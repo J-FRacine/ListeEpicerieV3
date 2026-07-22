@@ -79,17 +79,17 @@ def get_items(family_id):
                 FROM items
                 JOIN categories ON items.category_id = categories.id
                 WHERE items.family_id = %s
-                ORDER BY categories.name, items.name;
+                ORDER BY items.id;
             """, (family_id,))
             return cur.fetchall()
 
-def add_item(family_id, category_id, name, quantity):
+def add_item(family_id, category_id, name, quantity, needed):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO items (family_id, category_id, name, quantity)
-                VALUES (%s, %s, %s, %s);
-            """, (family_id, category_id, name, quantity))
+                INSERT INTO items (family_id, category_id, name, quantity, needed)
+                VALUES (%s, %s, %s, %s, %s);
+            """, (family_id, category_id, name, quantity, needed))
             conn.commit()
 
 def toggle_needed(item_id):
@@ -106,6 +106,3 @@ def delete_item(item_id):
         with conn.cursor() as cur:
             cur.execute("DELETE FROM items WHERE id = %s;", (item_id,))
             conn.commit()
-
-
-

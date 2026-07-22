@@ -5,7 +5,7 @@ from psycopg.rows import dict_row
 # Connexion à la base Canner
 def get_connection():
     return psycopg.connect(
-        os.getenv("DB_URL"),
+        os.getenv("DATABASE_URL"),   # <-- CORRECTION ICI
         row_factory=dict_row
     )
 

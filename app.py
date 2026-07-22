@@ -32,7 +32,6 @@ tri_mode_needs = 'Ordre d’ajout'
 # ---------------------------------------------------------
 
 def ensure_family_selected():
-    """Si aucune famille n'existe, afficher un message."""
     global current_family_id
     families = get_families()
     if not families:
@@ -42,9 +41,7 @@ def ensure_family_selected():
         current_family_id = families[0]['id']
     return True
 
-
 def ensure_categories_exist():
-    """Si aucune catégorie n'existe, afficher un message."""
     categories = get_categories()
     if not categories:
         ui.label("⚠️ Aucune catégorie trouvée. Allez dans l’onglet 'Catégories' pour en créer une.")
@@ -133,7 +130,13 @@ def add_item_panel():
     item_needed = ui.checkbox("J’en ai besoin")
 
     ui.button("Ajouter", on_click=lambda: (
-        add_item(current_family_id, cat_dict[item_cat.value], item_name.value, int(item_qty.value)),
+        add_item(
+            current_family_id,
+            cat_dict[item_cat.value],
+            item_name.value,
+            int(item_qty.value),
+            1 if item_needed.value else 0
+        ),
         ui.navigate.to('/')
     )).classes("w-full mt-2")
 
@@ -184,7 +187,6 @@ def items_panel():
 
     items = get_items(current_family_id)
 
-    # Tri
     if tri_mode_items == "Alphabétique":
         items = sorted(items, key=lambda x: x['name'].lower())
     elif tri_mode_items == "Catégorie":
@@ -208,7 +210,7 @@ def items_panel():
                     cat_names,
                     value=it['category'],
                     on_change=lambda e, iid=it['id']: (
-                        add_item(current_family_id, cat_dict[e.value], it['name'], it['quantity']),
+                        add_item(current_family_id, cat_dict[e.value], it['name'], it['quantity'], it['needed']),
                         delete_item(iid),
                         ui.navigate.to('/')
                     )

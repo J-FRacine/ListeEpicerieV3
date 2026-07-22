@@ -40,7 +40,16 @@ def init_db():
                 family_id INTEGER NOT NULL REFERENCES families(id),
                 email TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'member',  -- admin / member
+                role TEXT NOT NULL DEFAULT 'member',  -- admin / member / superadmin
+                created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            );
+        """)
+
+        # Table des catégories globales
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS categories (
+                id SERIAL PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
                 created_at TIMESTAMP NOT NULL DEFAULT NOW()
             );
         """)
@@ -50,6 +59,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS items (
                 id SERIAL PRIMARY KEY,
                 family_id INTEGER NOT NULL REFERENCES families(id),
+                category_id INTEGER NOT NULL REFERENCES categories(id),
                 name TEXT NOT NULL,
                 quantity INTEGER NOT NULL,
                 created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -121,31 +131,56 @@ def authenticate(email: str, password: str):
 
 
 # -----------------------------
+#  CATÉGORIES GLOBALES
+# -----------------------------
+
+def create_category(name: str) -> int:
+    """Crée une catégorie globale (super-admin seulement)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO categories (name) VALUES (%s) RETURNING id;",
+            (name,)
+        )
+        category_id = cur.fetchone()[0]
+        conn.commit()
+        return category_id
+
+
+def get_categories():
+    """Retourne toutes les catégories globales."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, name FROM categories ORDER BY name ASC;")
+        rows = cur.fetchall()
+        return [{"id": r[0], "name": r[1]} for r in rows]
+
+
+# -----------------------------
 #  ITEMS
 # -----------------------------
 
-def add_item(family_id: int, name: str, quantity: int):
+def add_item(family_id: int, category_id: int, name: str, quantity: int):
     """Ajoute un item dans la famille."""
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO items (family_id, name, quantity)
-            VALUES (%s, %s, %s);
+            INSERT INTO items (family_id, category_id, name, quantity)
+            VALUES (%s, %s, %s, %s);
             """,
-            (family_id, name, quantity)
+            (family_id, category_id, name, quantity)
         )
         conn.commit()
 
 
 def get_items(family_id: int):
-    """Retourne tous les items d'une famille."""
+    """Retourne tous les items d'une famille avec leur catégorie."""
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, name, quantity, created_at
+            SELECT items.id, items.name, items.quantity, categories.name
             FROM items
-            WHERE family_id = %s
-            ORDER BY id ASC;
+            JOIN categories ON items.category_id = categories.id
+            WHERE items.family_id = %s
+            ORDER BY items.id ASC;
             """,
             (family_id,)
         )
@@ -156,7 +191,7 @@ def get_items(family_id: int):
                 "id": r[0],
                 "name": r[1],
                 "quantity": r[2],
-                "created_at": r[3]
+                "category": r[3]
             }
             for r in rows
         ]

@@ -1,6 +1,14 @@
 import os
 from nicegui import ui, app
-from db import init_db, authenticate, get_categories, create_category, get_items, add_item, delete_item
+from db import (
+    init_db,
+    authenticate,
+    get_categories,
+    create_category,
+    get_items,
+    add_item,
+    delete_item,
+)
 
 # Initialisation de la base
 init_db()
@@ -12,10 +20,10 @@ init_db()
 app.storage.secret = os.getenv("SESSION_SECRET", "dev-secret")
 
 
-def require_login(page):
+def require_login():
     """Redirige vers /login si l'utilisateur n'est pas connecté."""
     if not ui.get_session().get('user'):
-        ui.navigate('/login')
+        ui.navigate.to('/login')
 
 
 # -----------------------------
@@ -39,9 +47,9 @@ def login_page():
         ui.notify(f'Bienvenue {user["email"]} !')
 
         if user['role'] == 'superadmin':
-            ui.navigate('/admin')
+            ui.navigate.to('/admin')
         else:
-            ui.navigate('/items')
+            ui.navigate.to('/items')
 
     ui.button('Se connecter', on_click=do_login).classes('mt-4')
 
@@ -52,7 +60,7 @@ def login_page():
 
 @ui.page('/admin')
 def admin_page():
-    require_login('/admin')
+    require_login()
 
     user = ui.get_session()['user']
     if user['role'] != 'superadmin':
@@ -65,11 +73,14 @@ def admin_page():
 
     with ui.row():
         new_cat = ui.input('Nouvelle catégorie')
-        ui.button('Ajouter', on_click=lambda: (
-            create_category(new_cat.value),
-            ui.notify('Catégorie ajoutée'),
-            ui.navigate('/admin')
-        ))
+        ui.button(
+            'Ajouter',
+            on_click=lambda: (
+                create_category(new_cat.value),
+                ui.notify('Catégorie ajoutée'),
+                ui.navigate.to('/admin')
+            )
+        )
 
     ui.separator()
 
@@ -78,10 +89,13 @@ def admin_page():
     for c in categories:
         ui.label(f"- {c['name']}")
 
-    ui.button('Déconnexion', on_click=lambda: (
-        ui.get_session().clear(),
-        ui.navigate('/login')
-    )).classes('mt-6')
+    ui.button(
+        'Déconnexion',
+        on_click=lambda: (
+            ui.get_session().clear(),
+            ui.navigate.to('/login')
+        )
+    ).classes('mt-6')
 
 
 # -----------------------------
@@ -90,7 +104,7 @@ def admin_page():
 
 @ui.page('/items')
 def items_page():
-    require_login('/items')
+    require_login()
 
     user = ui.get_session()['user']
     family_id = user['family_id']
@@ -112,7 +126,7 @@ def items_page():
             on_click=lambda: (
                 add_item(family_id, item_cat.value, item_name.value, item_qty.value),
                 ui.notify('Item ajouté'),
-                ui.navigate('/items')
+                ui.navigate.to('/items')
             )
         )
 
@@ -132,14 +146,17 @@ def items_page():
                 on_click=lambda it_id=it['id']: (
                     delete_item(it_id, family_id),
                     ui.notify('Item supprimé'),
-                    ui.navigate('/items')
+                    ui.navigate.to('/items')
                 )
             )
 
-    ui.button('Déconnexion', on_click=lambda: (
-        ui.get_session().clear(),
-        ui.navigate('/login')
-    )).classes('mt-6')
+    ui.button(
+        'Déconnexion',
+        on_click=lambda: (
+            ui.get_session().clear(),
+            ui.navigate.to('/login')
+        )
+    ).classes('mt-6')
 
 
 # -----------------------------
@@ -148,7 +165,7 @@ def items_page():
 
 @ui.page('/')
 def index_page():
-    ui.navigate('/login')
+    ui.navigate.to('/login')
 
 
 # -----------------------------

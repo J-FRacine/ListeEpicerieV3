@@ -9,6 +9,7 @@ from db import (
     delete_item,
 )
 
+# Initialisation DB
 init_db()
 
 
@@ -18,22 +19,25 @@ init_db()
 
 @ui.page('/select_family')
 def select_family_page():
-    ui.label('Choisir une famille').classes('text-2xl font-bold mb-4')
+    # Page centrée verticalement et horizontalement
+    with ui.column().classes('items-center justify-center w-full h-screen gap-4'):
+        ui.label('Choisir une famille').classes('text-3xl font-bold mb-4')
 
-    families = get_families()
+        families = get_families()
 
-    family_select = ui.select(
-        {f['id']: f['name'] for f in families},
-        label='Famille'
-    )
+        # Carte moderne centrée
+        with ui.card().classes('p-6 shadow-lg rounded-xl w-80 items-center'):
+            family_select = ui.select(
+                {f['id']: f['name'] for f in families},
+                label='Famille'
+            ).classes('w-full')
 
-    async def go():
-        if not family_select.value:
-            ui.notify('Choisir une famille', color='red')
-            return
-        ui.navigate.to(f'/items?family_id={family_select.value}')
-
-    ui.button('Continuer', on_click=go).classes('mt-4')
+            ui.button(
+                'Continuer',
+                on_click=lambda: ui.navigate.to(
+                    f'/items?family_id={family_select.value}'
+                )
+            ).classes('w-full mt-4 bg-blue-600 text-white')
 
 
 # -----------------------------
@@ -42,40 +46,51 @@ def select_family_page():
 
 @ui.page('/items')
 def items_page(family_id: int):
-    ui.label('Liste d’épicerie').classes('text-2xl font-bold mb-4')
+    with ui.column().classes('items-center w-full h-full gap-4 p-4'):
+        ui.label('Liste d’épicerie').classes('text-3xl font-bold mb-4')
 
-    categories = get_categories()
+        categories = get_categories()
 
-    item_name = ui.input('Nom de l’item')
-    item_qty = ui.number('Quantité', value=1)
-    item_cat = ui.select({c['id']: c['name'] for c in categories}, label='Catégorie')
+        # Carte pour ajouter un item
+        with ui.card().classes('p-6 shadow-lg rounded-xl w-full max-w-xl'):
+            item_name = ui.input('Nom de l’item').classes('w-full')
+            item_qty = ui.number('Quantité', value=1).classes('w-full')
+            item_cat = ui.select(
+                {c['id']: c['name'] for c in categories},
+                label='Catégorie'
+            ).classes('w-full')
 
-    async def add_item_handler():
-        if not item_name.value or not item_cat.value:
-            ui.notify('Nom et catégorie requis', color='red')
-            return
-        add_item(family_id, item_cat.value, item_name.value, int(item_qty.value or 1))
-        ui.notify('Item ajouté')
-        ui.navigate.to(f'/items?family_id={family_id}')
+            ui.button(
+                'Ajouter',
+                on_click=lambda: (
+                    add_item(family_id, item_cat.value, item_name.value, int(item_qty.value or 1)),
+                    ui.navigate.to(f'/items?family_id={family_id}')
+                )
+            ).classes('w-full mt-4 bg-green-600 text-white')
 
-    ui.button('Ajouter', on_click=add_item_handler)
+        ui.separator()
+        ui.label('Items').classes('text-2xl font-semibold')
 
-    ui.separator()
-    ui.label('Items :').classes('text-xl mt-4')
+        items = get_items(family_id)
 
-    items = get_items(family_id)
+        # Liste des items
+        with ui.column().classes('w-full max-w-xl gap-2'):
+            for it in items:
+                with ui.row().classes('w-full justify-between items-center p-2 border rounded-lg'):
+                    ui.label(f"{it['name']} ({it['quantity']}) — {it['category']}")
+                    ui.button(
+                        'Supprimer',
+                        color='red',
+                        on_click=lambda it_id=it['id']: (
+                            delete_item(it_id, family_id),
+                            ui.navigate.to(f'/items?family_id={family_id}')
+                        )
+                    )
 
-    for it in items:
-        async def delete_handler(it_id=it['id']):
-            delete_item(it_id, family_id)
-            ui.notify('Item supprimé')
-            ui.navigate.to(f'/items?family_id={family_id}')
-
-        with ui.row().classes('items-center'):
-            ui.label(f"{it['name']} ({it['quantity']}) — {it['category']}")
-            ui.button('Supprimer', color='red', on_click=delete_handler)
-
-    ui.button('Changer de famille', on_click=lambda: ui.navigate.to('/select_family')).classes('mt-6')
+        ui.button(
+            'Changer de famille',
+            on_click=lambda: ui.navigate.to('/select_family')
+        ).classes('mt-6 bg-gray-700 text-white')
 
 
 # -----------------------------

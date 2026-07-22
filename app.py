@@ -81,6 +81,10 @@ def admin_page():
     require_login()
     user = get_current_user()
 
+    if not user:
+        ui.navigate.to('/login')
+        return
+
     if user['role'] != 'superadmin':
         ui.label("Accès refusé").classes('text-red-500')
         return
@@ -121,6 +125,11 @@ def admin_page():
 def items_page():
     require_login()
     user = get_current_user()
+
+    if not user:
+        ui.navigate.to('/login')
+        return
+
     family_id = user['family_id']
 
     ui.label('Liste d’épicerie familiale').classes('text-2xl font-bold mb-4')

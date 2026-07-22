@@ -205,3 +205,21 @@ def delete_item(item_id: int, family_id: int):
             (item_id, family_id)
         )
         conn.commit()
+        
+def get_user_by_id(user_id):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, family_id, email, role
+                FROM users
+                WHERE id = %s
+            """, (user_id,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                'id': row[0],
+                'family_id': row[1],
+                'email': row[2],
+                'role': row[3],
+            }

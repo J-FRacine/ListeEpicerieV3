@@ -2,6 +2,7 @@ import os
 from nicegui import ui, app
 from db import (
     init_db,
+    get_families,
     get_categories,
     get_items,
     add_item,
@@ -19,8 +20,6 @@ init_db()
 def select_family_page():
     ui.label('Choisir une famille').classes('text-2xl font-bold mb-4')
 
-    # Charger toutes les familles
-    from db import get_families
     families = get_families()
 
     family_select = ui.select(
@@ -42,15 +41,7 @@ def select_family_page():
 # -----------------------------
 
 @ui.page('/items')
-def items_page():
-    # Lire family_id dans l’URL
-    family_id = ui.context.query.get('family_id')
-    if not family_id:
-        ui.navigate.to('/select_family')
-        return
-
-    family_id = int(family_id)
-
+def items_page(family_id: int):
     ui.label('Liste d’épicerie').classes('text-2xl font-bold mb-4')
 
     categories = get_categories()

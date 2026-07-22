@@ -2,12 +2,12 @@ import os
 from nicegui import ui, app
 from starlette.middleware.sessions import SessionMiddleware
 
-# Sessions NiceGUI 3.14
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "dev-secret"))
 
 from db import (
     init_db,
     authenticate,
+    get_user_by_id,
     get_categories,
     create_category,
     get_items,
@@ -22,8 +22,16 @@ init_db()
 #  UTILITAIRE
 # -----------------------------
 
+def get_current_user():
+    """Lit le cookie user_id et retourne l'utilisateur."""
+    user_id = ui.context.request.cookies.get('user_id')
+    if not user_id:
+        return None
+    return get_user_by_id(int(user_id))
+
+
 def require_login():
-    if not ui.context.client.storage.get('user'):
+    if not get_current_user():
         ui.navigate.to('/login')
 
 
@@ -45,7 +53,15 @@ def login_page():
             ui.notify('Identifiants invalides', color='red')
             return
 
-        ui.context.client.storage['user'] = user
+        # Stocker l'ID utilisateur dans un cookie
+        ui.context.response.set_cookie(
+            'user_id',
+            str(user['id']),
+            max_age=60*60*24*7,  # 7 jours
+            httponly=True,
+            secure=False,
+        )
+
         ui.notify(f"Bienvenue {user['email']} !")
 
         if user['role'] == 'superadmin':
@@ -63,8 +79,8 @@ def login_page():
 @ui.page('/admin')
 def admin_page():
     require_login()
+    user = get_current_user()
 
-    user = ui.context.client.storage['user']
     if user['role'] != 'superadmin':
         ui.label("Accès refusé").classes('text-red-500')
         return
@@ -91,7 +107,7 @@ def admin_page():
         ui.label(f"- {c['name']}")
 
     async def logout():
-        ui.context.client.storage.clear()
+        ui.context.response.delete_cookie('user_id')
         ui.navigate.to('/login')
 
     ui.button('Déconnexion', on_click=logout).classes('mt-6')
@@ -104,8 +120,7 @@ def admin_page():
 @ui.page('/items')
 def items_page():
     require_login()
-
-    user = ui.context.client.storage['user']
+    user = get_current_user()
     family_id = user['family_id']
 
     ui.label('Liste d’épicerie familiale').classes('text-2xl font-bold mb-4')
@@ -142,7 +157,7 @@ def items_page():
             ui.button('Supprimer', color='red', on_click=delete_handler)
 
     async def logout():
-        ui.context.client.storage.clear()
+        ui.context.response.delete_cookie('user_id')
         ui.navigate.to('/login')
 
     ui.button('Déconnexion', on_click=logout).classes('mt-6')

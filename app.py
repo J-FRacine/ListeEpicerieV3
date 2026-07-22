@@ -2,7 +2,7 @@ import os
 from nicegui import ui, app
 from starlette.middleware.sessions import SessionMiddleware
 
-# Activer les sessions NiceGUI 3.14
+# Sessions NiceGUI 3.14
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "dev-secret"))
 
 from db import (
@@ -15,7 +15,6 @@ from db import (
     delete_item,
 )
 
-# Initialisation DB
 init_db()
 
 
@@ -24,7 +23,7 @@ init_db()
 # -----------------------------
 
 def require_login():
-    if not getattr(app.storage, 'user', None):
+    if not ui.context.client.storage.get('user'):
         ui.navigate.to('/login')
 
 
@@ -46,7 +45,7 @@ def login_page():
             ui.notify('Identifiants invalides', color='red')
             return
 
-        app.storage.user = user
+        ui.context.client.storage['user'] = user
         ui.notify(f"Bienvenue {user['email']} !")
 
         if user['role'] == 'superadmin':
@@ -58,14 +57,14 @@ def login_page():
 
 
 # -----------------------------
-#  PAGE ADMIN (SUPERADMIN)
+#  PAGE ADMIN
 # -----------------------------
 
 @ui.page('/admin')
 def admin_page():
     require_login()
 
-    user = app.storage.user
+    user = ui.context.client.storage['user']
     if user['role'] != 'superadmin':
         ui.label("Accès refusé").classes('text-red-500')
         return
@@ -92,21 +91,21 @@ def admin_page():
         ui.label(f"- {c['name']}")
 
     async def logout():
-        app.storage.clear()
+        ui.context.client.storage.clear()
         ui.navigate.to('/login')
 
     ui.button('Déconnexion', on_click=logout).classes('mt-6')
 
 
 # -----------------------------
-#  PAGE ITEMS (FAMILLE)
+#  PAGE ITEMS
 # -----------------------------
 
 @ui.page('/items')
 def items_page():
     require_login()
 
-    user = app.storage.user
+    user = ui.context.client.storage['user']
     family_id = user['family_id']
 
     ui.label('Liste d’épicerie familiale').classes('text-2xl font-bold mb-4')
@@ -143,7 +142,7 @@ def items_page():
             ui.button('Supprimer', color='red', on_click=delete_handler)
 
     async def logout():
-        app.storage.clear()
+        ui.context.client.storage.clear()
         ui.navigate.to('/login')
 
     ui.button('Déconnexion', on_click=logout).classes('mt-6')

@@ -37,14 +37,14 @@ def login_page():
     email = ui.input('Email')
     password = ui.input('Mot de passe', password=True)
 
-    def do_login():
+    async def do_login():
         user = authenticate(email.value, password.value)
         if not user:
             ui.notify('Identifiants invalides', color='red')
             return
 
         ui.get_session()['user'] = user
-        ui.notify(f'Bienvenue {user["email"]} !')
+        ui.notify(f'Bienvenue {user['email']} !')
 
         if user['role'] == 'superadmin':
             ui.navigate.to('/admin')
@@ -71,16 +71,18 @@ def admin_page():
 
     categories = get_categories()
 
+    new_cat = ui.input('Nouvelle catégorie')
+
+    async def add_category():
+        if not new_cat.value:
+            ui.notify('Nom de catégorie requis', color='red')
+            return
+        create_category(new_cat.value)
+        ui.notify('Catégorie ajoutée')
+        ui.navigate.to('/admin')
+
     with ui.row():
-        new_cat = ui.input('Nouvelle catégorie')
-        ui.button(
-            'Ajouter',
-            on_click=lambda: (
-                create_category(new_cat.value),
-                ui.notify('Catégorie ajoutée'),
-                ui.navigate.to('/admin')
-            )
-        )
+        ui.button('Ajouter', on_click=add_category)
 
     ui.separator()
 
@@ -89,13 +91,11 @@ def admin_page():
     for c in categories:
         ui.label(f"- {c['name']}")
 
-    ui.button(
-        'Déconnexion',
-        on_click=lambda: (
-            ui.get_session().clear(),
-            ui.navigate.to('/login')
-        )
-    ).classes('mt-6')
+    async def logout():
+        ui.get_session().clear()
+        ui.navigate.to('/login')
+
+    ui.button('Déconnexion', on_click=logout).classes('mt-6')
 
 
 # -----------------------------
@@ -113,50 +113,45 @@ def items_page():
 
     categories = get_categories()
 
-    # Formulaire d'ajout
+    item_name = ui.input('Nom de l’item')
+    item_qty = ui.number('Quantité', value=1)
+    item_cat = ui.select(
+        {c['id']: c['name'] for c in categories},
+        label='Catégorie'
+    )
+
+    async def add_item_handler():
+        if not item_name.value or not item_cat.value:
+            ui.notify('Nom et catégorie requis', color='red')
+            return
+        add_item(family_id, item_cat.value, item_name.value, int(item_qty.value or 1))
+        ui.notify('Item ajouté')
+        ui.navigate.to('/items')
+
     with ui.row():
-        item_name = ui.input('Nom de l’item')
-        item_qty = ui.number('Quantité', value=1)
-        item_cat = ui.select(
-            {c['id']: c['name'] for c in categories},
-            label='Catégorie'
-        )
-        ui.button(
-            'Ajouter',
-            on_click=lambda: (
-                add_item(family_id, item_cat.value, item_name.value, item_qty.value),
-                ui.notify('Item ajouté'),
-                ui.navigate.to('/items')
-            )
-        )
+        ui.button('Ajouter', on_click=add_item_handler)
 
     ui.separator()
 
-    # Liste des items
     ui.label('Items de la famille :').classes('text-xl mt-4')
 
     items = get_items(family_id)
 
     for it in items:
+        async def delete_handler(it_id=it['id']):
+            delete_item(it_id, family_id)
+            ui.notify('Item supprimé')
+            ui.navigate.to('/items')
+
         with ui.row().classes('items-center'):
             ui.label(f"{it['name']} ({it['quantity']}) — {it['category']}")
-            ui.button(
-                'Supprimer',
-                color='red',
-                on_click=lambda it_id=it['id']: (
-                    delete_item(it_id, family_id),
-                    ui.notify('Item supprimé'),
-                    ui.navigate.to('/items')
-                )
-            )
+            ui.button('Supprimer', color='red', on_click=delete_handler)
 
-    ui.button(
-        'Déconnexion',
-        on_click=lambda: (
-            ui.get_session().clear(),
-            ui.navigate.to('/login')
-        )
-    ).classes('mt-6')
+    async def logout():
+        ui.get_session().clear()
+        ui.navigate.to('/login')
+
+    ui.button('Déconnexion', on_click=logout).classes('mt-6')
 
 
 # -----------------------------

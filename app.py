@@ -9,8 +9,28 @@ from db import (
     delete_item,
 )
 
-# Initialisation DB
 init_db()
+
+
+# -----------------------------
+#  BARRE D'ONGLETS
+# -----------------------------
+
+def nav_tabs(active: str, family_id: int | None = None):
+    with ui.row().classes('w-full justify-center gap-6 text-lg font-semibold mb-6'):
+        def tab(name, target):
+            color = 'blue' if name == active else 'gray'
+            ui.button(
+                name,
+                on_click=lambda: ui.navigate.to(
+                    f'{target}?family_id={family_id}' if family_id else target
+                ),
+            ).classes(f'text-{color}-700')
+
+        tab('Besoins', '/items')
+        tab('Catégories', '/categories')
+        tab('Familles', '/select_family')
+        tab('Admin', '/admin')
 
 
 # -----------------------------
@@ -19,13 +39,11 @@ init_db()
 
 @ui.page('/select_family')
 def select_family_page():
-    # Page centrée verticalement et horizontalement
     with ui.column().classes('items-center justify-center w-full h-screen gap-4'):
         ui.label('Choisir une famille').classes('text-3xl font-bold mb-4')
 
         families = get_families()
 
-        # Carte moderne centrée
         with ui.card().classes('p-6 shadow-lg rounded-xl w-80 items-center'):
             family_select = ui.select(
                 {f['id']: f['name'] for f in families},
@@ -41,12 +59,25 @@ def select_family_page():
 
 
 # -----------------------------
-#  PAGE ITEMS
+#  PAGE ITEMS (BESOINS)
 # -----------------------------
 
 @ui.page('/items')
 def items_page(family_id: int):
     with ui.column().classes('items-center w-full h-full gap-4 p-4'):
+
+        # Onglets
+        nav_tabs('Besoins', family_id)
+
+        # Sélecteur de famille en haut
+        families = get_families()
+        ui.label('Famille').classes('text-xl font-semibold')
+        ui.select(
+            {f['id']: f['name'] for f in families},
+            value=family_id,
+            on_change=lambda e: ui.navigate.to(f'/items?family_id={e.value}')
+        ).classes('w-full max-w-xs mb-4')
+
         ui.label('Liste d’épicerie').classes('text-3xl font-bold mb-4')
 
         categories = get_categories()
@@ -87,10 +118,37 @@ def items_page(family_id: int):
                         )
                     )
 
-        ui.button(
-            'Changer de famille',
-            on_click=lambda: ui.navigate.to('/select_family')
-        ).classes('mt-6 bg-gray-700 text-white')
+
+# -----------------------------
+#  PAGE CATÉGORIES
+# -----------------------------
+
+@ui.page('/categories')
+def categories_page(family_id: int):
+    with ui.column().classes('items-center w-full h-full gap-4 p-4'):
+
+        nav_tabs('Catégories', family_id)
+
+        ui.label('Catégories globales').classes('text-3xl font-bold mb-4')
+
+        categories = get_categories()
+
+        with ui.column().classes('w-full max-w-xl gap-2'):
+            for c in categories:
+                ui.label(f"- {c['name']}").classes('text-lg')
+
+
+# -----------------------------
+#  PAGE ADMIN (simple)
+# -----------------------------
+
+@ui.page('/admin')
+def admin_page():
+    with ui.column().classes('items-center w-full h-full gap-4 p-4'):
+        nav_tabs('Admin')
+
+        ui.label('Administration').classes('text-3xl font-bold mb-4')
+        ui.label("Ici tu pourras ajouter des fonctions admin plus tard.")
 
 
 # -----------------------------

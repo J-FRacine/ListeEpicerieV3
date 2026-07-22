@@ -15,16 +15,16 @@ from db import (
     delete_item,
 )
 
-# Initialisation de la base
+# Initialisation DB
 init_db()
 
+
 # -----------------------------
-#  SESSIONS UTILISATEURS
+#  UTILITAIRE
 # -----------------------------
 
 def require_login():
-    """Redirige vers /login si l'utilisateur n'est pas connecté."""
-    if not ui.get_session().get('user'):
+    if 'user' not in ui.session:
         ui.navigate.to('/login')
 
 
@@ -41,11 +41,12 @@ def login_page():
 
     async def do_login():
         user = authenticate(email.value, password.value)
+
         if not user:
             ui.notify('Identifiants invalides', color='red')
             return
 
-        ui.get_session()['user'] = user
+        ui.session['user'] = user
         ui.notify(f"Bienvenue {user['email']} !")
 
         if user['role'] == 'superadmin':
@@ -64,7 +65,7 @@ def login_page():
 def admin_page():
     require_login()
 
-    user = ui.get_session()['user']
+    user = ui.session['user']
     if user['role'] != 'superadmin':
         ui.label("Accès refusé").classes('text-red-500')
         return
@@ -72,12 +73,11 @@ def admin_page():
     ui.label('Administration — Catégories globales').classes('text-2xl font-bold mb-4')
 
     categories = get_categories()
-
     new_cat = ui.input('Nouvelle catégorie')
 
     async def add_category():
         if not new_cat.value:
-            ui.notify('Nom de catégorie requis', color='red')
+            ui.notify('Nom requis', color='red')
             return
         create_category(new_cat.value)
         ui.notify('Catégorie ajoutée')
@@ -86,14 +86,13 @@ def admin_page():
     ui.button('Ajouter', on_click=add_category)
 
     ui.separator()
-
     ui.label('Catégories existantes :').classes('text-xl mt-4')
 
     for c in categories:
         ui.label(f"- {c['name']}")
 
     async def logout():
-        ui.get_session().clear()
+        ui.session.clear()
         ui.navigate.to('/login')
 
     ui.button('Déconnexion', on_click=logout).classes('mt-6')
@@ -107,7 +106,7 @@ def admin_page():
 def items_page():
     require_login()
 
-    user = ui.get_session()['user']
+    user = ui.session['user']
     family_id = user['family_id']
 
     ui.label('Liste d’épicerie familiale').classes('text-2xl font-bold mb-4')
@@ -116,10 +115,7 @@ def items_page():
 
     item_name = ui.input('Nom de l’item')
     item_qty = ui.number('Quantité', value=1)
-    item_cat = ui.select(
-        {c['id']: c['name'] for c in categories},
-        label='Catégorie'
-    )
+    item_cat = ui.select({c['id']: c['name'] for c in categories}, label='Catégorie')
 
     async def add_item_handler():
         if not item_name.value or not item_cat.value:
@@ -132,7 +128,6 @@ def items_page():
     ui.button('Ajouter', on_click=add_item_handler)
 
     ui.separator()
-
     ui.label('Items de la famille :').classes('text-xl mt-4')
 
     items = get_items(family_id)
@@ -148,7 +143,7 @@ def items_page():
             ui.button('Supprimer', color='red', on_click=delete_handler)
 
     async def logout():
-        ui.get_session().clear()
+        ui.session.clear()
         ui.navigate.to('/login')
 
     ui.button('Déconnexion', on_click=logout).classes('mt-6')

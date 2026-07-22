@@ -1,15 +1,8 @@
 import os
 from nicegui import ui, app
-from starlette.middleware.sessions import SessionMiddleware
-
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "dev-secret"))
-
 from db import (
     init_db,
-    authenticate,
-    get_user_by_id,
     get_categories,
-    create_category,
     get_items,
     add_item,
     delete_item,
@@ -19,102 +12,29 @@ init_db()
 
 
 # -----------------------------
-#  UTILITAIRE
+#  PAGE DE SÉLECTION DE FAMILLE
 # -----------------------------
 
-def get_current_user():
-    """Lit le cookie user_id et retourne l'utilisateur."""
-    user_id = ui.context.request.cookies.get('user_id')
-    if not user_id:
-        return None
-    return get_user_by_id(int(user_id))
+@ui.page('/select_family')
+def select_family_page():
+    ui.label('Choisir une famille').classes('text-2xl font-bold mb-4')
 
+    # Charger toutes les familles
+    from db import get_families
+    families = get_families()
 
-def require_login():
-    if not get_current_user():
-        ui.navigate.to('/login')
+    family_select = ui.select(
+        {f['id']: f['name'] for f in families},
+        label='Famille'
+    )
 
-
-# -----------------------------
-#  PAGE LOGIN
-# -----------------------------
-
-@ui.page('/login')
-def login_page():
-    ui.label('Connexion').classes('text-2xl font-bold mb-4')
-
-    email = ui.input('Email')
-    password = ui.input('Mot de passe', password=True)
-
-    async def do_login():
-        user = authenticate(email.value, password.value)
-
-        if not user:
-            ui.notify('Identifiants invalides', color='red')
+    async def go():
+        if not family_select.value:
+            ui.notify('Choisir une famille', color='red')
             return
+        ui.navigate.to(f'/items?family_id={family_select.value}')
 
-        # Stocker l'ID utilisateur dans un cookie
-        ui.context.response.set_cookie(
-            'user_id',
-            str(user['id']),
-            max_age=60*60*24*7,  # 7 jours
-            httponly=True,
-            secure=False,
-        )
-
-        ui.notify(f"Bienvenue {user['email']} !")
-
-        if user['role'] == 'superadmin':
-            ui.navigate.to('/admin')
-        else:
-            ui.navigate.to('/items')
-
-    ui.button('Se connecter', on_click=do_login).classes('mt-4')
-
-
-# -----------------------------
-#  PAGE ADMIN
-# -----------------------------
-
-@ui.page('/admin')
-def admin_page():
-    require_login()
-    user = get_current_user()
-
-    if not user:
-        ui.navigate.to('/login')
-        return
-
-    if user['role'] != 'superadmin':
-        ui.label("Accès refusé").classes('text-red-500')
-        return
-
-    ui.label('Administration — Catégories globales').classes('text-2xl font-bold mb-4')
-
-    categories = get_categories()
-    new_cat = ui.input('Nouvelle catégorie')
-
-    async def add_category():
-        if not new_cat.value:
-            ui.notify('Nom requis', color='red')
-            return
-        create_category(new_cat.value)
-        ui.notify('Catégorie ajoutée')
-        ui.navigate.to('/admin')
-
-    ui.button('Ajouter', on_click=add_category)
-
-    ui.separator()
-    ui.label('Catégories existantes :').classes('text-xl mt-4')
-
-    for c in categories:
-        ui.label(f"- {c['name']}")
-
-    async def logout():
-        ui.context.response.delete_cookie('user_id')
-        ui.navigate.to('/login')
-
-    ui.button('Déconnexion', on_click=logout).classes('mt-6')
+    ui.button('Continuer', on_click=go).classes('mt-4')
 
 
 # -----------------------------
@@ -123,16 +43,15 @@ def admin_page():
 
 @ui.page('/items')
 def items_page():
-    require_login()
-    user = get_current_user()
-
-    if not user:
-        ui.navigate.to('/login')
+    # Lire family_id dans l’URL
+    family_id = ui.context.query.get('family_id')
+    if not family_id:
+        ui.navigate.to('/select_family')
         return
 
-    family_id = user['family_id']
+    family_id = int(family_id)
 
-    ui.label('Liste d’épicerie familiale').classes('text-2xl font-bold mb-4')
+    ui.label('Liste d’épicerie').classes('text-2xl font-bold mb-4')
 
     categories = get_categories()
 
@@ -146,12 +65,12 @@ def items_page():
             return
         add_item(family_id, item_cat.value, item_name.value, int(item_qty.value or 1))
         ui.notify('Item ajouté')
-        ui.navigate.to('/items')
+        ui.navigate.to(f'/items?family_id={family_id}')
 
     ui.button('Ajouter', on_click=add_item_handler)
 
     ui.separator()
-    ui.label('Items de la famille :').classes('text-xl mt-4')
+    ui.label('Items :').classes('text-xl mt-4')
 
     items = get_items(family_id)
 
@@ -159,17 +78,13 @@ def items_page():
         async def delete_handler(it_id=it['id']):
             delete_item(it_id, family_id)
             ui.notify('Item supprimé')
-            ui.navigate.to('/items')
+            ui.navigate.to(f'/items?family_id={family_id}')
 
         with ui.row().classes('items-center'):
             ui.label(f"{it['name']} ({it['quantity']}) — {it['category']}")
             ui.button('Supprimer', color='red', on_click=delete_handler)
 
-    async def logout():
-        ui.context.response.delete_cookie('user_id')
-        ui.navigate.to('/login')
-
-    ui.button('Déconnexion', on_click=logout).classes('mt-6')
+    ui.button('Changer de famille', on_click=lambda: ui.navigate.to('/select_family')).classes('mt-6')
 
 
 # -----------------------------
@@ -178,7 +93,7 @@ def items_page():
 
 @ui.page('/')
 def index_page():
-    ui.navigate.to('/login')
+    ui.navigate.to('/select_family')
 
 
 # -----------------------------

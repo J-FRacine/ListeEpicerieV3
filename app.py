@@ -1,475 +1,308 @@
-import sqlite3
-import csv
-from datetime import datetime
-from nicegui import ui
 import os
+from nicegui import ui
+from db import (
+    init_db,
+    get_families,
+    create_family,
+    get_categories,
+    create_category,
+    delete_category,
+    get_items,
+    add_item,
+    delete_item,
+    toggle_needed,
+)
 
-# ---------- BASE DE DONNÉES (persistante locale) ----------
-DB_PATH = 'items.db'  # adapté pour Canner
-
-def get_conn():
-    return sqlite3.connect(DB_PATH)
-
-def init_db():
-    if os.path.exists(DB_PATH):
-        return
-
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-        )
-    ''')
-
-    cur.execute('''
-        CREATE TABLE IF NOT EXISTS categories (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-        )
-    ''')
-
-    cur.execute('''
-        CREATE TABLE IF NOT EXISTS items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            category_id INTEGER,
-            needed INTEGER DEFAULT 0,
-            user_id INTEGER,
-            FOREIGN KEY(category_id) REFERENCES categories(id),
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        )
-    ''')
-
-    conn.commit()
-    conn.close()
-
+# ---------------------------------------------------------
+#  INITIALISATION BD POSTGRES
+# ---------------------------------------------------------
 init_db()
 
-# ---------- CRÉER UN UTILISATEUR PAR DÉFAUT SI BD VIDE ----------
-def ensure_default_user():
-    users = get_users()
-    if not users:
-        add_user("Famille 1")
-        globals()['current_user_id'] = 1
-
-# ---------- ÉTAT GLOBAL ----------
-current_user_id = 1
+# ---------------------------------------------------------
+#  ÉTAT GLOBAL
+# ---------------------------------------------------------
+current_family_id = None
 current_tab = 'items'
 tri_mode_items = 'Ordre d’ajout'
 tri_mode_needs = 'Ordre d’ajout'
 
-# ---------- DB HELPERS ----------
-def get_users():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT id, name FROM users ORDER BY id")
-    rows = cur.fetchall()
-    conn.close()
-    return rows
 
-def add_user(name):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO users(name) VALUES (?)", (name,))
-    conn.commit()
-    conn.close()
+# ---------------------------------------------------------
+#  UTILITAIRES
+# ---------------------------------------------------------
 
-def rename_user(user_id, new_name):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("UPDATE users SET name = ? WHERE id = ?", (new_name, user_id))
-    conn.commit()
-    conn.close()
+def ensure_default_family():
+    """Crée une famille par défaut si la BD est vide."""
+    global current_family_id
+    families = get_families()
+    if not families:
+        create_family("Famille 1")
+        families = get_families()
+    if current_family_id is None:
+        current_family_id = families[0]['id']
 
-def delete_user(user_id):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM items WHERE user_id = ?", (user_id,))
-    cur.execute("DELETE FROM users WHERE id = ?", (user_id,))
-    conn.commit()
-    conn.close()
 
-def get_categories():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT id, name FROM categories ORDER BY name")
-    rows = cur.fetchall()
-    conn.close()
-    return rows
+# ---------------------------------------------------------
+#  PANNEAU : FAMILLES
+# ---------------------------------------------------------
 
-def add_category(name):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO categories(name) VALUES (?)", (name,))
-    conn.commit()
-    conn.close()
+def families_panel():
+    ui.label("Gestion des familles").classes("text-xl font-bold")
 
-def delete_category(cat_id):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM items WHERE category_id = ?", (cat_id,))
-    cur.execute("DELETE FROM categories WHERE id = ?", (cat_id,))
-    conn.commit()
-    conn.close()
+    families = get_families()
+    family_dict = {f['name']: f['id'] for f in families}
 
-def add_item(name, category_id, needed, user_id):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO items(name, category_id, needed, user_id) VALUES (?, ?, ?, ?)",
-        (name, category_id, needed, user_id)
-    )
-    conn.commit()
-    conn.close()
-
-def get_items(user_id, only_needed=False):
-    conn = get_conn()
-    cur = conn.cursor()
-    if only_needed:
-        cur.execute("""
-            SELECT items.id, items.name, categories.name, items.needed
-            FROM items
-            LEFT JOIN categories ON items.category_id = categories.id
-            WHERE items.user_id = ? AND items.needed = 1
-            ORDER BY items.id
-        """, (user_id,))
-    else:
-        cur.execute("""
-            SELECT items.id, items.name, categories.name, items.needed
-            FROM items
-            LEFT JOIN categories ON items.category_id = categories.id
-            WHERE items.user_id = ?
-            ORDER BY items.id
-        """, (user_id,))
-    rows = cur.fetchall()
-    conn.close()
-    return rows
-
-def toggle_needed(item_id):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT needed FROM items WHERE id = ?", (item_id,))
-    row = cur.fetchone()
-    if row:
-        new_val = 0 if row[0] == 1 else 1
-        cur.execute("UPDATE items SET needed = ? WHERE id = ?", (new_val, item_id))
-    conn.commit()
-    conn.close()
-
-def delete_item(item_id):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM items WHERE id = ?", (item_id,))
-    conn.commit()
-    conn.close()
-
-def update_item_category(item_id, category_id):
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("UPDATE items SET category_id = ? WHERE id = ?", (category_id, item_id))
-    conn.commit()
-    conn.close()
-
-# ---------- ADMIN : EXPORT CSV ----------
-def export_csv():
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT items.id, items.name, categories.name, items.needed, users.name
-        FROM items
-        LEFT JOIN categories ON items.category_id = categories.id
-        LEFT JOIN users ON items.user_id = users.id
-        ORDER BY items.id
-    """)
-    rows = cur.fetchall()
-    conn.close()
-
-    filename = f"items_export_{datetime.now().strftime('%Y-%m-%d_%Hh%M')}.csv"
-
-    with open(filename, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.writer(f)
-        writer.writerow(['ID', 'Nom', 'Catégorie', 'Besoin', 'Utilisateur'])
-        writer.writerows(rows)
-
-    ui.download(filename)
-
-# ---------- ADMIN : BACKUP BD ----------
-def backup_db():
-    timestamp = datetime.now().strftime('%Y-%m-%d_%Hh%M')
-    backup_name = f"items_backup_{timestamp}.db"
-    os.system(f"cp {DB_PATH} {backup_name}")
-    ui.notify(f"Sauvegarde créée : {backup_name}")
-
-# ---------- ONGLET : ADMIN ----------
-def admin_panel():
-    ui.label('Administration').classes('text-xl font-bold')
-
-    ui.button('Exporter en CSV', on_click=export_csv).classes('w-full mt-3')
-    ui.button('Créer une sauvegarde BD (timestamp)', on_click=backup_db).classes('w-full mt-3')
-
-# ---------- ONGLET : UTILISATEURS ----------
-def users_panel():
-    ui.label('Gestion des utilisateurs').classes('text-xl font-bold')
-
-    users = get_users()
-    user_names = {u[1]: u[0] for u in users}
-
-    ui.label('Utilisateur actif').classes('mt-3')
+    ui.label("Famille active")
     ui.select(
-        list(user_names.keys()),
-        value=[name for name, uid in user_names.items() if uid == current_user_id][0],
+        list(family_dict.keys()),
+        value=[name for name, fid in family_dict.items() if fid == current_family_id][0],
         on_change=lambda e: (
-            globals().__setitem__('current_user_id', user_names[e.value]),
+            globals().__setitem__('current_family_id', family_dict[e.value]),
             ui.open('/')
         )
-    ).classes('w-full')
+    ).classes("w-full")
 
     ui.separator()
 
-    new_name = ui.input('Nouveau nom').classes('w-full')
-    ui.button('Renommer', on_click=lambda: (
-        rename_user(current_user_id, new_name.value),
+    new_name = ui.input("Nouvelle famille").classes("w-full")
+    ui.button("Créer", on_click=lambda: (
+        create_family(new_name.value),
         ui.open('/')
-    )).classes('w-full mt-2')
+    )).classes("w-full mt-2")
 
-    ui.separator()
 
-    new_user = ui.input('Nouvel utilisateur').classes('w-full')
-    ui.button('Créer utilisateur', on_click=lambda: (
-        add_user(new_user.value),
-        ui.open('/')
-    )).classes('w-full mt-2')
+# ---------------------------------------------------------
+#  PANNEAU : CATÉGORIES
+# ---------------------------------------------------------
 
-    ui.separator()
-
-    ui.label('Liste des utilisateurs').classes('text-lg font-bold mt-4')
-
-    for uid, name in users:
-        with ui.row().classes('items-center justify-between bg-gray-100 rounded-lg px-3 py-2 mt-2'):
-
-            ui.label(name).classes('font-bold')
-
-            with ui.row().classes('items-center gap-2'):
-                ui.button('Sélectionner', on_click=lambda u=uid: (
-                    globals().__setitem__('current_user_id', u),
-                    ui.open('/')
-                )).props('flat color=blue')
-
-                ui.button('🗑️', on_click=lambda u=uid: (
-                    delete_user(u),
-                    ui.open('/')
-                )).props('flat color=red')
-
-# ---------- ONGLET : CATÉGORIES ----------
 def categories_panel():
-    ui.label('Gestion des catégories').classes('text-xl font-bold')
+    ui.label("Gestion des catégories").classes("text-xl font-bold")
 
-    new_cat_input = ui.input('Nouvelle catégorie').classes('w-full')
-    ui.button('Ajouter', on_click=lambda: (
-        add_category(new_cat_input.value),
+    new_cat = ui.input("Nouvelle catégorie").classes("w-full")
+    ui.button("Ajouter", on_click=lambda: (
+        create_category(new_cat.value),
         ui.open('/')
-    )).classes('w-full mt-2')
+    )).classes("w-full mt-2")
 
     ui.separator()
 
     categories = get_categories()
-    for cid, name in categories:
-        with ui.row().classes('items-center justify-between mt-1'):
-            ui.label(name)
-            ui.button('🗑️', on_click=lambda cat_id=cid: (
-                delete_category(cat_id),
+    for cat in categories:
+        with ui.row().classes("items-center justify-between mt-1"):
+            ui.label(cat['name'])
+            ui.button("🗑️", on_click=lambda cid=cat['id']: (
+                delete_category(cid),
                 ui.open('/')
-            )).props('flat color=red')
+            )).props("flat color=red")
 
-# ---------- AJOUT ITEM ----------
+
+# ---------------------------------------------------------
+#  PANNEAU : AJOUT ITEM
+# ---------------------------------------------------------
+
 def add_item_panel():
-    ui.label('Ajouter un item').classes('text-xl font-bold')
+    ui.label("Ajouter un item").classes("text-xl font-bold")
 
     categories = get_categories()
-    cat_dict = {name: cid for cid, name in categories}
+    cat_dict = {c['name']: c['id'] for c in categories}
     cat_names = list(cat_dict.keys())
 
-    default_cat = 'Épicerie' if 'Épicerie' in cat_names else (cat_names[0] if cat_names else None)
+    default_cat = cat_names[0] if cat_names else None
 
-    item_name_input = ui.input('Nom de l’item').classes('w-full')
-    item_cat_select = ui.select(cat_names, value=default_cat, label='Catégorie').classes('w-full')
-    item_needed_checkbox = ui.checkbox('J’en ai besoin')
+    item_name = ui.input("Nom de l’item").classes("w-full")
+    item_cat = ui.select(cat_names, value=default_cat, label="Catégorie").classes("w-full")
+    item_qty = ui.number("Quantité", value=1).classes("w-full")
+    item_needed = ui.checkbox("J’en ai besoin")
 
-    ui.button('Ajouter item', on_click=lambda: (
-        add_item(item_name_input.value, cat_dict[item_cat_select.value], 1 if item_needed_checkbox.value else 0, current_user_id),
+    ui.button("Ajouter", on_click=lambda: (
+        add_item(current_family_id, cat_dict[item_cat.value], item_name.value, int(item_qty.value)),
         ui.open('/')
-    )).classes('w-full mt-2')
+    )).classes("w-full mt-2")
 
-# ---------- ITEMS ----------
+
+# ---------------------------------------------------------
+#  PANNEAU : ITEMS
+# ---------------------------------------------------------
+
 def items_panel():
     global tri_mode_items
 
-    users = get_users()
-    user_names = {u[1]: u[0] for u in users}
+    families = get_families()
+    family_dict = {f['name']: f['id'] for f in families}
 
     ui.select(
-        list(user_names.keys()),
-        value=[name for name, uid in user_names.items() if uid == current_user_id][0],
-        label='Utilisateur',
+        list(family_dict.keys()),
+        value=[name for name, fid in family_dict.items() if fid == current_family_id][0],
+        label="Famille",
         on_change=lambda e: (
-            globals().__setitem__('current_user_id', user_names[e.value]),
+            globals().__setitem__('current_family_id', family_dict[e.value]),
             ui.open('/')
         )
-    ).classes('w-full')
+    ).classes("w-full")
 
     ui.separator()
 
-    ui.label('Tous les items').classes('text-xl font-bold')
+    ui.label("Tous les items").classes("text-xl font-bold")
 
     ui.select(
-        ['Alphabétique', 'Ordre d’ajout', 'Catégorie', 'Besoin'],
+        ["Alphabétique", "Ordre d’ajout", "Catégorie", "Besoin"],
         value=tri_mode_items,
-        label='Trier par',
+        label="Trier par",
         on_change=lambda e: (
             globals().__setitem__('tri_mode_items', e.value),
             ui.open('/')
         )
-    ).classes('w-full')
+    ).classes("w-full")
 
     categories = get_categories()
-    cat_dict = {name: cid for cid, name in categories}
+    cat_dict = {c['name']: c['id'] for c in categories}
     cat_names = list(cat_dict.keys())
 
-    all_items = get_items(current_user_id)
+    items = get_items(current_family_id)
 
-    if tri_mode_items == 'Alphabétique':
-        all_items = sorted(all_items, key=lambda x: x[1].lower())
-    elif tri_mode_items == 'Catégorie':
-        all_items = sorted(all_items, key=lambda x: (x[2] or '').lower())
-    elif tri_mode_items == 'Besoin':
-        all_items = sorted(all_items, key=lambda x: x[3], reverse=True)
+    # Tri
+    if tri_mode_items == "Alphabétique":
+        items = sorted(items, key=lambda x: x['name'].lower())
+    elif tri_mode_items == "Catégorie":
+        items = sorted(items, key=lambda x: (x['category'] or '').lower())
+    elif tri_mode_items == "Besoin":
+        items = sorted(items, key=lambda x: x['needed'], reverse=True)
 
-    for iid, name, cat, needed in all_items:
-        with ui.row().classes('items-center justify-between bg-gray-100 rounded-lg px-3 py-2 mt-2 gap-2'):
+    for it in items:
+        with ui.row().classes("items-center justify-between bg-gray-100 rounded-lg px-3 py-2 mt-2 gap-2"):
 
-            with ui.row().classes('items-center gap-2'):
-                ui.label(name).classes('font-bold')
-                ui.button('✔️' if needed else '❌',
-                          on_click=lambda item_id=iid: (
-                              toggle_needed(item_id),
+            with ui.row().classes("items-center gap-2"):
+                ui.label(f"{it['name']} ({it['quantity']})").classes("font-bold")
+                ui.button("✔️" if it['needed'] else "❌",
+                          on_click=lambda iid=it['id']: (
+                              toggle_needed(iid),
                               ui.open('/')
-                          )).props('flat color=white')
+                          )).props("flat color=white")
 
-            with ui.row().classes('items-center gap-2'):
+            with ui.row().classes("items-center gap-2"):
                 ui.select(
                     cat_names,
-                    value=cat or (cat_names[0] if cat_names else None),
-                    on_change=lambda e, item_id=iid: (
-                        update_item_category(item_id, cat_dict[e.value]),
+                    value=it['category'],
+                    on_change=lambda e, iid=it['id']: (
+                        # update category
+                        add_item(current_family_id, cat_dict[e.value], it['name'], it['quantity']),
+                        delete_item(iid),
                         ui.open('/')
                     )
-                ).classes('w-32')
+                ).classes("w-32")
 
-                ui.button('🗑️',
-                          on_click=lambda item_id=iid: (
-                              delete_item(item_id),
+                ui.button("🗑️",
+                          on_click=lambda iid=it['id']: (
+                              delete_item(iid),
                               ui.open('/')
-                          )).props('flat color=red')
+                          )).props("flat color=red")
 
-# ---------- BESOINS ----------
+
+# ---------------------------------------------------------
+#  PANNEAU : BESOINS
+# ---------------------------------------------------------
+
 def needs_panel():
     global tri_mode_needs
 
-    users = get_users()
-    user_names = {u[1]: u[0] for u in users}
+    families = get_families()
+    family_dict = {f['name']: f['id'] for f in families}
 
     ui.select(
-        list(user_names.keys()),
-        value=[name for name, uid in user_names.items() if uid == current_user_id][0],
-        label='Utilisateur',
+        list(family_dict.keys()),
+        value=[name for name, fid in family_dict.items() if fid == current_family_id][0],
+        label="Famille",
         on_change=lambda e: (
-            globals().__setitem__('current_user_id', user_names[e.value]),
+            globals().__setitem__('current_family_id', family_dict[e.value]),
             ui.open('/')
         )
-    ).classes('w-full')
+    ).classes("w-full")
 
     ui.separator()
 
-    ui.label('Besoins').classes('text-xl font-bold')
+    ui.label("Besoins").classes("text-xl font-bold")
 
     ui.select(
-        ['Alphabétique', 'Ordre d’ajout'],
+        ["Alphabétique", "Ordre d’ajout"],
         value=tri_mode_needs,
-        label='Trier par',
+        label="Trier par",
         on_change=lambda e: (
             globals().__setitem__('tri_mode_needs', e.value),
             ui.open('/')
         )
-    ).classes('w-full')
+    ).classes("w-full")
 
-    needed_items = get_items(current_user_id, only_needed=True)
+    items = get_items(current_family_id)
+    needed_items = [it for it in items if it['needed'] == 1]
 
     grouped = {}
-    for iid, name, cat, needed in needed_items:
-        grouped.setdefault(cat or 'Sans catégorie', []).append((iid, name))
+    for it in needed_items:
+        grouped.setdefault(it['category'] or "Sans catégorie", []).append(it)
 
     if not grouped:
         ui.label("Aucun item marqué comme besoin.")
         return
 
-    for cat, items in grouped.items():
-        ui.label(f'📂 {cat}').classes('text-lg font-bold mt-3')
+    for cat, its in grouped.items():
+        ui.label(f"📂 {cat}").classes("text-lg font-bold mt-3")
 
-        if tri_mode_needs == 'Alphabétique':
-            items = sorted(items, key=lambda x: x[1])
+        if tri_mode_needs == "Alphabétique":
+            its = sorted(its, key=lambda x: x['name'])
 
-        for iid, name in items:
-            with ui.row().classes('items-center gap-3 mt-1'):
-                ui.button('❌',
-                          on_click=lambda item_id=iid: (
-                              toggle_needed(item_id),
+        for it in its:
+            with ui.row().classes("items-center gap-3 mt-1"):
+                ui.button("❌",
+                          on_click=lambda iid=it['id']: (
+                              toggle_needed(iid),
                               ui.open('/')
-                          )).props('flat color=red')
-                ui.label(name).classes('font-bold')
+                          )).props("flat color=red")
+                ui.label(it['name']).classes("font-bold")
 
-# ---------- NAVIGATION BAS ----------
+
+# ---------------------------------------------------------
+#  NAVIGATION BAS
+# ---------------------------------------------------------
+
 def bottom_nav():
     global current_tab
 
-    with ui.row().classes('fixed bottom-0 left-0 w-full justify-around bg-gray-800/90 text-white py-2 border-t border-gray-700 backdrop-blur'):
-        ui.button('📝 Items', on_click=lambda: (
+    with ui.row().classes(
+        "fixed bottom-0 left-0 w-full justify-around bg-gray-800/90 text-white py-2 border-t border-gray-700 backdrop-blur"
+    ):
+        ui.button("📝 Items", on_click=lambda: (
             globals().__setitem__('current_tab', 'items'),
             ui.open('/')
-        )).props('flat color=white')
+        )).props("flat color=white")
 
-        ui.button('❤️ Besoins', on_click=lambda: (
+        ui.button("❤️ Besoins", on_click=lambda: (
             globals().__setitem__('current_tab', 'besoins'),
             ui.open('/')
-        )).props('flat color=white')
+        )).props("flat color=white")
 
-        ui.button('📂 Catégories', on_click=lambda: (
+        ui.button("📂 Catégories", on_click=lambda: (
             globals().__setitem__('current_tab', 'categories'),
             ui.open('/')
-        )).props('flat color=white')
+        )).props("flat color=white")
 
-        ui.button('👤 Utilisateurs', on_click=lambda: (
-            globals().__setitem__('current_tab', 'users'),
+        ui.button("👨‍👩‍👧 Familles", on_click=lambda: (
+            globals().__setitem__('current_tab', 'families'),
             ui.open('/')
-        )).props('flat color=white')
+        )).props("flat color=white")
 
-        ui.button('⚙️ Admin', on_click=lambda: (
-            globals().__setitem__('current_tab', 'admin'),
-            ui.open('/')
-        )).props('flat color=white')
 
-# ---------- PAGE PRINCIPALE ----------
+# ---------------------------------------------------------
+#  PAGE PRINCIPALE
+# ---------------------------------------------------------
+
 @ui.page('/')
 def main_page():
 
-    ensure_default_user()
+    ensure_default_family()
 
-    with ui.row().classes('w-full justify-center mt-4'):
+    with ui.row().classes("w-full justify-center mt-4"):
         with ui.column().classes(
-            'w-full max-w-md bg-white text-black p-4 rounded-lg shadow-md '
-            'h-[calc(100vh-80px)] overflow-y-auto pb-24'
+            "w-full max-w-md bg-white text-black p-4 rounded-lg shadow-md "
+            "h-[calc(100vh-80px)] overflow-y-auto pb-24"
         ):
             if current_tab == 'items':
                 add_item_panel()
@@ -479,13 +312,19 @@ def main_page():
                 needs_panel()
             elif current_tab == 'categories':
                 categories_panel()
-            elif current_tab == 'users':
-                users_panel()
-            elif current_tab == 'admin':
-                admin_panel()
+            elif current_tab == 'families':
+                families_panel()
 
     bottom_nav()
 
-# ---------- LANCEMENT (CORRIGÉ POUR CANNER) ----------
+
+# ---------------------------------------------------------
+#  LANCEMENT CANNER
+# ---------------------------------------------------------
+
 ui.run(
-    title
+    title="Liste d’achats",
+    reload=False,
+    host="0.0.0.0",
+    port=int(os.getenv("PORT", 8080)),
+)

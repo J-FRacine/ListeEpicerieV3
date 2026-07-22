@@ -48,6 +48,13 @@ def init_db():
 
 init_db()
 
+# ---------- CRÉER UN UTILISATEUR PAR DÉFAUT SI BD VIDE ----------
+def ensure_default_user():
+    users = get_users()
+    if not users:
+        add_user("Famille 1")
+        globals()['current_user_id'] = 1
+
 # ---------- ÉTAT GLOBAL ----------
 current_user_id = 1
 current_tab = 'items'
@@ -457,6 +464,8 @@ def bottom_nav():
 @ui.page('/')
 def main_page():
 
+    ensure_default_user()
+
     with ui.row().classes('w-full justify-center mt-4'):
         with ui.column().classes(
             'w-full max-w-md bg-white text-black p-4 rounded-lg shadow-md '
@@ -479,8 +488,4 @@ def main_page():
 
 # ---------- LANCEMENT (CORRIGÉ POUR CANNER) ----------
 ui.run(
-    title='Liste d’achats',
-    reload=False,
-    host='0.0.0.0',
-    port=int(os.getenv('PORT', 8080)),
-)
+    title

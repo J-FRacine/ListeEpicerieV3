@@ -1,5 +1,10 @@
 import os
 from nicegui import ui, app
+from starlette.middleware.sessions import SessionMiddleware
+
+# Activer les sessions NiceGUI 3.14
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "dev-secret"))
+
 from db import (
     init_db,
     authenticate,
@@ -16,9 +21,6 @@ init_db()
 # -----------------------------
 #  SESSIONS UTILISATEURS
 # -----------------------------
-
-app.storage.secret = os.getenv("SESSION_SECRET", "dev-secret")
-
 
 def require_login():
     """Redirige vers /login si l'utilisateur n'est pas connecté."""
@@ -44,7 +46,7 @@ def login_page():
             return
 
         ui.get_session()['user'] = user
-        ui.notify(f'Bienvenue {user['email']} !')
+        ui.notify(f"Bienvenue {user['email']} !")
 
         if user['role'] == 'superadmin':
             ui.navigate.to('/admin')
@@ -81,8 +83,7 @@ def admin_page():
         ui.notify('Catégorie ajoutée')
         ui.navigate.to('/admin')
 
-    with ui.row():
-        ui.button('Ajouter', on_click=add_category)
+    ui.button('Ajouter', on_click=add_category)
 
     ui.separator()
 
@@ -128,8 +129,7 @@ def items_page():
         ui.notify('Item ajouté')
         ui.navigate.to('/items')
 
-    with ui.row():
-        ui.button('Ajouter', on_click=add_item_handler)
+    ui.button('Ajouter', on_click=add_item_handler)
 
     ui.separator()
 

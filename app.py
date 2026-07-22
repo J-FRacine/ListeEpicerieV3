@@ -24,7 +24,7 @@ init_db()
 # -----------------------------
 
 def require_login():
-    if 'user' not in ui.session:
+    if not getattr(app.storage, 'user', None):
         ui.navigate.to('/login')
 
 
@@ -46,7 +46,7 @@ def login_page():
             ui.notify('Identifiants invalides', color='red')
             return
 
-        ui.session['user'] = user
+        app.storage.user = user
         ui.notify(f"Bienvenue {user['email']} !")
 
         if user['role'] == 'superadmin':
@@ -65,7 +65,7 @@ def login_page():
 def admin_page():
     require_login()
 
-    user = ui.session['user']
+    user = app.storage.user
     if user['role'] != 'superadmin':
         ui.label("Accès refusé").classes('text-red-500')
         return
@@ -92,7 +92,7 @@ def admin_page():
         ui.label(f"- {c['name']}")
 
     async def logout():
-        ui.session.clear()
+        app.storage.clear()
         ui.navigate.to('/login')
 
     ui.button('Déconnexion', on_click=logout).classes('mt-6')
@@ -106,7 +106,7 @@ def admin_page():
 def items_page():
     require_login()
 
-    user = ui.session['user']
+    user = app.storage.user
     family_id = user['family_id']
 
     ui.label('Liste d’épicerie familiale').classes('text-2xl font-bold mb-4')
@@ -143,7 +143,7 @@ def items_page():
             ui.button('Supprimer', color='red', on_click=delete_handler)
 
     async def logout():
-        ui.session.clear()
+        app.storage.clear()
         ui.navigate.to('/login')
 
     ui.button('Déconnexion', on_click=logout).classes('mt-6')

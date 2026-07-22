@@ -106,3 +106,15 @@ def delete_item(item_id):
         with conn.cursor() as cur:
             cur.execute("DELETE FROM items WHERE id = %s;", (item_id,))
             conn.commit()
+cur.execute("""
+    CREATE TABLE IF NOT EXISTS items (
+        id SERIAL PRIMARY KEY,
+        family_id INTEGER NOT NULL REFERENCES families(id),
+        category_id INTEGER NOT NULL REFERENCES categories(id),
+        name TEXT NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 1,
+        needed INTEGER NOT NULL DEFAULT 0
+    );
+""")
+
+

@@ -1,8 +1,8 @@
 import sqlite3
-import os
 import csv
 from datetime import datetime
 from nicegui import ui
+import os
 
 # ---------- BASE DE DONNÉES (persistante locale) ----------
 DB_PATH = 'items.db'  # adapté pour Canner
@@ -477,5 +477,10 @@ def main_page():
 
     bottom_nav()
 
-# ---------- LANCEMENT ----------
-ui.run(title='Liste d’achats', reload=False)
+# ---------- LANCEMENT (CORRIGÉ POUR CANNER) ----------
+ui.run(
+    title='Liste d’achats',
+    reload=False,
+    host='0.0.0.0',
+    port=int(os.getenv('PORT', 8080)),
+)

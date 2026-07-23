@@ -1,7 +1,18 @@
 # ---------------------------------------------------------
 #  PANNEAU : ADMIN
 # ---------------------------------------------------------
+
 from nicegui import ui
+
+from db import (
+    get_items,
+    get_families,
+    get_categories,
+    create_category,
+    add_item,
+)
+from state import current_family_id
+
 
 def admin_panel():
     ui.label("Administration").classes("text-xl font-bold")
@@ -23,7 +34,7 @@ def admin_panel():
 
         with open(filename, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
-            writer.writerow(['ID', 'Nom', 'Catégorie', 'Besoin', 'Utilisateur'])
+            writer.writerow(['ID', 'Nom', 'Catégorie', 'Besoin', 'Famille'])
             for it in items:
                 writer.writerow([
                     it['id'],
@@ -70,7 +81,7 @@ def admin_panel():
             add_item(current_family_id, cat_id, name, 1, needed)
 
         ui.notify("Importation terminée !")
-        ui.navigate.to('/')
+        ui.navigate.to('/?tab=admin')
 
     ui.upload(
         label="Importer CSV",
@@ -122,12 +133,13 @@ def admin_panel():
             add_item(dst_id, cat_id, it['name'], it['quantity'], it['needed'])
 
         ui.notify("Copie terminée !")
+        ui.navigate.to('/?tab=admin')
 
     ui.button("Copier", on_click=copy_family).classes("w-full mt-2")
 
     ui.separator()
 
-    # ---------- NOUVEAU : BASCULER MODE CLAIR/SOMBRE ----------
+    # ---------- MODE CLAIR / SOMBRE ----------
     ui.label("Apparence").classes("text-lg font-bold mt-4")
 
     ui.button(
@@ -137,7 +149,7 @@ def admin_panel():
 
     ui.separator()
 
-    # ---------- NOUVEAU : RETOUR AU MENU DES APPLICATIONS ----------
+    # ---------- RETOUR AU MENU DES APPLICATIONS ----------
     ui.button(
         "⬅ Retour au menu des applications",
         on_click=lambda: ui.navigate.to('/apps')

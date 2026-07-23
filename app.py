@@ -1,6 +1,7 @@
 from nicegui import ui, app
+import os
 
-from db import init_db
+from db import init_db, get_families
 from state import (
     get_current_tab,
     set_current_tab,
@@ -19,6 +20,10 @@ from utils import apply_theme
 # ---------------------------------------------------------
 
 def portal_page():
+    print("==============================")
+    print("DEBUG: entrée dans portal_page()")
+    print("==============================")
+
     ui.label("Bienvenue").classes("text-2xl font-bold mt-8")
 
     ui.button(
@@ -41,8 +46,16 @@ def main_page():
     print("==============================")
 
     # Vérification authentification
-    if not app.storage.user.get('auth'):
-        print("DEBUG: utilisateur non authentifié → redirection")
+    try:
+        auth = app.storage.user.get('auth')
+        print(f"DEBUG: auth = {auth}")
+    except Exception as e:
+        print(f"DEBUG: ERREUR storage.user → {e}")
+        ui.navigate.to('/portal')
+        return
+
+    if not auth:
+        print("DEBUG: utilisateur non authentifié → redirection vers /portal")
         ui.navigate.to('/portal')
         return
 
@@ -64,9 +77,17 @@ def main_page():
     print(f"DEBUG: current_family_id AVANT auto-select = {current_family_id}")
 
     if current_family_id is None:
-        set_current_family_id(1)
-        current_family_id = 1
-        print(f"DEBUG: current_family_id APRÈS auto-select = {current_family_id}")
+        familles = get_families()
+        print(f"DEBUG: familles trouvées = {familles}")
+
+        if familles:
+            set_current_family_id(familles[0]['id'])
+            current_family_id = familles[0]['id']
+            print(f"DEBUG: current_family_id APRÈS auto-select = {current_family_id}")
+        else:
+            print("DEBUG: AUCUNE famille → affichage message")
+            ui.label("⚠️ Aucune famille trouvée. Ajoutez-en dans l’onglet Familles.")
+            return
 
     # Rendu du panneau
     print(f"DEBUG: rendu panneau → {current_tab}")
@@ -115,14 +136,12 @@ def index():
 # LANCEMENT
 # ---------------------------------------------------------
 
-import os
-
-
+print("DEBUG: initialisation DB…")
 init_db()
+print("DEBUG: DB initialisée")
 
 ui.run(
     host='0.0.0.0',
     port=int(os.getenv("PORT", 8080)),
     storage_secret=os.getenv("STORAGE_SECRET", "dev-secret")
 )
-

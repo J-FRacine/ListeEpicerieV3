@@ -650,6 +650,10 @@ def main_page():
                 add_item_panel()
                 ui.separator()
                 items_panel()
+                ui.button("⬅ Retour au menu des applications", 
+                    on_click=lambda: ui.navigate.to('/apps')
+                ).classes("w-full mt-4")
+
 
             elif current_tab == 'besoins':
                 needs_panel()

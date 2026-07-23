@@ -2,7 +2,7 @@ import os
 from nicegui import ui, app
 from fastapi import Request
 
-# --- Import des modules séparés ---
+# --- Import des modules ---
 from header import jf_header
 from navigation import bottom_nav
 
@@ -13,11 +13,8 @@ from categories import categories_panel
 from families import families_panel
 
 from state import current_tab, current_family_id
-from utils import ensure_family_selected, apply_theme
-
-from db import init_db
-from db import get_families
-
+from utils import apply_theme
+from db import init_db, get_families
 
 # ---------------------------------------------------------
 #  INITIALISATION BD
@@ -39,10 +36,11 @@ def logout():
 @ui.page('/portal')
 def portal_page():
     apply_theme()
-
     jf_header()
 
-    with ui.column().classes("w-full max-w-md mx-auto mt-10 p-6 bg-white dark:bg-gray-800 rounded-lg shadow"):
+    with ui.column().classes(
+        "w-full max-w-md mx-auto mt-10 p-6 bg-white dark:bg-gray-800 rounded-lg shadow"
+    ):
         ui.label("Portail des applications de J‑François").classes("text-2xl font-bold mb-4")
 
         code = ui.input("Code d’accès").classes("w-full")
@@ -71,11 +69,13 @@ def apps_page():
 
     jf_header()
 
-    with ui.column().classes("w-full max-w-md mx-auto mt-10 p-6 bg-white dark:bg-gray-800 rounded-lg shadow"):
+    with ui.column().classes(
+        "w-full max-w-md mx-auto mt-10 p-6 bg-white dark:bg-gray-800 rounded-lg shadow"
+    ):
         ui.label("Applications disponibles").classes("text-2xl font-bold mb-4")
 
         ui.button("Liste d’achats", on_click=lambda: ui.navigate.to('/')).classes("w-full mb-2")
-        ui.button("Admin", on_click=lambda: ui.navigate.to('/admin')).classes("w-full mb-2")
+        ui.button("Admin", on_click=lambda: ui.navigate.to('/?tab=admin')).classes("w-full mb-2")
         ui.button("Déconnexion", on_click=lambda: ui.navigate.to('/logout')).classes("w-full mt-4")
 
 # ---------------------------------------------------------
@@ -85,14 +85,13 @@ def apps_page():
 @ui.page('/')
 def main_page(request: Request):
     apply_theme()
-    
-    # Sélection automatique de la première famille si aucune n'est choisie
-    
+
+    # --- Sélection automatique de la première famille ---
     if current_family_id is None:
         families = get_families()
         if families:
             globals()['current_family_id'] = families[0]['id']
-            
+
     if not app.storage.user.get('auth'):
         ui.navigate.to('/portal')
         return
@@ -104,8 +103,8 @@ def main_page(request: Request):
 
     with ui.row().classes("w-full justify-center mt-4"):
         with ui.column().classes(
-            "w-full max-w-md bg-white text-black p-4 rounded-lg shadow-md "
-            "h-[calc(100vh-80px)] overflow-y-auto pb-24"
+            "w-full max-w-md bg-white dark:bg-gray-900 text-black dark:text-white "
+            "p-4 rounded-lg shadow-md h-[calc(100vh-80px)] overflow-y-auto pb-24"
         ):
 
             if current_tab == 'items':
@@ -113,7 +112,7 @@ def main_page(request: Request):
                 ui.separator()
                 items_panel()
                 ui.button("⬅ Retour au menu des applications",
-                    on_click=lambda: ui.navigate.to('/apps')
+                          on_click=lambda: ui.navigate.to('/apps')
                 ).classes("w-full mt-4")
 
             elif current_tab == 'besoins':

@@ -334,10 +334,10 @@ def admin_panel():
         import csv
         import io
 
-        # Canner: fichiers dans event['files']
-        uploaded = event['files'][0]
-        raw = uploaded.read()
-        content = raw.decode('utf-8')
+        # Canner: fichier dans event.file
+        uploaded = event.file
+        raw = uploaded.read()            # bytes
+        content = raw.decode('utf-8')    # texte
         f = io.StringIO(content)
 
         reader = csv.DictReader(f)
@@ -367,6 +367,7 @@ def admin_panel():
         on_upload=import_csv,
         multiple=False
     ).classes("w-full mt-2")
+
 
 
 # ---------------------------------------------------------

@@ -1,6 +1,7 @@
 # ---------------------------------------------------------
 #  PANNEAU : AJOUT ITEM
 # ---------------------------------------------------------
+from nicegui import ui
 
 def add_item_panel():
     ui.label("Ajouter un item").classes("text-xl font-bold")

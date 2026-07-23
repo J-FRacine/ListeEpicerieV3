@@ -9,7 +9,12 @@ from db import (
     get_families,
 )
 
-from state import current_family_id, tri_mode_items
+from state import (
+    get_current_family_id,
+    set_current_family_id,
+    get_tri_mode_items,
+    set_tri_mode_items,
+)
 from utils import ensure_family_selected, ensure_categories_exist
 
 
@@ -19,6 +24,8 @@ from utils import ensure_family_selected, ensure_categories_exist
 
 def add_item_panel():
     print("DEBUG add_item_panel() → entrée")
+
+    current_family_id = get_current_family_id()
     print(f"DEBUG add_item_panel() → current_family_id = {current_family_id}")
 
     ui.label("Ajouter un item").classes("text-xl font-bold")
@@ -64,6 +71,8 @@ def add_item_panel():
 
 def items_panel():
     print("DEBUG items_panel() → entrée")
+
+    current_family_id = get_current_family_id()
     print(f"DEBUG items_panel() → current_family_id = {current_family_id}")
 
     if not ensure_family_selected(current_family_id):
@@ -75,13 +84,14 @@ def items_panel():
 
     family_dict = {f['name']: f['id'] for f in families}
 
+    # Sélecteur de famille
     ui.select(
         list(family_dict.keys()),
         value=[name for name, fid in family_dict.items() if fid == current_family_id][0],
         label="Famille",
         on_change=lambda e: (
             print(f"DEBUG items_panel() → famille changée = {family_dict[e.value]}"),
-            globals().__setitem__('current_family_id', family_dict[e.value]),
+            set_current_family_id(family_dict[e.value]),
             ui.navigate.to('/?tab=items')
         )
     ).classes("w-full")
@@ -90,13 +100,15 @@ def items_panel():
 
     ui.label("Tous les items").classes("text-xl font-bold")
 
+    tri_mode = get_tri_mode_items()
+
     ui.select(
         ["Alphabétique", "Ordre d’ajout", "Catégorie", "Besoin"],
-        value=tri_mode_items,
+        value=tri_mode,
         label="Trier par",
         on_change=lambda e: (
             print(f"DEBUG items_panel() → tri changé = {e.value}"),
-            globals().__setitem__('tri_mode_items', e.value),
+            set_tri_mode_items(e.value),
             ui.navigate.to('/?tab=items')
         )
     ).classes("w-full")
@@ -114,16 +126,19 @@ def items_panel():
     items = get_items(current_family_id)
     print(f"DEBUG items_panel() → items = {items}")
 
-    if tri_mode_items == "Alphabétique":
+    # Tri
+    if tri_mode == "Alphabétique":
         items = sorted(items, key=lambda x: x['name'].strip().lower())
-    elif tri_mode_items == "Catégorie":
+    elif tri_mode == "Catégorie":
         items = sorted(items, key=lambda x: (x['category'] or '').lower())
-    elif tri_mode_items == "Besoin":
+    elif tri_mode == "Besoin":
         items = sorted(items, key=lambda x: x['needed'], reverse=True)
 
+    # Affichage des items
     for it in items:
         with ui.row().classes("items-center justify-between bg-gray-100 rounded-lg px-3 py-2 mt-2 gap-2"):
 
+            # Nom + besoin
             with ui.row().classes("items-center gap-2"):
                 ui.label(f"{it['name']} ({it['quantity']})").classes("font-bold")
                 ui.button(
@@ -135,6 +150,7 @@ def items_panel():
                     )
                 ).props("flat color=white")
 
+            # Catégorie + suppression
             with ui.row().classes("items-center gap-2"):
                 ui.select(
                     cat_names,

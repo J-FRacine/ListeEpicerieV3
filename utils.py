@@ -11,7 +11,7 @@ def ensure_family_selected(current_family_id):
 
     if current_family_id is None:
         print("DEBUG utils.ensure_family_selected() → AUCUNE famille sélectionnée")
-        ui.notify("DEBUG: aucune famille sélectionnée")
+        ui.notify("Aucune famille sélectionnée")
         ui.label("⚠️ Aucune famille sélectionnée. Choisissez-en une dans l’onglet Familles.")
         return False
 
@@ -31,7 +31,7 @@ def ensure_categories_exist():
 
     if not categories:
         print("DEBUG utils.ensure_categories_exist() → AUCUNE catégorie")
-        ui.notify("DEBUG: aucune catégorie disponible")
+        ui.notify("Aucune catégorie disponible")
         ui.label("⚠️ Aucune catégorie disponible. Ajoutez-en dans l’onglet Catégories.")
         return False
 

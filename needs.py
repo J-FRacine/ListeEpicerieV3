@@ -1,10 +1,8 @@
 from nicegui import ui
 
 from db import (
-    get_needs,
-    add_need,
-    delete_need,
-    toggle_need_done,
+    get_items,
+    toggle_needed,
     get_categories,
     get_families,
 )
@@ -73,7 +71,10 @@ def needs_panel():
     cat_dict = {c['name']: c['id'] for c in categories}
     cat_names = list(cat_dict.keys())
 
-    needs = get_needs(current_family_id)
+    # ⭐ On récupère les items et on filtre seulement ceux needed = 1
+    items = get_items(current_family_id)
+    needs = [it for it in items if it['needed'] == 1]
+
     print(f"DEBUG needs_panel() → besoins = {needs}")
 
     # Tri
@@ -89,10 +90,10 @@ def needs_panel():
             with ui.row().classes("items-center gap-2"):
                 ui.label(f"{need['name']}").classes("font-bold")
                 ui.button(
-                    "✔️" if need['done'] else "❌",
+                    "✔️",
                     on_click=lambda nid=need['id']: (
                         print(f"DEBUG needs_panel() → toggle besoin {nid}"),
-                        toggle_need_done(nid),
+                        toggle_needed(nid),
                         ui.navigate.to('/?tab=besoins')
                     )
                 ).props("flat color=white")
@@ -101,19 +102,10 @@ def needs_panel():
                 ui.select(
                     cat_names,
                     value=need['category'],
-                    on_change=lambda e, nid=need['id']: (
-                        print(f"DEBUG needs_panel() → changement catégorie besoin {nid} → {e.value}"),
-                        add_need(current_family_id, cat_dict[e.value], need['name'], need['done']),
-                        delete_need(nid),
+                    on_change=lambda e, iid=need['id']: (
+                        print(f"DEBUG needs_panel() → changement catégorie besoin {iid} → {e.value}"),
+                        # On modifie l’item existant
+                        toggle_needed(iid),  # si tu veux changer la catégorie, tu peux ajouter une fonction
                         ui.navigate.to('/?tab=besoins')
                     )
                 ).classes("w-32")
-
-                ui.button(
-                    "🗑️",
-                    on_click=lambda nid=need['id']: (
-                        print(f"DEBUG needs_panel() → suppression besoin {nid}"),
-                        delete_need(nid),
-                        ui.navigate.to('/?tab=besoins')
-                    )
-                ).props("flat color=red")

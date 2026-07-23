@@ -85,13 +85,33 @@ def families_panel():
         for f in families:
             with ui.row().classes("items-center justify-between mt-1"):
                 ui.label(f['name']).classes("font-bold")
-                ui.button(
-                    "Activer",
-                    on_click=lambda fid=f['id']: (
-                        globals().__setitem__('current_family_id', fid),
-                        ui.navigate.to('/')
-                    )
-                ).props("flat color=white")
+
+                with ui.row().classes("gap-2"):
+                    ui.button(
+                        "Activer",
+                        on_click=lambda fid=f['id']: (
+                            globals().__setitem__('current_family_id', fid),
+                            ui.navigate.to('/')
+                        )
+                    ).props("flat color=white")
+
+                    ui.button(
+                        "🗑️",
+                        on_click=lambda fid=f['id'], fname=f['name']: ui.dialog().classes("w-80").with_content(
+                            ui.label(f"Supprimer la famille '{fname}' ?").classes("text-lg font-bold"),
+                            ui.label("Cette action est irréversible."),
+                            ui.row().classes("justify-end gap-2 mt-4").with_content(
+                                ui.button("Annuler", on_click=lambda d=ui.context.dialog: d.close()),
+                                ui.button("Supprimer", on_click=lambda d=ui.context.dialog: (
+                                    delete_family(fid),
+                                    d.close(),
+                                    ui.notify(f"Famille '{fname}' supprimée."),
+                                    ui.navigate.to('/')
+                                )).props("color=red")
+                            )
+                        )
+                    ).props("flat color=red")
+
 
     ui.separator()
 

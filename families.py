@@ -1,40 +1,47 @@
 from nicegui import ui
 
 from db import get_families, create_family, delete_family
-from state import current_family_id
+from state import (
+    get_current_family_id,
+    set_current_family_id,
+)
 from utils import ensure_family_selected
 
 
 def families_panel():
     print("DEBUG families_panel() → entrée")
+
+    current_family_id = get_current_family_id()
     print(f"DEBUG families_panel() → current_family_id = {current_family_id}")
 
     families = get_families()
     print(f"DEBUG families_panel() → familles = {families}")
 
-    # Sélection automatique si aucune famille
+    # Sélection automatique si aucune famille active
     if current_family_id is None and families:
-        globals()['current_family_id'] = families[0]['id']
-        print(f"DEBUG families_panel() → auto-select = {current_family_id}")
-        ui.notify(f"Famille auto-sélectionnée dans families_panel: {current_family_id}")
+        set_current_family_id(families[0]['id'])
+        print(f"DEBUG families_panel() → auto-select = {get_current_family_id()}")
+        ui.notify(f"Famille auto-sélectionnée dans families_panel: {get_current_family_id()}")
 
-    ensure_family_selected(current_family_id)
+    ensure_family_selected(get_current_family_id())
 
     ui.label("Gestion des familles").classes("text-xl font-bold")
 
     family_dict = {f['name']: f['id'] for f in families}
 
+    # Sélecteur de famille active
     if families:
         ui.label("Famille active")
 
         def set_active_family(e):
-            globals()['current_family_id'] = family_dict[e.value]
-            print(f"DEBUG families_panel() → famille changée = {current_family_id}")
+            fid = family_dict[e.value]
+            set_current_family_id(fid)
+            print(f"DEBUG families_panel() → famille changée = {fid}")
             ui.navigate.to('/?tab=families')
 
         ui.select(
             list(family_dict.keys()),
-            value=[name for name, fid in family_dict.items() if fid == current_family_id][0],
+            value=[name for name, fid in family_dict.items() if fid == get_current_family_id()][0],
             on_change=set_active_family
         ).classes("w-full")
     else:
@@ -56,7 +63,7 @@ def families_panel():
                     ui.button(
                         "Activer",
                         on_click=lambda fid=f['id']: (
-                            globals().__setitem__('current_family_id', fid),
+                            set_current_family_id(fid),
                             print(f"DEBUG families_panel() → famille activée = {fid}"),
                             ui.navigate.to('/?tab=families')
                         )

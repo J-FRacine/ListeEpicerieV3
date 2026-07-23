@@ -16,16 +16,6 @@ from utils import apply_theme
 
 
 # ---------------------------------------------------------
-# HEALTH CHECK (Canner)
-# ---------------------------------------------------------
-
-@ui.page('/health')
-def health():
-    print("DEBUG: health check OK")
-    ui.label("OK")
-
-
-# ---------------------------------------------------------
 # PORTAIL (login simple)
 # ---------------------------------------------------------
 
@@ -56,17 +46,12 @@ def main_page():
     print("==============================")
 
     # Vérification authentification
-    try:
-        auth = app.storage.user.get('auth')
-        print(f"DEBUG: auth = {auth}")
-    except Exception as e:
-        print(f"DEBUG: ERREUR storage.user → {e}")
-        auth = None
+    auth = app.storage.user.get('auth')
+    print(f"DEBUG: auth = {auth}")
 
-    # Si pas authentifié → afficher le portail (PAS de redirection)
     if not auth:
-        print("DEBUG: utilisateur non authentifié → affichage portail dans /")
-        portal_page()
+        print("DEBUG: utilisateur non authentifié → redirection vers /portal")
+        ui.navigate.to('/portal')
         return
 
     # Appliquer le thème
@@ -103,15 +88,19 @@ def main_page():
     print(f"DEBUG: rendu panneau → {current_tab}")
 
     if current_tab == 'items':
+        print("DEBUG: rendu items_panel()")
         items_panel()
 
     elif current_tab == 'besoins':
+        print("DEBUG: rendu needs_panel()")
         needs_panel()
 
     elif current_tab == 'familles':
+        print("DEBUG: rendu families_panel()")
         families_panel()
 
     elif current_tab == 'categories':
+        print("DEBUG: rendu categories_panel()")
         categories_panel()
 
     # Barre de navigation

@@ -332,26 +332,29 @@ def admin_panel():
 
     def import_csv(file):
         import csv
+        import io
 
-        with open(file.name, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
+        content = file.content.read().decode('utf-8')
+        f = io.StringIO(content)
 
-            for row in reader:
-                name = row['Nom']
-                category = row['Catégorie']
-                needed = int(row['Besoin'])
+        reader = csv.DictReader(f)
 
+        for row in reader:
+            name = row['Nom']
+            category = row['Catégorie']
+            needed = int(row['Besoin'])
+
+            categories = get_categories()
+            cat_dict = {c['name']: c['id'] for c in categories}
+
+            if category not in cat_dict:
+                create_category(category)
                 categories = get_categories()
                 cat_dict = {c['name']: c['id'] for c in categories}
 
-                if category not in cat_dict:
-                    create_category(category)
-                    categories = get_categories()
-                    cat_dict = {c['name']: c['id'] for c in categories}
+            cat_id = cat_dict[category]
 
-                cat_id = cat_dict[category]
-
-                add_item(current_family_id, cat_id, name, 1, needed)
+            add_item(current_family_id, cat_id, name, 1, needed)
 
         ui.notify("Importation terminée !")
         ui.navigate.to('/')

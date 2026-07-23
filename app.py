@@ -16,6 +16,8 @@ from state import current_tab, current_family_id
 from utils import ensure_family_selected, apply_theme
 
 from db import init_db
+from db import get_families
+
 
 # ---------------------------------------------------------
 #  INITIALISATION BD

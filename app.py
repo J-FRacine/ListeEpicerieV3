@@ -12,7 +12,12 @@ from needs import needs_panel
 from categories import categories_panel
 from families import families_panel
 
-from state import current_tab, current_family_id
+from state import (
+    get_current_family_id,
+    set_current_family_id,
+    get_current_tab,
+    set_current_tab,
+)
 from utils import apply_theme
 from db import init_db, get_families
 
@@ -97,15 +102,18 @@ def main_page(request: Request):
     print("DEBUG: entrée dans main_page()")
     print("==============================")
 
-    # --- Sélection automatique de la première famille (DOIT être en premier) ---
+    # --- Lire la famille actuelle ---
+    current_family_id = get_current_family_id()
     print(f"DEBUG: current_family_id AVANT auto-select = {current_family_id}")
+
+    # --- Sélection automatique de la première famille ---
     if current_family_id is None:
         families = get_families()
         print(f"DEBUG: familles trouvées = {families}")
         if families:
-            globals()['current_family_id'] = families[0]['id']
-            print(f"DEBUG: current_family_id APRÈS auto-select = {current_family_id}")
-            ui.notify(f"Famille auto-sélectionnée: {current_family_id}")
+            set_current_family_id(families[0]['id'])
+            print(f"DEBUG: current_family_id APRÈS auto-select = {get_current_family_id()}")
+            ui.notify(f"Famille auto-sélectionnée: {get_current_family_id()}")
         else:
             print("DEBUG: Aucune famille dans la BD !")
             ui.notify("Aucune famille dans la BD !")
@@ -117,12 +125,14 @@ def main_page(request: Request):
         ui.navigate.to('/portal')
         return
 
-    # --- LIRE L’ONGLET DEPUIS L’URL ---
+    # --- Lire l’onglet depuis l’URL ---
     tab = request.query_params.get('tab')
     print(f"DEBUG: tab dans URL = {tab}")
-    if tab:
-        globals()['current_tab'] = tab
 
+    if tab:
+        set_current_tab(tab)
+
+    current_tab = get_current_tab()
     print(f"DEBUG: current_tab utilisé = {current_tab}")
 
     with ui.row().classes("w-full justify-center mt-4"):
@@ -136,9 +146,6 @@ def main_page(request: Request):
             if current_tab == 'items':
                 print("DEBUG: rendu items_panel()")
                 items_panel()
-                ui.button("⬅ Retour au menu des applications",
-                          on_click=lambda: ui.navigate.to('/apps')
-                ).classes("w-full mt-4")
 
             elif current_tab == 'add_item':
                 print("DEBUG: rendu add_item_panel()")

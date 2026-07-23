@@ -1,6 +1,7 @@
 # ---------------------------------------------------------
 #  PANNEAU : BESOINS
 # ---------------------------------------------------------
+from nicegui import ui
 
 def needs_panel():
     global tri_mode_needs

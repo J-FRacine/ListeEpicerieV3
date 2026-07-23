@@ -73,6 +73,20 @@ def families_panel():
         ui.label("⚠️ Aucune famille. Créez-en une ci-dessous.")
 
     ui.separator()
+    
+ui.label("Familles existantes").classes("text-lg font-bold mt-2")
+
+families = get_families()
+if not families:
+    ui.label("Aucune famille trouvée.")
+else:
+    for f in families:
+        with ui.row().classes("items-center justify-between mt-1"):
+            ui.label(f['name']).classes("font-bold")
+            ui.button("Activer", on_click=lambda fid=f['id']: (
+                globals().__setitem__('current_family_id', fid),
+                ui.navigate.to('/')
+            )).props("flat color=white")
 
     new_name = ui.input("Nouvelle famille").classes("w-full")
     ui.button("Créer", on_click=lambda: (
@@ -366,6 +380,43 @@ def admin_panel():
         on_upload=import_csv,
         multiple=False
     ).classes("w-full mt-2")
+    
+ui.separator()
+ui.label("Copier les items d'une famille à une autre").classes("text-lg font-bold mt-2")
+
+families = get_families()
+family_dict = {f['name']: f['id'] for f in families}
+
+source = ui.select(list(family_dict.keys()), label="Source").classes("w-full")
+dest = ui.select(list(family_dict.keys()), label="Destination").classes("w-full")
+def copy_family():
+    src_id = family_dict[source.value]
+    dst_id = family_dict[dest.value]
+
+    if src_id == dst_id:
+        ui.notify("Impossible de copier dans la même famille.")
+        return
+
+    items = get_items(src_id)
+
+    # Copier catégories manquantes
+    categories = get_categories()
+    cat_dict = {c['name']: c['id'] for c in categories}
+
+ui.button("Copier", on_click=copy_family).classes("w-full mt-2")
+
+    for it in items:
+        cat_name = it['category']
+        if cat_name not in cat_dict:
+            create_category(cat_name)
+            categories = get_categories()
+            cat_dict = {c['name']: c['id'] for c in categories}
+
+        cat_id = cat_dict[cat_name]
+
+        add_item(dst_id, cat_id, it['name'], it['quantity'], it['needed'])
+
+    ui.notify("Copie terminée !")
 
 
 # ---------------------------------------------------------

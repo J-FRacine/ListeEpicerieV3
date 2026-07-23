@@ -675,4 +675,5 @@ ui.run(
     reload=False,
     host="0.0.0.0",
     port=int(os.getenv("PORT", 8080)),
+    storage_secret="jf-secret-key",
 )

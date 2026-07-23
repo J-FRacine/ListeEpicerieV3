@@ -2,7 +2,15 @@
 #  PANNEAU : AJOUT ITEM
 # ---------------------------------------------------------
 from nicegui import ui
-from db import get_items, add_item, delete_item, toggle_needed
+
+from db import (
+    get_items,
+    add_item,
+    delete_item,
+    toggle_needed,
+    get_categories,
+)
+
 from state import current_family_id
 from utils import ensure_family_selected, ensure_categories_exist
 

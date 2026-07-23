@@ -135,7 +135,7 @@ def families_panel():
 #  PANNEAU : CATÉGORIES
 # ---------------------------------------------------------
 
-    def categories_panel():
+def categories_panel():
         ui.label("Gestion des catégories").classes("text-xl font-bold")
 
         # --- Ajouter une catégorie ---

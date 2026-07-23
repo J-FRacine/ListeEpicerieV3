@@ -9,14 +9,21 @@ from db import (
     delete_item,
     toggle_needed,
     get_categories,
+    get_families,
 )
 
-from state import current_family_id
+from state import current_family_id, tri_mode_items
 from utils import ensure_family_selected, ensure_categories_exist
+
 
 def add_item_panel():
     ui.label("Ajouter un item").classes("text-xl font-bold")
 
+    # Vérifier famille
+    if not ensure_family_selected(current_family_id):
+        return
+
+    # Vérifier catégories
     if not ensure_categories_exist():
         return
 
@@ -29,16 +36,19 @@ def add_item_panel():
     item_qty = ui.number("Quantité", value=1).classes("w-full")
     item_needed = ui.checkbox("J’en ai besoin")
 
-    ui.button("Ajouter", on_click=lambda: (
-        add_item(
-            current_family_id,
-            cat_dict[item_cat.value],
-            item_name.value,
-            int(item_qty.value),
-            1 if item_needed.value else 0
-        ),
-        ui.navigate.to('/')
-    )).classes("w-full mt-2")
+    ui.button(
+        "Ajouter",
+        on_click=lambda: (
+            add_item(
+                current_family_id,
+                cat_dict[item_cat.value],
+                item_name.value,
+                int(item_qty.value),
+                1 if item_needed.value else 0
+            ),
+            ui.navigate.to('/')
+        )
+    ).classes("w-full mt-2")
 
 
 # ---------------------------------------------------------
@@ -48,7 +58,8 @@ def add_item_panel():
 def items_panel():
     global tri_mode_items
 
-    if not ensure_family_selected():
+    # Vérifier famille
+    if not ensure_family_selected(current_family_id):
         return
 
     families = get_families()
@@ -79,6 +90,7 @@ def items_panel():
         )
     ).classes("w-full")
 
+    # Vérifier catégories
     if not ensure_categories_exist():
         return
 
@@ -88,6 +100,7 @@ def items_panel():
 
     items = get_items(current_family_id)
 
+    # Tri
     if tri_mode_items == "Alphabétique":
         items = sorted(items, key=lambda x: x['name'].strip().lower())
     elif tri_mode_items == "Catégorie":
@@ -95,16 +108,19 @@ def items_panel():
     elif tri_mode_items == "Besoin":
         items = sorted(items, key=lambda x: x['needed'], reverse=True)
 
+    # Affichage des items
     for it in items:
         with ui.row().classes("items-center justify-between bg-gray-100 rounded-lg px-3 py-2 mt-2 gap-2"):
 
             with ui.row().classes("items-center gap-2"):
                 ui.label(f"{it['name']} ({it['quantity']})").classes("font-bold")
-                ui.button("✔️" if it['needed'] else "❌",
-                          on_click=lambda iid=it['id']: (
-                              toggle_needed(iid),
-                              ui.navigate.to('/')
-                          )).props("flat color=white")
+                ui.button(
+                    "✔️" if it['needed'] else "❌",
+                    on_click=lambda iid=it['id']: (
+                        toggle_needed(iid),
+                        ui.navigate.to('/')
+                    )
+                ).props("flat color=white")
 
             with ui.row().classes("items-center gap-2"):
                 ui.select(
@@ -117,8 +133,10 @@ def items_panel():
                     )
                 ).classes("w-32")
 
-                ui.button("🗑️",
-                          on_click=lambda iid=it['id']: (
-                              delete_item(iid),
-                              ui.navigate.to('/')
-                          )).props("flat color=red")
+                ui.button(
+                    "🗑️",
+                    on_click=lambda iid=it['id']: (
+                        delete_item(iid),
+                        ui.navigate.to('/')
+                    )
+                ).props("flat color=red")

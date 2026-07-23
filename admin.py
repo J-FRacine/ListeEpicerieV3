@@ -139,14 +139,16 @@ def admin_panel():
 
     ui.separator()
 
-    # ---------- MODE CLAIR / SOMBRE ----------
-    # ---------- MODE CLAIR / SOMBRE ----------
+
+   # ---------- MODE CLAIR / SOMBRE ----------
     ui.label("Apparence").classes("text-lg font-bold mt-4")
 
     def toggle_theme():
-        if ui.dark_mode().value:
+        if app.storage.user.get('theme') == 'dark':
+            app.storage.user['theme'] = 'light'
             ui.dark_mode().disable()
         else:
+            app.storage.user['theme'] = 'dark'
             ui.dark_mode().enable()
 
     ui.button(

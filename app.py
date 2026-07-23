@@ -49,9 +49,11 @@ def main_page():
     auth = app.storage.user.get('auth')
     print(f"DEBUG: auth = {auth}")
 
+    # ❗ Correction : NE PAS REDIRIGER
+    # On affiche simplement le portail dans /
     if not auth:
-        print("DEBUG: utilisateur non authentifié → redirection vers /portal")
-        ui.navigate.to('/portal')
+        print("DEBUG: utilisateur non authentifié → affichage portail dans /")
+        portal_page()
         return
 
     # Appliquer le thème
@@ -88,19 +90,15 @@ def main_page():
     print(f"DEBUG: rendu panneau → {current_tab}")
 
     if current_tab == 'items':
-        print("DEBUG: rendu items_panel()")
         items_panel()
 
     elif current_tab == 'besoins':
-        print("DEBUG: rendu needs_panel()")
         needs_panel()
 
     elif current_tab == 'familles':
-        print("DEBUG: rendu families_panel()")
         families_panel()
 
     elif current_tab == 'categories':
-        print("DEBUG: rendu categories_panel()")
         categories_panel()
 
     # Barre de navigation

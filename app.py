@@ -59,11 +59,13 @@ def families_panel():
     families = get_families()
     family_dict = {f['name']: f['id'] for f in families}
 
+    # Sélecteur de famille active
     if families:
         ui.label("Famille active")
         ui.select(
             list(family_dict.keys()),
-            value=[name for name, fid in family_dict.items() if fid == current_family_id][0],
+            value=[name for name, fid in family_dict.items() if fid == current_family_id][0]
+            if current_family_id in family_dict.values() else list(family_dict.keys())[0],
             on_change=lambda e: (
                 globals().__setitem__('current_family_id', family_dict[e.value]),
                 ui.navigate.to('/')
@@ -73,21 +75,27 @@ def families_panel():
         ui.label("⚠️ Aucune famille. Créez-en une ci-dessous.")
 
     ui.separator()
-    
-ui.label("Familles existantes").classes("text-lg font-bold mt-2")
 
-families = get_families()
-if not families:
-    ui.label("Aucune famille trouvée.")
-else:
-    for f in families:
-        with ui.row().classes("items-center justify-between mt-1"):
-            ui.label(f['name']).classes("font-bold")
-            ui.button("Activer", on_click=lambda fid=f['id']: (
-                globals().__setitem__('current_family_id', fid),
-                ui.navigate.to('/')
-            )).props("flat color=white")
+    # Liste de toutes les familles
+    ui.label("Familles existantes").classes("text-lg font-bold mt-2")
 
+    if not families:
+        ui.label("Aucune famille trouvée.")
+    else:
+        for f in families:
+            with ui.row().classes("items-center justify-between mt-1"):
+                ui.label(f['name']).classes("font-bold")
+                ui.button(
+                    "Activer",
+                    on_click=lambda fid=f['id']: (
+                        globals().__setitem__('current_family_id', fid),
+                        ui.navigate.to('/')
+                    )
+                ).props("flat color=white")
+
+    ui.separator()
+
+    # Création d’une nouvelle famille
     new_name = ui.input("Nouvelle famille").classes("w-full")
     ui.button("Créer", on_click=lambda: (
         create_family(new_name.value),
@@ -170,7 +178,8 @@ def items_panel():
 
     ui.select(
         list(family_dict.keys()),
-        value=[name for name, fid in family_dict.items() if fid == current_family_id][0],
+        value=[name for name, fid in family_dict.items() if fid == current_family_id][0]
+        if current_family_id in family_dict.values() else list(family_dict.keys())[0],
         label="Famille",
         on_change=lambda e: (
             globals().__setitem__('current_family_id', family_dict[e.value]),
@@ -252,7 +261,8 @@ def needs_panel():
 
     ui.select(
         list(family_dict.keys()),
-        value=[name for name, fid in family_dict.items() if fid == current_family_id][0],
+        value=[name for name, fid in family_dict.items() if fid == current_family_id][0]
+        if current_family_id in family_dict.values() else list(family_dict.keys())[0],
         label="Famille",
         on_change=lambda e: (
             globals().__setitem__('current_family_id', family_dict[e.value]),
@@ -380,43 +390,53 @@ def admin_panel():
         on_upload=import_csv,
         multiple=False
     ).classes("w-full mt-2")
-    
-ui.separator()
-ui.label("Copier les items d'une famille à une autre").classes("text-lg font-bold mt-2")
 
-families = get_families()
-family_dict = {f['name']: f['id'] for f in families}
+    ui.separator()
 
-source = ui.select(list(family_dict.keys()), label="Source").classes("w-full")
-dest = ui.select(list(family_dict.keys()), label="Destination").classes("w-full")
-def copy_family():
-    src_id = family_dict[source.value]
-    dst_id = family_dict[dest.value]
+    # ---------- COPIE FAMILLE -> FAMILLE ----------
+    ui.label("Copier les items d'une famille à une autre").classes("text-lg font-bold mt-2")
 
-    if src_id == dst_id:
-        ui.notify("Impossible de copier dans la même famille.")
+    families = get_families()
+    if not families:
+        ui.label("Aucune famille disponible pour la copie.")
         return
 
-    items = get_items(src_id)
+    family_dict = {f['name']: f['id'] for f in families}
 
-    # Copier catégories manquantes
-    categories = get_categories()
-    cat_dict = {c['name']: c['id'] for c in categories}
+    source = ui.select(list(family_dict.keys()), label="Source").classes("w-full")
+    dest = ui.select(list(family_dict.keys()), label="Destination").classes("w-full")
 
-ui.button("Copier", on_click=copy_family).classes("w-full mt-2")
+    def copy_family():
+        if not source.value or not dest.value:
+            ui.notify("Sélectionnez une source et une destination.")
+            return
 
-    for it in items:
-        cat_name = it['category']
-        if cat_name not in cat_dict:
-            create_category(cat_name)
-            categories = get_categories()
-            cat_dict = {c['name']: c['id'] for c in categories}
+        src_id = family_dict[source.value]
+        dst_id = family_dict[dest.value]
 
-        cat_id = cat_dict[cat_name]
+        if src_id == dst_id:
+            ui.notify("Impossible de copier dans la même famille.")
+            return
 
-        add_item(dst_id, cat_id, it['name'], it['quantity'], it['needed'])
+        items = get_items(src_id)
 
-    ui.notify("Copie terminée !")
+        categories = get_categories()
+        cat_dict = {c['name']: c['id'] for c in categories}
+
+        for it in items:
+            cat_name = it['category']
+            if cat_name not in cat_dict:
+                create_category(cat_name)
+                categories = get_categories()
+                cat_dict = {c['name']: c['id'] for c in categories}
+
+            cat_id = cat_dict[cat_name]
+
+            add_item(dst_id, cat_id, it['name'], it['quantity'], it['needed'])
+
+        ui.notify("Copie terminée !")
+
+    ui.button("Copier", on_click=copy_family).classes("w-full mt-2")
 
 
 # ---------------------------------------------------------

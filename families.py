@@ -1,15 +1,25 @@
 # ---------------------------------------------------------
 #  PANNEAU : FAMILLES
 # ---------------------------------------------------------
+
 from nicegui import ui
 
+from db import get_families, create_family, delete_family
+from state import current_family_id
+from utils import ensure_family_selected
+
+
 def families_panel():
+
+    # Vérifier famille sélectionnée
+    ensure_family_selected(current_family_id)
+
     ui.label("Gestion des familles").classes("text-xl font-bold")
 
     families = get_families()
     family_dict = {f['name']: f['id'] for f in families}
 
-    # Sélecteur de famille active
+    # --- Sélecteur de famille active ---
     if families:
         ui.label("Famille active")
         ui.select(
@@ -18,7 +28,7 @@ def families_panel():
             if current_family_id in family_dict.values() else list(family_dict.keys())[0],
             on_change=lambda e: (
                 globals().__setitem__('current_family_id', family_dict[e.value]),
-                ui.navigate.to('/')
+                ui.navigate.to('/?tab=families')
             )
         ).classes("w-full")
     else:
@@ -26,7 +36,7 @@ def families_panel():
 
     ui.separator()
 
-    # Liste de toutes les familles
+    # --- Liste des familles ---
     ui.label("Familles existantes").classes("text-lg font-bold mt-2")
 
     if not families:
@@ -37,16 +47,17 @@ def families_panel():
                 ui.label(f['name']).classes("font-bold")
 
                 with ui.row().classes("gap-2"):
+
                     # Activer
                     ui.button(
                         "Activer",
                         on_click=lambda fid=f['id']: (
                             globals().__setitem__('current_family_id', fid),
-                            ui.navigate.to('/')
+                            ui.navigate.to('/?tab=families')
                         )
                     ).props("flat color=white")
 
-                    # Supprimer (dialogue NiceGUI 1.x)
+                    # Supprimer (dialogue)
                     def open_delete_dialog(fid=f['id'], fname=f['name']):
                         with ui.dialog() as dialog:
                             with ui.card().classes("p-4"):
@@ -61,7 +72,7 @@ def families_panel():
                                             delete_family(fid),
                                             dialog.close(),
                                             ui.notify(f"Famille '{fname}' supprimée."),
-                                            ui.navigate.to('/')
+                                            ui.navigate.to('/?tab=families')
                                         )
                                     ).props("color=red")
 
@@ -71,9 +82,12 @@ def families_panel():
 
     ui.separator()
 
-    # Création d’une nouvelle famille
+    # --- Création d’une nouvelle famille ---
     new_name = ui.input("Nouvelle famille").classes("w-full")
-    ui.button("Créer", on_click=lambda: (
-        create_family(new_name.value),
-        ui.navigate.to('/')
-    )).classes("w-full mt-2")
+    ui.button(
+        "Créer",
+        on_click=lambda: (
+            create_family(new_name.value),
+            ui.navigate.to('/?tab=families')
+        )
+    ).classes("w-full mt-2")

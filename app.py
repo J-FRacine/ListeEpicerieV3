@@ -63,9 +63,9 @@ def main_page():
         print(f"DEBUG: ERREUR storage.user → {e}")
         auth = None
 
-    # Si pas authentifié → afficher le portail
+    # Si pas authentifié → afficher le portail (PAS de redirection)
     if not auth:
-        print("DEBUG: utilisateur non authentifié → affichage portail")
+        print("DEBUG: utilisateur non authentifié → affichage portail dans /")
         portal_page()
         return
 

@@ -12,6 +12,7 @@ from db import (
     add_item,
     delete_item,
     toggle_needed,
+    get_connection,
 )
 
 # ---------------------------------------------------------

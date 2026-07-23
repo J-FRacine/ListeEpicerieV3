@@ -330,36 +330,37 @@ def admin_panel():
     # ---------- IMPORT ----------
     ui.label("Importer un fichier CSV").classes("text-lg font-bold mt-2")
 
-    def import_csv(file):
-        import csv
-        import io
+def import_csv(event):
+    import csv
+    import io
 
-        content = file.content.read().decode('utf-8')
-        f = io.StringIO(content)
+    # NiceGUI 3.14: les fichiers sont dans event.files
+    uploaded = event.files[0]
+    content = uploaded.read().decode('utf-8')
+    f = io.StringIO(content)
 
-        reader = csv.DictReader(f)
+    reader = csv.DictReader(f)
 
-        for row in reader:
-            name = row['Nom']
-            category = row['Catégorie']
-            needed = int(row['Besoin'])
+    for row in reader:
+        name = row['Nom']
+        category = row['Catégorie']
+        needed = int(row['Besoin'])
 
+        categories = get_categories()
+        cat_dict = {c['name']: c['id'] for c in categories}
+
+        if category not in cat_dict:
+            create_category(category)
             categories = get_categories()
             cat_dict = {c['name']: c['id'] for c in categories}
 
-            if category not in cat_dict:
-                create_category(category)
-                categories = get_categories()
-                cat_dict = {c['name']: c['id'] for c in categories}
+        cat_id = cat_dict[category]
 
-            cat_id = cat_dict[category]
+        add_item(current_family_id, cat_id, name, 1, needed)
 
-            add_item(current_family_id, cat_id, name, 1, needed)
+    ui.notify("Importation terminée !")
+    ui.navigate.to('/')
 
-        ui.notify("Importation terminée !")
-        ui.navigate.to('/')
-
-    ui.upload(on_upload=import_csv).classes("w-full mt-2")
 
 
 # ---------------------------------------------------------

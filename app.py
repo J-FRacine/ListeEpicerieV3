@@ -81,6 +81,11 @@ def main_page():
         ui.navigate.to('/portal')
         return
 
+    # --- NOUVEAU : lire l’onglet depuis l’URL ---
+    tab = ui.get_query().get('tab')
+    if tab:
+        globals()['current_tab'] = tab
+
     with ui.row().classes("w-full justify-center mt-4"):
         with ui.column().classes(
             "w-full max-w-md bg-white text-black p-4 rounded-lg shadow-md "
@@ -108,6 +113,7 @@ def main_page():
                 admin_panel()
 
     bottom_nav()
+
 
 # ---------------------------------------------------------
 #  LANCEMENT CANNER

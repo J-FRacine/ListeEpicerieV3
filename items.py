@@ -10,7 +10,7 @@ from db import (
 )
 
 from state import current_family_id, tri_mode_items
-from utils import ensure_family_selected, ensure_categories_exist
+from utils import ensure_family_selected
 
 
 # ---------------------------------------------------------

@@ -1,13 +1,16 @@
 import os
 from nicegui import ui, app
 
+# --- Import des modules séparés ---
 from header import jf_header
 from navigation import bottom_nav
+
 from admin import admin_panel
 from items import items_panel, add_item_panel
 from needs import needs_panel
 from categories import categories_panel
 from families import families_panel
+
 from state import current_tab, current_family_id
 from utils import ensure_family_selected
 
@@ -88,7 +91,7 @@ def main_page():
                 add_item_panel()
                 ui.separator()
                 items_panel()
-                ui.button("⬅ Retour au menu des applications", 
+                ui.button("⬅ Retour au menu des applications",
                     on_click=lambda: ui.navigate.to('/apps')
                 ).classes("w-full mt-4")
 

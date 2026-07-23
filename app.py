@@ -334,9 +334,10 @@ def admin_panel():
         import csv
         import io
 
-        uploaded = event.files[0]                 # premier fichier
-        raw = uploaded.read()                     # bytes
-        content = raw.decode('utf-8')             # texte
+        # Canner: fichiers dans event['files']
+        uploaded = event['files'][0]
+        raw = uploaded.read()
+        content = raw.decode('utf-8')
         f = io.StringIO(content)
 
         reader = csv.DictReader(f)

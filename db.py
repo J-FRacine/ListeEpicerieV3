@@ -106,3 +106,12 @@ def delete_item(item_id):
         with conn.cursor() as cur:
             cur.execute("DELETE FROM items WHERE id = %s;", (item_id,))
             conn.commit()
+
+def delete_family(family_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM items WHERE family_id = %s", (family_id,))
+    cur.execute("DELETE FROM families WHERE id = %s", (family_id,))
+    conn.commit()
+    cur.close()
+    conn.close()

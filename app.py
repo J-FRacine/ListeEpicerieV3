@@ -115,5 +115,12 @@ def index():
 # LANCEMENT
 # ---------------------------------------------------------
 
+import os
+
 init_db()
-ui.run()
+
+ui.run(
+    host='0.0.0.0',
+    port=int(os.getenv("PORT", 8080))
+)
+

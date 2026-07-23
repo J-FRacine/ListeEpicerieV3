@@ -1,7 +1,7 @@
 from nicegui import ui
 
 def jf_header():
-    ui.dark_mode().auto()  # mode auto déplacé ici
+    ui.dark_mode().auto()
 
     with ui.header().classes(
         "w-full bg-white dark:bg-gray-900 shadow-md p-3 flex flex-col items-center"

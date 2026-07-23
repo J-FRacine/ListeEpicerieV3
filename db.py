@@ -115,3 +115,72 @@ def delete_family(family_id):
     conn.commit()
     cur.close()
     conn.close()
+    # ---------------------------------------------------------
+#  BESOIN (NEEDS)
+# ---------------------------------------------------------
+
+def get_needs(family_id):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, name, category, done
+        FROM needs
+        WHERE family_id = %s
+        ORDER BY id ASC
+    """, (family_id,))
+
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    return [
+        {
+            'id': r[0],
+            'name': r[1],
+            'category': r[2],
+            'done': r[3],
+        }
+        for r in rows
+    ]
+
+
+def add_need(family_id, category_id, name, done):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO needs (family_id, category, name, done)
+        VALUES (%s, %s, %s, %s)
+    """, (family_id, category_id, name, done))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def delete_need(need_id):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("DELETE FROM needs WHERE id = %s", (need_id,))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def toggle_need_done(need_id):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        UPDATE needs
+        SET done = CASE WHEN done = 1 THEN 0 ELSE 1 END
+        WHERE id = %s
+    """, (need_id,))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+

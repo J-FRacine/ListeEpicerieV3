@@ -21,14 +21,16 @@ def add_item_panel():
     ui.label("Ajouter un item").classes("text-xl font-bold")
 
     # Vérifier famille
-    if not ensure_family_selected(current_family_id):
+    if current_family_id is None:
+        ui.label("⚠️ Aucune famille sélectionnée. Choisissez-en une dans l’onglet Familles.")
         return
 
     # Vérifier catégories
-    if not ensure_categories_exist():
+    categories = get_categories()
+    if not categories:
+        ui.label("⚠️ Aucune catégorie disponible. Ajoutez-en dans l’onglet Catégories.")
         return
 
-    categories = get_categories()
     cat_dict = {c['name']: c['id'] for c in categories}
     cat_names = list(cat_dict.keys())
 
@@ -47,7 +49,7 @@ def add_item_panel():
                 int(item_qty.value),
                 1 if item_needed.value else 0
             ),
-            ui.navigate.to('/')
+            ui.navigate.to('/?tab=items')
         )
     ).classes("w-full mt-2")
 
@@ -60,20 +62,21 @@ def items_panel():
     global tri_mode_items
 
     # Vérifier famille
-    if not ensure_family_selected(current_family_id):
+    if current_family_id is None:
+        ui.label("⚠️ Aucune famille sélectionnée. Choisissez-en une dans l’onglet Familles.")
         return
 
     families = get_families()
     family_dict = {f['name']: f['id'] for f in families}
 
+    # Sélecteur de famille
     ui.select(
         list(family_dict.keys()),
-        value=[name for name, fid in family_dict.items() if fid == current_family_id][0]
-        if current_family_id in family_dict.values() else list(family_dict.keys())[0],
+        value=[name for name, fid in family_dict.items() if fid == current_family_id][0],
         label="Famille",
         on_change=lambda e: (
             globals().__setitem__('current_family_id', family_dict[e.value]),
-            ui.navigate.to('/')
+            ui.navigate.to('/?tab=items')
         )
     ).classes("w-full")
 
@@ -81,21 +84,23 @@ def items_panel():
 
     ui.label("Tous les items").classes("text-xl font-bold")
 
+    # Tri
     ui.select(
         ["Alphabétique", "Ordre d’ajout", "Catégorie", "Besoin"],
         value=tri_mode_items,
         label="Trier par",
         on_change=lambda e: (
             globals().__setitem__('tri_mode_items', e.value),
-            ui.navigate.to('/')
+            ui.navigate.to('/?tab=items')
         )
     ).classes("w-full")
 
     # Vérifier catégories
-    if not ensure_categories_exist():
+    categories = get_categories()
+    if not categories:
+        ui.label("⚠️ Aucune catégorie disponible. Ajoutez-en dans l’onglet Catégories.")
         return
 
-    categories = get_categories()
     cat_dict = {c['name']: c['id'] for c in categories}
     cat_names = list(cat_dict.keys())
 
@@ -119,7 +124,7 @@ def items_panel():
                     "✔️" if it['needed'] else "❌",
                     on_click=lambda iid=it['id']: (
                         toggle_needed(iid),
-                        ui.navigate.to('/')
+                        ui.navigate.to('/?tab=items')
                     )
                 ).props("flat color=white")
 
@@ -130,7 +135,7 @@ def items_panel():
                     on_change=lambda e, iid=it['id']: (
                         add_item(current_family_id, cat_dict[e.value], it['name'], it['quantity'], it['needed']),
                         delete_item(iid),
-                        ui.navigate.to('/')
+                        ui.navigate.to('/?tab=items')
                     )
                 ).classes("w-32")
 
@@ -138,6 +143,6 @@ def items_panel():
                     "🗑️",
                     on_click=lambda iid=it['id']: (
                         delete_item(iid),
-                        ui.navigate.to('/')
+                        ui.navigate.to('/?tab=items')
                     )
                 ).props("flat color=red")

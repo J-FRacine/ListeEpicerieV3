@@ -330,39 +330,42 @@ def admin_panel():
     # ---------- IMPORT ----------
     ui.label("Importer un fichier CSV").classes("text-lg font-bold mt-2")
 
-def import_csv(event):
-    import csv
-    import io
+    def import_csv(event):
+        import csv
+        import io
 
-    # NiceGUI 3.14: les fichiers sont dans event.files
-    uploaded = event.files[0]                 # premier fichier uploadé
-    content = uploaded.read().decode('utf-8') # lire le contenu
-    f = io.StringIO(content)
+        uploaded = event.files[0]                 # premier fichier
+        raw = uploaded.read()                     # bytes
+        content = raw.decode('utf-8')             # texte
+        f = io.StringIO(content)
 
-    reader = csv.DictReader(f)
+        reader = csv.DictReader(f)
 
-    for row in reader:
-        name = row['Nom']
-        category = row['Catégorie']
-        needed = int(row['Besoin'])
+        for row in reader:
+            name = row['Nom']
+            category = row['Catégorie']
+            needed = int(row['Besoin'])
 
-        # Vérifier si la catégorie existe
-        categories = get_categories()
-        cat_dict = {c['name']: c['id'] for c in categories}
-
-        if category not in cat_dict:
-            create_category(category)
             categories = get_categories()
             cat_dict = {c['name']: c['id'] for c in categories}
 
-        cat_id = cat_dict[category]
+            if category not in cat_dict:
+                create_category(category)
+                categories = get_categories()
+                cat_dict = {c['name']: c['id'] for c in categories}
 
-        add_item(current_family_id, cat_id, name, 1, needed)
+            cat_id = cat_dict[category]
 
-    ui.notify("Importation terminée !")
-    ui.navigate.to('/')
+            add_item(current_family_id, cat_id, name, 1, needed)
 
+        ui.notify("Importation terminée !")
+        ui.navigate.to('/')
 
+    ui.upload(
+        label="Importer CSV",
+        on_upload=import_csv,
+        multiple=False
+    ).classes("w-full mt-2")
 
 
 # ---------------------------------------------------------

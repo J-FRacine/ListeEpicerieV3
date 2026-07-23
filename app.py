@@ -20,11 +20,11 @@ from db import (
 # ---------------------------------------------------------
 from nicegui import ui, app
 
-# --- Mode clair/sombre automatique ---
-ui.dark_mode().auto()
-
 # --- Header moderne centré ---
 def jf_header():
+    # Mode clair/sombre automatique (déplacé ici, plus en global)
+    ui.dark_mode().auto()
+
     with ui.header().classes(
         "w-full bg-white dark:bg-gray-900 shadow-md p-3 flex flex-col items-center"
     ):
@@ -68,7 +68,6 @@ def ensure_categories_exist():
         ui.label("⚠️ Aucune catégorie trouvée. Allez dans l’onglet 'Catégories' pour en créer une.")
         return False
     return True
-
 
 # ---------------------------------------------------------
 #  PANNEAU : FAMILLES

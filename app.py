@@ -238,7 +238,7 @@ def items_panel():
     items = get_items(current_family_id)
 
     if tri_mode_items == "Alphabétique":
-        items = sorted(items, key=lambda x: x['name'].lower())
+        items = sorted(items, key=lambda x: x['name'].strip().lower())
     elif tri_mode_items == "Catégorie":
         items = sorted(items, key=lambda x: (x['category'] or '').lower())
     elif tri_mode_items == "Besoin":
@@ -326,7 +326,7 @@ def needs_panel():
         ui.label(f"📂 {cat}").classes("text-lg font-bold mt-3")
 
         if tri_mode_needs == "Alphabétique":
-            its = sorted(its, key=lambda x: x['name'])
+            its = sorted(its, key=lambda x: x['name'].strip().lower())
 
         for it in its:
             with ui.row().classes("items-center gap-3 mt-1"):

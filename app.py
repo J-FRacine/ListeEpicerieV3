@@ -83,7 +83,14 @@ def apps_page():
 @ui.page('/')
 def main_page(request: Request):
     apply_theme()
-
+    
+    # Sélection automatique de la première famille si aucune n'est choisie
+    
+    if current_family_id is None:
+        families = get_families()
+        if families:
+            globals()['current_family_id'] = families[0]['id']
+            
     if not app.storage.user.get('auth'):
         ui.navigate.to('/portal')
         return

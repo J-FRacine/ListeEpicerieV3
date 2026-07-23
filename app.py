@@ -16,6 +16,25 @@ from db import (
 )
 
 # ---------------------------------------------------------
+#  INITIALISATION HEADER
+# ---------------------------------------------------------
+from nicegui import ui, app
+
+# --- Mode clair/sombre automatique ---
+ui.dark_mode().auto()
+
+# --- Header moderne centré ---
+def jf_header():
+    with ui.header().classes(
+        "w-full bg-white dark:bg-gray-900 shadow-md p-3 flex flex-col items-center"
+    ):
+        ui.image('logo_jf.png').classes("w-12 h-12 mb-1")
+        ui.label("JF Apps").classes("text-xl font-bold text-gray-800 dark:text-gray-200")
+        ui.label("Liste d’achats — Portail sécurisé").classes(
+            "text-sm text-gray-600 dark:text-gray-400"
+        )
+
+# ---------------------------------------------------------
 #  INITIALISATION BD POSTGRES
 # ---------------------------------------------------------
 init_db()
@@ -471,9 +490,8 @@ def admin_panel():
         import csv
         import io
 
-        # Canner: fichier dans event.file (async read)
-        raw = await event.file.read()       # bytes
-        content = raw.decode('utf-8')       # texte
+        raw = await event.file.read()
+        content = raw.decode('utf-8')
         f = io.StringIO(content)
 
         reader = csv.DictReader(f)
@@ -551,6 +569,23 @@ def admin_panel():
 
     ui.button("Copier", on_click=copy_family).classes("w-full mt-2")
 
+    ui.separator()
+
+    # ---------- NOUVEAU : BASCULER MODE CLAIR/SOMBRE ----------
+    ui.label("Apparence").classes("text-lg font-bold mt-4")
+
+    ui.button(
+        "🌗 Basculer mode clair / sombre",
+        on_click=lambda: ui.dark_mode().toggle()
+    ).classes("w-full mt-2")
+
+    ui.separator()
+
+    # ---------- NOUVEAU : RETOUR AU MENU DES APPLICATIONS ----------
+    ui.button(
+        "⬅ Retour au menu des applications",
+        on_click=lambda: ui.navigate.to('/apps')
+    ).classes("w-full mt-4")
 
 # ---------------------------------------------------------
 #  NAVIGATION BAS
@@ -592,7 +627,9 @@ def bottom_nav():
 #  PAGE PRINCIPALE
 # ---------------------------------------------------------
 from nicegui import ui, app
-
+# ---------------------------------------------------------
+#  PORTAIL 
+# ---------------------------------------------------------
 # --- Sécurité simple ---
 VALID_CODE = "1234"
 VALID_PASSWORD = "jf2024"
@@ -604,7 +641,9 @@ def logout():
 
 @ui.page('/portal')
 def portal_page():
-    with ui.column().classes("w-full max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow"):
+    jf_header()
+
+    with ui.column().classes("w-full max-w-md mx-auto mt-10 p-6 bg-white dark:bg-gray-800 rounded-lg shadow"):
         ui.label("Portail des applications de J‑François").classes("text-2xl font-bold mb-4")
 
         code = ui.input("Code d’accès").classes("w-full")
@@ -619,19 +658,20 @@ def portal_page():
 
         ui.button("Connexion", on_click=login).classes("w-full mt-4")
 
+
 @ui.page('/apps')
 def apps_page():
     if not app.storage.user.get('auth'):
         ui.navigate.to('/portal')
         return
 
-    with ui.column().classes("w-full max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow"):
+    jf_header()
+
+    with ui.column().classes("w-full max-w-md mx-auto mt-10 p-6 bg-white dark:bg-gray-800 rounded-lg shadow"):
         ui.label("Applications disponibles").classes("text-2xl font-bold mb-4")
 
         ui.button("Liste d’achats", on_click=lambda: ui.navigate.to('/')).classes("w-full mb-2")
-
-        ui.button("Application #2 (à venir)", on_click=lambda: ui.notify("Pas encore développée")).classes("w-full mb-2")
-
+        ui.button("Admin", on_click=lambda: ui.navigate.to('/admin')).classes("w-full mb-2")
         ui.button("Déconnexion", on_click=lambda: ui.navigate.to('/logout')).classes("w-full mt-4")
 
 @ui.page('/')
@@ -675,9 +715,11 @@ def main_page():
 # ---------------------------------------------------------
 
 ui.run(
-    title="Liste d’achats",
+    title="JF Apps — Liste d’achats",
+    favicon="logo_jf.png",
     reload=False,
     host="0.0.0.0",
     port=int(os.getenv("PORT", 8080)),
     storage_secret="jf-secret-key",
 )
+

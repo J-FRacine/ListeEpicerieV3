@@ -335,8 +335,8 @@ def import_csv(event):
     import io
 
     # NiceGUI 3.14: les fichiers sont dans event.files
-    uploaded = event.files[0]
-    content = uploaded.read().decode('utf-8')
+    uploaded = event.files[0]                 # premier fichier uploadé
+    content = uploaded.read().decode('utf-8') # lire le contenu
     f = io.StringIO(content)
 
     reader = csv.DictReader(f)
@@ -346,6 +346,7 @@ def import_csv(event):
         category = row['Catégorie']
         needed = int(row['Besoin'])
 
+        # Vérifier si la catégorie existe
         categories = get_categories()
         cat_dict = {c['name']: c['id'] for c in categories}
 
@@ -360,6 +361,7 @@ def import_csv(event):
 
     ui.notify("Importation terminée !")
     ui.navigate.to('/')
+
 
 
 

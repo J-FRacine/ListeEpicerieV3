@@ -1,6 +1,7 @@
 # ---------------------------------------------------------
 #  PANNEAU : ADMIN
 # ---------------------------------------------------------
+from nicegui import ui
 
 def admin_panel():
     ui.label("Administration").classes("text-xl font-bold")

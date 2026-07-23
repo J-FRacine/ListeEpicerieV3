@@ -1,132 +1,56 @@
-import os
 from nicegui import ui, app
-from fastapi import Request
 
-# --- Import des modules ---
-from header import jf_header
-from navigation import bottom_nav
-
-from admin import admin_panel
-from items import items_panel, add_item_panel
-from needs import needs_panel
-from categories import categories_panel
-from families import families_panel
-
+from db import init_db
 from state import (
-    get_current_family_id,
-    set_current_family_id,
     get_current_tab,
     set_current_tab,
+    get_current_family_id,
+    set_current_family_id,
 )
+from items import items_panel
+from needs import needs_panel
+from families import families_panel
+from categories import categories_panel
 from utils import apply_theme
-from db import init_db, get_families
+
 
 # ---------------------------------------------------------
-#  INITIALISATION BD
-# ---------------------------------------------------------
-print("DEBUG: init_db() lancé")
-init_db()
-print("DEBUG: init_db() terminé")
-
-# ---------------------------------------------------------
-#  PORTAIL
+# PORTAIL (login simple)
 # ---------------------------------------------------------
 
-VALID_CODE = "1234"
-VALID_PASSWORD = "jf2024"
-
-@app.get('/logout')
-def logout():
-    print("DEBUG: logout() → suppression session utilisateur")
-    app.storage.user.clear()
-    ui.navigate.to('/portal')
-
-@ui.page('/portal')
 def portal_page():
-    print("DEBUG: entrée dans portal_page()")
-    apply_theme()
-    jf_header()
+    ui.label("Bienvenue").classes("text-2xl font-bold mt-8")
 
-    with ui.column().classes(
-        "w-full max-w-md mx-auto mt-10 p-6 bg-white dark:bg-gray-800 rounded-lg shadow"
-    ):
-        ui.label("Portail des applications de J‑François").classes("text-2xl font-bold mb-4")
+    ui.button(
+        "Entrer",
+        on_click=lambda: (
+            print("DEBUG portal_page() → authentification"),
+            app.storage.user.update({'auth': True}),
+            ui.navigate.to('/')
+        )
+    ).classes("mt-4")
 
-        code = ui.input("Code d’accès").classes("w-full")
-        password = ui.input("Mot de passe", password=True).classes("w-full")
-
-        def login():
-            print(f"DEBUG: tentative login → code={code.value}, mdp={password.value}")
-            if code.value == VALID_CODE and password.value == VALID_PASSWORD:
-                print("DEBUG: login réussi")
-                app.storage.user['auth'] = True
-                ui.navigate.to('/apps')
-            else:
-                print("DEBUG: login échoué")
-                ui.notify("Code ou mot de passe incorrect", color="red")
-
-        ui.button("Connexion", on_click=login).classes("w-full mt-4")
 
 # ---------------------------------------------------------
-#  MENU DES APPS
+# PAGE PRINCIPALE
 # ---------------------------------------------------------
 
-@ui.page('/apps')
-def apps_page():
-    print("DEBUG: entrée dans apps_page()")
-    apply_theme()
-
-    if not app.storage.user.get('auth'):
-        print("DEBUG: utilisateur non authentifié → redirection")
-        ui.navigate.to('/portal')
-        return
-
-    jf_header()
-
-    with ui.column().classes(
-        "w-full max-w-md mx-auto mt-10 p-6 bg-white dark:bg-gray-800 rounded-lg shadow"
-    ):
-        ui.label("Applications disponibles").classes("text-2xl font-bold mb-4")
-
-        ui.button("Liste d’achats", on_click=lambda: ui.navigate.to('/')).classes("w-full mb-2")
-        ui.button("Admin", on_click=lambda: ui.navigate.to('/?tab=admin')).classes("w-full mb-2")
-        ui.button("Déconnexion", on_click=lambda: ui.navigate.to('/logout')).classes("w-full mt-4")
-
-# ---------------------------------------------------------
-#  PAGE PRINCIPALE
-# ---------------------------------------------------------
-
-@ui.page('/')
-def main_page(request: Request):
-    print("\n\n==============================")
+def main_page():
+    print("==============================")
     print("DEBUG: entrée dans main_page()")
     print("==============================")
 
-    # --- Lire la famille actuelle ---
-    current_family_id = get_current_family_id()
-    print(f"DEBUG: current_family_id AVANT auto-select = {current_family_id}")
-
-    # --- Sélection automatique de la première famille ---
-    if current_family_id is None:
-        families = get_families()
-        print(f"DEBUG: familles trouvées = {families}")
-        if families:
-            set_current_family_id(families[0]['id'])
-            print(f"DEBUG: current_family_id APRÈS auto-select = {get_current_family_id()}")
-            ui.notify(f"Famille auto-sélectionnée: {get_current_family_id()}")
-        else:
-            print("DEBUG: Aucune famille dans la BD !")
-            ui.notify("Aucune famille dans la BD !")
-
-    apply_theme()
-
+    # Vérification authentification
     if not app.storage.user.get('auth'):
         print("DEBUG: utilisateur non authentifié → redirection")
         ui.navigate.to('/portal')
         return
 
-    # --- Lire l’onglet depuis l’URL ---
-    tab = request.query_params.get('tab')
+    # Appliquer le thème
+    apply_theme()
+
+    # Lire l’onglet dans l’URL
+    tab = ui.context.request.query_params.get('tab')
     print(f"DEBUG: tab dans URL = {tab}")
 
     if tab:
@@ -135,51 +59,61 @@ def main_page(request: Request):
     current_tab = get_current_tab()
     print(f"DEBUG: current_tab utilisé = {current_tab}")
 
-    with ui.row().classes("w-full justify-center mt-4"):
-        with ui.column().classes(
-            "w-full max-w-md bg-white dark:bg-gray-900 text-black dark:text-white "
-            "p-4 rounded-lg shadow-md h-[calc(100vh-80px)] overflow-y-auto pb-24"
-        ):
+    # Auto-sélection famille si aucune
+    current_family_id = get_current_family_id()
+    print(f"DEBUG: current_family_id AVANT auto-select = {current_family_id}")
 
-            print(f"DEBUG: rendu panneau → {current_tab}")
+    if current_family_id is None:
+        set_current_family_id(1)
+        current_family_id = 1
+        print(f"DEBUG: current_family_id APRÈS auto-select = {current_family_id}")
 
-            if current_tab == 'items':
-                print("DEBUG: rendu items_panel()")
-                items_panel()
+    # Rendu du panneau
+    print(f"DEBUG: rendu panneau → {current_tab}")
 
-            elif current_tab == 'add_item':
-                print("DEBUG: rendu add_item_panel()")
-                add_item_panel()
+    if current_tab == 'items':
+        print("DEBUG: rendu items_panel()")
+        items_panel()
 
-            elif current_tab == 'besoins':
-                print("DEBUG: rendu needs_panel()")
-                needs_panel()
+    elif current_tab == 'besoins':
+        print("DEBUG: rendu needs_panel()")
+        needs_panel()
 
-            elif current_tab == 'categories':
-                print("DEBUG: rendu categories_panel()")
-                categories_panel()
+    elif current_tab == 'familles':
+        print("DEBUG: rendu families_panel()")
+        families_panel()
 
-            elif current_tab == 'families':
-                print("DEBUG: rendu families_panel()")
-                families_panel()
+    elif current_tab == 'categories':
+        print("DEBUG: rendu categories_panel()")
+        categories_panel()
 
-            elif current_tab == 'admin':
-                print("DEBUG: rendu admin_panel()")
-                admin_panel()
-
+    # Barre de navigation
     print("DEBUG: rendu bottom_nav()")
-    bottom_nav()
+
+    with ui.footer().classes("bg-gray-200 p-2"):
+        with ui.row().classes("justify-around w-full"):
+            ui.button("Items", on_click=lambda: ui.navigate.to('/?tab=items'))
+            ui.button("Besoins", on_click=lambda: ui.navigate.to('/?tab=besoins'))
+            ui.button("Familles", on_click=lambda: ui.navigate.to('/?tab=familles'))
+            ui.button("Catégories", on_click=lambda: ui.navigate.to('/?tab=categories'))
+
 
 # ---------------------------------------------------------
-#  LANCEMENT CANNER
+# ROUTES
 # ---------------------------------------------------------
 
-print("DEBUG: lancement ui.run()")
-ui.run(
-    title="JF Apps — Liste d’achats",
-    favicon="logo_jf.png",
-    reload=False,
-    host="0.0.0.0",
-    port=int(os.getenv("PORT", 8080)),
-    storage_secret="jf-secret-key",
-)
+@ui.page('/portal')
+def portal():
+    portal_page()
+
+@ui.page('/')
+def index():
+    main_page()
+
+
+# ---------------------------------------------------------
+# LANCEMENT
+# ---------------------------------------------------------
+
+init_db()
+ui.run()

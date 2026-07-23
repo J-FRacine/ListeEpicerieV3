@@ -1,5 +1,4 @@
 from nicegui import ui
-from nicegui import app
 from db import get_categories
 
 def ensure_family_selected(current_family_id):
@@ -34,12 +33,11 @@ def ensure_categories_exist():
 
 def apply_theme():
     print("DEBUG utils.apply_theme() → entrée")
-    theme = app.storage.user.get('theme', 'light')
-    print(f"DEBUG utils.apply_theme() → thème = {theme}")
 
-    if theme == 'dark':
-        print("DEBUG utils.apply_theme() → activation mode sombre")
-        ui.dark_mode().enable()
-    else:
-        print("DEBUG utils.apply_theme() → désactivation mode sombre")
-        ui.dark_mode().disable()
+    # IMPORTANT :
+    # On n'utilise plus app.storage.user ici,
+    # car cela provoquait un crash avant ui.run().
+    # On laisse simplement le thème par défaut.
+
+    print("DEBUG utils.apply_theme() → thème = light (fixé par défaut)")
+    ui.dark_mode().disable()

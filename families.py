@@ -11,26 +11,32 @@ from utils import ensure_family_selected
 
 def families_panel():
 
-    # Vérifier famille sélectionnée
+    families = get_families()
+    family_dict = {f['name']: f['id'] for f in families}
+
+    # --- Sélection automatique de la première famille ---
+    if current_family_id is None and families:
+        globals()['current_family_id'] = families[0]['id']
+
+    # Vérifier famille sélectionnée (après auto-sélection)
     ensure_family_selected(current_family_id)
 
     ui.label("Gestion des familles").classes("text-xl font-bold")
 
-    families = get_families()
-    family_dict = {f['name']: f['id'] for f in families}
-
     # --- Sélecteur de famille active ---
     if families:
         ui.label("Famille active")
+
+        def set_active_family(e):
+            globals()['current_family_id'] = family_dict[e.value]
+            ui.navigate.to('/?tab=families')
+
         ui.select(
             list(family_dict.keys()),
-            value=[name for name, fid in family_dict.items() if fid == current_family_id][0]
-            if current_family_id in family_dict.values() else list(family_dict.keys())[0],
-            on_change=lambda e: (
-                globals().__setitem__('current_family_id', family_dict[e.value]),
-                ui.navigate.to('/?tab=families')
-            )
+            value=[name for name, fid in family_dict.items() if fid == current_family_id][0],
+            on_change=set_active_family
         ).classes("w-full")
+
     else:
         ui.label("⚠️ Aucune famille. Créez-en une ci-dessous.")
 

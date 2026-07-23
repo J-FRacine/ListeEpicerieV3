@@ -1,5 +1,6 @@
 import os
 from nicegui import ui, app
+from fastapi import Request
 
 # --- Import des modules séparés ---
 from header import jf_header
@@ -76,13 +77,13 @@ def apps_page():
 # ---------------------------------------------------------
 
 @ui.page('/')
-def main_page():
+def main_page(request: Request):
     if not app.storage.user.get('auth'):
         ui.navigate.to('/portal')
         return
 
-    # --- NOUVEAU : lire l’onglet depuis l’URL ---
-    tab = ui.get_query().get('tab')
+    # --- LIRE L’ONGLET DEPUIS L’URL ---
+    tab = request.query_params.get('tab')
     if tab:
         globals()['current_tab'] = tab
 
@@ -113,7 +114,6 @@ def main_page():
                 admin_panel()
 
     bottom_nav()
-
 
 # ---------------------------------------------------------
 #  LANCEMENT CANNER

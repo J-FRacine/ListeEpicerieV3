@@ -14,6 +14,8 @@ from families import families_panel
 
 from state import current_tab, current_family_id
 from utils import ensure_family_selected
+from utils import apply_theme
+
 
 from db import init_db
 

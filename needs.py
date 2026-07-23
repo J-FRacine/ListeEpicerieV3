@@ -104,8 +104,7 @@ def needs_panel():
                     value=need['category'],
                     on_change=lambda e, iid=need['id']: (
                         print(f"DEBUG needs_panel() → changement catégorie besoin {iid} → {e.value}"),
-                        # On modifie l’item existant
-                        toggle_needed(iid),  # si tu veux changer la catégorie, tu peux ajouter une fonction
+                        # Ici tu peux ajouter une fonction pour changer la catégorie si tu veux
                         ui.navigate.to('/?tab=besoins')
                     )
                 ).classes("w-32")

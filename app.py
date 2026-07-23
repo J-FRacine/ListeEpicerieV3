@@ -134,14 +134,15 @@ def main_page(request: Request):
             print(f"DEBUG: rendu panneau → {current_tab}")
 
             if current_tab == 'items':
-                print("DEBUG: rendu add_item_panel()")
-                add_item_panel()
-                ui.separator()
                 print("DEBUG: rendu items_panel()")
                 items_panel()
                 ui.button("⬅ Retour au menu des applications",
                           on_click=lambda: ui.navigate.to('/apps')
                 ).classes("w-full mt-4")
+
+            elif current_tab == 'add_item':
+                print("DEBUG: rendu add_item_panel()")
+                add_item_panel()
 
             elif current_tab == 'besoins':
                 print("DEBUG: rendu needs_panel()")

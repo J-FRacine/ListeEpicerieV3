@@ -15,59 +15,9 @@ from state import (
     get_tri_mode_items,
     set_tri_mode_items,
 )
+
 from utils import ensure_family_selected, ensure_categories_exist
 
-
-# ---------------------------------------------------------
-#  PANNEAU : AJOUT ITEM
-# ---------------------------------------------------------
-
-def add_item_panel():
-    print("DEBUG add_item_panel() → entrée")
-
-    current_family_id = get_current_family_id()
-    print(f"DEBUG add_item_panel() → current_family_id = {current_family_id}")
-
-    ui.label("Ajouter un item").classes("text-xl font-bold")
-
-    if not ensure_family_selected(current_family_id):
-        print("DEBUG add_item_panel() → STOP: famille non sélectionnée")
-        return
-
-    if not ensure_categories_exist():
-        print("DEBUG add_item_panel() → STOP: aucune catégorie")
-        return
-
-    categories = get_categories()
-    print(f"DEBUG add_item_panel() → catégories = {categories}")
-
-    cat_dict = {c['name']: c['id'] for c in categories}
-    cat_names = list(cat_dict.keys())
-
-    item_name = ui.input("Nom de l’item").classes("w-full")
-    item_cat = ui.select(cat_names, value=cat_names[0], label="Catégorie").classes("w-full")
-    item_qty = ui.number("Quantité", value=1).classes("w-full")
-    item_needed = ui.checkbox("J’en ai besoin")
-
-    ui.button(
-        "Ajouter",
-        on_click=lambda: (
-            print("DEBUG add_item_panel() → ajout item"),
-            add_item(
-                current_family_id,
-                cat_dict[item_cat.value],
-                item_name.value,
-                int(item_qty.value),
-                1 if item_needed.value else 0
-            ),
-            ui.navigate.to('/?tab=items')
-        )
-    ).classes("w-full mt-2")
-
-
-# ---------------------------------------------------------
-#  PANNEAU : ITEMS
-# ---------------------------------------------------------
 
 def items_panel():
     print("DEBUG items_panel() → entrée")
@@ -103,7 +53,7 @@ def items_panel():
     tri_mode = get_tri_mode_items()
 
     ui.select(
-        ["Alphabétique", "Ordre d’ajout", "Catégorie", "Besoin"],
+        ["Alphabétique", "Ordre d’ajout", "Catégorie"],
         value=tri_mode,
         label="Trier par",
         on_change=lambda e: (
@@ -131,43 +81,64 @@ def items_panel():
         items = sorted(items, key=lambda x: x['name'].strip().lower())
     elif tri_mode == "Catégorie":
         items = sorted(items, key=lambda x: (x['category'] or '').lower())
-    elif tri_mode == "Besoin":
-        items = sorted(items, key=lambda x: x['needed'], reverse=True)
 
     # Affichage des items
-    for it in items:
+    for item in items:
         with ui.row().classes("items-center justify-between bg-gray-100 rounded-lg px-3 py-2 mt-2 gap-2"):
 
-            # Nom + besoin
             with ui.row().classes("items-center gap-2"):
-                ui.label(f"{it['name']} ({it['quantity']})").classes("font-bold")
+                ui.label(f"{item['name']} ({item['quantity']})").classes("font-bold")
+
                 ui.button(
-                    "✔️" if it['needed'] else "❌",
-                    on_click=lambda iid=it['id']: (
-                        print(f"DEBUG items_panel() → toggle besoin item {iid}"),
+                    "✔️" if item['needed'] else "❌",
+                    on_click=lambda iid=item['id']: (
+                        print(f"DEBUG items_panel() → toggle item {iid}"),
                         toggle_needed(iid),
                         ui.navigate.to('/?tab=items')
                     )
                 ).props("flat color=white")
 
-            # Catégorie + suppression
             with ui.row().classes("items-center gap-2"):
                 ui.select(
                     cat_names,
-                    value=it['category'],
-                    on_change=lambda e, iid=it['id']: (
+                    value=item['category'],
+                    on_change=lambda e, iid=item['id']: (
                         print(f"DEBUG items_panel() → changement catégorie item {iid} → {e.value}"),
-                        add_item(current_family_id, cat_dict[e.value], it['name'], it['quantity'], it['needed']),
-                        delete_item(iid),
+                        # Ici tu peux ajouter une fonction pour changer la catégorie si tu veux
                         ui.navigate.to('/?tab=items')
                     )
                 ).classes("w-32")
 
                 ui.button(
                     "🗑️",
-                    on_click=lambda iid=it['id']: (
+                    on_click=lambda iid=item['id']: (
                         print(f"DEBUG items_panel() → suppression item {iid}"),
                         delete_item(iid),
                         ui.navigate.to('/?tab=items')
                     )
                 ).props("flat color=red")
+
+    ui.separator()
+
+    # Ajout d'un nouvel item
+    ui.label("Ajouter un item").classes("text-lg font-bold")
+
+    with ui.row().classes("items-center gap-2 mt-2"):
+        name_input = ui.input(label="Nom")
+        quantity_input = ui.number(label="Quantité", value=1)
+        category_input = ui.select(cat_names, label="Catégorie")
+
+        ui.button(
+            "Ajouter",
+            on_click=lambda: (
+                print(f"DEBUG items_panel() → ajout item {name_input.value}"),
+                add_item(
+                    current_family_id,
+                    cat_dict[category_input.value],
+                    name_input.value,
+                    quantity_input.value,
+                    0  # needed = 0 par défaut
+                ),
+                ui.navigate.to('/?tab=items')
+            )
+        ).props("flat color=green")

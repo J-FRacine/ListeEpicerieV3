@@ -1,6 +1,3 @@
-# ---------------------------------------------------------
-#  PANNEAU : AJOUT ITEM
-# ---------------------------------------------------------
 from nicegui import ui
 
 from db import (
@@ -15,6 +12,10 @@ from db import (
 from state import current_family_id, tri_mode_items
 from utils import ensure_family_selected, ensure_categories_exist
 
+
+# ---------------------------------------------------------
+#  PANNEAU : AJOUT ITEM
+# ---------------------------------------------------------
 
 def add_item_panel():
     ui.label("Ajouter un item").classes("text-xl font-bold")

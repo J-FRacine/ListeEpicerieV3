@@ -330,14 +330,13 @@ def admin_panel():
     # ---------- IMPORT ----------
     ui.label("Importer un fichier CSV").classes("text-lg font-bold mt-2")
 
-    def import_csv(event):
+    async def import_csv(event):
         import csv
         import io
 
-        # Canner: fichier dans event.file
-        uploaded = event.file
-        raw = uploaded.read()            # bytes
-        content = raw.decode('utf-8')    # texte
+        # Canner: fichier dans event.file (async read)
+        raw = await event.file.read()       # bytes
+        content = raw.decode('utf-8')       # texte
         f = io.StringIO(content)
 
         reader = csv.DictReader(f)
@@ -367,7 +366,6 @@ def admin_panel():
         on_upload=import_csv,
         multiple=False
     ).classes("w-full mt-2")
-
 
 
 # ---------------------------------------------------------

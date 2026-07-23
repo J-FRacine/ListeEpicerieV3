@@ -4,6 +4,7 @@ from db import (
     init_db,
     get_families,
     create_family,
+    delete_family,
     get_categories,
     create_category,
     delete_category,

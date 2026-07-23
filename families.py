@@ -1,6 +1,7 @@
 # ---------------------------------------------------------
 #  PANNEAU : FAMILLES
 # ---------------------------------------------------------
+from nicegui import ui
 
 def families_panel():
     ui.label("Gestion des familles").classes("text-xl font-bold")

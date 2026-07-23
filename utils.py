@@ -1,5 +1,9 @@
-from nicegui import ui
+from nicegui import ui, app
 from db import get_categories
+
+# ---------------------------------------------------------
+# Vérifie qu'une famille est sélectionnée
+# ---------------------------------------------------------
 
 def ensure_family_selected(current_family_id):
     print("DEBUG utils.ensure_family_selected() → entrée")
@@ -14,6 +18,10 @@ def ensure_family_selected(current_family_id):
     print("DEBUG utils.ensure_family_selected() → famille OK")
     return True
 
+
+# ---------------------------------------------------------
+# Vérifie qu'il existe au moins une catégorie
+# ---------------------------------------------------------
 
 def ensure_categories_exist():
     print("DEBUG utils.ensure_categories_exist() → entrée")
@@ -31,13 +39,20 @@ def ensure_categories_exist():
     return True
 
 
+# ---------------------------------------------------------
+# Gestion du thème (light / dark)
+# ---------------------------------------------------------
+
 def apply_theme():
     print("DEBUG utils.apply_theme() → entrée")
 
-    # IMPORTANT :
-    # On n'utilise plus app.storage.user ici,
-    # car cela provoquait un crash avant ui.run().
-    # On laisse simplement le thème par défaut.
+    # Maintenant que Canner a un storage_secret, on peut utiliser app.storage.user
+    theme = app.storage.user.get('theme', 'light')
+    print(f"DEBUG utils.apply_theme() → thème = {theme}")
 
-    print("DEBUG utils.apply_theme() → thème = light (fixé par défaut)")
-    ui.dark_mode().disable()
+    if theme == 'dark':
+        print("DEBUG utils.apply_theme() → activation mode sombre")
+        ui.dark_mode().enable()
+    else:
+        print("DEBUG utils.apply_theme() → désactivation mode sombre")
+        ui.dark_mode().disable()

@@ -10,7 +10,7 @@ from db import (
 )
 
 from state import current_family_id, tri_mode_items
-from utils import ensure_family_selected
+from utils import ensure_family_selected, ensure_categories_exist
 
 
 # ---------------------------------------------------------
@@ -21,16 +21,14 @@ def add_item_panel():
     ui.label("Ajouter un item").classes("text-xl font-bold")
 
     # Vérifier famille
-    if current_family_id is None:
-        ui.label("⚠️ Aucune famille sélectionnée. Choisissez-en une dans l’onglet Familles.")
+    if not ensure_family_selected(current_family_id):
         return
 
     # Vérifier catégories
-    categories = get_categories()
-    if not categories:
-        ui.label("⚠️ Aucune catégorie disponible. Ajoutez-en dans l’onglet Catégories.")
+    if not ensure_categories_exist():
         return
 
+    categories = get_categories()
     cat_dict = {c['name']: c['id'] for c in categories}
     cat_names = list(cat_dict.keys())
 
@@ -62,8 +60,7 @@ def items_panel():
     global tri_mode_items
 
     # Vérifier famille
-    if current_family_id is None:
-        ui.label("⚠️ Aucune famille sélectionnée. Choisissez-en une dans l’onglet Familles.")
+    if not ensure_family_selected(current_family_id):
         return
 
     families = get_families()
@@ -96,11 +93,10 @@ def items_panel():
     ).classes("w-full")
 
     # Vérifier catégories
-    categories = get_categories()
-    if not categories:
-        ui.label("⚠️ Aucune catégorie disponible. Ajoutez-en dans l’onglet Catégories.")
+    if not ensure_categories_exist():
         return
 
+    categories = get_categories()
     cat_dict = {c['name']: c['id'] for c in categories}
     cat_names = list(cat_dict.keys())
 
@@ -118,6 +114,7 @@ def items_panel():
     for it in items:
         with ui.row().classes("items-center justify-between bg-gray-100 rounded-lg px-3 py-2 mt-2 gap-2"):
 
+            # Nom + besoin
             with ui.row().classes("items-center gap-2"):
                 ui.label(f"{it['name']} ({it['quantity']})").classes("font-bold")
                 ui.button(
@@ -128,6 +125,7 @@ def items_panel():
                     )
                 ).props("flat color=white")
 
+            # Catégorie + suppression
             with ui.row().classes("items-center gap-2"):
                 ui.select(
                     cat_names,

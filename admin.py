@@ -140,12 +140,20 @@ def admin_panel():
     ui.separator()
 
     # ---------- MODE CLAIR / SOMBRE ----------
+    # ---------- MODE CLAIR / SOMBRE ----------
     ui.label("Apparence").classes("text-lg font-bold mt-4")
+
+    def toggle_theme():
+        if ui.dark_mode().value:
+            ui.dark_mode().disable()
+        else:
+            ui.dark_mode().enable()
 
     ui.button(
         "🌗 Basculer mode clair / sombre",
-        on_click=lambda: ui.dark_mode().toggle()
+        on_click=toggle_theme
     ).classes("w-full mt-2")
+
 
     ui.separator()
 

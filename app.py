@@ -13,9 +13,7 @@ from categories import categories_panel
 from families import families_panel
 
 from state import current_tab, current_family_id
-from utils import ensure_family_selected
-from utils import apply_theme
-
+from utils import ensure_family_selected, apply_theme
 
 from db import init_db
 
@@ -38,6 +36,8 @@ def logout():
 
 @ui.page('/portal')
 def portal_page():
+    apply_theme()
+
     jf_header()
 
     with ui.column().classes("w-full max-w-md mx-auto mt-10 p-6 bg-white dark:bg-gray-800 rounded-lg shadow"):
@@ -61,6 +61,8 @@ def portal_page():
 
 @ui.page('/apps')
 def apps_page():
+    apply_theme()
+
     if not app.storage.user.get('auth'):
         ui.navigate.to('/portal')
         return
@@ -80,6 +82,8 @@ def apps_page():
 
 @ui.page('/')
 def main_page(request: Request):
+    apply_theme()
+
     if not app.storage.user.get('auth'):
         ui.navigate.to('/portal')
         return

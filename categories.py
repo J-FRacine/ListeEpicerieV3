@@ -1,6 +1,7 @@
 # ---------------------------------------------------------
 #  PANNEAU : CATÉGORIES
 # ---------------------------------------------------------
+from nicegui import ui
 
 def categories_panel():
         ui.label("Gestion des catégories").classes("text-xl font-bold")

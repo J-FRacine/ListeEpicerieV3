@@ -158,6 +158,70 @@ def categories_panel():
                 ui.navigate.to('/')
             )).props("flat color=red")
 
+    ui.separator()
+    ui.label("Renommer une catégorie").classes("text-lg font-bold mt-2")
+
+    categories = get_categories()
+    cat_dict = {c['name']: c['id'] for c in categories}
+
+    old_cat = ui.select(list(cat_dict.keys()), label="Catégorie à renommer").classes("w-full")
+    new_cat_name = ui.input("Nouveau nom").classes("w-full")
+
+    def rename_category():
+        if not old_cat.value or not new_cat_name.value:
+            ui.notify("Sélectionnez une catégorie et entrez un nouveau nom.")
+            return
+
+        cat_id = cat_dict[old_cat.value]
+
+        # Mise à jour dans la BD
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE categories SET name = %s WHERE id = %s", (new_cat_name.value, cat_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        ui.notify("Catégorie renommée !")
+        ui.navigate.to('/')
+
+    ui.button("Renommer", on_click=rename_category).classes("w-full mt-2")
+
+    ui.separator()
+    ui.label("Fusionner deux catégories").classes("text-lg font-bold mt-2")
+
+    cat1 = ui.select(list(cat_dict.keys()), label="Catégorie source").classes("w-full")
+    cat2 = ui.select(list(cat_dict.keys()), label="Catégorie destination").classes("w-full")
+
+    def merge_categories():
+        if not cat1.value or not cat2.value:
+            ui.notify("Sélectionnez les deux catégories.")
+            return
+
+        if cat1.value == cat2.value:
+            ui.notify("Impossible de fusionner une catégorie avec elle-même.")
+            return
+
+        src_id = cat_dict[cat1.value]
+        dst_id = cat_dict[cat2.value]
+
+        # Déplacer tous les items de src → dst
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE items SET category = %s WHERE category = %s", (cat2.value, cat1.value))
+        conn.commit()
+
+        # Supprimer la catégorie source
+        cur.execute("DELETE FROM categories WHERE id = %s", (src_id,))
+        conn.commit()
+
+        cur.close()
+        conn.close()
+
+        ui.notify(f"Catégorie '{cat1.value}' fusionnée dans '{cat2.value}' !")
+        ui.navigate.to('/')
+
+    ui.button("Fusionner", on_click=merge_categories).classes("w-full mt-2")
 
 # ---------------------------------------------------------
 #  PANNEAU : AJOUT ITEM

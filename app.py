@@ -87,6 +87,7 @@ def families_panel():
                 ui.label(f['name']).classes("font-bold")
 
                 with ui.row().classes("gap-2"):
+                    # Activer
                     ui.button(
                         "Activer",
                         on_click=lambda fid=f['id']: (
@@ -95,23 +96,28 @@ def families_panel():
                         )
                     ).props("flat color=white")
 
-                    ui.button(
-                        "🗑️",
-                        on_click=lambda fid=f['id'], fname=f['name']: ui.dialog().classes("w-80").with_content(
-                            ui.label(f"Supprimer la famille '{fname}' ?").classes("text-lg font-bold"),
-                            ui.label("Cette action est irréversible."),
-                            ui.row().classes("justify-end gap-2 mt-4").with_content(
-                                ui.button("Annuler", on_click=lambda d=ui.context.dialog: d.close()),
-                                ui.button("Supprimer", on_click=lambda d=ui.context.dialog: (
-                                    delete_family(fid),
-                                    d.close(),
-                                    ui.notify(f"Famille '{fname}' supprimée."),
-                                    ui.navigate.to('/')
-                                )).props("color=red")
-                            )
-                        )
-                    ).props("flat color=red")
+                    # Supprimer (dialogue NiceGUI 1.x)
+                    def open_delete_dialog(fid=f['id'], fname=f['name']):
+                        with ui.dialog() as dialog:
+                            with ui.card().classes("p-4"):
+                                ui.label(f"Supprimer la famille '{fname}' ?").classes("text-lg font-bold")
+                                ui.label("Cette action est irréversible.")
 
+                                with ui.row().classes("justify-end gap-2 mt-4"):
+                                    ui.button("Annuler", on_click=dialog.close)
+                                    ui.button(
+                                        "Supprimer",
+                                        on_click=lambda: (
+                                            delete_family(fid),
+                                            dialog.close(),
+                                            ui.notify(f"Famille '{fname}' supprimée."),
+                                            ui.navigate.to('/')
+                                        )
+                                    ).props("color=red")
+
+                        dialog.open()
+
+                    ui.button("🗑️", on_click=open_delete_dialog).props("flat color=red")
 
     ui.separator()
 

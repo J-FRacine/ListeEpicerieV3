@@ -292,6 +292,27 @@ def _move_items_to_their_family_categories(cur):
 
 def _migrate_categories_to_families(cur):
     _add_categories_family_column(cur)
+
+    # Une fois la corbeille installée, deux catégories portant le même
+    # nom peuvent coexister si l’une est supprimée. L’ancienne migration
+    # ne doit alors plus fusionner ou effacer ces lignes au démarrage.
+    cur.execute(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'categories'
+              AND column_name = 'deleted_at'
+        ) AS exists;
+        """
+    )
+    if cur.fetchone()["exists"]:
+        cur.execute(
+            "DROP INDEX IF EXISTS categories_family_name_unique;"
+        )
+        return
+
     _drop_legacy_category_name_uniqueness(cur)
     _remove_duplicate_family_categories(cur)
 
@@ -1289,17 +1310,20 @@ def get_accessible_families_with_stats(user_id):
                         SELECT COUNT(*)::INTEGER
                         FROM categories AS category
                         WHERE category.family_id = family.id
+                          AND category.deleted_at IS NULL
                     ) AS category_count,
                     (
                         SELECT COUNT(*)::INTEGER
                         FROM items AS item
                         WHERE item.family_id = family.id
+                          AND item.deleted_at IS NULL
                     ) AS item_count,
                     (
                         SELECT COUNT(*)::INTEGER
                         FROM items AS item
                         WHERE item.family_id = family.id
                           AND item.needed = 1
+                          AND item.deleted_at IS NULL
                     ) AS needed_count,
                     (
                         SELECT COUNT(*)::INTEGER
@@ -1358,10 +1382,23 @@ def create_family_for_user(user_id, name):
 
             cur.execute(
                 """
-                INSERT INTO categories (family_id, name)
-                SELECT %s, legacy_category.name
+                INSERT INTO categories (family_id, name, sort_order)
+                SELECT
+                    %s,
+                    legacy_category.name,
+                    legacy_category.sort_order
                 FROM categories AS legacy_category
                 WHERE legacy_category.family_id IS NULL
+                  AND legacy_category.deleted_at IS NULL
+                ON CONFLICT DO NOTHING;
+                """,
+                (family_id,),
+            )
+
+            cur.execute(
+                """
+                INSERT INTO stores (family_id, name, sort_order)
+                VALUES (%s, 'Épicerie', 10)
                 ON CONFLICT DO NOTHING;
                 """,
                 (family_id,),
@@ -2091,3 +2128,58 @@ def import_family_backup(
                 "items_updated": items_updated,
                 "replaced": bool(replace_existing),
             }
+
+# =========================================================
+# EXTENSIONS DE LA LISTE D'ÉPICERIE
+# =========================================================
+
+_legacy_init_db = init_db
+
+from grocery_schema import migrate_grocery_schema
+
+
+def init_db():
+    _legacy_init_db()
+    migrate_grocery_schema(get_connection)
+
+
+# Les imports suivants remplacent les anciennes fonctions de la couche
+# épicerie tout en conservant intactes les fonctions utilisateurs/familles.
+from grocery_categories import (
+    create_category,
+    create_store,
+    delete_category,
+    delete_store,
+    get_categories,
+    get_categories_with_counts,
+    get_deleted_categories,
+    get_deleted_stores,
+    get_stores,
+    get_stores_with_counts,
+    merge_categories,
+    move_category,
+    move_store,
+    permanently_delete_category,
+    permanently_delete_store,
+    rename_category,
+    rename_store,
+    restore_category,
+    restore_store,
+)
+from grocery_items import (
+    add_item,
+    delete_item,
+    get_deleted_items,
+    get_frequent_items,
+    get_items,
+    permanently_delete_item,
+    restore_item,
+    set_item_needed,
+    toggle_needed,
+    update_item,
+)
+from grocery_common import (
+    get_activity_history,
+    purge_expired_trash,
+)
+from grocery_backup import export_family_backup, import_family_backup

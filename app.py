@@ -6,6 +6,7 @@ from pathlib import Path
 
 from nicegui import app, run, ui
 
+from activity import activity_panel
 from auth import (
     authenticate,
     clear_session,
@@ -51,6 +52,13 @@ PORTAL_TABS = {"portail", "portal", "apps"}
 FAMILY_TABS = {"familles", "families"}
 USER_TABS = {"utilisateurs", "users"}
 ACCOUNT_TABS = {"compte", "account"}
+ACTIVITY_TABS = {
+    "activite",
+    "activité",
+    "activity",
+    "corbeille",
+    "historique",
+}
 BACKUP_TABS = {
     "donnees",
     "sauvegarde",
@@ -949,13 +957,26 @@ def show_portal(user):
             portal_action_card(
                 title="Liste d’épicerie",
                 description=(
-                    "Gérez les items, les besoins "
+                    "Gérez les items, les besoins, les magasins "
                     "et les catégories de vos familles."
                 ),
                 icon="shopping_cart",
                 action_label="Ouvrir",
                 on_click=lambda: ui.navigate.to(
                     "/?tab=items"
+                ),
+            )
+
+            portal_action_card(
+                title="Activité et corbeille",
+                description=(
+                    "Consultez les dernières actions et restaurez "
+                    "les éléments supprimés par erreur."
+                ),
+                icon="history",
+                action_label="Consulter",
+                on_click=lambda: ui.navigate.to(
+                    "/?tab=activite"
                 ),
             )
 
@@ -1112,6 +1133,15 @@ def application_header(active_tab):
                 "items-center gap-0"
             ):
                 ui.button(
+                    icon="history",
+                    on_click=lambda: ui.navigate.to(
+                        "/?tab=activite"
+                    ),
+                ).props("flat round").tooltip(
+                    "Activité et corbeille"
+                )
+
+                ui.button(
                     icon="settings",
                     on_click=lambda: ui.navigate.to(
                         "/?tab=donnees"
@@ -1258,6 +1288,19 @@ def index(tab="portail"):
         with page_container():
             portal_header("Mon compte")
             account_panel(user)
+
+        return
+
+    if normalized_tab in ACTIVITY_TABS:
+        set_current_tab("activite")
+
+        with page_container():
+            portal_header("Activité et corbeille")
+
+            if not ensure_valid_family(user["id"]):
+                show_no_family_message()
+            else:
+                activity_panel()
 
         return
 

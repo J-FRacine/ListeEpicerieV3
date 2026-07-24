@@ -1143,24 +1143,66 @@ def reset_user_password_for_admin(actor_user_id, target_user_id, password_hash):
             conn.commit()
 
 
-def update_own_profile(user_id, display_name):
+def update_own_profile(user_id, display_name, email):
+    """Permet à un utilisateur actif de modifier son nom et son courriel."""
+
     name = (display_name or "").strip()
+    normalized_email = (email or "").strip().lower()
 
     if not name:
         raise ValueError("Le nom est obligatoire.")
 
+    if (
+        not normalized_email
+        or "@" not in normalized_email
+        or normalized_email.startswith("@")
+        or normalized_email.endswith("@")
+    ):
+        raise ValueError("L’adresse courriel semble invalide.")
+
     with get_connection() as conn:
         with conn.cursor() as cur:
             _get_active_user(cur, user_id)
+
+            cur.execute(
+                """
+                SELECT 1
+                FROM users
+                WHERE LOWER(BTRIM(email)) = LOWER(BTRIM(%s))
+                  AND id <> %s
+                LIMIT 1;
+                """,
+                (normalized_email, user_id),
+            )
+
+            if cur.fetchone() is not None:
+                raise ValueError(
+                    "Un autre compte utilise déjà cette adresse courriel."
+                )
+
             cur.execute(
                 """
                 UPDATE users
-                SET display_name = %s
-                WHERE id = %s;
+                SET
+                    display_name = %s,
+                    email = %s
+                WHERE id = %s
+                RETURNING
+                    id,
+                    display_name,
+                    email,
+                    is_admin,
+                    is_active;
                 """,
-                (name, user_id),
+                (name, normalized_email, user_id),
             )
+            updated_user = cur.fetchone()
+
+            if updated_user is None:
+                raise ValueError("Ce compte n’existe plus.")
+
             conn.commit()
+            return updated_user
 
 
 def update_own_password_hash(user_id, password_hash):

@@ -1,6 +1,11 @@
 from nicegui import ui
 
-from auth import hash_password, validate_password, verify_password
+from auth import (
+    hash_password,
+    normalize_email,
+    validate_password,
+    verify_password,
+)
 from db import (
     create_user_for_admin,
     get_accessible_families,
@@ -288,87 +293,332 @@ def users_panel(current_user):
 def account_panel(current_user):
     user_id = current_user["id"]
 
-    ui.label("Mon compte").classes("text-2xl font-bold")
+    with ui.row().classes(
+        "w-full items-start justify-between gap-3 flex-wrap"
+    ):
+        with ui.column().classes("gap-0"):
+            ui.label("Mon compte").classes("text-2xl font-bold")
+            ui.label(
+                "Modifiez vos informations personnelles "
+                "et votre mot de passe."
+            ).classes("text-sm text-gray-500")
+
+        if current_user["is_admin"]:
+            ui.badge("Administrateur").props("color=primary")
+
+    # ---------------------------------------------------------
+    # INFORMATIONS PERSONNELLES
+    # ---------------------------------------------------------
 
     with ui.card().classes("w-full p-5"):
-        ui.label("Profil").classes("text-xl font-bold")
+        with ui.row().classes("w-full items-center gap-3"):
+            ui.icon("person").classes("text-3xl text-primary")
+
+            with ui.column().classes("gap-0 grow"):
+                ui.label("Informations personnelles").classes(
+                    "text-xl font-bold"
+                )
+                ui.label(
+                    "Votre courriel sert aussi à vous connecter."
+                ).classes("text-sm text-gray-500")
+
         name_input = ui.input(
             label="Nom affiché",
             value=current_user["display_name"],
-        ).classes("w-full")
-        ui.input(
+        ).props("autocomplete=name").classes("w-full mt-2")
+
+        email_input = ui.input(
             label="Adresse courriel",
             value=current_user["email"],
-        ).props("readonly").classes("w-full")
+        ).props(
+            "type=email autocomplete=email"
+        ).classes("w-full")
+
+        current_password_for_profile = ui.input(
+            label="Mot de passe actuel",
+            password=True,
+            password_toggle_button=True,
+        ).props(
+            "autocomplete=current-password"
+        ).classes("w-full")
+
+        ui.label(
+            "Le mot de passe actuel est demandé seulement "
+            "si vous changez votre adresse courriel."
+        ).classes("text-xs text-gray-500")
+
+        profile_status = ui.label("").classes(
+            "text-sm min-h-[22px]"
+        )
 
         def save_profile():
-            try:
-                update_own_profile(user_id, name_input.value)
-            except (ValueError, PermissionError) as error:
-                ui.notify(str(error), type="warning")
+            profile_status.set_text("")
+
+            fresh_user = get_user_by_id(user_id)
+
+            if fresh_user is None:
+                profile_status.set_text(
+                    "Ce compte n’existe plus."
+                )
+                profile_status.classes(
+                    replace="text-sm min-h-[22px] text-negative"
+                )
                 return
 
-            ui.notify("Profil mis à jour.", type="positive")
+            new_name = (name_input.value or "").strip()
+            new_email = normalize_email(email_input.value)
+            old_email = normalize_email(fresh_user["email"])
+            email_changed = new_email != old_email
+
+            if not new_name:
+                profile_status.set_text(
+                    "Le nom est obligatoire."
+                )
+                profile_status.classes(
+                    replace="text-sm min-h-[22px] text-negative"
+                )
+                name_input.run_method("focus")
+                return
+
+            if (
+                not new_email
+                or "@" not in new_email
+                or new_email.startswith("@")
+                or new_email.endswith("@")
+            ):
+                profile_status.set_text(
+                    "L’adresse courriel semble invalide."
+                )
+                profile_status.classes(
+                    replace="text-sm min-h-[22px] text-negative"
+                )
+                email_input.run_method("focus")
+                return
+
+            if email_changed and not verify_password(
+                current_password_for_profile.value or "",
+                fresh_user["password_hash"],
+            ):
+                profile_status.set_text(
+                    "Le mot de passe actuel est requis "
+                    "pour changer l’adresse courriel."
+                )
+                profile_status.classes(
+                    replace="text-sm min-h-[22px] text-negative"
+                )
+                current_password_for_profile.run_method("focus")
+                return
+
+            try:
+                updated_user = update_own_profile(
+                    user_id,
+                    new_name,
+                    new_email,
+                )
+            except (ValueError, PermissionError) as error:
+                profile_status.set_text(str(error))
+                profile_status.classes(
+                    replace="text-sm min-h-[22px] text-negative"
+                )
+                return
+
+            current_password_for_profile.value = ""
+            current_password_for_profile.update()
+
+            profile_status.set_text(
+                "Informations personnelles enregistrées."
+            )
+            profile_status.classes(
+                replace="text-sm min-h-[22px] text-positive"
+            )
+
+            if email_changed:
+                ui.notify(
+                    "Adresse courriel modifiée. Utilisez-la "
+                    "lors de votre prochaine connexion.",
+                    type="positive",
+                    timeout=7000,
+                )
+            else:
+                ui.notify(
+                    "Profil mis à jour.",
+                    type="positive",
+                )
+
+            # Recharge la page afin que le portail utilise immédiatement
+            # le nouveau nom et le nouveau courriel.
             ui.navigate.to("/?tab=compte")
 
         ui.button(
-            "Enregistrer le profil",
+            "Enregistrer",
             icon="save",
             on_click=save_profile,
         ).props("color=primary").classes("w-full mt-2")
 
+    # ---------------------------------------------------------
+    # MOT DE PASSE
+    # ---------------------------------------------------------
+
     with ui.card().classes("w-full p-5"):
-        ui.label("Changer mon mot de passe").classes("text-xl font-bold")
+        with ui.row().classes("w-full items-center gap-3"):
+            ui.icon("password").classes(
+                "text-3xl text-primary"
+            )
+
+            with ui.column().classes("gap-0 grow"):
+                ui.label("Changer mon mot de passe").classes(
+                    "text-xl font-bold"
+                )
+                ui.label(
+                    "Le nouveau mot de passe doit contenir "
+                    "au moins 10 caractères."
+                ).classes("text-sm text-gray-500")
+
         current_password_input = ui.input(
             label="Mot de passe actuel",
             password=True,
             password_toggle_button=True,
-        ).classes("w-full")
+        ).props(
+            "autocomplete=current-password"
+        ).classes("w-full mt-2")
+
         new_password_input = ui.input(
             label="Nouveau mot de passe",
             password=True,
             password_toggle_button=True,
+        ).props(
+            "autocomplete=new-password"
         ).classes("w-full")
+
         confirmation_input = ui.input(
             label="Confirmer le nouveau mot de passe",
             password=True,
             password_toggle_button=True,
+        ).props(
+            "autocomplete=new-password"
         ).classes("w-full")
 
+        password_status = ui.label("").classes(
+            "text-sm min-h-[22px]"
+        )
+
         def save_password():
+            password_status.set_text("")
+
             fresh_user = get_user_by_id(user_id)
 
             if fresh_user is None or not verify_password(
                 current_password_input.value or "",
                 fresh_user["password_hash"],
             ):
-                ui.notify(
-                    "Le mot de passe actuel est incorrect.",
-                    type="warning",
+                password_status.set_text(
+                    "Le mot de passe actuel est incorrect."
                 )
+                password_status.classes(
+                    replace="text-sm min-h-[22px] text-negative"
+                )
+                current_password_input.run_method("focus")
                 return
 
-            if new_password_input.value != confirmation_input.value:
-                ui.notify(
-                    "Les deux nouveaux mots de passe ne correspondent pas.",
-                    type="warning",
+            new_password = new_password_input.value or ""
+            confirmation = confirmation_input.value or ""
+
+            if new_password != confirmation:
+                password_status.set_text(
+                    "Les deux nouveaux mots de passe "
+                    "ne correspondent pas."
                 )
+                password_status.classes(
+                    replace="text-sm min-h-[22px] text-negative"
+                )
+                confirmation_input.run_method("focus")
+                return
+
+            if verify_password(
+                new_password,
+                fresh_user["password_hash"],
+            ):
+                password_status.set_text(
+                    "Le nouveau mot de passe doit être différent "
+                    "du mot de passe actuel."
+                )
+                password_status.classes(
+                    replace="text-sm min-h-[22px] text-negative"
+                )
+                new_password_input.run_method("focus")
                 return
 
             try:
-                password_hash = hash_password(new_password_input.value or "")
-                update_own_password_hash(user_id, password_hash)
+                validate_password(new_password)
+                password_hash = hash_password(new_password)
+                update_own_password_hash(
+                    user_id,
+                    password_hash,
+                )
             except (ValueError, PermissionError) as error:
-                ui.notify(str(error), type="warning")
+                password_status.set_text(str(error))
+                password_status.classes(
+                    replace="text-sm min-h-[22px] text-negative"
+                )
                 return
 
-            current_password_input.value = ""
-            new_password_input.value = ""
-            confirmation_input.value = ""
-            ui.notify("Mot de passe modifié.", type="positive")
+            for password_field in (
+                current_password_input,
+                new_password_input,
+                confirmation_input,
+            ):
+                password_field.value = ""
+                password_field.update()
+
+            password_status.set_text(
+                "Mot de passe modifié."
+            )
+            password_status.classes(
+                replace="text-sm min-h-[22px] text-positive"
+            )
+
+            ui.notify(
+                "Mot de passe modifié.",
+                type="positive",
+            )
+
+        confirmation_input.on(
+            "keydown.enter",
+            save_password,
+        )
 
         ui.button(
             "Changer le mot de passe",
             icon="password",
             on_click=save_password,
         ).props("color=primary").classes("w-full mt-2")
+
+    # ---------------------------------------------------------
+    # INFORMATIONS DU COMPTE
+    # ---------------------------------------------------------
+
+    with ui.card().classes("w-full p-5"):
+        ui.label("Informations du compte").classes(
+            "text-lg font-bold"
+        )
+
+        account_type = (
+            "Administrateur du portail"
+            if current_user["is_admin"]
+            else "Utilisateur"
+        )
+
+        with ui.row().classes(
+            "w-full items-center justify-between gap-3"
+        ):
+            ui.label("Type de compte").classes(
+                "text-gray-600"
+            )
+            ui.label(account_type).classes("font-bold")
+
+        with ui.row().classes(
+            "w-full items-center justify-between gap-3"
+        ):
+            ui.label("État").classes("text-gray-600")
+            ui.badge("Actif").props("color=positive")
+

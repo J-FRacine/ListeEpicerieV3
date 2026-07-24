@@ -1,106 +1,508 @@
 from nicegui import ui
 
-from db import get_families, create_family, delete_family
+from db import (
+    create_family,
+    delete_family,
+    get_families_with_stats,
+    rename_family,
+)
 from state import (
     get_current_family_id,
     set_current_family_id,
 )
-from utils import ensure_family_selected
 
 
 def families_panel():
-    print("DEBUG families_panel() → entrée")
-
+    families = get_families_with_stats()
     current_family_id = get_current_family_id()
-    print(f"DEBUG families_panel() → current_family_id = {current_family_id}")
 
-    families = get_families()
-    print(f"DEBUG families_panel() → familles = {families}")
+    valid_family_ids = {
+        family["id"]
+        for family in families
+    }
 
-    # Sélection automatique si aucune famille active
-    if current_family_id is None and families:
-        set_current_family_id(families[0]['id'])
-        print(f"DEBUG families_panel() → auto-select = {get_current_family_id()}")
-        ui.notify(f"Famille auto-sélectionnée dans families_panel: {get_current_family_id()}")
+    if current_family_id not in valid_family_ids:
+        current_family_id = (
+            families[0]["id"]
+            if families
+            else None
+        )
+        set_current_family_id(current_family_id)
 
-    ensure_family_selected(get_current_family_id())
+    family_options = {
+        family["id"]: family["name"]
+        for family in families
+    }
 
-    ui.label("Gestion des familles").classes("text-xl font-bold")
+    # ---------------------------------------------------------
+    # EN-TÊTE
+    # ---------------------------------------------------------
 
-    family_dict = {f['name']: f['id'] for f in families}
+    with ui.row().classes(
+        "w-full items-start justify-between gap-3 flex-wrap"
+    ):
+        with ui.column().classes("gap-0"):
+            ui.label("Familles").classes(
+                "text-2xl font-bold"
+            )
+            ui.label(
+                "Créez vos espaces et choisissez celui "
+                "utilisé par les applications."
+            ).classes("text-sm text-gray-500")
 
-    # Sélecteur de famille active
-    if families:
-        ui.label("Famille active")
+        family_count = len(families)
 
-        def set_active_family(e):
-            fid = family_dict[e.value]
-            set_current_family_id(fid)
-            print(f"DEBUG families_panel() → famille changée = {fid}")
-            ui.navigate.to('/?tab=families')
+        ui.label(
+            f"{family_count} famille"
+            if family_count == 1
+            else f"{family_count} familles"
+        ).classes(
+            "text-sm bg-gray-100 rounded-full px-3 py-1"
+        )
 
-        ui.select(
-            list(family_dict.keys()),
-            value=[name for name, fid in family_dict.items() if fid == get_current_family_id()][0],
-            on_change=set_active_family
-        ).classes("w-full")
-    else:
-        ui.label("⚠️ Aucune famille. Créez-en une ci-dessous.")
+    # ---------------------------------------------------------
+    # CRÉATION RAPIDE
+    # ---------------------------------------------------------
 
-    ui.separator()
+    with ui.card().classes("w-full p-4"):
+        ui.label("Créer une famille").classes(
+            "text-lg font-bold"
+        )
 
-    ui.label("Familles existantes").classes("text-lg font-bold mt-2")
+        with ui.row().classes(
+            "w-full items-end gap-2 flex-wrap"
+        ):
+            new_family_input = ui.input(
+                label="Nom de la nouvelle famille",
+                placeholder="Ex. Maison ou Chalet",
+            ).classes("grow min-w-[220px]")
+
+            def add_family():
+                try:
+                    new_family_id = create_family(
+                        new_family_input.value
+                    )
+                except ValueError as error:
+                    ui.notify(
+                        str(error),
+                        type="warning",
+                    )
+                    return
+
+                set_current_family_id(new_family_id)
+
+                ui.notify(
+                    "Famille créée et activée.",
+                    type="positive",
+                )
+                ui.navigate.to("/?tab=familles")
+
+            new_family_input.on(
+                "keydown.enter",
+                add_family,
+            )
+
+            ui.button(
+                "Créer",
+                icon="add",
+                on_click=add_family,
+            ).props("color=primary").classes(
+                "min-w-[120px]"
+            )
+
+    # ---------------------------------------------------------
+    # AUCUNE FAMILLE
+    # ---------------------------------------------------------
 
     if not families:
-        ui.label("Aucune famille trouvée.")
-    else:
-        for f in families:
-            with ui.row().classes("items-center justify-between mt-1"):
-                ui.label(f['name']).classes("font-bold")
+        with ui.card().classes(
+            "w-full p-6 items-center text-center"
+        ):
+            ui.icon("groups").classes(
+                "text-4xl text-gray-400"
+            )
+            ui.label("Aucune famille").classes(
+                "text-lg font-bold"
+            )
+            ui.label(
+                "Créez votre première famille ci-dessus."
+            ).classes("text-gray-500")
+        return
 
-                with ui.row().classes("gap-2"):
+    # ---------------------------------------------------------
+    # FAMILLE ACTIVE
+    # ---------------------------------------------------------
+
+    with ui.card().classes("w-full p-4"):
+        with ui.row().classes(
+            "w-full items-center gap-3"
+        ):
+            ui.icon("check_circle").classes(
+                "text-3xl text-positive"
+            )
+
+            with ui.column().classes("gap-0 grow"):
+                ui.label("Famille active").classes(
+                    "text-lg font-bold"
+                )
+                ui.label(
+                    "Cette famille sera utilisée par "
+                    "la liste d’épicerie."
+                ).classes("text-sm text-gray-500")
+
+        with ui.row().classes(
+            "w-full items-end gap-2 flex-wrap mt-2"
+        ):
+            active_family_input = ui.select(
+                family_options,
+                value=current_family_id,
+                label="Choisir la famille active",
+            ).classes("grow min-w-[220px]")
+
+            def activate_selected_family():
+                selected_family_id = (
+                    active_family_input.value
+                )
+
+                if selected_family_id is None:
+                    ui.notify(
+                        "Choisissez une famille.",
+                        type="warning",
+                    )
+                    return
+
+                selected_family_id = int(
+                    selected_family_id
+                )
+                set_current_family_id(
+                    selected_family_id
+                )
+
+                ui.notify(
+                    "Famille active modifiée.",
+                    type="positive",
+                )
+                ui.navigate.to("/?tab=familles")
+
+            ui.button(
+                "Activer",
+                icon="check",
+                on_click=activate_selected_family,
+            ).props("color=positive").classes(
+                "min-w-[120px]"
+            )
+
+        ui.button(
+            "Ouvrir la liste d’épicerie",
+            icon="shopping_cart",
+            on_click=lambda: ui.navigate.to(
+                "/?tab=items"
+            ),
+        ).props("flat color=primary").classes(
+            "mt-2"
+        )
+
+    # ---------------------------------------------------------
+    # DIALOGUE POUR RENOMMER
+    # ---------------------------------------------------------
+
+    def open_rename_dialog(family):
+        with ui.dialog() as dialog:
+            with ui.card().classes(
+                "w-full max-w-md p-5"
+            ):
+                ui.label("Renommer la famille").classes(
+                    "text-xl font-bold"
+                )
+
+                family_name_input = ui.input(
+                    label="Nom",
+                    value=family["name"],
+                ).classes("w-full")
+
+                def save_family_name():
+                    try:
+                        rename_family(
+                            family["id"],
+                            family_name_input.value,
+                        )
+                    except ValueError as error:
+                        ui.notify(
+                            str(error),
+                            type="warning",
+                        )
+                        return
+
+                    dialog.close()
+
+                    ui.notify(
+                        "Famille renommée.",
+                        type="positive",
+                    )
+                    ui.navigate.to("/?tab=familles")
+
+                family_name_input.on(
+                    "keydown.enter",
+                    save_family_name,
+                )
+
+                with ui.row().classes(
+                    "w-full justify-end gap-2 mt-3"
+                ):
+                    ui.button(
+                        "Annuler",
+                        on_click=dialog.close,
+                    ).props("flat")
 
                     ui.button(
-                        "Activer",
-                        on_click=lambda fid=f['id']: (
-                            set_current_family_id(fid),
-                            print(f"DEBUG families_panel() → famille activée = {fid}"),
-                            ui.navigate.to('/?tab=families')
-                        )
-                    ).props("flat color=white")
+                        "Enregistrer",
+                        icon="save",
+                        on_click=save_family_name,
+                    ).props("color=primary")
 
-                    def open_delete_dialog(fid=f['id'], fname=f['name']):
-                        print(f"DEBUG families_panel() → demande suppression famille {fname}")
-                        with ui.dialog() as dialog:
-                            with ui.card().classes("p-4"):
-                                ui.label(f"Supprimer la famille '{fname}' ?").classes("text-lg font-bold")
-                                ui.label("Cette action est irréversible.")
+        dialog.open()
 
-                                with ui.row().classes("justify-end gap-2 mt-4"):
-                                    ui.button("Annuler", on_click=dialog.close)
-                                    ui.button(
-                                        "Supprimer",
-                                        on_click=lambda: (
-                                            delete_family(fid),
-                                            print(f"DEBUG families_panel() → famille supprimée = {fid}"),
-                                            dialog.close(),
-                                            ui.notify(f"Famille '{fname}' supprimée."),
-                                            ui.navigate.to('/?tab=families')
-                                        )
-                                    ).props("color=red")
+    # ---------------------------------------------------------
+    # DIALOGUE POUR SUPPRIMER
+    # ---------------------------------------------------------
 
-                        dialog.open()
+    def open_delete_dialog(family):
+        remaining_family_ids = [
+            other_family["id"]
+            for other_family in families
+            if other_family["id"] != family["id"]
+        ]
 
-                    ui.button("🗑️", on_click=open_delete_dialog).props("flat color=red")
-
-    ui.separator()
-
-    new_name = ui.input("Nouvelle famille").classes("w-full")
-    ui.button(
-        "Créer",
-        on_click=lambda: (
-            create_family(new_name.value),
-            print(f"DEBUG families_panel() → famille créée = {new_name.value}"),
-            ui.navigate.to('/?tab=families')
+        contains_data = (
+            family["item_count"] > 0
+            or family["category_count"] > 0
         )
-    ).classes("w-full mt-2")
+
+        with ui.dialog() as dialog:
+            with ui.card().classes(
+                "w-full max-w-md p-5"
+            ):
+                ui.label("Supprimer la famille").classes(
+                    "text-xl font-bold"
+                )
+
+                ui.label(
+                    f"Supprimer définitivement "
+                    f"« {family['name']} » ?"
+                ).classes("font-bold")
+
+                ui.label(
+                    f"{family['category_count']} catégorie(s), "
+                    f"{family['item_count']} item(s), dont "
+                    f"{family['needed_count']} besoin(s), "
+                    "seront supprimés."
+                ).classes("text-gray-600")
+
+                confirmation = None
+
+                if contains_data:
+                    confirmation = ui.checkbox(
+                        "Je comprends que les données de cette "
+                        "famille seront supprimées."
+                    ).classes("mt-2")
+
+                def confirm_delete():
+                    if (
+                        confirmation is not None
+                        and not confirmation.value
+                    ):
+                        ui.notify(
+                            "Cochez la confirmation avant "
+                            "de supprimer.",
+                            type="warning",
+                        )
+                        return
+
+                    try:
+                        delete_family(family["id"])
+                    except ValueError as error:
+                        ui.notify(
+                            str(error),
+                            type="warning",
+                        )
+                        return
+
+                    if (
+                        get_current_family_id()
+                        == family["id"]
+                    ):
+                        new_active_family_id = (
+                            remaining_family_ids[0]
+                            if remaining_family_ids
+                            else None
+                        )
+                        set_current_family_id(
+                            new_active_family_id
+                        )
+
+                    dialog.close()
+
+                    ui.notify(
+                        "Famille supprimée.",
+                        type="positive",
+                    )
+                    ui.navigate.to("/?tab=familles")
+
+                with ui.row().classes(
+                    "w-full justify-end gap-2 mt-3"
+                ):
+                    ui.button(
+                        "Annuler",
+                        on_click=dialog.close,
+                    ).props("flat")
+
+                    ui.button(
+                        "Supprimer",
+                        icon="delete",
+                        on_click=confirm_delete,
+                    ).props("color=negative")
+
+        dialog.open()
+
+    # ---------------------------------------------------------
+    # LISTE DES FAMILLES
+    # ---------------------------------------------------------
+
+    ui.label("Familles existantes").classes(
+        "text-lg font-bold mt-1"
+    )
+
+    with ui.column().classes("w-full gap-2"):
+        for family in families:
+            is_active = (
+                family["id"] == current_family_id
+            )
+
+            with ui.card().classes(
+                "w-full px-4 py-3"
+            ):
+                with ui.row().classes(
+                    "w-full items-center justify-between "
+                    "gap-3 flex-wrap"
+                ):
+                    with ui.row().classes(
+                        "items-center gap-3 grow "
+                        "min-w-[190px]"
+                    ):
+                        ui.icon("group").classes(
+                            "text-2xl text-primary"
+                        )
+
+                        with ui.column().classes("gap-1"):
+                            with ui.row().classes(
+                                "items-center gap-2"
+                            ):
+                                ui.label(
+                                    family["name"]
+                                ).classes(
+                                    "font-bold text-base"
+                                )
+
+                                if is_active:
+                                    ui.badge(
+                                        "Active"
+                                    ).props(
+                                        "color=positive"
+                                    )
+
+                            with ui.row().classes(
+                                "items-center gap-2 flex-wrap"
+                            ):
+                                ui.label(
+                                    f"{family['item_count']} item"
+                                    if family["item_count"] == 1
+                                    else (
+                                        f"{family['item_count']} "
+                                        "items"
+                                    )
+                                ).classes(
+                                    "text-sm text-gray-500"
+                                )
+
+                                ui.label("•").classes(
+                                    "text-gray-400"
+                                )
+
+                                ui.label(
+                                    f"{family['needed_count']} besoin"
+                                    if family["needed_count"] == 1
+                                    else (
+                                        f"{family['needed_count']} "
+                                        "besoins"
+                                    )
+                                ).classes(
+                                    "text-sm text-gray-500"
+                                )
+
+                                ui.label("•").classes(
+                                    "text-gray-400"
+                                )
+
+                                ui.label(
+                                    (
+                                        f"{family['category_count']} "
+                                        "catégorie"
+                                    )
+                                    if family["category_count"] == 1
+                                    else (
+                                        f"{family['category_count']} "
+                                        "catégories"
+                                    )
+                                ).classes(
+                                    "text-sm text-gray-500"
+                                )
+
+                    with ui.row().classes(
+                        "items-center gap-0"
+                    ):
+                        if not is_active:
+                            ui.button(
+                                icon="check_circle",
+                                on_click=lambda
+                                selected_id=family["id"]: (
+                                    set_current_family_id(
+                                        selected_id
+                                    ),
+                                    ui.notify(
+                                        "Famille activée.",
+                                        type="positive",
+                                    ),
+                                    ui.navigate.to(
+                                        "/?tab=familles"
+                                    ),
+                                ),
+                            ).props(
+                                "flat round color=positive"
+                            ).tooltip("Activer")
+
+                        ui.button(
+                            icon="edit",
+                            on_click=lambda
+                            selected=family: (
+                                open_rename_dialog(selected)
+                            ),
+                        ).props(
+                            "flat round color=primary"
+                        ).tooltip("Renommer")
+
+                        ui.button(
+                            icon="delete",
+                            on_click=lambda
+                            selected=family: (
+                                open_delete_dialog(selected)
+                            ),
+                        ).props(
+                            "flat round color=negative"
+                        ).tooltip("Supprimer")
+
+    ui.label(
+        "La gestion des membres et du partage sera ajoutée "
+        "avec les comptes utilisateurs du portail."
+    ).classes(
+        "text-xs text-gray-500 mt-2"
+    )

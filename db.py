@@ -381,14 +381,79 @@ def get_families():
             return cur.fetchall()
 
 
+def get_families_with_stats():
+    """Retourne les familles avec leurs statistiques d'épicerie."""
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    family.id,
+                    family.name,
+                    (
+                        SELECT COUNT(*)::INTEGER
+                        FROM categories AS category
+                        WHERE category.family_id = family.id
+                    ) AS category_count,
+                    (
+                        SELECT COUNT(*)::INTEGER
+                        FROM items AS item
+                        WHERE item.family_id = family.id
+                    ) AS item_count,
+                    (
+                        SELECT COUNT(*)::INTEGER
+                        FROM items AS item
+                        WHERE item.family_id = family.id
+                          AND item.needed = 1
+                    ) AS needed_count
+                FROM families AS family
+                ORDER BY LOWER(family.name), family.name;
+            """)
+            return cur.fetchall()
+
+
+def _family_name_exists(
+    cur,
+    name,
+    exclude_family_id=None,
+):
+    if exclude_family_id is None:
+        cur.execute("""
+            SELECT 1
+            FROM families
+            WHERE LOWER(BTRIM(name)) = LOWER(BTRIM(%s))
+            LIMIT 1;
+        """, (name,))
+    else:
+        cur.execute("""
+            SELECT 1
+            FROM families
+            WHERE LOWER(BTRIM(name)) = LOWER(BTRIM(%s))
+              AND id <> %s
+            LIMIT 1;
+        """, (
+            name,
+            exclude_family_id,
+        ))
+
+    return cur.fetchone() is not None
+
+
 def create_family(name):
     family_name = (name or "").strip()
 
     if not family_name:
-        raise ValueError("Le nom de la famille est obligatoire.")
+        raise ValueError(
+            "Le nom de la famille est obligatoire."
+        )
 
     with get_connection() as conn:
         with conn.cursor() as cur:
+            if _family_name_exists(cur, family_name):
+                raise ValueError(
+                    f"La famille « {family_name} » existe déjà."
+                )
+
             cur.execute("""
                 INSERT INTO families (name)
                 VALUES (%s)
@@ -396,8 +461,8 @@ def create_family(name):
             """, (family_name,))
             family_id = cur.fetchone()["id"]
 
-            # Une nouvelle famille reçoit aussi les catégories
-            # provenant de l'ancien modèle global.
+            # Une nouvelle famille reçoit les anciennes catégories
+            # modèles conservées par la migration.
             cur.execute("""
                 INSERT INTO categories (family_id, name)
                 SELECT
@@ -412,9 +477,58 @@ def create_family(name):
             return family_id
 
 
+def rename_family(family_id, new_name):
+    family_name = (new_name or "").strip()
+
+    if not family_name:
+        raise ValueError(
+            "Le nom de la famille est obligatoire."
+        )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            if _family_name_exists(
+                cur,
+                family_name,
+                exclude_family_id=family_id,
+            ):
+                raise ValueError(
+                    f"La famille « {family_name} » existe déjà."
+                )
+
+            cur.execute("""
+                UPDATE families
+                SET name = %s
+                WHERE id = %s;
+            """, (
+                family_name,
+                family_id,
+            ))
+
+            if cur.rowcount == 0:
+                raise ValueError(
+                    "Cette famille n’existe plus."
+                )
+
+            conn.commit()
+
+
 def delete_family(family_id):
     with get_connection() as conn:
         with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id
+                FROM families
+                WHERE id = %s;
+            """, (family_id,))
+
+            if cur.fetchone() is None:
+                raise ValueError(
+                    "Cette famille n’existe plus."
+                )
+
+            # Les catégories sont supprimées par ON DELETE CASCADE.
+            # Les items doivent être supprimés avant la famille.
             cur.execute(
                 "DELETE FROM items WHERE family_id = %s;",
                 (family_id,),

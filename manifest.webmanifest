@@ -1,0 +1,76 @@
+{
+  "id": "/",
+  "name": "JF Apps",
+  "short_name": "JF Apps",
+  "description": "Portail personnel pour les applications et les listes partagées de Jean-François.",
+  "lang": "fr-CA",
+  "dir": "ltr",
+  "start_url": "/?tab=portail",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f3ed",
+  "theme_color": "#173553",
+  "categories": [
+    "productivity",
+    "utilities",
+    "lifestyle"
+  ],
+  "icons": [
+    {
+      "src": "/assets/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/pwa-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Items",
+      "short_name": "Items",
+      "url": "/?tab=items",
+      "icons": [
+        {
+          "src": "/assets/pwa-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Besoins",
+      "short_name": "Besoins",
+      "url": "/?tab=besoins",
+      "icons": [
+        {
+          "src": "/assets/pwa-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Mode courses",
+      "short_name": "Courses",
+      "url": "/?tab=courses",
+      "icons": [
+        {
+          "src": "/assets/pwa-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}

@@ -26,6 +26,10 @@ from db import (
 from families import families_panel
 from items import items_panel
 from needs import needs_panel
+from pwa import (
+    configure_pwa,
+    request_pwa_install,
+)
 from shopping import shopping_panel
 from state import (
     get_current_family_id,
@@ -70,6 +74,8 @@ if LOGO_FILE.exists():
         local_file=str(LOGO_FILE),
         max_cache_age=3600,
     )
+
+configure_pwa(BASE_DIR)
 
 
 APP_CSS = r'''
@@ -910,8 +916,14 @@ def show_portal(user):
                                 )
 
             with ui.row().classes(
-                "w-full justify-end gap-1 mt-2"
+                "w-full justify-end gap-1 mt-2 flex-wrap"
             ):
+                ui.button(
+                    "Installer JF Apps",
+                    icon="install_mobile",
+                    on_click=request_pwa_install,
+                ).props("flat color=primary")
+
                 ui.button(
                     "Mon compte",
                     icon="account_circle",

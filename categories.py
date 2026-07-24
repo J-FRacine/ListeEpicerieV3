@@ -4,34 +4,86 @@ from db import (
     create_category,
     delete_category,
     get_categories_with_counts,
+    get_families,
     merge_categories,
     rename_category,
 )
+from state import (
+    get_current_family_id,
+    set_current_family_id,
+)
+from utils import ensure_family_selected
 
 
 def categories_panel():
-    categories = get_categories_with_counts()
+    current_family_id = get_current_family_id()
+
+    if not ensure_family_selected(current_family_id):
+        return
+
+    families = get_families()
+
+    if not families:
+        ui.label(
+            "Aucune famille disponible."
+        ).classes("text-orange-700")
+        return
+
+    family_dict = {
+        family["name"]: family["id"]
+        for family in families
+    }
+
+    current_family_name = next(
+        (
+            name
+            for name, family_id in family_dict.items()
+            if family_id == current_family_id
+        ),
+        list(family_dict.keys())[0],
+    )
+
+    ui.select(
+        list(family_dict.keys()),
+        value=current_family_name,
+        label="Famille",
+        on_change=lambda event: (
+            set_current_family_id(
+                family_dict[event.value]
+            ),
+            ui.navigate.to("/?tab=categories"),
+        ),
+    ).classes("w-full")
+
+    categories = get_categories_with_counts(
+        current_family_id
+    )
 
     # ---------------------------------------------------------
     # EN-TÊTE
     # ---------------------------------------------------------
 
     with ui.row().classes(
-        "w-full items-start justify-between gap-3 flex-wrap"
+        "w-full items-start justify-between "
+        "gap-3 flex-wrap"
     ):
         with ui.column().classes("gap-0"):
-            ui.label("Catégories").classes("text-2xl font-bold")
+            ui.label("Catégories").classes(
+                "text-2xl font-bold"
+            )
             ui.label(
-                "Classez les items et gardez la liste facile à parcourir."
+                "Les catégories de cette famille seulement."
             ).classes("text-sm text-gray-500")
 
         category_count = len(categories)
+
         ui.label(
             f"{category_count} catégorie"
             if category_count == 1
             else f"{category_count} catégories"
         ).classes(
-            "text-sm bg-gray-100 rounded-full px-3 py-1"
+            "text-sm bg-gray-100 rounded-full "
+            "px-3 py-1"
         )
 
     # ---------------------------------------------------------
@@ -53,12 +105,21 @@ def categories_panel():
 
             def add_category():
                 try:
-                    create_category(new_category_input.value)
+                    create_category(
+                        current_family_id,
+                        new_category_input.value,
+                    )
                 except ValueError as error:
-                    ui.notify(str(error), type="warning")
+                    ui.notify(
+                        str(error),
+                        type="warning",
+                    )
                     return
 
-                ui.notify("Catégorie ajoutée.", type="positive")
+                ui.notify(
+                    "Catégorie ajoutée.",
+                    type="positive",
+                )
                 ui.navigate.to("/?tab=categories")
 
             new_category_input.on(
@@ -70,11 +131,9 @@ def categories_panel():
                 "Ajouter",
                 icon="add",
                 on_click=add_category,
-            ).props("color=primary").classes("min-w-[120px]")
-
-    # ---------------------------------------------------------
-    # AUCUNE CATÉGORIE
-    # ---------------------------------------------------------
+            ).props("color=primary").classes(
+                "min-w-[120px]"
+            )
 
     if not categories:
         with ui.card().classes(
@@ -87,7 +146,8 @@ def categories_panel():
                 "text-lg font-bold"
             )
             ui.label(
-                "Ajoutez votre première catégorie ci-dessus."
+                "Ajoutez la première catégorie "
+                "de cette famille."
             ).classes("text-gray-500")
         return
 
@@ -97,10 +157,12 @@ def categories_panel():
 
     def open_rename_dialog(category):
         with ui.dialog() as dialog:
-            with ui.card().classes("w-full max-w-md p-5"):
-                ui.label("Renommer la catégorie").classes(
-                    "text-xl font-bold"
-                )
+            with ui.card().classes(
+                "w-full max-w-md p-5"
+            ):
+                ui.label(
+                    "Renommer la catégorie"
+                ).classes("text-xl font-bold")
 
                 name_input = ui.input(
                     label="Nom",
@@ -110,11 +172,15 @@ def categories_panel():
                 def save_name():
                     try:
                         rename_category(
+                            current_family_id,
                             category["id"],
                             name_input.value,
                         )
                     except ValueError as error:
-                        ui.notify(str(error), type="warning")
+                        ui.notify(
+                            str(error),
+                            type="warning",
+                        )
                         return
 
                     dialog.close()
@@ -122,9 +188,14 @@ def categories_panel():
                         "Catégorie renommée.",
                         type="positive",
                     )
-                    ui.navigate.to("/?tab=categories")
+                    ui.navigate.to(
+                        "/?tab=categories"
+                    )
 
-                name_input.on("keydown.enter", save_name)
+                name_input.on(
+                    "keydown.enter",
+                    save_name,
+                )
 
                 with ui.row().classes(
                     "w-full justify-end gap-2 mt-3"
@@ -144,25 +215,31 @@ def categories_panel():
 
     def open_merge_dialog(category):
         destination_categories = {
-            other_category["name"]: other_category["id"]
+            other_category["name"]:
+                other_category["id"]
             for other_category in categories
-            if other_category["id"] != category["id"]
+            if other_category["id"]
+            != category["id"]
         }
 
         with ui.dialog() as dialog:
-            with ui.card().classes("w-full max-w-md p-5"):
-                ui.label("Fusionner la catégorie").classes(
-                    "text-xl font-bold"
-                )
+            with ui.card().classes(
+                "w-full max-w-md p-5"
+            ):
+                ui.label(
+                    "Fusionner la catégorie"
+                ).classes("text-xl font-bold")
 
                 ui.label(
-                    f"Les {category['item_count']} item(s) de "
-                    f"« {category['name']} » seront déplacés."
+                    f"Les {category['item_count']} item(s) "
+                    f"de « {category['name']} » "
+                    "seront déplacés."
                 ).classes("text-gray-600")
 
                 if not destination_categories:
                     ui.label(
-                        "Créez d’abord une autre catégorie."
+                        "Créez d’abord une autre catégorie "
+                        "dans cette famille."
                     ).classes("text-orange-700")
 
                     with ui.row().classes(
@@ -174,42 +251,59 @@ def categories_panel():
                         )
                 else:
                     destination_input = ui.select(
-                        list(destination_categories.keys()),
+                        list(
+                            destination_categories.keys()
+                        ),
                         label="Déplacer vers",
                     ).classes("w-full")
 
                     def confirm_merge():
                         if not destination_input.value:
                             ui.notify(
-                                "Choisissez une catégorie de destination.",
+                                "Choisissez une catégorie "
+                                "de destination.",
                                 type="warning",
                             )
                             return
 
-                        destination_name = destination_input.value
-                        destination_id = destination_categories[
-                            destination_name
-                        ]
+                        destination_name = (
+                            destination_input.value
+                        )
+                        destination_id = (
+                            destination_categories[
+                                destination_name
+                            ]
+                        )
 
                         try:
-                            moved_count = merge_categories(
-                                category["id"],
-                                destination_id,
+                            moved_count = (
+                                merge_categories(
+                                    current_family_id,
+                                    category["id"],
+                                    destination_id,
+                                )
                             )
                         except ValueError as error:
-                            ui.notify(str(error), type="warning")
+                            ui.notify(
+                                str(error),
+                                type="warning",
+                            )
                             return
 
                         dialog.close()
                         ui.notify(
-                            f"{moved_count} item(s) déplacé(s) vers "
+                            f"{moved_count} item(s) "
+                            f"déplacé(s) vers "
                             f"« {destination_name} ».",
                             type="positive",
                         )
-                        ui.navigate.to("/?tab=categories")
+                        ui.navigate.to(
+                            "/?tab=categories"
+                        )
 
                     with ui.row().classes(
-                        "w-full justify-end gap-2 mt-3"
+                        "w-full justify-end "
+                        "gap-2 mt-3"
                     ):
                         ui.button(
                             "Annuler",
@@ -226,10 +320,12 @@ def categories_panel():
 
     def open_delete_dialog(category):
         with ui.dialog() as dialog:
-            with ui.card().classes("w-full max-w-md p-5"):
-                ui.label("Supprimer la catégorie").classes(
-                    "text-xl font-bold"
-                )
+            with ui.card().classes(
+                "w-full max-w-md p-5"
+            ):
+                ui.label(
+                    "Supprimer la catégorie"
+                ).classes("text-xl font-bold")
 
                 if category["item_count"] > 0:
                     ui.label(
@@ -238,9 +334,8 @@ def categories_panel():
                     ).classes("font-bold")
 
                     ui.label(
-                        "Pour protéger vos données, cette catégorie "
-                        "ne peut pas être supprimée directement. "
-                        "Utilisez le bouton Fusionner."
+                        "Pour protéger les données, "
+                        "fusionnez d’abord cette catégorie."
                     ).classes("text-gray-600")
 
                     with ui.row().classes(
@@ -256,30 +351,36 @@ def categories_panel():
                         f"« {category['name']} » ?"
                     )
 
+                    def confirm_delete():
+                        try:
+                            delete_category(
+                                current_family_id,
+                                category["id"],
+                            )
+                        except ValueError as error:
+                            ui.notify(
+                                str(error),
+                                type="warning",
+                            )
+                            return
+
+                        dialog.close()
+                        ui.notify(
+                            "Catégorie supprimée.",
+                            type="positive",
+                        )
+                        ui.navigate.to(
+                            "/?tab=categories"
+                        )
+
                     with ui.row().classes(
-                        "w-full justify-end gap-2 mt-3"
+                        "w-full justify-end "
+                        "gap-2 mt-3"
                     ):
                         ui.button(
                             "Annuler",
                             on_click=dialog.close,
                         ).props("flat")
-
-                        def confirm_delete():
-                            try:
-                                delete_category(category["id"])
-                            except ValueError as error:
-                                ui.notify(
-                                    str(error),
-                                    type="warning",
-                                )
-                                return
-
-                            dialog.close()
-                            ui.notify(
-                                "Catégorie supprimée.",
-                                type="positive",
-                            )
-                            ui.navigate.to("/?tab=categories")
 
                         ui.button(
                             "Supprimer",
@@ -305,17 +406,21 @@ def categories_panel():
                 "w-full px-4 py-3"
             ):
                 with ui.row().classes(
-                    "w-full items-center justify-between gap-3"
+                    "w-full items-center justify-between "
+                    "gap-3"
                 ):
                     with ui.row().classes(
-                        "items-center gap-3 grow min-w-[180px]"
+                        "items-center gap-3 grow "
+                        "min-w-[180px]"
                     ):
                         ui.icon("folder").classes(
                             "text-2xl text-primary"
                         )
 
                         with ui.column().classes("gap-0"):
-                            ui.label(category["name"]).classes(
+                            ui.label(
+                                category["name"]
+                            ).classes(
                                 "font-bold text-base"
                             )
 
@@ -323,15 +428,20 @@ def categories_panel():
                                 f"{item_count} item"
                                 if item_count == 1
                                 else f"{item_count} items"
-                            ).classes("text-sm text-gray-500")
+                            ).classes(
+                                "text-sm text-gray-500"
+                            )
 
                     with ui.row().classes(
                         "items-center gap-0"
                     ):
                         ui.button(
                             icon="edit",
-                            on_click=lambda selected=category: (
-                                open_rename_dialog(selected)
+                            on_click=lambda
+                            selected=category: (
+                                open_rename_dialog(
+                                    selected
+                                )
                             ),
                         ).props(
                             "flat round color=primary"
@@ -339,8 +449,11 @@ def categories_panel():
 
                         ui.button(
                             icon="merge_type",
-                            on_click=lambda selected=category: (
-                                open_merge_dialog(selected)
+                            on_click=lambda
+                            selected=category: (
+                                open_merge_dialog(
+                                    selected
+                                )
                             ),
                         ).props(
                             "flat round color=primary"
@@ -348,8 +461,11 @@ def categories_panel():
 
                         ui.button(
                             icon="delete",
-                            on_click=lambda selected=category: (
-                                open_delete_dialog(selected)
+                            on_click=lambda
+                            selected=category: (
+                                open_delete_dialog(
+                                    selected
+                                )
                             ),
                         ).props(
                             "flat round color=negative"

@@ -27,7 +27,9 @@ def items_panel():
     families = get_families()
 
     if not families:
-        ui.label("Aucune famille disponible.").classes("text-orange-700")
+        ui.label(
+            "Aucune famille disponible."
+        ).classes("text-orange-700")
         return
 
     family_dict = {
@@ -44,10 +46,6 @@ def items_panel():
         list(family_dict.keys())[0],
     )
 
-    # ---------------------------------------------------------
-    # FAMILLE ACTIVE
-    # ---------------------------------------------------------
-
     ui.select(
         list(family_dict.keys()),
         value=current_family_name,
@@ -58,10 +56,10 @@ def items_panel():
         ),
     ).classes("w-full")
 
-    if not ensure_categories_exist():
+    if not ensure_categories_exist(current_family_id):
         return
 
-    categories = get_categories()
+    categories = get_categories(current_family_id)
 
     category_dict = {
         category["name"]: category["id"]
@@ -76,7 +74,9 @@ def items_panel():
     ui.separator()
     ui.label("Ajouter un item").classes("text-xl font-bold")
 
-    with ui.row().classes("w-full items-end gap-3 flex-wrap"):
+    with ui.row().classes(
+        "w-full items-end gap-3 flex-wrap"
+    ):
         name_input = ui.input(
             label="Nom",
         ).classes("grow min-w-[210px]")
@@ -106,30 +106,30 @@ def items_panel():
 
             quantity = int(quantity_input.value or 1)
 
-            if quantity < 1:
-                ui.notify(
-                    "La quantité doit être d’au moins 1.",
-                    type="warning",
+            try:
+                add_item(
+                    current_family_id,
+                    category_dict[category_input.value],
+                    item_name,
+                    quantity,
+                    0,
                 )
+            except ValueError as error:
+                ui.notify(str(error), type="warning")
                 return
-
-            add_item(
-                current_family_id,
-                category_dict[category_input.value],
-                item_name,
-                quantity,
-                0,
-            )
 
             ui.navigate.to("/?tab=items")
 
+        name_input.on("keydown.enter", add_new_item)
+
         ui.button(
             "Ajouter",
+            icon="add",
             on_click=add_new_item,
         ).props("flat color=green").classes("mb-1")
 
     # ---------------------------------------------------------
-    # LISTE DES ITEMS ET TRI COMPACT
+    # LISTE ET TRI COMPACT
     # ---------------------------------------------------------
 
     ui.separator()
@@ -139,7 +139,9 @@ def items_panel():
     with ui.row().classes(
         "w-full items-center justify-between gap-3 flex-wrap"
     ):
-        ui.label("Tous les items").classes("text-xl font-bold")
+        ui.label("Tous les items").classes(
+            "text-xl font-bold"
+        )
 
         with ui.row().classes("items-center gap-1"):
             ui.icon("sort").classes("text-gray-500")
@@ -182,12 +184,14 @@ def items_panel():
         return
 
     # ---------------------------------------------------------
-    # FENÊTRE DE MODIFICATION
+    # MODIFICATION D’UN ITEM
     # ---------------------------------------------------------
 
     def open_edit_dialog(item):
         with ui.dialog() as dialog:
-            with ui.card().classes("w-full max-w-md p-5"):
+            with ui.card().classes(
+                "w-full max-w-md p-5"
+            ):
                 ui.label("Modifier l’item").classes(
                     "text-xl font-bold"
                 )
@@ -216,23 +220,12 @@ def items_panel():
                 )
 
                 def save_item():
-                    item_name = (edit_name.value or "").strip()
-
-                    if not item_name:
-                        ui.notify(
-                            "Le nom de l’item est obligatoire.",
-                            type="warning",
-                        )
-                        return
-
-                    quantity = int(edit_quantity.value or 1)
-
-                    if quantity < 1:
-                        ui.notify(
-                            "La quantité doit être d’au moins 1.",
-                            type="warning",
-                        )
-                        return
+                    item_name = (
+                        edit_name.value or ""
+                    ).strip()
+                    quantity = int(
+                        edit_quantity.value or 1
+                    )
 
                     if not edit_category.value:
                         ui.notify(
@@ -241,13 +234,22 @@ def items_panel():
                         )
                         return
 
-                    update_item(
-                        item["id"],
-                        category_dict[edit_category.value],
-                        item_name,
-                        quantity,
-                        1 if edit_needed.value else 0,
-                    )
+                    try:
+                        update_item(
+                            item["id"],
+                            category_dict[
+                                edit_category.value
+                            ],
+                            item_name,
+                            quantity,
+                            1 if edit_needed.value else 0,
+                        )
+                    except ValueError as error:
+                        ui.notify(
+                            str(error),
+                            type="warning",
+                        )
+                        return
 
                     dialog.close()
                     ui.navigate.to("/?tab=items")
@@ -262,6 +264,7 @@ def items_panel():
 
                     ui.button(
                         "Enregistrer",
+                        icon="save",
                         on_click=save_item,
                     ).props("color=primary")
 
@@ -274,10 +277,12 @@ def items_panel():
     for item in items:
         with ui.row().classes(
             "w-full items-center justify-between "
-            "bg-gray-100 rounded-lg px-3 py-2 mt-2 gap-2 "
-            "flex-wrap"
+            "bg-gray-100 rounded-lg px-3 py-2 mt-2 "
+            "gap-2 flex-wrap"
         ):
-            with ui.column().classes("gap-0 grow min-w-[170px]"):
+            with ui.column().classes(
+                "gap-0 grow min-w-[170px]"
+            ):
                 ui.label(
                     f"{item['name']} ({item['quantity']})"
                 ).classes("font-bold")
@@ -287,7 +292,7 @@ def items_panel():
                 ).classes("text-sm text-gray-500")
 
             with ui.row().classes(
-                "items-center gap-1 flex-wrap justify-end"
+                "items-center gap-1 justify-end"
             ):
                 ui.button(
                     icon=(

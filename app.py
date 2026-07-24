@@ -148,10 +148,16 @@ body.body--dark {
 }
 
 .jf-auth-page {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    width: 100vw;
     min-height: 100vh;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow-y: auto;
     padding: 1.5rem 1rem;
 }
 

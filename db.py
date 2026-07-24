@@ -316,6 +316,293 @@ def _migrate_categories_to_families(cur):
     _move_items_to_their_family_categories(cur)
 
 
+
+
+# ---------------------------------------------------------
+# MIGRATION DE L'ANCIENNE TABLE USERS
+# ---------------------------------------------------------
+
+
+def _get_table_columns(cur, table_name):
+    cur.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = %s;
+        """,
+        (table_name,),
+    )
+    return {
+        row["column_name"]
+        for row in cur.fetchall()
+    }
+
+
+def _migrate_users_table(cur):
+    """Met à niveau une ancienne table users sans supprimer de données.
+
+    Certaines versions précédentes du projet utilisaient notamment les
+    colonnes family_id, password et role, sans display_name ni
+    password_hash. CREATE TABLE IF NOT EXISTS ne modifie pas une table
+    déjà existante; cette migration ajoute donc les colonnes manquantes
+    et rend les anciennes colonnes compatibles avec les nouveaux inserts.
+    """
+
+    columns = _get_table_columns(cur, "users")
+
+    required_columns = {
+        "display_name": "TEXT",
+        "email": "TEXT",
+        "password_hash": "TEXT",
+        "is_admin": "BOOLEAN",
+        "is_active": "BOOLEAN",
+        "created_at": "TIMESTAMPTZ",
+    }
+
+    for column_name, column_type in required_columns.items():
+        if column_name not in columns:
+            cur.execute(
+                sql.SQL(
+                    "ALTER TABLE users ADD COLUMN {} {};"
+                ).format(
+                    sql.Identifier(column_name),
+                    sql.SQL(column_type),
+                )
+            )
+
+    columns = _get_table_columns(cur, "users")
+
+    # Les anciennes colonnes peuvent avoir été NOT NULL. On les conserve
+    # pour ne rien perdre, mais on les rend facultatives afin que les
+    # nouveaux comptes puissent être créés avec le nouveau modèle.
+    current_columns = {
+        "id",
+        "display_name",
+        "email",
+        "password_hash",
+        "is_admin",
+        "is_active",
+        "created_at",
+    }
+
+    for legacy_column in sorted(columns - current_columns):
+        cur.execute(
+            sql.SQL(
+                "ALTER TABLE users "
+                "ALTER COLUMN {} DROP NOT NULL;"
+            ).format(
+                sql.Identifier(legacy_column)
+            )
+        )
+
+    # Récupère autant que possible l'ancien nom de l'utilisateur.
+    display_name_sources = []
+
+    if "name" in columns:
+        display_name_sources.append(
+            "NULLIF(BTRIM(name::TEXT), '')"
+        )
+
+    if "username" in columns:
+        display_name_sources.append(
+            "NULLIF(BTRIM(username::TEXT), '')"
+        )
+
+    display_name_sources.extend(
+        [
+            "NULLIF(SPLIT_PART(BTRIM(email), '@', 1), '')",
+            "'Utilisateur ' || id::TEXT",
+        ]
+    )
+
+    cur.execute(
+        f"""
+        UPDATE users
+        SET display_name = COALESCE(
+            NULLIF(BTRIM(display_name), ''),
+            {", ".join(display_name_sources)}
+        )
+        WHERE display_name IS NULL
+           OR BTRIM(display_name) = '';
+        """
+    )
+
+    # Toute ligne sans courriel reçoit une adresse technique unique.
+    cur.execute(
+        """
+        UPDATE users
+        SET email = 'legacy-user-' || id::TEXT || '@local.invalid'
+        WHERE email IS NULL
+           OR BTRIM(email) = '';
+        """
+    )
+
+    cur.execute(
+        """
+        UPDATE users
+        SET email = LOWER(BTRIM(email));
+        """
+    )
+
+    # Corrige les doublons insensibles à la casse avant l'index unique.
+    cur.execute(
+        """
+        WITH ranked_emails AS (
+            SELECT
+                id,
+                ROW_NUMBER() OVER (
+                    PARTITION BY LOWER(BTRIM(email))
+                    ORDER BY id
+                ) AS duplicate_rank
+            FROM users
+        )
+        UPDATE users AS user_account
+        SET email = (
+            'legacy-user-'
+            || user_account.id::TEXT
+            || '@local.invalid'
+        )
+        FROM ranked_emails
+        WHERE ranked_emails.id = user_account.id
+          AND ranked_emails.duplicate_rank > 1;
+        """
+    )
+
+    # Un ancien mot de passe n'est réutilisé que s'il s'agit déjà d'un
+    # hachage scrypt au format de cette application. Sinon le compte reste
+    # inutilisable jusqu'à ce qu'un administrateur définisse un mot de passe.
+    if "password" in columns:
+        cur.execute(
+            """
+            UPDATE users
+            SET password_hash = CASE
+                WHEN password_hash IS NOT NULL
+                 AND BTRIM(password_hash) <> ''
+                    THEN password_hash
+                WHEN password::TEXT LIKE 'scrypt$%%'
+                    THEN password::TEXT
+                ELSE 'legacy-account-disabled'
+            END;
+            """
+        )
+    else:
+        cur.execute(
+            """
+            UPDATE users
+            SET password_hash = COALESCE(
+                NULLIF(BTRIM(password_hash), ''),
+                'legacy-account-disabled'
+            );
+            """
+        )
+
+    if "role" in columns:
+        cur.execute(
+            """
+            UPDATE users
+            SET is_admin = COALESCE(
+                is_admin,
+                LOWER(BTRIM(role::TEXT)) IN (
+                    'superadmin',
+                    'admin',
+                    'owner'
+                ),
+                FALSE
+            );
+            """
+        )
+    else:
+        cur.execute(
+            """
+            UPDATE users
+            SET is_admin = COALESCE(is_admin, FALSE);
+            """
+        )
+
+    cur.execute(
+        """
+        UPDATE users
+        SET
+            is_active = COALESCE(is_active, TRUE),
+            created_at = COALESCE(created_at, NOW());
+        """
+    )
+
+    # Le compte provisoire doit pouvoir être réclamé comme premier admin.
+    cur.execute(
+        """
+        UPDATE users
+        SET
+            display_name = COALESCE(
+                NULLIF(BTRIM(display_name), ''),
+                'Administrateur'
+            ),
+            is_admin = TRUE,
+            is_active = TRUE
+        WHERE LOWER(BTRIM(email)) = 'admin@local';
+        """
+    )
+
+    cur.execute(
+        """
+        ALTER TABLE users
+            ALTER COLUMN display_name SET NOT NULL,
+            ALTER COLUMN email SET NOT NULL,
+            ALTER COLUMN password_hash SET NOT NULL,
+            ALTER COLUMN is_admin SET DEFAULT FALSE,
+            ALTER COLUMN is_admin SET NOT NULL,
+            ALTER COLUMN is_active SET DEFAULT TRUE,
+            ALTER COLUMN is_active SET NOT NULL,
+            ALTER COLUMN created_at SET DEFAULT NOW(),
+            ALTER COLUMN created_at SET NOT NULL;
+        """
+    )
+
+
+def _migrate_legacy_family_members(cur):
+    """Conserve les associations de l'ancien champ users.family_id."""
+
+    columns = _get_table_columns(cur, "users")
+
+    if "family_id" not in columns:
+        return
+
+    role_expression = "'member'"
+
+    if "role" in columns:
+        role_expression = """
+            CASE
+                WHEN LOWER(BTRIM(role::TEXT)) IN (
+                    'superadmin',
+                    'admin',
+                    'owner'
+                )
+                    THEN 'owner'
+                ELSE 'member'
+            END
+        """
+
+    cur.execute(
+        f"""
+        INSERT INTO family_members (
+            family_id,
+            user_id,
+            role
+        )
+        SELECT
+            user_account.family_id,
+            user_account.id,
+            {role_expression}
+        FROM users AS user_account
+        JOIN families AS family
+          ON family.id = user_account.family_id
+        WHERE user_account.family_id IS NOT NULL
+        ON CONFLICT (family_id, user_id) DO NOTHING;
+        """
+    )
+
+
 # ---------------------------------------------------------
 # INITIALISATION GÉNÉRALE
 # ---------------------------------------------------------

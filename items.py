@@ -310,13 +310,12 @@ def items_panel():
                 )
 
                 ui.button(
-                    "Modifier",
                     icon="edit",
                     on_click=lambda item_data=item: (
                         open_edit_dialog(item_data)
                     ),
                 ).props(
-                    "flat dense color=primary"
+                    "flat round color=primary"
                 ).tooltip("Modifier cet item")
 
                 ui.button(

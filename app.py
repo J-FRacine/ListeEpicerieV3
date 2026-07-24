@@ -57,8 +57,8 @@ LOGO_URL = "/assets/logo_jf.png"
 
 if LOGO_FILE.exists():
     app.add_static_file(
-        LOGO_URL,
-        str(LOGO_FILE),
+        url_path=LOGO_URL,
+        local_file=str(LOGO_FILE),
         max_cache_age=3600,
     )
 

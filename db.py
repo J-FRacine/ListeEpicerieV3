@@ -484,6 +484,34 @@ def count_users():
             return cur.fetchone()["user_count"]
 
 
+def needs_initial_admin_setup():
+    """Indique si le portail doit afficher la configuration initiale.
+
+    En plus d'une base sans utilisateur, cette fonction reconnaît le
+    compte provisoire historique admin@local comme non configuré.
+    """
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    COUNT(*)::INTEGER AS user_count,
+                    MIN(LOWER(BTRIM(email))) AS only_email
+                FROM users;
+                """
+            )
+            row = cur.fetchone()
+
+            return (
+                row["user_count"] == 0
+                or (
+                    row["user_count"] == 1
+                    and row["only_email"] == "admin@local"
+                )
+            )
+
+
 def get_user_by_email(email):
     normalized_email = (email or "").strip()
 
@@ -535,6 +563,13 @@ def get_user_by_id(user_id):
 
 
 def create_first_admin(display_name, email, password_hash):
+    """Crée le premier administrateur ou réclame admin@local.
+
+    Le compte admin@local provenait d'une ancienne étape provisoire du
+    projet. S'il est le seul compte présent, on le transforme en vrai
+    compte administrateur au lieu de bloquer la configuration initiale.
+    """
+
     name = (display_name or "").strip()
     normalized_email = (email or "").strip().lower()
 
@@ -547,26 +582,74 @@ def create_first_admin(display_name, email, password_hash):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("LOCK TABLE users IN EXCLUSIVE MODE;")
-            cur.execute("SELECT COUNT(*)::INTEGER AS user_count FROM users;")
-
-            if cur.fetchone()["user_count"] > 0:
-                raise ValueError("Le premier administrateur existe déjà.")
-
             cur.execute(
                 """
-                INSERT INTO users (
-                    display_name,
-                    email,
-                    password_hash,
-                    is_admin,
-                    is_active
-                )
-                VALUES (%s, %s, %s, TRUE, TRUE)
-                RETURNING id, display_name, email, is_admin, is_active;
-                """,
-                (name, normalized_email, password_hash),
+                SELECT
+                    id,
+                    LOWER(BTRIM(email)) AS normalized_email
+                FROM users
+                ORDER BY id;
+                """
             )
-            user = cur.fetchone()
+            existing_users = cur.fetchall()
+
+            if not existing_users:
+                cur.execute(
+                    """
+                    INSERT INTO users (
+                        display_name,
+                        email,
+                        password_hash,
+                        is_admin,
+                        is_active
+                    )
+                    VALUES (%s, %s, %s, TRUE, TRUE)
+                    RETURNING
+                        id,
+                        display_name,
+                        email,
+                        is_admin,
+                        is_active;
+                    """,
+                    (name, normalized_email, password_hash),
+                )
+                user = cur.fetchone()
+
+            elif (
+                len(existing_users) == 1
+                and existing_users[0]["normalized_email"]
+                == "admin@local"
+            ):
+                cur.execute(
+                    """
+                    UPDATE users
+                    SET
+                        display_name = %s,
+                        email = %s,
+                        password_hash = %s,
+                        is_admin = TRUE,
+                        is_active = TRUE
+                    WHERE id = %s
+                    RETURNING
+                        id,
+                        display_name,
+                        email,
+                        is_admin,
+                        is_active;
+                    """,
+                    (
+                        name,
+                        normalized_email,
+                        password_hash,
+                        existing_users[0]["id"],
+                    ),
+                )
+                user = cur.fetchone()
+
+            else:
+                raise ValueError(
+                    "Le premier administrateur existe déjà."
+                )
 
             cur.execute(
                 """

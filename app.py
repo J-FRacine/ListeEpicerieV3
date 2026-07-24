@@ -15,10 +15,10 @@ from auth import (
 from backup import backup_panel
 from categories import categories_panel
 from db import (
-    count_users,
     create_first_admin,
     get_accessible_families,
     init_db,
+    needs_initial_admin_setup,
 )
 from families import families_panel
 from items import items_panel
@@ -69,16 +69,22 @@ def show_first_admin_setup():
             name_input = ui.input(label="Votre nom").classes("w-full")
             email_input = ui.input(
                 label="Adresse courriel"
-            ).props("type=email").classes("w-full")
+            ).props(
+                "type=email autocomplete=username"
+            ).classes("w-full")
             password_input = ui.input(
                 label="Mot de passe",
                 password=True,
                 password_toggle_button=True,
+            ).props(
+                "autocomplete=new-password"
             ).classes("w-full")
             confirmation_input = ui.input(
                 label="Confirmer le mot de passe",
                 password=True,
                 password_toggle_button=True,
+            ).props(
+                "autocomplete=new-password"
             ).classes("w-full")
 
             ui.label(
@@ -142,25 +148,37 @@ def show_login():
 
             email_input = ui.input(
                 label="Adresse courriel"
-            ).props("type=email autofocus").classes("w-full mt-4")
+            ).props(
+                "type=email autofocus autocomplete=username"
+            ).classes("w-full mt-4")
             password_input = ui.input(
                 label="Mot de passe",
                 password=True,
                 password_toggle_button=True,
+            ).props(
+                "autocomplete=current-password"
             ).classes("w-full")
 
+            login_error = ui.label("").classes(
+                "text-sm text-negative min-h-[20px]"
+            )
+
             def try_login():
+                login_error.set_text("")
+
                 user = authenticate(
                     email_input.value,
                     password_input.value,
                 )
 
                 if user is None:
-                    ui.notify(
-                        "Adresse courriel ou mot de passe incorrect.",
-                        type="negative",
+                    message = (
+                        "Adresse courriel ou mot de passe incorrect."
                     )
+                    login_error.set_text(message)
+                    ui.notify(message, type="negative")
                     password_input.value = ""
+                    password_input.update()
                     return
 
                 ui.navigate.to("/?tab=portail")
@@ -326,7 +344,7 @@ def bottom_navigation(active_tab):
 def index(tab="portail"):
     apply_theme()
 
-    if count_users() == 0:
+    if needs_initial_admin_setup():
         show_first_admin_setup()
         return
 

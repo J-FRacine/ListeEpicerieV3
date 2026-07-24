@@ -42,6 +42,7 @@ def hash_password(password):
         r=SCRYPT_R,
         p=SCRYPT_P,
         dklen=SCRYPT_DKLEN,
+        maxmem=64 * 1024 * 1024,
     )
 
     return "$".join(
@@ -74,6 +75,7 @@ def verify_password(password, stored_hash):
             r=int(r_text),
             p=int(p_text),
             dklen=len(expected_hash),
+            maxmem=64 * 1024 * 1024,
         )
     except (ValueError, TypeError, AttributeError):
         return False

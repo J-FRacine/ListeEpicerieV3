@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import os
+import traceback
 
-from nicegui import ui
+from nicegui import run, ui
 
 from auth import (
     authenticate,
@@ -51,6 +52,17 @@ def logout():
     ui.navigate.to("/")
 
 
+def _create_first_admin_blocking(display_name, email, password):
+    """Hache le mot de passe et écrit le premier compte dans PostgreSQL."""
+
+    password_hash = hash_password(password)
+    return create_first_admin(
+        display_name,
+        email,
+        password_hash,
+    )
+
+
 def show_first_admin_setup():
     apply_theme()
 
@@ -66,12 +78,16 @@ def show_first_admin_setup():
                 "Toutes les familles existantes lui seront attribuées."
             ).classes("text-gray-600")
 
-            name_input = ui.input(label="Votre nom").classes("w-full")
+            name_input = ui.input(
+                label="Votre nom"
+            ).props("autofocus autocomplete=name").classes("w-full")
+
             email_input = ui.input(
                 label="Adresse courriel"
             ).props(
                 "type=email autocomplete=username"
             ).classes("w-full")
+
             password_input = ui.input(
                 label="Mot de passe",
                 password=True,
@@ -79,6 +95,7 @@ def show_first_admin_setup():
             ).props(
                 "autocomplete=new-password"
             ).classes("w-full")
+
             confirmation_input = ui.input(
                 label="Confirmer le mot de passe",
                 password=True,
@@ -91,43 +108,132 @@ def show_first_admin_setup():
                 "Le mot de passe doit contenir au moins 10 caractères."
             ).classes("text-xs text-gray-500")
 
-            def create_admin():
-                if password_input.value != confirmation_input.value:
-                    ui.notify(
-                        "Les deux mots de passe ne correspondent pas.",
-                        type="warning",
-                    )
-                    return
+            status_label = ui.label("").classes(
+                "text-sm min-h-[22px]"
+            )
 
+            create_button = None
+
+            async def create_admin():
+                nonlocal create_button
+
+                status_label.set_text("")
+                status_label.classes(
+                    replace="text-sm min-h-[22px] text-gray-600"
+                )
+
+                display_name = (name_input.value or "").strip()
                 email = normalize_email(email_input.value)
+                password = password_input.value or ""
+                confirmation = confirmation_input.value or ""
 
-                if "@" not in email:
-                    ui.notify(
-                        "L’adresse courriel semble invalide.",
-                        type="warning",
+                if not display_name:
+                    status_label.set_text("Votre nom est obligatoire.")
+                    status_label.classes(
+                        replace="text-sm min-h-[22px] text-negative"
                     )
+                    name_input.run_method("focus")
                     return
+
+                if "@" not in email or email.startswith("@") or email.endswith("@"):
+                    status_label.set_text(
+                        "L’adresse courriel semble invalide."
+                    )
+                    status_label.classes(
+                        replace="text-sm min-h-[22px] text-negative"
+                    )
+                    email_input.run_method("focus")
+                    return
+
+                if password != confirmation:
+                    status_label.set_text(
+                        "Les deux mots de passe ne correspondent pas."
+                    )
+                    status_label.classes(
+                        replace="text-sm min-h-[22px] text-negative"
+                    )
+                    confirmation_input.run_method("focus")
+                    return
+
+                if len(password) < 10:
+                    status_label.set_text(
+                        "Le mot de passe doit contenir au moins 10 caractères."
+                    )
+                    status_label.classes(
+                        replace="text-sm min-h-[22px] text-negative"
+                    )
+                    password_input.run_method("focus")
+                    return
+
+                if create_button is not None:
+                    create_button.disable()
+
+                status_label.set_text(
+                    "Création de l’administrateur en cours…"
+                )
+                status_label.classes(
+                    replace="text-sm min-h-[22px] text-primary"
+                )
 
                 try:
-                    password_hash = hash_password(password_input.value or "")
-                    user = create_first_admin(
-                        name_input.value,
+                    # Le hachage et PostgreSQL sont exécutés hors de la
+                    # boucle d’événements afin que l’écran reste réactif.
+                    user = await run.io_bound(
+                        _create_first_admin_blocking,
+                        display_name,
                         email,
-                        password_hash,
+                        password,
                     )
+
+                    set_authenticated_user(user["id"])
+
+                    status_label.set_text(
+                        "Administrateur créé. Ouverture du portail…"
+                    )
+                    status_label.classes(
+                        replace="text-sm min-h-[22px] text-positive"
+                    )
+
+                    ui.notify(
+                        "Administrateur créé. Bienvenue dans JF Apps.",
+                        type="positive",
+                    )
+                    ui.navigate.to("/?tab=portail")
+
                 except ValueError as error:
-                    ui.notify(str(error), type="warning")
-                    return
+                    status_label.set_text(str(error))
+                    status_label.classes(
+                        replace="text-sm min-h-[22px] text-negative"
+                    )
+                    ui.notify(str(error), type="negative")
 
-                set_authenticated_user(user["id"])
-                ui.notify(
-                    "Administrateur créé. Bienvenue dans JF Apps.",
-                    type="positive",
-                )
-                ui.navigate.to("/?tab=portail")
+                except Exception as error:
+                    traceback.print_exc()
+                    message = (
+                        "La création a échoué : "
+                        f"{type(error).__name__}: {error}"
+                    )
+                    status_label.set_text(message)
+                    status_label.classes(
+                        replace="text-sm min-h-[22px] text-negative"
+                    )
+                    ui.notify(
+                        "La création a échoué. Le détail est affiché "
+                        "sous le formulaire et dans le journal Canner.",
+                        type="negative",
+                        timeout=8000,
+                    )
 
-            confirmation_input.on("keydown.enter", create_admin)
-            ui.button(
+                finally:
+                    if create_button is not None:
+                        create_button.enable()
+
+            confirmation_input.on(
+                "keydown.enter",
+                create_admin,
+            )
+
+            create_button = ui.button(
                 "Créer l’administrateur",
                 icon="admin_panel_settings",
                 on_click=create_admin,

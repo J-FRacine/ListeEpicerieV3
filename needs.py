@@ -1,20 +1,10 @@
+from collections import defaultdict
+
 from nicegui import ui
 
-from db import (
-    get_items,
-    toggle_needed,
-    get_categories,
-    get_families,
-)
-
-from state import (
-    get_current_family_id,
-    set_current_family_id,
-    get_tri_mode_needs,
-    set_tri_mode_needs,
-)
-
-from utils import ensure_family_selected, ensure_categories_exist
+from db import get_families, get_items, toggle_needed
+from state import get_current_family_id, set_current_family_id
+from utils import ensure_family_selected
 
 
 def needs_panel():
@@ -30,81 +20,132 @@ def needs_panel():
     families = get_families()
     print(f"DEBUG needs_panel() → familles = {families}")
 
-    family_dict = {f['name']: f['id'] for f in families}
+    if not families:
+        ui.label(
+            "⚠️ Aucune famille disponible."
+        ).classes("text-orange-700")
+        return
 
-    # Sélecteur de famille
+    family_dict = {
+        family["name"]: family["id"]
+        for family in families
+    }
+
+    current_family_name = next(
+        (
+            name
+            for name, family_id in family_dict.items()
+            if family_id == current_family_id
+        ),
+        list(family_dict.keys())[0],
+    )
+
+    # ---------------------------------------------------------
+    # FAMILLE ACTIVE
+    # ---------------------------------------------------------
+
     ui.select(
         list(family_dict.keys()),
-        value=[name for name, fid in family_dict.items() if fid == current_family_id][0],
+        value=current_family_name,
         label="Famille",
-        on_change=lambda e: (
-            print(f"DEBUG needs_panel() → famille changée = {family_dict[e.value]}"),
-            set_current_family_id(family_dict[e.value]),
-            ui.navigate.to('/?tab=besoins')
-        )
+        on_change=lambda event: (
+            print(
+                "DEBUG needs_panel() → famille changée = "
+                f"{family_dict[event.value]}"
+            ),
+            set_current_family_id(family_dict[event.value]),
+            ui.navigate.to("/?tab=besoins"),
+        ),
     ).classes("w-full")
 
     ui.separator()
 
     ui.label("Besoins").classes("text-xl font-bold")
 
-    tri_mode = get_tri_mode_needs()
+    # ---------------------------------------------------------
+    # RÉCUPÉRATION DES BESOINS
+    # ---------------------------------------------------------
 
-    ui.select(
-        ["Alphabétique", "Ordre d’ajout", "Catégorie"],
-        value=tri_mode,
-        label="Trier par",
-        on_change=lambda e: (
-            print(f"DEBUG needs_panel() → tri changé = {e.value}"),
-            set_tri_mode_needs(e.value),
-            ui.navigate.to('/?tab=besoins')
-        )
-    ).classes("w-full")
-
-    if not ensure_categories_exist():
-        print("DEBUG needs_panel() → STOP: aucune catégorie")
-        return
-
-    categories = get_categories()
-    print(f"DEBUG needs_panel() → catégories = {categories}")
-
-    cat_dict = {c['name']: c['id'] for c in categories}
-    cat_names = list(cat_dict.keys())
-
-    # ⭐ On récupère les items et on filtre seulement ceux needed = 1
     items = get_items(current_family_id)
-    needs = [it for it in items if it['needed'] == 1]
+    needs = [
+        item
+        for item in items
+        if item["needed"] == 1
+    ]
 
     print(f"DEBUG needs_panel() → besoins = {needs}")
 
-    # Tri
-    if tri_mode == "Alphabétique":
-        needs = sorted(needs, key=lambda x: x['name'].strip().lower())
-    elif tri_mode == "Catégorie":
-        needs = sorted(needs, key=lambda x: (x['category'] or '').lower())
+    if not needs:
+        ui.label(
+            "Aucun item n’est actuellement marqué comme besoin."
+        ).classes("text-gray-500 mt-3")
+        return
 
-    # Affichage des besoins
-    for need in needs:
-        with ui.row().classes("items-center justify-between bg-gray-100 rounded-lg px-3 py-2 mt-2 gap-2"):
+    # ---------------------------------------------------------
+    # REGROUPEMENT PAR CATÉGORIE
+    # ---------------------------------------------------------
 
-            with ui.row().classes("items-center gap-2"):
-                ui.label(f"{need['name']}").classes("font-bold")
-                ui.button(
-                    "✔️",
-                    on_click=lambda nid=need['id']: (
-                        print(f"DEBUG needs_panel() → toggle besoin {nid}"),
-                        toggle_needed(nid),
-                        ui.navigate.to('/?tab=besoins')
+    needs_by_category = defaultdict(list)
+
+    for item in needs:
+        category_name = (
+            item["category"].strip()
+            if item.get("category")
+            else "Sans catégorie"
+        )
+        needs_by_category[category_name].append(item)
+
+    # Les catégories sont affichées en ordre alphabétique.
+    sorted_categories = sorted(
+        needs_by_category.keys(),
+        key=lambda category: category.casefold(),
+    )
+
+    # ---------------------------------------------------------
+    # AFFICHAGE
+    # Les items sont triés alphabétiquement à l'intérieur
+    # de chacune des catégories.
+    # ---------------------------------------------------------
+
+    for category_name in sorted_categories:
+        category_items = sorted(
+            needs_by_category[category_name],
+            key=lambda item: item["name"].strip().casefold(),
+        )
+
+        with ui.column().classes("w-full gap-1 mt-4"):
+            ui.label(category_name).classes(
+                "text-lg font-bold border-b border-gray-300 "
+                "pb-1 w-full"
+            )
+
+            for item in category_items:
+                with ui.row().classes(
+                    "w-full items-center justify-between "
+                    "bg-gray-100 rounded-lg px-3 py-2 mt-1 gap-2"
+                ):
+                    with ui.row().classes("items-center gap-2"):
+                        quantity = item.get("quantity", 1)
+
+                        if quantity and quantity != 1:
+                            item_text = f"{item['name']} ({quantity})"
+                        else:
+                            item_text = item["name"]
+
+                        ui.label(item_text).classes("font-bold")
+
+                    ui.button(
+                        icon="check",
+                        on_click=lambda item_id=item["id"]: (
+                            print(
+                                "DEBUG needs_panel() → "
+                                f"retrait du besoin {item_id}"
+                            ),
+                            toggle_needed(item_id),
+                            ui.navigate.to("/?tab=besoins"),
+                        ),
+                    ).props(
+                        "flat round color=green"
+                    ).tooltip(
+                        "Retirer de la liste des besoins"
                     )
-                ).props("flat color=white")
-
-            with ui.row().classes("items-center gap-2"):
-                ui.select(
-                    cat_names,
-                    value=need['category'],
-                    on_change=lambda e, iid=need['id']: (
-                        print(f"DEBUG needs_panel() → changement catégorie besoin {iid} → {e.value}"),
-                        # Ici tu peux ajouter une fonction pour changer la catégorie si tu veux
-                        ui.navigate.to('/?tab=besoins')
-                    )
-                ).classes("w-32")

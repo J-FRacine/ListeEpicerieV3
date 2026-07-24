@@ -26,6 +26,7 @@ from db import (
 from families import families_panel
 from items import items_panel
 from needs import needs_panel
+from shopping import shopping_panel
 from state import (
     get_current_family_id,
     set_current_family_id,
@@ -40,6 +41,7 @@ VALID_APP_TABS = {
     "besoins",
     "categories",
     "donnees",
+    "courses",
 }
 PORTAL_TABS = {"portail", "portal", "apps"}
 FAMILY_TABS = {"familles", "families"}
@@ -50,6 +52,12 @@ BACKUP_TABS = {
     "sauvegarde",
     "backup",
     "admin",
+}
+SHOPPING_TABS = {
+    "courses",
+    "course",
+    "magasin",
+    "shopping",
 }
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -1244,10 +1252,23 @@ def index(tab="portail"):
     if normalized_tab in BACKUP_TABS:
         normalized_tab = "donnees"
 
+    if normalized_tab in SHOPPING_TABS:
+        normalized_tab = "courses"
+
     if normalized_tab not in VALID_APP_TABS:
         normalized_tab = "items"
 
     set_current_tab(normalized_tab)
+
+    # Le mode courses utilise volontairement un écran simplifié,
+    # sans l'en-tête et la navigation habituels.
+    if normalized_tab == "courses":
+        with page_container():
+            if not ensure_valid_family(user["id"]):
+                show_no_family_message()
+            else:
+                shopping_panel()
+        return
 
     needs_count = 0
 

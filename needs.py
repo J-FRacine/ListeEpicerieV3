@@ -13,6 +13,10 @@ from state import (
     get_current_family_id,
     set_current_family_id,
 )
+from shopping import (
+    has_active_shopping_session,
+    start_shopping_session,
+)
 from utils import ensure_family_selected
 
 
@@ -380,6 +384,51 @@ def needs_panel():
         )
     ).classes(
         "text-xs text-gray-500"
+    )
+
+    shopping_is_active = (
+        has_active_shopping_session(
+            current_family_id
+        )
+    )
+
+    def open_shopping_mode():
+        if not shopping_is_active:
+            try:
+                start_shopping_session(
+                    user_id,
+                    current_family_id,
+                )
+            except (
+                ValueError,
+                PermissionError,
+            ) as error:
+                ui.notify(
+                    str(error),
+                    type="warning",
+                )
+                return
+
+        ui.navigate.to(
+            "/?tab=courses"
+        )
+
+    ui.button(
+        (
+            "Reprendre les courses"
+            if shopping_is_active
+            else "Commencer les courses"
+        ),
+        icon=(
+            "play_arrow"
+            if shopping_is_active
+            else "shopping_cart_checkout"
+        ),
+        on_click=open_shopping_mode,
+    ).props(
+        "color=primary size=lg"
+    ).classes(
+        "w-full mt-3"
     )
 
     # ---------------------------------------------------------

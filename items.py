@@ -1,20 +1,22 @@
 from nicegui import ui
 
 from db import (
+    get_items,
     add_item,
     delete_item,
+    toggle_needed,
     get_categories,
     get_families,
-    get_items,
-    toggle_needed,
 )
+
 from state import (
     get_current_family_id,
-    get_tri_mode_items,
     set_current_family_id,
+    get_tri_mode_items,
     set_tri_mode_items,
 )
-from utils import ensure_categories_exist, ensure_family_selected
+
+from utils import ensure_family_selected, ensure_categories_exist
 
 
 def items_panel():
@@ -30,10 +32,7 @@ def items_panel():
     families = get_families()
     print(f"DEBUG items_panel() → familles = {families}")
 
-    family_dict = {
-        family["name"]: family["id"]
-        for family in families
-    }
+    family_dict = {family["name"]: family["id"] for family in families}
 
     current_family_name = next(
         (
@@ -45,7 +44,7 @@ def items_panel():
     )
 
     # ---------------------------------------------------------
-    # FAMILLE ACTIVE
+    # SÉLECTEUR DE FAMILLE
     # ---------------------------------------------------------
 
     ui.select(
@@ -76,8 +75,7 @@ def items_panel():
     category_names = list(category_dict.keys())
 
     # ---------------------------------------------------------
-    # AJOUTER UN ITEM
-    # Placé immédiatement sous le sélecteur de famille
+    # AJOUT D'UN ITEM — MAINTENANT EN HAUT DE LA PAGE
     # ---------------------------------------------------------
 
     ui.separator()
@@ -85,9 +83,9 @@ def items_panel():
     ui.label("Ajouter un item").classes("text-xl font-bold")
 
     with ui.row().classes("w-full items-end gap-3 flex-wrap"):
-        name_input = ui.input(
-            label="Nom",
-        ).classes("grow min-w-[210px]")
+        name_input = ui.input(label="Nom").classes(
+            "grow min-w-[220px]"
+        )
 
         quantity_input = ui.number(
             label="Quantité",
@@ -100,23 +98,17 @@ def items_panel():
             category_names,
             value=category_names[0],
             label="Catégorie",
-        ).classes("grow min-w-[170px]")
+        ).classes("grow min-w-[180px]")
 
         def add_new_item():
             item_name = (name_input.value or "").strip()
 
             if not item_name:
-                ui.notify(
-                    "Inscris le nom de l’item.",
-                    type="warning",
-                )
+                ui.notify("Inscris le nom de l’item.", type="warning")
                 return
 
             if not category_input.value:
-                ui.notify(
-                    "Choisis une catégorie.",
-                    type="warning",
-                )
+                ui.notify("Choisis une catégorie.", type="warning")
                 return
 
             quantity = int(quantity_input.value or 1)
@@ -129,8 +121,7 @@ def items_panel():
                 return
 
             print(
-                "DEBUG items_panel() → ajout item "
-                f"{item_name}"
+                f"DEBUG items_panel() → ajout item {item_name}"
             )
 
             add_item(
@@ -138,7 +129,7 @@ def items_panel():
                 category_dict[category_input.value],
                 item_name,
                 quantity,
-                0,
+                0,  # needed = 0 par défaut
             )
 
             ui.navigate.to("/?tab=items")
@@ -154,34 +145,22 @@ def items_panel():
 
     ui.separator()
 
+    ui.label("Tous les items").classes("text-xl font-bold")
+
     tri_mode = get_tri_mode_items()
 
-    with ui.row().classes(
-        "w-full items-center justify-between gap-3"
-    ):
-        ui.label("Tous les items").classes("text-xl font-bold")
-
-        with ui.row().classes("items-center gap-1"):
-            ui.icon("sort").classes("text-gray-500 text-lg")
-
-            ui.select(
-                [
-                    "Alphabétique",
-                    "Ordre d’ajout",
-                    "Catégorie",
-                ],
-                value=tri_mode,
-                on_change=lambda event: (
-                    print(
-                        "DEBUG items_panel() → tri changé = "
-                        f"{event.value}"
-                    ),
-                    set_tri_mode_items(event.value),
-                    ui.navigate.to("/?tab=items"),
-                ),
-            ).props(
-                "dense borderless options-dense"
-            ).classes("w-40 text-sm")
+    ui.select(
+        ["Alphabétique", "Ordre d’ajout", "Catégorie"],
+        value=tri_mode,
+        label="Trier par",
+        on_change=lambda event: (
+            print(
+                f"DEBUG items_panel() → tri changé = {event.value}"
+            ),
+            set_tri_mode_items(event.value),
+            ui.navigate.to("/?tab=items"),
+        ),
+    ).classes("w-full")
 
     items = get_items(current_family_id)
     print(f"DEBUG items_panel() → items = {items}")
@@ -196,12 +175,6 @@ def items_panel():
             items,
             key=lambda item: (item["category"] or "").lower(),
         )
-
-    if not items:
-        ui.label(
-            "Aucun item dans cette famille."
-        ).classes("text-gray-500 mt-3")
-        return
 
     for item in items:
         with ui.row().classes(

@@ -663,6 +663,9 @@ def init_db():
                 """
             )
 
+            # Met à niveau une éventuelle ancienne table users.
+            _migrate_users_table(cur)
+
             cur.execute(
                 """
                 CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_unique
@@ -686,6 +689,9 @@ def init_db():
                 );
                 """
             )
+
+            # Récupère l'ancienne association users.family_id, si présente.
+            _migrate_legacy_family_members(cur)
 
             conn.commit()
 

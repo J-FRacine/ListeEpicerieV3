@@ -292,7 +292,7 @@ def backup_panel():
             )
 
         ui.button(
-            "Télécharger",
+            "Exporter",
             icon="download",
             on_click=export_data,
         ).props("color=primary").classes(

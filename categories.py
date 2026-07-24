@@ -1,134 +1,356 @@
-# ---------------------------------------------------------
-#  PANNEAU : CATÉGORIES
-# ---------------------------------------------------------
-
 from nicegui import ui
 
 from db import (
-    get_categories,
     create_category,
     delete_category,
-    get_connection,
+    get_categories_with_counts,
+    merge_categories,
+    rename_category,
 )
-from state import current_family_id
-from utils import ensure_family_selected
 
 
 def categories_panel():
+    categories = get_categories_with_counts()
 
-    # Vérifier famille sélectionnée (si nécessaire dans ton app)
-    ensure_family_selected(current_family_id)
+    # ---------------------------------------------------------
+    # EN-TÊTE
+    # ---------------------------------------------------------
 
-    ui.label("Gestion des catégories").classes("text-xl font-bold")
+    with ui.row().classes(
+        "w-full items-start justify-between gap-3 flex-wrap"
+    ):
+        with ui.column().classes("gap-0"):
+            ui.label("Catégories").classes("text-2xl font-bold")
+            ui.label(
+                "Classez les items et gardez la liste facile à parcourir."
+            ).classes("text-sm text-gray-500")
 
-    # --- Ajouter une catégorie ---
-    new_cat = ui.input("Nouvelle catégorie").classes("w-full")
-    ui.button(
-        "Ajouter",
-        on_click=lambda: (
-            create_category(new_cat.value),
-            ui.navigate.to('/?tab=categories')
+        category_count = len(categories)
+        ui.label(
+            f"{category_count} catégorie"
+            if category_count == 1
+            else f"{category_count} catégories"
+        ).classes(
+            "text-sm bg-gray-100 rounded-full px-3 py-1"
         )
-    ).classes("w-full mt-2")
 
-    ui.separator()
+    # ---------------------------------------------------------
+    # AJOUT RAPIDE
+    # ---------------------------------------------------------
 
-    # --- Liste des catégories existantes ---
-    categories = get_categories()
+    with ui.card().classes("w-full p-4"):
+        ui.label("Ajouter une catégorie").classes(
+            "text-lg font-bold"
+        )
+
+        with ui.row().classes(
+            "w-full items-end gap-2 flex-wrap"
+        ):
+            new_category_input = ui.input(
+                label="Nom de la nouvelle catégorie",
+                placeholder="Ex. Pharmacie",
+            ).classes("grow min-w-[220px]")
+
+            def add_category():
+                try:
+                    create_category(new_category_input.value)
+                except ValueError as error:
+                    ui.notify(str(error), type="warning")
+                    return
+
+                ui.notify("Catégorie ajoutée.", type="positive")
+                ui.navigate.to("/?tab=categories")
+
+            new_category_input.on(
+                "keydown.enter",
+                add_category,
+            )
+
+            ui.button(
+                "Ajouter",
+                icon="add",
+                on_click=add_category,
+            ).props("color=primary").classes("min-w-[120px]")
+
+    # ---------------------------------------------------------
+    # AUCUNE CATÉGORIE
+    # ---------------------------------------------------------
+
     if not categories:
-        ui.label("⚠️ Aucune catégorie. Ajoutez-en une ci-dessus.")
+        with ui.card().classes(
+            "w-full p-6 items-center text-center"
+        ):
+            ui.icon("category").classes(
+                "text-4xl text-gray-400"
+            )
+            ui.label("Aucune catégorie").classes(
+                "text-lg font-bold"
+            )
+            ui.label(
+                "Ajoutez votre première catégorie ci-dessus."
+            ).classes("text-gray-500")
         return
 
-    for cat in categories:
-        with ui.row().classes("items-center justify-between mt-1"):
-            ui.label(cat['name'])
-            ui.button(
-                "🗑️",
-                on_click=lambda cid=cat['id']: (
-                    delete_category(cid),
-                    ui.navigate.to('/?tab=categories')
+    # ---------------------------------------------------------
+    # DIALOGUES
+    # ---------------------------------------------------------
+
+    def open_rename_dialog(category):
+        with ui.dialog() as dialog:
+            with ui.card().classes("w-full max-w-md p-5"):
+                ui.label("Renommer la catégorie").classes(
+                    "text-xl font-bold"
                 )
-            ).props("flat color=red")
+
+                name_input = ui.input(
+                    label="Nom",
+                    value=category["name"],
+                ).classes("w-full")
+
+                def save_name():
+                    try:
+                        rename_category(
+                            category["id"],
+                            name_input.value,
+                        )
+                    except ValueError as error:
+                        ui.notify(str(error), type="warning")
+                        return
+
+                    dialog.close()
+                    ui.notify(
+                        "Catégorie renommée.",
+                        type="positive",
+                    )
+                    ui.navigate.to("/?tab=categories")
+
+                name_input.on("keydown.enter", save_name)
+
+                with ui.row().classes(
+                    "w-full justify-end gap-2 mt-3"
+                ):
+                    ui.button(
+                        "Annuler",
+                        on_click=dialog.close,
+                    ).props("flat")
+
+                    ui.button(
+                        "Enregistrer",
+                        icon="save",
+                        on_click=save_name,
+                    ).props("color=primary")
+
+        dialog.open()
+
+    def open_merge_dialog(category):
+        destination_categories = {
+            other_category["name"]: other_category["id"]
+            for other_category in categories
+            if other_category["id"] != category["id"]
+        }
+
+        with ui.dialog() as dialog:
+            with ui.card().classes("w-full max-w-md p-5"):
+                ui.label("Fusionner la catégorie").classes(
+                    "text-xl font-bold"
+                )
+
+                ui.label(
+                    f"Les {category['item_count']} item(s) de "
+                    f"« {category['name']} » seront déplacés."
+                ).classes("text-gray-600")
+
+                if not destination_categories:
+                    ui.label(
+                        "Créez d’abord une autre catégorie."
+                    ).classes("text-orange-700")
+
+                    with ui.row().classes(
+                        "w-full justify-end mt-3"
+                    ):
+                        ui.button(
+                            "Fermer",
+                            on_click=dialog.close,
+                        )
+                else:
+                    destination_input = ui.select(
+                        list(destination_categories.keys()),
+                        label="Déplacer vers",
+                    ).classes("w-full")
+
+                    def confirm_merge():
+                        if not destination_input.value:
+                            ui.notify(
+                                "Choisissez une catégorie de destination.",
+                                type="warning",
+                            )
+                            return
+
+                        destination_name = destination_input.value
+                        destination_id = destination_categories[
+                            destination_name
+                        ]
+
+                        try:
+                            moved_count = merge_categories(
+                                category["id"],
+                                destination_id,
+                            )
+                        except ValueError as error:
+                            ui.notify(str(error), type="warning")
+                            return
+
+                        dialog.close()
+                        ui.notify(
+                            f"{moved_count} item(s) déplacé(s) vers "
+                            f"« {destination_name} ».",
+                            type="positive",
+                        )
+                        ui.navigate.to("/?tab=categories")
+
+                    with ui.row().classes(
+                        "w-full justify-end gap-2 mt-3"
+                    ):
+                        ui.button(
+                            "Annuler",
+                            on_click=dialog.close,
+                        ).props("flat")
+
+                        ui.button(
+                            "Fusionner",
+                            icon="merge_type",
+                            on_click=confirm_merge,
+                        ).props("color=primary")
+
+        dialog.open()
+
+    def open_delete_dialog(category):
+        with ui.dialog() as dialog:
+            with ui.card().classes("w-full max-w-md p-5"):
+                ui.label("Supprimer la catégorie").classes(
+                    "text-xl font-bold"
+                )
+
+                if category["item_count"] > 0:
+                    ui.label(
+                        f"« {category['name']} » contient "
+                        f"{category['item_count']} item(s)."
+                    ).classes("font-bold")
+
+                    ui.label(
+                        "Pour protéger vos données, cette catégorie "
+                        "ne peut pas être supprimée directement. "
+                        "Utilisez le bouton Fusionner."
+                    ).classes("text-gray-600")
+
+                    with ui.row().classes(
+                        "w-full justify-end mt-3"
+                    ):
+                        ui.button(
+                            "Fermer",
+                            on_click=dialog.close,
+                        )
+                else:
+                    ui.label(
+                        f"Supprimer définitivement "
+                        f"« {category['name']} » ?"
+                    )
+
+                    with ui.row().classes(
+                        "w-full justify-end gap-2 mt-3"
+                    ):
+                        ui.button(
+                            "Annuler",
+                            on_click=dialog.close,
+                        ).props("flat")
+
+                        def confirm_delete():
+                            try:
+                                delete_category(category["id"])
+                            except ValueError as error:
+                                ui.notify(
+                                    str(error),
+                                    type="warning",
+                                )
+                                return
+
+                            dialog.close()
+                            ui.notify(
+                                "Catégorie supprimée.",
+                                type="positive",
+                            )
+                            ui.navigate.to("/?tab=categories")
+
+                        ui.button(
+                            "Supprimer",
+                            icon="delete",
+                            on_click=confirm_delete,
+                        ).props("color=negative")
+
+        dialog.open()
 
     # ---------------------------------------------------------
-    #  GESTION AVANCÉE : RENOMMER + FUSIONNER
+    # LISTE DES CATÉGORIES
     # ---------------------------------------------------------
 
-    ui.separator()
-    ui.label("Gestion avancée des catégories").classes("text-lg font-bold mt-2")
+    ui.label("Catégories existantes").classes(
+        "text-lg font-bold mt-1"
+    )
 
-    categories = get_categories()
-    cat_dict = {c['name']: c['id'] for c in categories}
-    cat_names = list(cat_dict.keys())
+    with ui.column().classes("w-full gap-2"):
+        for category in categories:
+            item_count = category["item_count"]
 
-    # --- Sélection de la catégorie source ---
-    source_cat = ui.select(cat_names, label="Catégorie de départ").classes("w-full mt-2")
+            with ui.card().classes(
+                "w-full px-4 py-3"
+            ):
+                with ui.row().classes(
+                    "w-full items-center justify-between gap-3"
+                ):
+                    with ui.row().classes(
+                        "items-center gap-3 grow min-w-[180px]"
+                    ):
+                        ui.icon("folder").classes(
+                            "text-2xl text-primary"
+                        )
 
-    ui.separator()
+                        with ui.column().classes("gap-0"):
+                            ui.label(category["name"]).classes(
+                                "font-bold text-base"
+                            )
 
-    # ---------------------------------------------------------
-    #  RENOMMER LA CATÉGORIE
-    # ---------------------------------------------------------
+                            ui.label(
+                                f"{item_count} item"
+                                if item_count == 1
+                                else f"{item_count} items"
+                            ).classes("text-sm text-gray-500")
 
-    ui.label("Renommer la catégorie").classes("text-md font-bold mt-2")
-    new_cat_name = ui.input("Nouveau nom").classes("w-full")
+                    with ui.row().classes(
+                        "items-center gap-0"
+                    ):
+                        ui.button(
+                            icon="edit",
+                            on_click=lambda selected=category: (
+                                open_rename_dialog(selected)
+                            ),
+                        ).props(
+                            "flat round color=primary"
+                        ).tooltip("Renommer")
 
-    def rename_category():
-        if not source_cat.value or not new_cat_name.value:
-            ui.notify("Sélectionnez une catégorie et entrez un nouveau nom.")
-            return
+                        ui.button(
+                            icon="merge_type",
+                            on_click=lambda selected=category: (
+                                open_merge_dialog(selected)
+                            ),
+                        ).props(
+                            "flat round color=primary"
+                        ).tooltip("Fusionner")
 
-        cat_id = cat_dict[source_cat.value]
-
-        conn = get_connection()
-        cur = conn.cursor()
-        cur.execute("UPDATE categories SET name = %s WHERE id = %s", (new_cat_name.value, cat_id))
-        conn.commit()
-        cur.close()
-        conn.close()
-
-        ui.notify(f"Catégorie renommée en '{new_cat_name.value}' !")
-        ui.navigate.to('/?tab=categories')
-
-    ui.button("Renommer", on_click=rename_category).classes("w-full mt-2")
-
-    ui.separator()
-
-    # ---------------------------------------------------------
-    #  FUSIONNER DANS UNE AUTRE CATÉGORIE
-    # ---------------------------------------------------------
-
-    ui.label("Fusionner dans une autre catégorie").classes("text-md font-bold mt-2")
-
-    # Liste des catégories destination (sans la source)
-    def get_dest_list():
-        return [c for c in cat_names if c != source_cat.value]
-
-    dest_cat = ui.select(get_dest_list(), label="Catégorie destination").classes("w-full")
-
-    def merge_categories():
-        if not source_cat.value or not dest_cat.value:
-            ui.notify("Sélectionnez la catégorie de départ et la catégorie de destination.")
-            return
-
-        src_id = cat_dict[source_cat.value]
-        dst_id = cat_dict[dest_cat.value]
-
-        conn = get_connection()
-        cur = conn.cursor()
-
-        # Déplacer les items vers la catégorie destination
-        cur.execute("UPDATE items SET category_id = %s WHERE category_id = %s", (dst_id, src_id))
-        conn.commit()
-
-        # Supprimer la catégorie source
-        cur.execute("DELETE FROM categories WHERE id = %s", (src_id,))
-        conn.commit()
-
-        cur.close()
-        conn.close()
-
-        ui.notify(f"Catégorie '{source_cat.value}' fusionnée dans '{dest_cat.value}' !")
-        ui.navigate.to('/?tab=categories')
-
-    ui.button("Fusionner", on_click=merge_categories).classes("w-full mt-2")
+                        ui.button(
+                            icon="delete",
+                            on_click=lambda selected=category: (
+                                open_delete_dialog(selected)
+                            ),
+                        ).props(
+                            "flat round color=negative"
+                        ).tooltip("Supprimer")

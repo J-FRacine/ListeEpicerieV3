@@ -19,6 +19,7 @@ from categories import categories_panel
 from db import (
     create_first_admin,
     get_accessible_families,
+    get_items,
     init_db,
     needs_initial_admin_setup,
 )
@@ -1113,7 +1114,16 @@ def application_header(active_tab):
                 )
 
 
-def bottom_navigation(active_tab):
+def bottom_navigation(
+    active_tab,
+    needs_count=0,
+):
+    needs_label = (
+        f"Besoins {needs_count}"
+        if needs_count > 0
+        else "Besoins"
+    )
+
     with ui.footer().classes("jf-footer"):
         with ui.row().classes(
             "w-full justify-around gap-1"
@@ -1129,7 +1139,7 @@ def bottom_navigation(active_tab):
             )
 
             needs_button = ui.button(
-                "Besoins",
+                needs_label,
                 icon="shopping_cart",
                 on_click=lambda: ui.navigate.to(
                     "/?tab=besoins"
@@ -1239,21 +1249,42 @@ def index(tab="portail"):
 
     set_current_tab(normalized_tab)
 
+    needs_count = 0
+
     with page_container():
         application_header(normalized_tab)
 
         if not ensure_valid_family(user["id"]):
             show_no_family_message()
-        elif normalized_tab == "items":
-            items_panel()
-        elif normalized_tab == "besoins":
-            needs_panel()
-        elif normalized_tab == "categories":
-            categories_panel()
-        elif normalized_tab == "donnees":
-            backup_panel()
+        else:
+            current_family_id = get_current_family_id()
 
-    bottom_navigation(normalized_tab)
+            try:
+                family_items = get_items(
+                    user["id"],
+                    current_family_id,
+                )
+                needs_count = sum(
+                    1
+                    for item in family_items
+                    if item["needed"] == 1
+                )
+            except (ValueError, PermissionError):
+                needs_count = 0
+
+            if normalized_tab == "items":
+                items_panel()
+            elif normalized_tab == "besoins":
+                needs_panel()
+            elif normalized_tab == "categories":
+                categories_panel()
+            elif normalized_tab == "donnees":
+                backup_panel()
+
+    bottom_navigation(
+        normalized_tab,
+        needs_count,
+    )
 
 
 init_db()

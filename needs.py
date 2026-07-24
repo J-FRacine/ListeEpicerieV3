@@ -254,8 +254,7 @@ def needs_panel():
             ):
                 for item in category_items:
                     with ui.row().classes(
-                        "w-full items-center "
-                        "justify-between "
+                        "w-full items-center flex-nowrap "
                         "bg-gray-100 rounded-lg "
                         "px-3 py-2 gap-2"
                     ):
@@ -273,7 +272,13 @@ def needs_panel():
                         )
 
                         ui.label(item_text).classes(
-                            "font-bold"
+                            "font-bold leading-snug "
+                            "whitespace-normal break-words "
+                            "pr-2"
+                        ).style(
+                            "flex: 1 1 0; "
+                            "min-width: 0; "
+                            "overflow-wrap: anywhere;"
                         )
 
                         def remove_need(
@@ -303,6 +308,8 @@ def needs_panel():
                             on_click=remove_need,
                         ).props(
                             "flat round color=green"
+                        ).classes(
+                            "shrink-0 ml-auto self-center"
                         ).tooltip(
                             "Retirer de la liste "
                             "des besoins"

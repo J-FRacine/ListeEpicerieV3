@@ -856,3 +856,328 @@ def delete_item(item_id):
                 (item_id,),
             )
             conn.commit()
+
+
+# ---------------------------------------------------------
+# IMPORTATION ET EXPORTATION D'UNE FAMILLE
+# ---------------------------------------------------------
+
+def export_family_backup(family_id):
+    """Retourne toutes les données d'épicerie de la famille active."""
+
+    if family_id is None:
+        raise ValueError("Aucune famille n’est sélectionnée.")
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, name
+                FROM families
+                WHERE id = %s;
+            """, (family_id,))
+            family = cur.fetchone()
+
+            if family is None:
+                raise ValueError("Cette famille n’existe plus.")
+
+            cur.execute("""
+                SELECT name
+                FROM categories
+                WHERE family_id = %s
+                ORDER BY LOWER(name), name;
+            """, (family_id,))
+            categories = [
+                {"name": row["name"]}
+                for row in cur.fetchall()
+            ]
+
+            cur.execute("""
+                SELECT
+                    item.name,
+                    item.quantity,
+                    item.needed,
+                    category.name AS category
+                FROM items AS item
+                JOIN categories AS category
+                  ON category.id = item.category_id
+                WHERE item.family_id = %s
+                ORDER BY
+                    LOWER(category.name),
+                    LOWER(item.name),
+                    item.id;
+            """, (family_id,))
+            items = [
+                {
+                    "name": row["name"],
+                    "quantity": row["quantity"],
+                    "needed": bool(row["needed"]),
+                    "category": row["category"],
+                }
+                for row in cur.fetchall()
+            ]
+
+            return {
+                "family": {
+                    "name": family["name"],
+                },
+                "categories": categories,
+                "items": items,
+            }
+
+
+def _backup_category_name(category):
+    if isinstance(category, str):
+        name = category
+    elif isinstance(category, dict):
+        name = category.get("name")
+    else:
+        name = None
+
+    category_name = str(name or "").strip()
+
+    if not category_name:
+        raise ValueError(
+            "Le fichier contient une catégorie sans nom."
+        )
+
+    return category_name
+
+
+def _backup_item_values(item):
+    if not isinstance(item, dict):
+        raise ValueError(
+            "Le fichier contient un item dans un format invalide."
+        )
+
+    item_name = str(item.get("name") or "").strip()
+    category_name = str(
+        item.get("category") or "Sans catégorie"
+    ).strip()
+
+    if not item_name:
+        raise ValueError(
+            "Le fichier contient un item sans nom."
+        )
+
+    if not category_name:
+        category_name = "Sans catégorie"
+
+    try:
+        quantity = int(item.get("quantity", 1) or 1)
+    except (TypeError, ValueError) as error:
+        raise ValueError(
+            f"La quantité de « {item_name} » est invalide."
+        ) from error
+
+    if quantity < 1:
+        raise ValueError(
+            f"La quantité de « {item_name} » doit être "
+            "d’au moins 1."
+        )
+
+    raw_needed = item.get("needed", False)
+
+    if isinstance(raw_needed, str):
+        needed = raw_needed.strip().lower() in {
+            "1",
+            "true",
+            "vrai",
+            "yes",
+            "oui",
+        }
+    else:
+        needed = bool(raw_needed)
+
+    return item_name, category_name, quantity, needed
+
+
+def import_family_backup(
+    family_id,
+    backup_data,
+    replace_existing=False,
+):
+    """Importe une sauvegarde dans la famille active.
+
+    En mode fusion, un item portant le même nom dans la même catégorie
+    est mis à jour plutôt que dupliqué.
+
+    En mode remplacement, les catégories et items de la famille active
+    sont supprimés, puis recréés à partir du fichier.
+    """
+
+    if family_id is None:
+        raise ValueError("Aucune famille n’est sélectionnée.")
+
+    if not isinstance(backup_data, dict):
+        raise ValueError(
+            "Le contenu de la sauvegarde est invalide."
+        )
+
+    categories_data = backup_data.get("categories", [])
+    items_data = backup_data.get("items", [])
+
+    if not isinstance(categories_data, list):
+        raise ValueError(
+            "La liste des catégories est invalide."
+        )
+
+    if not isinstance(items_data, list):
+        raise ValueError(
+            "La liste des items est invalide."
+        )
+
+    category_names = [
+        _backup_category_name(category)
+        for category in categories_data
+    ]
+
+    parsed_items = [
+        _backup_item_values(item)
+        for item in items_data
+    ]
+
+    # Une catégorie mentionnée par un item doit être importée,
+    # même si elle manque par erreur dans la section categories.
+    for _, category_name, _, _ in parsed_items:
+        if category_name.casefold() not in {
+            name.casefold()
+            for name in category_names
+        }:
+            category_names.append(category_name)
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id
+                FROM families
+                WHERE id = %s;
+            """, (family_id,))
+
+            if cur.fetchone() is None:
+                raise ValueError("Cette famille n’existe plus.")
+
+            if replace_existing:
+                cur.execute(
+                    "DELETE FROM items WHERE family_id = %s;",
+                    (family_id,),
+                )
+                cur.execute(
+                    "DELETE FROM categories WHERE family_id = %s;",
+                    (family_id,),
+                )
+
+            cur.execute("""
+                SELECT id, name
+                FROM categories
+                WHERE family_id = %s;
+            """, (family_id,))
+
+            category_ids = {
+                row["name"].strip().casefold(): row["id"]
+                for row in cur.fetchall()
+            }
+
+            categories_created = 0
+
+            for category_name in category_names:
+                normalized_name = category_name.casefold()
+
+                if normalized_name in category_ids:
+                    continue
+
+                cur.execute("""
+                    INSERT INTO categories (family_id, name)
+                    VALUES (%s, %s)
+                    RETURNING id;
+                """, (
+                    family_id,
+                    category_name,
+                ))
+                category_ids[normalized_name] = (
+                    cur.fetchone()["id"]
+                )
+                categories_created += 1
+
+            existing_items = {}
+
+            if not replace_existing:
+                cur.execute("""
+                    SELECT
+                        item.id,
+                        item.name,
+                        item.category_id
+                    FROM items AS item
+                    WHERE item.family_id = %s
+                    ORDER BY item.id;
+                """, (family_id,))
+
+                for row in cur.fetchall():
+                    key = (
+                        row["category_id"],
+                        row["name"].strip().casefold(),
+                    )
+                    existing_items.setdefault(key, row["id"])
+
+            items_created = 0
+            items_updated = 0
+
+            for (
+                item_name,
+                category_name,
+                quantity,
+                needed,
+            ) in parsed_items:
+                category_id = category_ids[
+                    category_name.casefold()
+                ]
+                needed_value = 1 if needed else 0
+                item_key = (
+                    category_id,
+                    item_name.casefold(),
+                )
+
+                if (
+                    not replace_existing
+                    and item_key in existing_items
+                ):
+                    cur.execute("""
+                        UPDATE items
+                        SET
+                            name = %s,
+                            quantity = %s,
+                            needed = %s
+                        WHERE id = %s;
+                    """, (
+                        item_name,
+                        quantity,
+                        needed_value,
+                        existing_items[item_key],
+                    ))
+                    items_updated += 1
+                else:
+                    cur.execute("""
+                        INSERT INTO items (
+                            family_id,
+                            category_id,
+                            name,
+                            quantity,
+                            needed
+                        )
+                        VALUES (%s, %s, %s, %s, %s);
+                    """, (
+                        family_id,
+                        category_id,
+                        item_name,
+                        quantity,
+                        needed_value,
+                    ))
+                    items_created += 1
+
+            conn.commit()
+
+            return {
+                "categories_created": categories_created,
+                "items_created": items_created,
+                "items_updated": items_updated,
+                "replaced": bool(replace_existing),
+            }

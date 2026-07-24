@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import re
 from datetime import datetime, timezone
@@ -65,6 +67,61 @@ def _validate_backup_document(document):
     return data
 
 
+def _build_json_export(data):
+    document = {
+        "format": BACKUP_FORMAT,
+        "version": BACKUP_VERSION,
+        "exported_at": datetime.now(
+            timezone.utc
+        ).isoformat(),
+        "data": data,
+    }
+
+    return json.dumps(
+        document,
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
+def _build_csv_export(data):
+    """Crée un CSV pratique à consulter dans Excel.
+
+    Le JSON demeure le format recommandé pour une sauvegarde
+    complète et réimportable. Le CSV contient la liste des items.
+    """
+
+    output = io.StringIO(newline="")
+    writer = csv.writer(
+        output,
+        delimiter=";",
+        quoting=csv.QUOTE_MINIMAL,
+        lineterminator="\r\n",
+    )
+
+    writer.writerow([
+        "Famille",
+        "Catégorie",
+        "Item",
+        "Quantité",
+        "Besoin",
+    ])
+
+    family_name = data["family"]["name"]
+
+    for item in data.get("items", []):
+        writer.writerow([
+            family_name,
+            item.get("category", ""),
+            item.get("name", ""),
+            item.get("quantity", 1),
+            "Oui" if item.get("needed") else "Non",
+        ])
+
+    # Le BOM UTF-8 aide Excel à afficher correctement les accents.
+    return "\ufeff" + output.getvalue()
+
+
 def backup_panel():
     current_family_id = get_current_family_id()
 
@@ -72,6 +129,13 @@ def backup_panel():
         return
 
     families = get_families()
+
+    if not families:
+        ui.label(
+            "Aucune famille disponible."
+        ).classes("text-orange-700")
+        return
+
     current_family = next(
         (
             family
@@ -87,7 +151,12 @@ def backup_panel():
         ).classes("text-orange-700")
         return
 
-    family_name = current_family["name"]
+    current_family_name = current_family["name"]
+
+    family_name_to_id = {
+        family["name"]: family["id"]
+        for family in families
+    }
 
     with ui.row().classes(
         "w-full items-start justify-between gap-3 flex-wrap"
@@ -97,7 +166,8 @@ def backup_panel():
                 "text-2xl font-bold"
             )
             ui.label(
-                f"Famille active : {family_name}"
+                f"Famille active pour l’importation : "
+                f"{current_family_name}"
             ).classes("text-sm text-gray-500")
 
         ui.icon("cloud_sync").classes(
@@ -105,8 +175,8 @@ def backup_panel():
         )
 
     ui.label(
-        "La sauvegarde contient les catégories, les items, "
-        "les quantités et la liste des besoins de cette famille."
+        "L’exportation peut viser n’importe quelle famille. "
+        "L’importation agit seulement sur la famille active."
     ).classes("text-gray-600")
 
     # ---------------------------------------------------------
@@ -126,58 +196,103 @@ def backup_panel():
                     "text-xl font-bold"
                 )
                 ui.label(
-                    "Télécharger une sauvegarde JSON de "
-                    "la famille active."
+                    "Choisir la famille et le format du fichier."
                 ).classes("text-sm text-gray-500")
 
+        with ui.row().classes(
+            "w-full items-end gap-3 flex-wrap mt-3"
+        ):
+            export_family_input = ui.select(
+                list(family_name_to_id.keys()),
+                value=current_family_name,
+                label="Famille à exporter",
+            ).classes("grow min-w-[220px]")
+
+            export_format_input = ui.select(
+                ["JSON", "CSV"],
+                value="JSON",
+                label="Format",
+            ).classes("w-40")
+
+        format_explanation = ui.label(
+            "JSON : sauvegarde complète et réimportable."
+        ).classes("text-xs text-gray-500")
+
+        def update_format_explanation():
+            if export_format_input.value == "CSV":
+                format_explanation.set_text(
+                    "CSV : liste des items pour Excel; "
+                    "utilise JSON pour une restauration complète."
+                )
+            else:
+                format_explanation.set_text(
+                    "JSON : sauvegarde complète et réimportable."
+                )
+
+        export_format_input.on(
+            "update:model-value",
+            lambda: update_format_explanation(),
+        )
+
         def export_data():
+            selected_family_name = (
+                export_family_input.value
+            )
+            selected_format = (
+                export_format_input.value or "JSON"
+            ).upper()
+
+            if selected_family_name not in family_name_to_id:
+                ui.notify(
+                    "Choisis une famille à exporter.",
+                    type="warning",
+                )
+                return
+
+            selected_family_id = family_name_to_id[
+                selected_family_name
+            ]
+
             try:
                 data = export_family_backup(
-                    current_family_id
+                    selected_family_id
                 )
             except ValueError as error:
                 ui.notify(str(error), type="warning")
                 return
 
-            exported_at = datetime.now(
-                timezone.utc
-            ).isoformat()
-
-            document = {
-                "format": BACKUP_FORMAT,
-                "version": BACKUP_VERSION,
-                "exported_at": exported_at,
-                "data": data,
-            }
-
-            json_content = json.dumps(
-                document,
-                ensure_ascii=False,
-                indent=2,
-            )
-
             date_text = datetime.now().strftime(
                 "%Y-%m-%d_%Hh%M"
             )
-            filename = (
+            base_filename = (
                 "sauvegarde_epicerie_"
-                f"{_safe_filename(family_name)}_"
-                f"{date_text}.json"
+                f"{_safe_filename(selected_family_name)}_"
+                f"{date_text}"
             )
 
+            if selected_format == "CSV":
+                file_content = _build_csv_export(data)
+                filename = f"{base_filename}.csv"
+                media_type = "text/csv; charset=utf-8"
+            else:
+                file_content = _build_json_export(data)
+                filename = f"{base_filename}.json"
+                media_type = "application/json"
+
             ui.download.content(
-                json_content,
+                file_content,
                 filename=filename,
-                media_type="application/json",
+                media_type=media_type,
             )
 
             ui.notify(
-                "La sauvegarde est prête.",
+                f"Exportation de « {selected_family_name} » "
+                f"en {selected_format} prête.",
                 type="positive",
             )
 
         ui.button(
-            "Télécharger la sauvegarde",
+            "Télécharger",
             icon="download",
             on_click=export_data,
         ).props("color=primary").classes(
@@ -185,7 +300,7 @@ def backup_panel():
         )
 
     # ---------------------------------------------------------
-    # IMPORTATION
+    # IMPORTATION JSON
     # ---------------------------------------------------------
 
     with ui.card().classes("w-full p-5"):
@@ -201,8 +316,8 @@ def backup_panel():
                     "text-xl font-bold"
                 )
                 ui.label(
-                    "Importer une sauvegarde dans "
-                    "la famille active."
+                    "Importer une sauvegarde JSON dans "
+                    f"la famille active « {current_family_name} »."
                 ).classes("text-sm text-gray-500")
 
         import_mode = ui.radio(
@@ -317,6 +432,6 @@ def backup_panel():
         ).classes("w-full mt-3")
 
         ui.label(
-            "L’importation agit uniquement sur la famille "
-            "affichée en haut de cette page."
+            "Le format CSV est destiné à la consultation dans Excel. "
+            "L’importation accepte actuellement le format JSON seulement."
         ).classes("text-xs text-gray-500 mt-2")

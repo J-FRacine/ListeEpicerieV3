@@ -17,8 +17,8 @@ def ensure_family_selected(current_family_id):
     return True
 
 
-def ensure_categories_exist(family_id):
-    categories = get_categories(family_id)
+def ensure_categories_exist(user_id, family_id):
+    categories = get_categories(user_id, family_id)
 
     if not categories:
         ui.label(

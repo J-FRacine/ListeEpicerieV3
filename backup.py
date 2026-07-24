@@ -6,9 +6,10 @@ from datetime import datetime, timezone
 
 from nicegui import ui
 
+from auth import get_current_user_id
 from db import (
     export_family_backup,
-    get_families,
+    get_accessible_families,
     import_family_backup,
 )
 from state import get_current_family_id
@@ -37,14 +38,12 @@ def _validate_backup_document(document):
 
     if document.get("format") != BACKUP_FORMAT:
         raise ValueError(
-            "Ce fichier n’est pas une sauvegarde de "
-            "la liste d’épicerie JF Apps."
+            "Ce fichier n’est pas une sauvegarde de la liste d’épicerie JF Apps."
         )
 
     if document.get("version") != BACKUP_VERSION:
         raise ValueError(
-            "La version de cette sauvegarde n’est pas prise "
-            "en charge."
+            "La version de cette sauvegarde n’est pas prise en charge."
         )
 
     data = document.get("data")
@@ -55,14 +54,10 @@ def _validate_backup_document(document):
         )
 
     if not isinstance(data.get("categories", []), list):
-        raise ValueError(
-            "La liste des catégories est invalide."
-        )
+        raise ValueError("La liste des catégories est invalide.")
 
     if not isinstance(data.get("items", []), list):
-        raise ValueError(
-            "La liste des items est invalide."
-        )
+        raise ValueError("La liste des items est invalide.")
 
     return data
 
@@ -71,9 +66,7 @@ def _build_json_export(data):
     document = {
         "format": BACKUP_FORMAT,
         "version": BACKUP_VERSION,
-        "exported_at": datetime.now(
-            timezone.utc
-        ).isoformat(),
+        "exported_at": datetime.now(timezone.utc).isoformat(),
         "data": data,
     }
 
@@ -85,12 +78,6 @@ def _build_json_export(data):
 
 
 def _build_csv_export(data):
-    """Crée un CSV pratique à consulter dans Excel.
-
-    Le JSON demeure le format recommandé pour une sauvegarde
-    complète et réimportable. Le CSV contient la liste des items.
-    """
-
     output = io.StringIO(newline="")
     writer = csv.writer(
         output,
@@ -118,22 +105,20 @@ def _build_csv_export(data):
             "Oui" if item.get("needed") else "Non",
         ])
 
-    # Le BOM UTF-8 aide Excel à afficher correctement les accents.
     return "\ufeff" + output.getvalue()
 
 
 def backup_panel():
+    user_id = get_current_user_id()
     current_family_id = get_current_family_id()
 
-    if not ensure_family_selected(current_family_id):
+    if user_id is None or not ensure_family_selected(current_family_id):
         return
 
-    families = get_families()
+    families = get_accessible_families(user_id)
 
     if not families:
-        ui.label(
-            "Aucune famille disponible."
-        ).classes("text-orange-700")
+        ui.label("Aucune famille accessible.").classes("text-orange-700")
         return
 
     current_family = next(
@@ -146,13 +131,12 @@ def backup_panel():
     )
 
     if current_family is None:
-        ui.label(
-            "La famille active n’existe plus."
-        ).classes("text-orange-700")
+        ui.label("La famille active n’est plus accessible.").classes(
+            "text-orange-700"
+        )
         return
 
     current_family_name = current_family["name"]
-
     family_name_to_id = {
         family["name"]: family["id"]
         for family in families
@@ -162,52 +146,33 @@ def backup_panel():
         "w-full items-start justify-between gap-3 flex-wrap"
     ):
         with ui.column().classes("gap-0"):
-            ui.label("Données et sauvegarde").classes(
-                "text-2xl font-bold"
-            )
+            ui.label("Données et sauvegarde").classes("text-2xl font-bold")
             ui.label(
-                f"Famille active pour l’importation : "
-                f"{current_family_name}"
+                f"Famille active pour l’importation : {current_family_name}"
             ).classes("text-sm text-gray-500")
 
-        ui.icon("cloud_sync").classes(
-            "text-3xl text-primary"
-        )
+        ui.icon("cloud_sync").classes("text-3xl text-primary")
 
     ui.label(
-        "L’exportation peut viser n’importe quelle famille. "
+        "L’exportation peut viser une famille accessible. "
         "L’importation agit seulement sur la famille active."
     ).classes("text-gray-600")
 
-    # ---------------------------------------------------------
-    # EXPORTATION
-    # ---------------------------------------------------------
-
     with ui.card().classes("w-full p-5"):
-        with ui.row().classes(
-            "w-full items-center gap-3"
-        ):
-            ui.icon("download").classes(
-                "text-3xl text-primary"
-            )
-
+        with ui.row().classes("w-full items-center gap-3"):
+            ui.icon("download").classes("text-3xl text-primary")
             with ui.column().classes("gap-0 grow"):
-                ui.label("Exporter").classes(
-                    "text-xl font-bold"
-                )
+                ui.label("Exporter").classes("text-xl font-bold")
                 ui.label(
                     "Choisir la famille et le format du fichier."
                 ).classes("text-sm text-gray-500")
 
-        with ui.row().classes(
-            "w-full items-end gap-3 flex-wrap mt-3"
-        ):
+        with ui.row().classes("w-full items-end gap-3 flex-wrap mt-3"):
             export_family_input = ui.select(
                 list(family_name_to_id.keys()),
                 value=current_family_name,
                 label="Famille à exporter",
             ).classes("grow min-w-[220px]")
-
             export_format_input = ui.select(
                 ["JSON", "CSV"],
                 value="JSON",
@@ -219,15 +184,12 @@ def backup_panel():
         ).classes("text-xs text-gray-500")
 
         def update_format_explanation():
-            if export_format_input.value == "CSV":
-                format_explanation.set_text(
-                    "CSV : liste des items pour Excel; "
-                    "utilise JSON pour une restauration complète."
-                )
-            else:
-                format_explanation.set_text(
-                    "JSON : sauvegarde complète et réimportable."
-                )
+            format_explanation.set_text(
+                "CSV : liste des items pour Excel; "
+                "utilisez JSON pour une restauration complète."
+                if export_format_input.value == "CSV"
+                else "JSON : sauvegarde complète et réimportable."
+            )
 
         export_format_input.on(
             "update:model-value",
@@ -235,39 +197,25 @@ def backup_panel():
         )
 
         def export_data():
-            selected_family_name = (
-                export_family_input.value
-            )
-            selected_format = (
-                export_format_input.value or "JSON"
-            ).upper()
+            selected_family_name = export_family_input.value
+            selected_format = (export_format_input.value or "JSON").upper()
 
             if selected_family_name not in family_name_to_id:
-                ui.notify(
-                    "Choisis une famille à exporter.",
-                    type="warning",
-                )
+                ui.notify("Choisissez une famille à exporter.", type="warning")
                 return
 
-            selected_family_id = family_name_to_id[
-                selected_family_name
-            ]
+            selected_family_id = family_name_to_id[selected_family_name]
 
             try:
-                data = export_family_backup(
-                    selected_family_id
-                )
-            except ValueError as error:
+                data = export_family_backup(user_id, selected_family_id)
+            except (ValueError, PermissionError) as error:
                 ui.notify(str(error), type="warning")
                 return
 
-            date_text = datetime.now().strftime(
-                "%Y-%m-%d_%Hh%M"
-            )
+            date_text = datetime.now().strftime("%Y-%m-%d_%Hh%M")
             base_filename = (
                 "sauvegarde_epicerie_"
-                f"{_safe_filename(selected_family_name)}_"
-                f"{date_text}"
+                f"{_safe_filename(selected_family_name)}_{date_text}"
             )
 
             if selected_format == "CSV":
@@ -284,7 +232,6 @@ def backup_panel():
                 filename=filename,
                 media_type=media_type,
             )
-
             ui.notify(
                 f"Exportation de « {selected_family_name} » "
                 f"en {selected_format} prête.",
@@ -295,26 +242,13 @@ def backup_panel():
             "Exporter",
             icon="download",
             on_click=export_data,
-        ).props("color=primary").classes(
-            "w-full mt-3"
-        )
-
-    # ---------------------------------------------------------
-    # IMPORTATION JSON
-    # ---------------------------------------------------------
+        ).props("color=primary").classes("w-full mt-3")
 
     with ui.card().classes("w-full p-5"):
-        with ui.row().classes(
-            "w-full items-center gap-3"
-        ):
-            ui.icon("upload_file").classes(
-                "text-3xl text-primary"
-            )
-
+        with ui.row().classes("w-full items-center gap-3"):
+            ui.icon("upload_file").classes("text-3xl text-primary")
             with ui.column().classes("gap-0 grow"):
-                ui.label("Importer").classes(
-                    "text-xl font-bold"
-                )
+                ui.label("Importer").classes("text-xl font-bold")
                 ui.label(
                     "Importer une sauvegarde JSON dans "
                     f"la famille active « {current_family_name} »."
@@ -335,27 +269,20 @@ def backup_panel():
         ).classes("w-full mt-3")
 
         ui.label(
-            "Un doublon est un item ayant le même nom dans "
-            "la même catégorie."
+            "Un doublon est un item ayant le même nom dans la même catégorie."
         ).classes("text-xs text-gray-500")
 
         replacement_confirmation = ui.checkbox(
-            "Je comprends que le mode Remplacer effacera "
-            "les catégories et les items actuels de cette famille."
+            "Je comprends que le mode Remplacer effacera les catégories "
+            "et les items actuels de cette famille."
         ).classes("mt-2")
 
         async def import_data(event):
-            replace_existing = (
-                import_mode.value == "replace"
-            )
+            replace_existing = import_mode.value == "replace"
 
-            if (
-                replace_existing
-                and not replacement_confirmation.value
-            ):
+            if replace_existing and not replacement_confirmation.value:
                 ui.notify(
-                    "Coche la confirmation avant d’utiliser "
-                    "le mode Remplacer.",
+                    "Cochez la confirmation avant d’utiliser le mode Remplacer.",
                     type="warning",
                 )
                 return
@@ -364,8 +291,8 @@ def backup_panel():
                 text = await event.file.text()
                 document = json.loads(text)
                 data = _validate_backup_document(document)
-
                 result = import_family_backup(
+                    user_id,
                     current_family_id,
                     data,
                     replace_existing=replace_existing,
@@ -378,25 +305,17 @@ def backup_panel():
                 return
             except json.JSONDecodeError:
                 ui.notify(
-                    "Le fichier choisi n’est pas un fichier "
-                    "JSON valide.",
+                    "Le fichier choisi n’est pas un fichier JSON valide.",
                     type="negative",
                 )
                 return
-            except (ValueError, KeyError) as error:
-                ui.notify(
-                    str(error),
-                    type="negative",
-                )
+            except (ValueError, KeyError, PermissionError) as error:
+                ui.notify(str(error), type="negative")
                 return
             except Exception as error:
-                print(
-                    "ERREUR importation sauvegarde :",
-                    repr(error),
-                )
+                print("ERREUR importation sauvegarde :", repr(error))
                 ui.notify(
-                    "L’importation a échoué. Consulte le journal "
-                    "de Canner pour le détail.",
+                    "L’importation a échoué. Consultez le journal de Canner.",
                     type="negative",
                 )
                 return
@@ -404,8 +323,8 @@ def backup_panel():
             if result["replaced"]:
                 message = (
                     "Importation terminée : "
-                    f"{result['categories_created']} catégorie(s) "
-                    f"et {result['items_created']} item(s) restauré(s)."
+                    f"{result['categories_created']} catégorie(s) et "
+                    f"{result['items_created']} item(s) restauré(s)."
                 )
             else:
                 message = (
@@ -415,11 +334,7 @@ def backup_panel():
                     f"{result['items_updated']} item(s) mis à jour."
                 )
 
-            ui.notify(
-                message,
-                type="positive",
-                timeout=8000,
-            )
+            ui.notify(message, type="positive", timeout=8000)
             ui.navigate.to("/?tab=donnees")
 
         ui.upload(
@@ -427,11 +342,9 @@ def backup_panel():
             on_upload=import_data,
             auto_upload=True,
             max_files=1,
-        ).props(
-            "accept=.json,application/json"
-        ).classes("w-full mt-3")
+        ).props("accept=.json,application/json").classes("w-full mt-3")
 
         ui.label(
-            "Le format CSV est destiné à la consultation dans Excel. "
-            "L’importation accepte actuellement le format JSON seulement."
+            "Le format CSV sert à la consultation dans Excel. "
+            "L’importation accepte le format JSON seulement."
         ).classes("text-xs text-gray-500 mt-2")

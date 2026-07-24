@@ -2,11 +2,24 @@ from __future__ import annotations
 
 import os
 
-from nicegui import app, ui
+from nicegui import ui
 
+from auth import (
+    authenticate,
+    clear_session,
+    get_current_user,
+    hash_password,
+    normalize_email,
+    set_authenticated_user,
+)
 from backup import backup_panel
 from categories import categories_panel
-from db import get_families, init_db
+from db import (
+    count_users,
+    create_first_admin,
+    get_accessible_families,
+    init_db,
+)
 from families import families_panel
 from items import items_panel
 from needs import needs_panel
@@ -15,122 +28,211 @@ from state import (
     set_current_family_id,
     set_current_tab,
 )
+from users import account_panel, users_panel
 from utils import apply_theme
 
 
-VALID_APP_TABS = {
-    "items",
-    "besoins",
-    "categories",
-    "donnees",
-}
-FAMILY_TABS = {"familles", "families"}
+VALID_APP_TABS = {"items", "besoins", "categories", "donnees"}
 PORTAL_TABS = {"portail", "portal", "apps"}
-BACKUP_TABS = {
-    "donnees",
-    "sauvegarde",
-    "backup",
-    "admin",
-}
+FAMILY_TABS = {"familles", "families"}
+USER_TABS = {"utilisateurs", "users"}
+ACCOUNT_TABS = {"compte", "account"}
+BACKUP_TABS = {"donnees", "sauvegarde", "backup", "admin"}
 
-
-# ---------------------------------------------------------
-# OUTILS D'AFFICHAGE
-# ---------------------------------------------------------
 
 def page_container():
-    """Retourne le conteneur principal utilisé par toutes les pages."""
-
     return ui.column().classes(
         "w-full max-w-3xl mx-auto px-4 pt-4 pb-24 gap-4"
     )
 
 
-def show_portal(*, authenticated):
-    """Affiche le portail central JF Apps."""
-
-    apply_theme()
-
-    with page_container():
-        with ui.card().classes(
-            "w-full p-6 items-center text-center"
-        ):
-            ui.label("JF Apps").classes(
-                "text-3xl font-bold"
-            )
-            ui.label(
-                "Portail de mes applications personnelles"
-            ).classes(
-                "text-base text-gray-600 "
-                "dark:text-gray-300"
-            )
-
-            if not authenticated:
-                ui.label(
-                    "La connexion réelle sera ajoutée plus tard. "
-                    "Pour l’instant, le bouton Entrer ouvre "
-                    "simplement le portail."
-                ).classes(
-                    "mt-4 text-sm text-gray-500"
-                )
-
-                def enter_portal():
-                    app.storage.user["auth"] = True
-                    ui.navigate.to("/?tab=portail")
-
-                ui.button(
-                    "Entrer",
-                    on_click=enter_portal,
-                ).classes(
-                    "mt-4 w-full max-w-xs"
-                )
-                return
-
-            ui.separator().classes("my-2")
-
-            ui.button(
-                "Ouvrir la liste d’épicerie",
-                icon="shopping_cart",
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=items"
-                ),
-            ).classes("w-full max-w-sm")
-
-            ui.button(
-                "Gérer les familles",
-                icon="groups",
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=familles"
-                ),
-            ).classes("w-full max-w-sm")
-
-            ui.button(
-                "Déconnexion",
-                icon="logout",
-                on_click=logout,
-            ).props("flat").classes("mt-2")
-
-
 def logout():
-    """Ferme la session provisoire."""
-
-    app.storage.user.clear()
+    clear_session()
     ui.navigate.to("/")
 
 
-def ensure_valid_family():
-    """Sélectionne une famille valide."""
+def show_first_admin_setup():
+    apply_theme()
 
-    families = get_families()
+    with ui.column().classes(
+        "w-full max-w-md mx-auto px-4 py-8 gap-4"
+    ):
+        with ui.card().classes("w-full p-6"):
+            ui.label("Configuration initiale").classes(
+                "text-2xl font-bold"
+            )
+            ui.label(
+                "Créez le premier administrateur du portail. "
+                "Toutes les familles existantes lui seront attribuées."
+            ).classes("text-gray-600")
+
+            name_input = ui.input(label="Votre nom").classes("w-full")
+            email_input = ui.input(
+                label="Adresse courriel"
+            ).props("type=email").classes("w-full")
+            password_input = ui.input(
+                label="Mot de passe",
+                password=True,
+                password_toggle_button=True,
+            ).classes("w-full")
+            confirmation_input = ui.input(
+                label="Confirmer le mot de passe",
+                password=True,
+                password_toggle_button=True,
+            ).classes("w-full")
+
+            ui.label(
+                "Le mot de passe doit contenir au moins 10 caractères."
+            ).classes("text-xs text-gray-500")
+
+            def create_admin():
+                if password_input.value != confirmation_input.value:
+                    ui.notify(
+                        "Les deux mots de passe ne correspondent pas.",
+                        type="warning",
+                    )
+                    return
+
+                email = normalize_email(email_input.value)
+
+                if "@" not in email:
+                    ui.notify(
+                        "L’adresse courriel semble invalide.",
+                        type="warning",
+                    )
+                    return
+
+                try:
+                    password_hash = hash_password(password_input.value or "")
+                    user = create_first_admin(
+                        name_input.value,
+                        email,
+                        password_hash,
+                    )
+                except ValueError as error:
+                    ui.notify(str(error), type="warning")
+                    return
+
+                set_authenticated_user(user["id"])
+                ui.notify(
+                    "Administrateur créé. Bienvenue dans JF Apps.",
+                    type="positive",
+                )
+                ui.navigate.to("/?tab=portail")
+
+            confirmation_input.on("keydown.enter", create_admin)
+            ui.button(
+                "Créer l’administrateur",
+                icon="admin_panel_settings",
+                on_click=create_admin,
+            ).props("color=primary").classes("w-full mt-2")
+
+
+def show_login():
+    apply_theme()
+
+    with ui.column().classes(
+        "w-full max-w-md mx-auto px-4 py-8 gap-4"
+    ):
+        with ui.card().classes("w-full p-6"):
+            ui.label("JF Apps").classes("text-3xl font-bold text-center")
+            ui.label(
+                "Portail de mes applications personnelles"
+            ).classes("text-center text-gray-600")
+
+            email_input = ui.input(
+                label="Adresse courriel"
+            ).props("type=email autofocus").classes("w-full mt-4")
+            password_input = ui.input(
+                label="Mot de passe",
+                password=True,
+                password_toggle_button=True,
+            ).classes("w-full")
+
+            def try_login():
+                user = authenticate(
+                    email_input.value,
+                    password_input.value,
+                )
+
+                if user is None:
+                    ui.notify(
+                        "Adresse courriel ou mot de passe incorrect.",
+                        type="negative",
+                    )
+                    password_input.value = ""
+                    return
+
+                ui.navigate.to("/?tab=portail")
+
+            email_input.on(
+                "keydown.enter",
+                lambda: password_input.run_method("focus"),
+            )
+            password_input.on("keydown.enter", try_login)
+            ui.button(
+                "Se connecter",
+                icon="login",
+                on_click=try_login,
+            ).props("color=primary").classes("w-full mt-2")
+
+
+def show_portal(user):
+    apply_theme()
+
+    with page_container():
+        with ui.card().classes("w-full p-6"):
+            with ui.row().classes(
+                "w-full items-start justify-between gap-3 flex-wrap"
+            ):
+                with ui.column().classes("gap-0"):
+                    ui.label("JF Apps").classes("text-3xl font-bold")
+                    ui.label(
+                        f"Bonjour {user['display_name']}"
+                    ).classes("text-gray-600")
+
+                ui.button(
+                    icon="logout",
+                    on_click=logout,
+                ).props("flat round").tooltip("Déconnexion")
+
+            ui.separator().classes("my-2")
+
+            ui.label("Applications").classes("text-lg font-bold")
+            ui.button(
+                "Liste d’épicerie",
+                icon="shopping_cart",
+                on_click=lambda: ui.navigate.to("/?tab=items"),
+            ).classes("w-full")
+
+            ui.label("Portail").classes("text-lg font-bold mt-3")
+            ui.button(
+                "Familles",
+                icon="groups",
+                on_click=lambda: ui.navigate.to("/?tab=familles"),
+            ).classes("w-full")
+            ui.button(
+                "Mon compte",
+                icon="account_circle",
+                on_click=lambda: ui.navigate.to("/?tab=compte"),
+            ).props("outline").classes("w-full")
+
+            if user["is_admin"]:
+                ui.button(
+                    "Utilisateurs",
+                    icon="manage_accounts",
+                    on_click=lambda: ui.navigate.to("/?tab=utilisateurs"),
+                ).props("outline").classes("w-full")
+
+
+def ensure_valid_family(user_id):
+    families = get_accessible_families(user_id)
 
     if not families:
         set_current_family_id(None)
         return False
 
-    valid_ids = {
-        family["id"]
-        for family in families
-    }
+    valid_ids = {family["id"] for family in families}
     current_family_id = get_current_family_id()
 
     if current_family_id not in valid_ids:
@@ -140,40 +242,42 @@ def ensure_valid_family():
 
 
 def show_no_family_message():
-    """Affiche un chemin clair pour créer la première famille."""
-
     with ui.card().classes("w-full p-6"):
+        ui.label("Aucune famille accessible").classes("text-xl font-bold")
         ui.label(
-            "Aucune famille trouvée"
-        ).classes("text-xl font-bold")
-        ui.label(
-            "Crée d’abord une famille dans le portail, "
-            "puis reviens dans la liste d’épicerie."
+            "Créez une famille ou demandez à l’administrateur "
+            "de vous donner accès à une famille."
         )
         ui.button(
-            "Créer ou gérer une famille",
+            "Gérer les familles",
             icon="groups",
-            on_click=lambda: ui.navigate.to(
-                "/?tab=familles"
-            ),
+            on_click=lambda: ui.navigate.to("/?tab=familles"),
         ).classes("mt-2")
 
 
-def application_header(active_tab):
-    """En-tête de l’application avec accès aux sauvegardes."""
-
+def portal_header(title):
     with ui.row().classes(
         "w-full items-center justify-between gap-3"
     ):
-        ui.label(
-            "Liste d’épicerie"
-        ).classes("text-2xl font-bold")
+        ui.button(
+            icon="arrow_back",
+            on_click=lambda: ui.navigate.to("/?tab=portail"),
+        ).props("flat round").tooltip("Retour au portail")
+        ui.label(title).classes("text-xl font-bold")
+        ui.button(
+            icon="logout",
+            on_click=logout,
+        ).props("flat round").tooltip("Déconnexion")
 
+
+def application_header(active_tab):
+    with ui.row().classes(
+        "w-full items-center justify-between gap-3"
+    ):
+        ui.label("Liste d’épicerie").classes("text-2xl font-bold")
         ui.button(
             icon="settings",
-            on_click=lambda: ui.navigate.to(
-                "/?tab=donnees"
-            ),
+            on_click=lambda: ui.navigate.to("/?tab=donnees"),
         ).props(
             "flat round color=primary"
             if active_tab == "donnees"
@@ -182,99 +286,85 @@ def application_header(active_tab):
 
 
 def bottom_navigation(active_tab):
-    """Navigation mobile de l’application d’épicerie."""
-
     with ui.footer().classes(
         "bg-gray-100 dark:bg-gray-900 border-t p-2"
     ):
-        with ui.row().classes(
-            "w-full justify-around gap-1"
-        ):
+        with ui.row().classes("w-full justify-around gap-1"):
             ui.button(
                 "Items",
                 icon="inventory_2",
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=items"
-                ),
+                on_click=lambda: ui.navigate.to("/?tab=items"),
             ).props(
-                "flat color=primary"
-                if active_tab == "items"
-                else "flat"
+                "flat color=primary" if active_tab == "items" else "flat"
             )
-
             ui.button(
                 "Besoins",
                 icon="shopping_cart",
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=besoins"
-                ),
+                on_click=lambda: ui.navigate.to("/?tab=besoins"),
             ).props(
                 "flat color=primary"
                 if active_tab == "besoins"
                 else "flat"
             )
-
             ui.button(
                 "Catégories",
                 icon="category",
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=categories"
-                ),
+                on_click=lambda: ui.navigate.to("/?tab=categories"),
             ).props(
                 "flat color=primary"
                 if active_tab == "categories"
                 else "flat"
             )
-
             ui.button(
                 "Portail",
                 icon="apps",
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=portail"
-                ),
+                on_click=lambda: ui.navigate.to("/?tab=portail"),
             ).props("flat")
 
 
-# ---------------------------------------------------------
-# ROUTE PRINCIPALE
-# ---------------------------------------------------------
-
 @ui.page("/", title="JF Apps")
 def index(tab="portail"):
-    """Affiche le portail ou une section de l’application."""
-
     apply_theme()
 
-    authenticated = bool(
-        app.storage.user.get("auth")
-    )
-
-    if not authenticated:
-        show_portal(authenticated=False)
+    if count_users() == 0:
+        show_first_admin_setup()
         return
 
-    normalized_tab = (
-        tab or "portail"
-    ).strip().lower()
+    user = get_current_user()
+
+    if user is None:
+        show_login()
+        return
+
+    normalized_tab = (tab or "portail").strip().lower()
 
     if normalized_tab in PORTAL_TABS:
-        show_portal(authenticated=True)
+        show_portal(user)
         return
 
     if normalized_tab in FAMILY_TABS:
         set_current_tab("familles")
-
         with page_container():
-            ui.button(
-                "Retour au portail",
-                icon="arrow_back",
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=portail"
-                ),
-            ).props("flat")
-
+            portal_header("Familles")
             families_panel()
+        return
 
+    if normalized_tab in USER_TABS:
+        if not user["is_admin"]:
+            ui.navigate.to("/?tab=portail")
+            return
+
+        set_current_tab("utilisateurs")
+        with page_container():
+            portal_header("Utilisateurs")
+            users_panel(user)
+        return
+
+    if normalized_tab in ACCOUNT_TABS:
+        set_current_tab("compte")
+        with page_container():
+            portal_header("Mon compte")
+            account_panel(user)
         return
 
     if normalized_tab in BACKUP_TABS:
@@ -288,7 +378,7 @@ def index(tab="portail"):
     with page_container():
         application_header(normalized_tab)
 
-        if not ensure_valid_family():
+        if not ensure_valid_family(user["id"]):
             show_no_family_message()
         elif normalized_tab == "items":
             items_panel()
@@ -302,18 +392,18 @@ def index(tab="portail"):
     bottom_navigation(normalized_tab)
 
 
-# ---------------------------------------------------------
-# LANCEMENT
-# ---------------------------------------------------------
-
 init_db()
+
+storage_secret = os.getenv("STORAGE_SECRET")
+
+if not storage_secret:
+    raise RuntimeError(
+        "La variable d’environnement STORAGE_SECRET est obligatoire."
+    )
 
 ui.run(
     host="0.0.0.0",
     port=int(os.getenv("PORT", "8080")),
-    storage_secret=os.getenv(
-        "STORAGE_SECRET",
-        "dev-secret-change-me",
-    ),
+    storage_secret=storage_secret,
     reload=False,
 )

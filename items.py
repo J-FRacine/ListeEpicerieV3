@@ -1,10 +1,11 @@
 from nicegui import ui
 
+from auth import get_current_user_id
 from db import (
     add_item,
     delete_item,
+    get_accessible_families,
     get_categories,
-    get_families,
     get_items,
     toggle_needed,
     update_item,
@@ -19,24 +20,19 @@ from utils import ensure_categories_exist, ensure_family_selected
 
 
 def items_panel():
+    user_id = get_current_user_id()
     current_family_id = get_current_family_id()
 
-    if not ensure_family_selected(current_family_id):
+    if user_id is None or not ensure_family_selected(current_family_id):
         return
 
-    families = get_families()
+    families = get_accessible_families(user_id)
 
     if not families:
-        ui.label(
-            "Aucune famille disponible."
-        ).classes("text-orange-700")
+        ui.label("Aucune famille accessible.").classes("text-orange-700")
         return
 
-    family_dict = {
-        family["name"]: family["id"]
-        for family in families
-    }
-
+    family_dict = {family["name"]: family["id"] for family in families}
     current_family_name = next(
         (
             name
@@ -56,38 +52,27 @@ def items_panel():
         ),
     ).classes("w-full")
 
-    if not ensure_categories_exist(current_family_id):
+    if not ensure_categories_exist(user_id, current_family_id):
         return
 
-    categories = get_categories(current_family_id)
-
+    categories = get_categories(user_id, current_family_id)
     category_dict = {
         category["name"]: category["id"]
         for category in categories
     }
     category_names = list(category_dict.keys())
 
-    # ---------------------------------------------------------
-    # AJOUTER UN ITEM
-    # ---------------------------------------------------------
-
     ui.separator()
     ui.label("Ajouter un item").classes("text-xl font-bold")
 
-    with ui.row().classes(
-        "w-full items-end gap-3 flex-wrap"
-    ):
-        name_input = ui.input(
-            label="Nom",
-        ).classes("grow min-w-[210px]")
-
+    with ui.row().classes("w-full items-end gap-3 flex-wrap"):
+        name_input = ui.input(label="Nom").classes("grow min-w-[210px]")
         quantity_input = ui.number(
             label="Quantité",
             value=1,
             min=1,
             step=1,
         ).classes("w-28")
-
         category_input = ui.select(
             category_names,
             value=category_names[0],
@@ -96,25 +81,18 @@ def items_panel():
 
         def add_new_item():
             item_name = (name_input.value or "").strip()
-
-            if not item_name:
-                ui.notify(
-                    "Inscris le nom de l’item.",
-                    type="warning",
-                )
-                return
-
             quantity = int(quantity_input.value or 1)
 
             try:
                 add_item(
+                    user_id,
                     current_family_id,
                     category_dict[category_input.value],
                     item_name,
                     quantity,
                     0,
                 )
-            except ValueError as error:
+            except (ValueError, PermissionError) as error:
                 ui.notify(str(error), type="warning")
                 return
 
@@ -128,40 +106,28 @@ def items_panel():
             on_click=add_new_item,
         ).props("flat color=green").classes("mb-1")
 
-    # ---------------------------------------------------------
-    # LISTE ET TRI COMPACT
-    # ---------------------------------------------------------
-
     ui.separator()
-
     tri_mode = get_tri_mode_items()
 
     with ui.row().classes(
         "w-full items-center justify-between gap-3 flex-wrap"
     ):
-        ui.label("Tous les items").classes(
-            "text-xl font-bold"
-        )
+        ui.label("Tous les items").classes("text-xl font-bold")
 
         with ui.row().classes("items-center gap-1"):
             ui.icon("sort").classes("text-gray-500")
-
             ui.select(
-                [
-                    "Alphabétique",
-                    "Ordre d’ajout",
-                    "Catégorie",
-                ],
+                ["Alphabétique", "Ordre d’ajout", "Catégorie"],
                 value=tri_mode,
                 on_change=lambda event: (
                     set_tri_mode_items(event.value),
                     ui.navigate.to("/?tab=items"),
                 ),
-            ).props(
-                "dense borderless options-dense"
-            ).classes("w-40 text-sm")
+            ).props("dense borderless options-dense").classes(
+                "w-40 text-sm"
+            )
 
-    items = get_items(current_family_id)
+    items = get_items(user_id, current_family_id)
 
     if tri_mode == "Alphabétique":
         items = sorted(
@@ -178,77 +144,47 @@ def items_panel():
         )
 
     if not items:
-        ui.label(
-            "Aucun item dans cette famille."
-        ).classes("text-gray-500 mt-3")
+        ui.label("Aucun item dans cette famille.").classes(
+            "text-gray-500 mt-3"
+        )
         return
-
-    # ---------------------------------------------------------
-    # MODIFICATION D’UN ITEM
-    # ---------------------------------------------------------
 
     def open_edit_dialog(item):
         with ui.dialog() as dialog:
-            with ui.card().classes(
-                "w-full max-w-md p-5"
-            ):
-                ui.label("Modifier l’item").classes(
-                    "text-xl font-bold"
-                )
-
+            with ui.card().classes("w-full max-w-md p-5"):
+                ui.label("Modifier l’item").classes("text-xl font-bold")
                 edit_name = ui.input(
                     label="Nom",
                     value=item["name"],
                 ).classes("w-full")
-
                 edit_quantity = ui.number(
                     label="Quantité",
                     value=item["quantity"],
                     min=1,
                     step=1,
                 ).classes("w-full")
-
                 edit_category = ui.select(
                     category_names,
                     value=item["category"],
                     label="Catégorie",
                 ).classes("w-full")
-
                 edit_needed = ui.checkbox(
                     "Présent dans la liste des besoins",
                     value=item["needed"] == 1,
                 )
 
                 def save_item():
-                    item_name = (
-                        edit_name.value or ""
-                    ).strip()
-                    quantity = int(
-                        edit_quantity.value or 1
-                    )
-
-                    if not edit_category.value:
-                        ui.notify(
-                            "Choisis une catégorie.",
-                            type="warning",
-                        )
-                        return
-
                     try:
                         update_item(
+                            user_id,
                             item["id"],
-                            category_dict[
-                                edit_category.value
-                            ],
-                            item_name,
-                            quantity,
+                            category_dict[edit_category.value],
+                            (edit_name.value or "").strip(),
+                            int(edit_quantity.value or 1),
                             1 if edit_needed.value else 0,
                         )
-                    except ValueError as error:
-                        ui.notify(
-                            str(error),
-                            type="warning",
-                        )
+                    except (ValueError, PermissionError) as error:
+                        ui.notify(str(error), type="warning")
                         return
 
                     dialog.close()
@@ -257,11 +193,7 @@ def items_panel():
                 with ui.row().classes(
                     "w-full justify-end gap-2 mt-4"
                 ):
-                    ui.button(
-                        "Annuler",
-                        on_click=dialog.close,
-                    ).props("flat")
-
+                    ui.button("Annuler", on_click=dialog.close).props("flat")
                     ui.button(
                         "Enregistrer",
                         icon="save",
@@ -270,40 +202,31 @@ def items_panel():
 
         dialog.open()
 
-    # ---------------------------------------------------------
-    # AFFICHAGE DES ITEMS
-    # ---------------------------------------------------------
-
     for item in items:
         with ui.row().classes(
             "w-full items-center justify-between "
-            "bg-gray-100 rounded-lg px-3 py-2 mt-2 "
-            "gap-2 flex-wrap"
+            "bg-gray-100 rounded-lg px-3 py-2 mt-2 gap-2 flex-wrap"
         ):
-            with ui.column().classes(
-                "gap-0 grow min-w-[170px]"
-            ):
+            with ui.column().classes("gap-0 grow min-w-[170px]"):
                 ui.label(
                     f"{item['name']} ({item['quantity']})"
                 ).classes("font-bold")
-
                 ui.label(
                     item["category"] or "Sans catégorie"
                 ).classes("text-sm text-gray-500")
 
-            with ui.row().classes(
-                "items-center gap-1 justify-end"
-            ):
+            with ui.row().classes("items-center gap-1 justify-end"):
+                def change_needed(item_id=item["id"]):
+                    try:
+                        toggle_needed(user_id, item_id)
+                    except (ValueError, PermissionError) as error:
+                        ui.notify(str(error), type="warning")
+                        return
+                    ui.navigate.to("/?tab=items")
+
                 ui.button(
-                    icon=(
-                        "check_circle"
-                        if item["needed"]
-                        else "cancel"
-                    ),
-                    on_click=lambda item_id=item["id"]: (
-                        toggle_needed(item_id),
-                        ui.navigate.to("/?tab=items"),
-                    ),
+                    icon="check_circle" if item["needed"] else "cancel",
+                    on_click=change_needed,
                 ).props(
                     "flat round color=green"
                     if item["needed"]
@@ -316,19 +239,20 @@ def items_panel():
 
                 ui.button(
                     icon="edit",
-                    on_click=lambda item_data=item: (
-                        open_edit_dialog(item_data)
-                    ),
-                ).props(
-                    "flat round color=primary"
-                ).tooltip("Modifier cet item")
+                    on_click=lambda item_data=item: open_edit_dialog(item_data),
+                ).props("flat round color=primary").tooltip(
+                    "Modifier cet item"
+                )
+
+                def remove_item(item_id=item["id"]):
+                    try:
+                        delete_item(user_id, item_id)
+                    except (ValueError, PermissionError) as error:
+                        ui.notify(str(error), type="warning")
+                        return
+                    ui.navigate.to("/?tab=items")
 
                 ui.button(
                     icon="delete",
-                    on_click=lambda item_id=item["id"]: (
-                        delete_item(item_id),
-                        ui.navigate.to("/?tab=items"),
-                    ),
-                ).props(
-                    "flat round color=red"
-                ).tooltip("Supprimer l’item")
+                    on_click=remove_item,
+                ).props("flat round color=red").tooltip("Supprimer l’item")

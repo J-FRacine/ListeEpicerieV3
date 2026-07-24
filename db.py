@@ -1,6 +1,7 @@
 import os
 
 import psycopg
+from psycopg import sql
 from psycopg.rows import dict_row
 
 
@@ -42,7 +43,6 @@ def _add_categories_family_column(cur):
             ADD COLUMN family_id INTEGER;
         """)
 
-    # Ajoute la clé étrangère si elle n’existe pas déjà.
     cur.execute("""
         DO $$
         BEGIN
@@ -63,8 +63,75 @@ def _add_categories_family_column(cur):
     """)
 
 
+def _drop_legacy_category_name_uniqueness(cur):
+    """Retire l'ancienne unicité globale sur categories.name.
+
+    L'ancien modèle interdisait deux catégories portant le même nom.
+    Le nouveau modèle doit permettre, par exemple, une catégorie
+    « Épicerie » dans chacune des familles.
+    """
+
+    # Cas normal de l'ancien schéma: name TEXT UNIQUE.
+    cur.execute("""
+        ALTER TABLE categories
+        DROP CONSTRAINT IF EXISTS categories_name_key;
+    """)
+
+    # Protection supplémentaire: retire toute autre contrainte UNIQUE
+    # portant uniquement sur la colonne name.
+    cur.execute("""
+        SELECT
+            table_constraint.constraint_name
+        FROM information_schema.table_constraints AS table_constraint
+        JOIN information_schema.constraint_column_usage AS column_usage
+          ON column_usage.constraint_schema =
+             table_constraint.constraint_schema
+         AND column_usage.constraint_name =
+             table_constraint.constraint_name
+         AND column_usage.table_schema =
+             table_constraint.table_schema
+         AND column_usage.table_name =
+             table_constraint.table_name
+        WHERE table_constraint.table_schema = 'public'
+          AND table_constraint.table_name = 'categories'
+          AND table_constraint.constraint_type = 'UNIQUE'
+        GROUP BY table_constraint.constraint_name
+        HAVING COUNT(*) = 1
+           AND MIN(column_usage.column_name) = 'name';
+    """)
+
+    for row in cur.fetchall():
+        cur.execute(
+            sql.SQL("""
+                ALTER TABLE categories
+                DROP CONSTRAINT IF EXISTS {};
+            """).format(
+                sql.Identifier(row["constraint_name"])
+            )
+        )
+
+    # Protection supplémentaire contre un ancien index unique créé
+    # directement, sans contrainte SQL.
+    cur.execute("""
+        SELECT indexname
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND tablename = 'categories'
+          AND indexdef ILIKE 'CREATE UNIQUE INDEX%%'
+          AND indexdef ILIKE '%%name%%'
+          AND indexdef NOT ILIKE '%%family_id%%';
+    """)
+
+    for row in cur.fetchall():
+        cur.execute(
+            sql.SQL("DROP INDEX IF EXISTS public.{};").format(
+                sql.Identifier(row["indexname"])
+            )
+        )
+
+
 def _remove_duplicate_family_categories(cur):
-    """Fusionne d’éventuels doublons avant de créer l’index unique."""
+    """Fusionne d’éventuels doublons locaux avant l’index unique."""
 
     cur.execute("""
         WITH category_groups AS (
@@ -115,7 +182,7 @@ def _remove_duplicate_family_categories(cur):
 
 
 def _copy_legacy_categories_to_all_families(cur):
-    """Copie toutes les anciennes catégories globales dans chaque famille."""
+    """Copie toutes les anciennes catégories dans toutes les familles."""
 
     cur.execute("""
         WITH legacy_categories AS (
@@ -192,7 +259,8 @@ def _ensure_local_category_for_each_item(cur):
         WHERE NOT EXISTS (
             SELECT 1
             FROM categories AS existing_category
-            WHERE existing_category.family_id = item_category.family_id
+            WHERE existing_category.family_id =
+                  item_category.family_id
               AND LOWER(
                     COALESCE(
                         NULLIF(BTRIM(existing_category.name), ''),
@@ -225,19 +293,20 @@ def _move_items_to_their_family_categories(cur):
                     'Sans catégorie'
                 )
               )
-          AND current_category.family_id IS DISTINCT FROM item.family_id;
+          AND current_category.family_id
+              IS DISTINCT FROM item.family_id;
     """)
 
 
 def _migrate_categories_to_families(cur):
-    """Migration sans perte des catégories globales vers des catégories familiales.
-
-    Les anciennes catégories globales sont conservées temporairement avec
-    family_id = NULL. Elles sont invisibles dans la nouvelle interface et
-    servent de filet de sécurité si un ancien déploiement devait être restauré.
-    """
+    """Migration des catégories globales vers des catégories familiales."""
 
     _add_categories_family_column(cur)
+
+    # IMPORTANT: cette étape doit arriver avant la création des copies.
+    # Elle corrige précisément l'erreur categories_name_key.
+    _drop_legacy_category_name_uniqueness(cur)
+
     _remove_duplicate_family_categories(cur)
 
     cur.execute("""
@@ -326,6 +395,19 @@ def create_family(name):
                 RETURNING id;
             """, (family_name,))
             family_id = cur.fetchone()["id"]
+
+            # Une nouvelle famille reçoit aussi les catégories
+            # provenant de l'ancien modèle global.
+            cur.execute("""
+                INSERT INTO categories (family_id, name)
+                SELECT
+                    %s,
+                    legacy_category.name
+                FROM categories AS legacy_category
+                WHERE legacy_category.family_id IS NULL
+                ON CONFLICT DO NOTHING;
+            """, (family_id,))
+
             conn.commit()
             return family_id
 
@@ -407,7 +489,11 @@ def _category_name_exists(
               AND LOWER(BTRIM(name)) = LOWER(BTRIM(%s))
               AND id <> %s
             LIMIT 1;
-        """, (family_id, name, exclude_category_id))
+        """, (
+            family_id,
+            name,
+            exclude_category_id,
+        ))
 
     return cur.fetchone() is not None
 
@@ -437,7 +523,10 @@ def create_category(family_id, name):
                 INSERT INTO categories (family_id, name)
                 VALUES (%s, %s)
                 RETURNING id;
-            """, (family_id, category_name))
+            """, (
+                family_id,
+                category_name,
+            ))
             category_id = cur.fetchone()["id"]
             conn.commit()
             return category_id
@@ -479,7 +568,8 @@ def rename_category(
 
             if cur.rowcount == 0:
                 raise ValueError(
-                    "Cette catégorie n’existe pas dans la famille active."
+                    "Cette catégorie n’existe pas "
+                    "dans la famille active."
                 )
 
             conn.commit()
@@ -573,7 +663,8 @@ def delete_category(family_id, category_id):
 
             if cur.rowcount == 0:
                 raise ValueError(
-                    "Cette catégorie n’existe pas dans la famille active."
+                    "Cette catégorie n’existe pas "
+                    "dans la famille active."
                 )
 
             conn.commit()
@@ -749,7 +840,10 @@ def toggle_needed(item_id):
 
             cur.execute(
                 "UPDATE items SET needed = %s WHERE id = %s;",
-                (new_value, item_id),
+                (
+                    new_value,
+                    item_id,
+                ),
             )
             conn.commit()
 

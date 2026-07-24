@@ -385,6 +385,12 @@ body.body--dark {
     box-shadow: 0 7px 16px rgba(23, 53, 83, 0.20);
 }
 
+.jf-nav-active .q-btn__content,
+.jf-nav-active .q-icon,
+.jf-nav-active .block {
+    color: white !important;
+}
+
 .jf-status-chip {
     display: inline-flex;
     width: fit-content;

@@ -26,6 +26,7 @@ from db import (
 )
 from families import families_panel
 from items import items_panel
+from maintenance import maintenance_panel
 from needs import needs_panel
 from pwa import (
     configure_pwa,
@@ -58,6 +59,11 @@ ACTIVITY_TABS = {
     "activity",
     "corbeille",
     "historique",
+}
+MAINTENANCE_TABS = {
+    "maintenance",
+    "entretien",
+    "diagnostic",
 }
 BACKUP_TABS = {
     "donnees",
@@ -1027,6 +1033,20 @@ def show_portal(user):
                     ),
                 )
 
+                portal_action_card(
+                    title="Centre de maintenance",
+                    description=(
+                        "Vérifiez l’intégrité, les doublons, "
+                        "les éléments inutilisés et la taille "
+                        "de la base."
+                    ),
+                    icon="health_and_safety",
+                    action_label="Diagnostiquer",
+                    on_click=lambda: ui.navigate.to(
+                        "/?tab=maintenance"
+                    ),
+                )
+
 
 def ensure_valid_family(user_id):
     families = get_accessible_families(user_id)
@@ -1301,6 +1321,19 @@ def index(tab="portail"):
                 show_no_family_message()
             else:
                 activity_panel()
+
+        return
+
+    if normalized_tab in MAINTENANCE_TABS:
+        if not user["is_admin"]:
+            ui.navigate.to("/?tab=portail")
+            return
+
+        set_current_tab("maintenance")
+
+        with page_container():
+            portal_header("Centre de maintenance")
+            maintenance_panel()
 
         return
 

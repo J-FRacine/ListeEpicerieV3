@@ -596,7 +596,7 @@ def _get_naming_issues(cur, family_id):
                     entry.name,
                     %s AS entity_type,
                     (entry.name <> BTRIM(entry.name)) AS outer_spaces,
-                    (entry.name ~ '[[:space:]]{2,}') AS repeated_spaces,
+                    (entry.name ~ '[[:space:]]{{2,}}') AS repeated_spaces,
                     (BTRIM(COALESCE(entry.name, '')) = '') AS blank_name
                 FROM {} AS entry
                 JOIN families AS family
@@ -605,7 +605,7 @@ def _get_naming_issues(cur, family_id):
                   AND {}
                   AND (
                         entry.name <> BTRIM(entry.name)
-                     OR entry.name ~ '[[:space:]]{2,}'
+                     OR entry.name ~ '[[:space:]]{{2,}}'
                      OR BTRIM(COALESCE(entry.name, '')) = ''
                   )
                 ORDER BY

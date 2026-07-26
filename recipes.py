@@ -1,4 +1,4 @@
-from nicegui import ui
+from nicegui import app, ui
 
 from auth import get_current_user_id
 from db import (
@@ -74,6 +74,39 @@ def _summary_message(result):
 def recipes_panel():
     user_id = get_current_user_id()
     family_id = get_current_family_id()
+    open_storage_key = (
+        f"open_grocery_recipes_{family_id}"
+    )
+
+    def get_open_recipe_ids():
+        stored_ids = app.storage.user.get(
+            open_storage_key,
+            [],
+        )
+        result = set()
+
+        for stored_id in stored_ids:
+            try:
+                result.add(int(stored_id))
+            except (TypeError, ValueError):
+                continue
+
+        return result
+
+    def save_recipe_open_state(
+        recipe_id,
+        is_open,
+    ):
+        open_ids = get_open_recipe_ids()
+
+        if is_open:
+            open_ids.add(int(recipe_id))
+        else:
+            open_ids.discard(int(recipe_id))
+
+        app.storage.user[open_storage_key] = sorted(
+            open_ids
+        )
 
     if user_id is None or not ensure_family_selected(family_id):
         return
@@ -291,6 +324,19 @@ def recipes_panel():
         items = get_items(user_id, family_id)
         options = _item_options(items)
 
+        valid_recipe_ids = {
+            int(recipe["id"])
+            for recipe in recipes
+        }
+        open_recipe_ids = (
+            get_open_recipe_ids()
+            & valid_recipe_ids
+        )
+
+        app.storage.user[open_storage_key] = sorted(
+            open_recipe_ids
+        )
+
         if not recipes:
             with ui.card().classes("w-full p-7 items-center text-center mt-3"):
                 ui.icon("menu_book").classes("text-5xl text-primary")
@@ -313,7 +359,16 @@ def recipes_panel():
                     ingredient_count,
                 ),
                 icon="restaurant",
-                value=False,
+                value=recipe_id in open_recipe_ids,
+                on_value_change=(
+                    lambda event,
+                    selected_recipe_id=recipe_id: (
+                        save_recipe_open_state(
+                            selected_recipe_id,
+                            bool(event.value),
+                        )
+                    )
+                ),
             ).props("expand-separator").classes(
                 "w-full bg-white rounded-xl shadow-sm "
                 "border border-gray-200 overflow-hidden mt-3"
@@ -525,7 +580,21 @@ def recipes_panel():
                                     ui.notify(str(error), type="warning")
                                     return
 
+                                save_recipe_open_state(
+                                    selected_recipe_id,
+                                    True,
+                                )
+                                selected_item_input.value = None
+                                selected_quantity_input.value = 1
+                                selected_note_input.value = ""
+                                selected_item_input.update()
+                                selected_quantity_input.update()
+                                selected_note_input.update()
                                 render_recipes.refresh()
+                                ui.notify(
+                                    "Ingrédient ajouté à la recette.",
+                                    type="positive",
+                                )
 
                             ui.button(
                                 "Ajouter",

@@ -1,4 +1,4 @@
-from nicegui import ui
+from nicegui import app, ui
 
 from auth import get_current_user_id
 from db import (
@@ -59,6 +59,39 @@ def _summary_message(result):
 def templates_panel():
     user_id = get_current_user_id()
     family_id = get_current_family_id()
+    open_storage_key = (
+        f"open_grocery_templates_{family_id}"
+    )
+
+    def get_open_template_ids():
+        stored_ids = app.storage.user.get(
+            open_storage_key,
+            [],
+        )
+        result = set()
+
+        for stored_id in stored_ids:
+            try:
+                result.add(int(stored_id))
+            except (TypeError, ValueError):
+                continue
+
+        return result
+
+    def save_template_open_state(
+        template_id,
+        is_open,
+    ):
+        open_ids = get_open_template_ids()
+
+        if is_open:
+            open_ids.add(int(template_id))
+        else:
+            open_ids.discard(int(template_id))
+
+        app.storage.user[open_storage_key] = sorted(
+            open_ids
+        )
 
     if user_id is None or not ensure_family_selected(family_id):
         return
@@ -302,6 +335,19 @@ def templates_panel():
         items = get_items(user_id, family_id)
         options = _item_options(items)
 
+        valid_template_ids = {
+            int(template["id"])
+            for template in templates
+        }
+        open_template_ids = (
+            get_open_template_ids()
+            & valid_template_ids
+        )
+
+        app.storage.user[open_storage_key] = sorted(
+            open_template_ids
+        )
+
         if not templates:
             with ui.card().classes("w-full p-7 items-center text-center mt-3"):
                 ui.icon("playlist_add").classes("text-5xl text-primary")
@@ -324,7 +370,16 @@ def templates_panel():
                     else f"{item_count} items"
                 ),
                 icon="checklist",
-                value=False,
+                value=template_id in open_template_ids,
+                on_value_change=(
+                    lambda event,
+                    selected_template_id=template_id: (
+                        save_template_open_state(
+                            selected_template_id,
+                            bool(event.value),
+                        )
+                    )
+                ),
             ).props("expand-separator").classes(
                 "w-full bg-white rounded-xl shadow-sm "
                 "border border-gray-200 overflow-hidden mt-3"
@@ -512,7 +567,19 @@ def templates_panel():
                                     ui.notify(str(error), type="warning")
                                     return
 
+                                save_template_open_state(
+                                    selected_template_id,
+                                    True,
+                                )
+                                selected_item_input.value = None
+                                selected_quantity_input.value = 1
+                                selected_item_input.update()
+                                selected_quantity_input.update()
                                 render_templates.refresh()
+                                ui.notify(
+                                    "Item ajouté à la liste modèle.",
+                                    type="positive",
+                                )
 
                             ui.button(
                                 "Ajouter",

@@ -27,6 +27,7 @@ from db import (
 from families import families_panel
 from items import items_panel
 from maintenance import maintenance_panel
+from manual import manual_panel
 from needs import needs_panel
 from recipes import recipes_panel
 from pwa import (
@@ -68,6 +69,12 @@ MAINTENANCE_TABS = {
     "maintenance",
     "entretien",
     "diagnostic",
+}
+MANUAL_TABS = {
+    "manuel",
+    "aide",
+    "help",
+    "guide",
 }
 TEMPLATE_TABS = {
     "modeles",
@@ -1017,6 +1024,19 @@ def show_portal(user):
                 ),
             )
 
+            portal_action_card(
+                title="Manuel d’utilisation",
+                description=(
+                    "Retrouvez les instructions pour toutes les "
+                    "fonctions actuellement disponibles."
+                ),
+                icon="help_center",
+                action_label="Consulter",
+                on_click=lambda: ui.navigate.to(
+                    "/?tab=manuel"
+                ),
+            )
+
         ui.label("Administration du portail").classes(
             "jf-section-title mt-2"
         )
@@ -1206,6 +1226,15 @@ def application_header(active_tab):
                 )
 
                 ui.button(
+                    icon="help_outline",
+                    on_click=lambda: ui.navigate.to(
+                        "/?tab=manuel"
+                    ),
+                ).props("flat round").tooltip(
+                    "Manuel d’utilisation"
+                )
+
+                ui.button(
                     icon="settings",
                     on_click=lambda: ui.navigate.to(
                         "/?tab=donnees"
@@ -1365,6 +1394,15 @@ def index(tab="portail"):
                 show_no_family_message()
             else:
                 activity_panel()
+
+        return
+
+    if normalized_tab in MANUAL_TABS:
+        set_current_tab("manuel")
+
+        with page_container():
+            portal_header("Manuel d’utilisation")
+            manual_panel()
 
         return
 

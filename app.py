@@ -30,6 +30,7 @@ from maintenance import maintenance_panel
 from manual import manual_panel
 from needs import needs_panel
 from recipes import recipes_panel
+from shared_library import shared_library_panel
 from pwa import (
     configure_pwa,
     request_pwa_install,
@@ -75,6 +76,13 @@ MANUAL_TABS = {
     "aide",
     "help",
     "guide",
+}
+LIBRARY_TABS = {
+    "bibliotheque",
+    "bibliothèque",
+    "library",
+    "partage",
+    "public",
 }
 TEMPLATE_TABS = {
     "modeles",
@@ -978,6 +986,46 @@ def show_portal(user):
                     "Déconnexion"
                 )
 
+        accessible_families = get_accessible_families(
+            user["id"]
+        )
+
+        if not accessible_families:
+            with ui.card().classes(
+                "w-full p-5 border-l-4 border-primary"
+            ):
+                with ui.row().classes(
+                    "w-full items-start gap-3 flex-nowrap"
+                ):
+                    ui.icon("group_add").classes(
+                        "text-4xl text-primary shrink-0"
+                    )
+                    with ui.column().classes("gap-1 grow min-w-0"):
+                        ui.label(
+                            "Première étape : créez votre famille"
+                        ).classes("text-xl font-bold")
+                        ui.label(
+                            "La famille est votre espace de travail, même si "
+                            "vous utilisez JF Apps seul. Elle doit être créée "
+                            "avant d’ajouter des items, des besoins, des listes "
+                            "modèles ou des recettes."
+                        ).classes("text-sm jf-muted")
+                        with ui.row().classes("gap-2 flex-wrap mt-2"):
+                            ui.button(
+                                "Créer ma première famille",
+                                icon="groups",
+                                on_click=lambda: ui.navigate.to(
+                                    "/?tab=familles"
+                                ),
+                            ).props("color=primary")
+                            ui.button(
+                                "Voir le guide de démarrage",
+                                icon="help_outline",
+                                on_click=lambda: ui.navigate.to(
+                                    "/?tab=manuel"
+                                ),
+                            ).props("outline color=primary")
+
         ui.label("Applications").classes(
             "jf-section-title"
         )
@@ -1008,6 +1056,19 @@ def show_portal(user):
                 action_label="Planifier",
                 on_click=lambda: ui.navigate.to(
                     "/?tab=modeles"
+                ),
+            )
+
+            portal_action_card(
+                title="Bibliothèque partagée",
+                description=(
+                    "Consultez les recettes et listes modèles publiées "
+                    "et copiez-les dans votre famille."
+                ),
+                icon="public",
+                action_label="Consulter",
+                on_click=lambda: ui.navigate.to(
+                    "/?tab=bibliotheque"
                 ),
             )
 
@@ -1132,13 +1193,21 @@ def show_no_family_message():
             "Créez une famille ou demandez à "
             "l’administrateur de vous donner accès."
         ).classes("jf-muted")
-        ui.button(
-            "Gérer les familles",
-            icon="groups",
-            on_click=lambda: ui.navigate.to(
-                "/?tab=familles"
-            ),
-        ).classes("mt-2")
+        with ui.row().classes("gap-2 flex-wrap mt-2"):
+            ui.button(
+                "Créer ou gérer les familles",
+                icon="groups",
+                on_click=lambda: ui.navigate.to(
+                    "/?tab=familles"
+                ),
+            ).props("color=primary")
+            ui.button(
+                "Voir le guide de démarrage",
+                icon="help_outline",
+                on_click=lambda: ui.navigate.to(
+                    "/?tab=manuel"
+                ),
+            ).props("outline color=primary")
 
 
 def portal_header(title):
@@ -1403,6 +1472,15 @@ def index(tab="portail"):
         with page_container():
             portal_header("Manuel d’utilisation")
             manual_panel()
+
+        return
+
+    if normalized_tab in LIBRARY_TABS:
+        set_current_tab("bibliotheque")
+
+        with page_container():
+            portal_header("Bibliothèque partagée")
+            shared_library_panel()
 
         return
 

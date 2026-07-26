@@ -1,17 +1,18 @@
 CONTENU DU PAQUET
 
-Fichiers complets prêts à remplacer :
+Fichiers complets à remplacer :
 - app.py
 - activity.py
-- backup.py
 - db.py
-- grocery_backup.py
+- grocery_planning.py
 - grocery_schema.py
+- manual.py
+- recipes.py
+- templates.py
 
 Nouveaux modules :
-- grocery_planning.py
-- templates.py
-- recipes.py
+- grocery_sharing.py
+- shared_library.py
 
 Documentation :
 - LIRE_AVANT_INSTALLATION.txt

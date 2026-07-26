@@ -70,6 +70,14 @@ ACTION_TEXT = {
     "recipe_updated": "a modifié la recette",
     "recipe_deleted": "a supprimé la recette",
     "recipe_applied": "a ajouté aux besoins la recette",
+    "template_published": "a publié la liste modèle",
+    "template_unpublished": "a retiré de la bibliothèque la liste modèle",
+    "template_public_updated": "a mis à jour la publication de la liste modèle",
+    "template_copied_from_library": "a copié depuis la bibliothèque la liste modèle",
+    "recipe_published": "a publié la recette",
+    "recipe_unpublished": "a retiré de la bibliothèque la recette",
+    "recipe_public_updated": "a mis à jour la publication de la recette",
+    "recipe_copied_from_library": "a copié depuis la bibliothèque la recette",
 }
 
 

@@ -11,7 +11,9 @@ from db import (
     get_recipe_ingredients,
     get_recipes,
     move_recipe_ingredient,
+    refresh_public_recipe,
     remove_recipe_ingredient,
+    set_recipe_public,
     update_recipe,
     update_recipe_ingredient,
 )
@@ -237,6 +239,12 @@ def recipes_panel():
             on_click=lambda: ui.navigate.to("/?tab=modeles"),
         ).props("flat color=primary")
 
+        ui.button(
+            "Bibliothèque partagée",
+            icon="public",
+            on_click=lambda: ui.navigate.to("/?tab=bibliotheque"),
+        ).props("flat color=primary")
+
     def confirm_delete(recipe):
         with ui.dialog() as dialog:
             with ui.card().classes("w-full max-w-md p-5"):
@@ -378,6 +386,78 @@ def recipes_panel():
                         ui.label(recipe["description"]).classes(
                             "text-sm text-gray-600 whitespace-normal"
                         ).style("overflow-wrap:anywhere;")
+
+                    with ui.card().classes(
+                        "w-full p-3 shadow-none bg-blue-50"
+                    ):
+                        def change_public_state(
+                            event,
+                            selected_recipe=recipe,
+                        ):
+                            save_recipe_open_state(
+                                selected_recipe["id"],
+                                True,
+                            )
+                            try:
+                                set_recipe_public(
+                                    user_id,
+                                    selected_recipe["id"],
+                                    bool(event.value),
+                                )
+                            except (ValueError, PermissionError) as error:
+                                ui.notify(str(error), type="warning")
+                                render_recipes.refresh()
+                                return
+
+                            ui.notify(
+                                "Recette publiée dans la bibliothèque."
+                                if event.value
+                                else "Recette retirée de la bibliothèque.",
+                                type="positive",
+                            )
+                            render_recipes.refresh()
+
+                        ui.checkbox(
+                            "Publier dans la bibliothèque partagée",
+                            value=bool(recipe["is_public"]),
+                            on_change=change_public_state,
+                        )
+                        ui.label(
+                            "La publication contient seulement le nom, la "
+                            "description, les portions, la préparation et les "
+                            "ingrédients génériques autorisés."
+                        ).classes("text-xs text-gray-600")
+
+                        if recipe["is_public"]:
+                            if recipe["public_update_available"]:
+                                ui.badge(
+                                    "Modifications privées à publier"
+                                ).props("color=orange")
+
+                            def refresh_public(selected_recipe=recipe):
+                                save_recipe_open_state(
+                                    selected_recipe["id"],
+                                    True,
+                                )
+                                try:
+                                    refresh_public_recipe(
+                                        user_id,
+                                        selected_recipe["id"],
+                                    )
+                                except (ValueError, PermissionError) as error:
+                                    ui.notify(str(error), type="warning")
+                                    return
+                                ui.notify(
+                                    "Version publiée mise à jour.",
+                                    type="positive",
+                                )
+                                render_recipes.refresh()
+
+                            ui.button(
+                                "Mettre à jour la version publiée",
+                                icon="sync",
+                                on_click=refresh_public,
+                            ).props("flat color=primary")
 
                     with ui.row().classes(
                         "w-full items-center gap-1 flex-wrap"

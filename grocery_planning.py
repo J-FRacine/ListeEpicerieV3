@@ -303,7 +303,23 @@ def get_templates(user_id, family_id):
                     template.description,
                     template.created_at,
                     template.updated_at,
-                    COUNT(item.id)::INTEGER AS item_count
+                    COUNT(item.id)::INTEGER AS item_count,
+                    EXISTS (
+                        SELECT 1
+                        FROM shared_grocery_content AS public_template
+                        WHERE public_template.source_template_id = template.id
+                    ) AS is_public,
+                    (
+                        SELECT public_template.published_at
+                        FROM shared_grocery_content AS public_template
+                        WHERE public_template.source_template_id = template.id
+                    ) AS published_at,
+                    EXISTS (
+                        SELECT 1
+                        FROM shared_grocery_content AS public_template
+                        WHERE public_template.source_template_id = template.id
+                          AND template.updated_at > public_template.source_updated_at
+                    ) AS public_update_available
                 FROM grocery_templates AS template
                 LEFT JOIN grocery_template_items AS line
                   ON line.template_id = template.id
@@ -793,7 +809,23 @@ def get_recipes(user_id, family_id):
                     recipe.servings,
                     recipe.created_at,
                     recipe.updated_at,
-                    COUNT(item.id)::INTEGER AS ingredient_count
+                    COUNT(item.id)::INTEGER AS ingredient_count,
+                    EXISTS (
+                        SELECT 1
+                        FROM shared_grocery_content AS public_recipe
+                        WHERE public_recipe.source_recipe_id = recipe.id
+                    ) AS is_public,
+                    (
+                        SELECT public_recipe.published_at
+                        FROM shared_grocery_content AS public_recipe
+                        WHERE public_recipe.source_recipe_id = recipe.id
+                    ) AS published_at,
+                    EXISTS (
+                        SELECT 1
+                        FROM shared_grocery_content AS public_recipe
+                        WHERE public_recipe.source_recipe_id = recipe.id
+                          AND recipe.updated_at > public_recipe.source_updated_at
+                    ) AS public_update_available
                 FROM grocery_recipes AS recipe
                 LEFT JOIN grocery_recipe_ingredients AS ingredient
                   ON ingredient.recipe_id = recipe.id

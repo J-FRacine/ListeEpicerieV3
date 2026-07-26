@@ -220,6 +220,62 @@ def migrate_grocery_schema(get_connection):
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     UNIQUE (recipe_id, item_id)
                 );
+
+
+                CREATE TABLE IF NOT EXISTS shared_grocery_content (
+                    id BIGSERIAL PRIMARY KEY,
+                    content_type TEXT NOT NULL
+                        CHECK (content_type IN ('template', 'recipe')),
+                    source_family_id INTEGER NOT NULL
+                        REFERENCES families(id)
+                        ON DELETE CASCADE,
+                    source_template_id INTEGER
+                        REFERENCES grocery_templates(id)
+                        ON DELETE CASCADE,
+                    source_recipe_id INTEGER
+                        REFERENCES grocery_recipes(id)
+                        ON DELETE CASCADE,
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    instructions TEXT NOT NULL DEFAULT '',
+                    servings INTEGER,
+                    published_by_user_id INTEGER
+                        REFERENCES users(id)
+                        ON DELETE SET NULL,
+                    source_updated_at TIMESTAMPTZ NOT NULL,
+                    published_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CHECK (
+                        (
+                            content_type = 'template'
+                            AND source_template_id IS NOT NULL
+                            AND source_recipe_id IS NULL
+                            AND servings IS NULL
+                        )
+                        OR
+                        (
+                            content_type = 'recipe'
+                            AND source_template_id IS NULL
+                            AND source_recipe_id IS NOT NULL
+                            AND servings IS NOT NULL
+                            AND servings >= 1
+                        )
+                    )
+                );
+
+                CREATE TABLE IF NOT EXISTS shared_grocery_content_lines (
+                    id BIGSERIAL PRIMARY KEY,
+                    content_id BIGINT NOT NULL
+                        REFERENCES shared_grocery_content(id)
+                        ON DELETE CASCADE,
+                    item_name TEXT NOT NULL,
+                    quantity INTEGER NOT NULL DEFAULT 1
+                        CHECK (quantity >= 1),
+                    note TEXT NOT NULL DEFAULT '',
+                    category_name TEXT NOT NULL DEFAULT '',
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
                 """
             )
 
@@ -280,6 +336,31 @@ def migrate_grocery_schema(get_connection):
                     grocery_recipe_ingredients_recipe_order_idx
                 ON grocery_recipe_ingredients (
                     recipe_id,
+                    sort_order,
+                    id
+                );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                    shared_grocery_template_source_unique
+                ON shared_grocery_content (source_template_id)
+                WHERE content_type = 'template';
+
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                    shared_grocery_recipe_source_unique
+                ON shared_grocery_content (source_recipe_id)
+                WHERE content_type = 'recipe';
+
+                CREATE INDEX IF NOT EXISTS
+                    shared_grocery_content_type_updated_idx
+                ON shared_grocery_content (
+                    content_type,
+                    updated_at DESC
+                );
+
+                CREATE INDEX IF NOT EXISTS
+                    shared_grocery_content_lines_order_idx
+                ON shared_grocery_content_lines (
+                    content_id,
                     sort_order,
                     id
                 );

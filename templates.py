@@ -12,7 +12,9 @@ from db import (
     get_template_items,
     get_templates,
     move_template_item,
+    refresh_public_template,
     remove_template_item,
+    set_template_public,
     update_template,
     update_template_item,
 )
@@ -213,6 +215,12 @@ def templates_panel():
             on_click=lambda: ui.navigate.to("/?tab=recettes"),
         ).props("flat color=primary")
 
+        ui.button(
+            "Bibliothèque partagée",
+            icon="public",
+            on_click=lambda: ui.navigate.to("/?tab=bibliotheque"),
+        ).props("flat color=primary")
+
     def open_edit_template(template):
         with ui.dialog() as dialog:
             with ui.card().classes("w-full max-w-lg p-5"):
@@ -389,6 +397,78 @@ def templates_panel():
                         ui.label(template["description"]).classes(
                             "text-sm text-gray-600 whitespace-normal"
                         ).style("overflow-wrap:anywhere;")
+
+                    with ui.card().classes(
+                        "w-full p-3 shadow-none bg-blue-50"
+                    ):
+                        def change_public_state(
+                            event,
+                            selected_template=template,
+                        ):
+                            save_template_open_state(
+                                selected_template["id"],
+                                True,
+                            )
+                            try:
+                                set_template_public(
+                                    user_id,
+                                    selected_template["id"],
+                                    bool(event.value),
+                                )
+                            except (ValueError, PermissionError) as error:
+                                ui.notify(str(error), type="warning")
+                                render_templates.refresh()
+                                return
+
+                            ui.notify(
+                                "Liste publiée dans la bibliothèque."
+                                if event.value
+                                else "Liste retirée de la bibliothèque.",
+                                type="positive",
+                            )
+                            render_templates.refresh()
+
+                        ui.checkbox(
+                            "Publier dans la bibliothèque partagée",
+                            value=bool(template["is_public"]),
+                            on_change=change_public_state,
+                        )
+                        ui.label(
+                            "La publication est une copie sécurisée : le magasin, "
+                            "les notes privées et les identifiants internes ne "
+                            "sont pas partagés."
+                        ).classes("text-xs text-gray-600")
+
+                        if template["is_public"]:
+                            if template["public_update_available"]:
+                                ui.badge(
+                                    "Modifications privées à publier"
+                                ).props("color=orange")
+
+                            def refresh_public(selected_template=template):
+                                save_template_open_state(
+                                    selected_template["id"],
+                                    True,
+                                )
+                                try:
+                                    refresh_public_template(
+                                        user_id,
+                                        selected_template["id"],
+                                    )
+                                except (ValueError, PermissionError) as error:
+                                    ui.notify(str(error), type="warning")
+                                    return
+                                ui.notify(
+                                    "Version publiée mise à jour.",
+                                    type="positive",
+                                )
+                                render_templates.refresh()
+
+                            ui.button(
+                                "Mettre à jour la version publiée",
+                                icon="sync",
+                                on_click=refresh_public,
+                            ).props("flat color=primary")
 
                     with ui.row().classes(
                         "w-full items-center gap-1 flex-wrap"

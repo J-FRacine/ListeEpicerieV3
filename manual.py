@@ -19,6 +19,12 @@ MANUAL_SECTIONS = [
 2. Entrez votre adresse courriel et votre mot de passe.
 3. Après la connexion, le **Portail** présente les applications et les outils auxquels vous avez accès.
 
+### Première connexion : créez votre famille
+
+Une **famille** est l’espace où sont conservés vos items, besoins, magasins, catégories, listes modèles et recettes. Même lorsque vous utilisez l’application seul, vous devez d’abord créer votre famille.
+
+Depuis le Portail, ouvrez **Familles**, puis utilisez **Créer une famille**. Après cette étape, la liste d’épicerie et les autres fonctions familiales deviennent accessibles.
+
 ### Installer JF Apps sur un appareil
 
 - Dans le Portail, utilisez **Installer JF Apps**.
@@ -230,6 +236,10 @@ Les flèches modifient l'ordre. Le crayon ajuste la quantité. Le X retire seule
 ### Utiliser une liste modèle
 
 **Ajouter aux besoins** traite toute la liste en une opération. Les items déjà présents ne sont pas dupliqués. Leur quantité est augmentée seulement lorsque le modèle en demande davantage.
+
+### Publier dans la bibliothèque partagée
+
+Cochez **Publier dans la bibliothèque partagée** pour créer une version publique sécurisée. Utilisez **Mettre à jour la version publiée** après une modification que vous souhaitez rendre visible. Décochez la case pour retirer la publication; les copies déjà créées dans d’autres familles demeurent intactes.
 """,
     },
     {
@@ -259,6 +269,32 @@ Les flèches changent l'ordre des ingrédients. Le crayon modifie la quantité o
 ### Ajouter aux besoins
 
 **Ajouter les ingrédients** transfère tous les ingrédients vers les besoins sans créer de doublons.
+
+### Publier dans la bibliothèque partagée
+
+Cochez **Publier dans la bibliothèque partagée** pour publier une copie sécurisée de la recette. La publication n’inclut pas les magasins, notes privées, prix, besoins ou identifiants internes. Une famille qui copie la recette reçoit une version privée et indépendante.
+""",
+    },
+    {
+        "title": "Bibliothèque partagée",
+        "icon": "public",
+        "caption": "Consulter et copier les publications",
+        "keywords": (
+            "bibliothèque partagée publique publier recette liste modèle "
+            "copier famille aperçu recherche"
+        ),
+        "content": """
+### Consulter la bibliothèque
+
+Ouvrez **Bibliothèque partagée** depuis le Portail, les Listes modèles ou les Recettes. Vous pouvez rechercher un nom, un item, un ingrédient ou une catégorie, puis filtrer les recettes et les listes modèles.
+
+### Copier dans votre famille
+
+Utilisez **Consulter et copier** pour voir le contenu avant de le copier. L’application réutilise les items portant exactement le même nom dans votre famille et crée les items manquants. La copie est privée et indépendante : vous pouvez la modifier sans affecter la publication originale.
+
+### Retrait d’une publication
+
+Lorsqu’un auteur décoche la publication, celle-ci disparaît de la bibliothèque. Les copies déjà importées dans les autres familles ne sont jamais supprimées.
 """,
     },
     {
@@ -303,7 +339,7 @@ La page **Données et sauvegarde** permet de choisir une famille et un format :
 - **JSON** : sauvegarde complète restaurable;
 - **CSV** : tableau lisible des items.
 
-Les sauvegardes JSON actuelles incluent les magasins, catégories, notes, items, besoins, listes modèles et recettes.
+Les sauvegardes JSON actuelles incluent les magasins, catégories, notes, items, besoins, listes modèles et recettes. L’état de publication dans la bibliothèque n’est pas restauré automatiquement : après une importation, republiez volontairement les contenus désirés.
 
 ### Importer
 

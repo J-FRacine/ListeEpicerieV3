@@ -62,6 +62,14 @@ ACTION_TEXT = {
         "a supprimé définitivement le magasin"
     ),
     "backup_imported": "a importé une sauvegarde",
+    "template_created": "a créé la liste modèle",
+    "template_updated": "a modifié la liste modèle",
+    "template_deleted": "a supprimé la liste modèle",
+    "template_applied": "a ajouté aux besoins la liste modèle",
+    "recipe_created": "a créé la recette",
+    "recipe_updated": "a modifié la recette",
+    "recipe_deleted": "a supprimé la recette",
+    "recipe_applied": "a ajouté aux besoins la recette",
 }
 
 

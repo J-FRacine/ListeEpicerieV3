@@ -159,6 +159,72 @@ def migrate_grocery_schema(get_connection):
 
             cur.execute(
                 """
+                CREATE TABLE IF NOT EXISTS grocery_templates (
+                    id SERIAL PRIMARY KEY,
+                    family_id INTEGER NOT NULL
+                        REFERENCES families(id)
+                        ON DELETE CASCADE,
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    created_by_user_id INTEGER
+                        REFERENCES users(id)
+                        ON DELETE SET NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+
+                CREATE TABLE IF NOT EXISTS grocery_template_items (
+                    id BIGSERIAL PRIMARY KEY,
+                    template_id INTEGER NOT NULL
+                        REFERENCES grocery_templates(id)
+                        ON DELETE CASCADE,
+                    item_id INTEGER NOT NULL
+                        REFERENCES items(id)
+                        ON DELETE CASCADE,
+                    quantity INTEGER NOT NULL DEFAULT 1
+                        CHECK (quantity >= 1),
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE (template_id, item_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS grocery_recipes (
+                    id SERIAL PRIMARY KEY,
+                    family_id INTEGER NOT NULL
+                        REFERENCES families(id)
+                        ON DELETE CASCADE,
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    instructions TEXT NOT NULL DEFAULT '',
+                    servings INTEGER NOT NULL DEFAULT 4
+                        CHECK (servings >= 1),
+                    created_by_user_id INTEGER
+                        REFERENCES users(id)
+                        ON DELETE SET NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+
+                CREATE TABLE IF NOT EXISTS grocery_recipe_ingredients (
+                    id BIGSERIAL PRIMARY KEY,
+                    recipe_id INTEGER NOT NULL
+                        REFERENCES grocery_recipes(id)
+                        ON DELETE CASCADE,
+                    item_id INTEGER NOT NULL
+                        REFERENCES items(id)
+                        ON DELETE CASCADE,
+                    quantity INTEGER NOT NULL DEFAULT 1
+                        CHECK (quantity >= 1),
+                    note TEXT NOT NULL DEFAULT '',
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE (recipe_id, item_id)
+                );
+                """
+            )
+
+            cur.execute(
+                """
                 DROP INDEX IF EXISTS categories_family_name_unique;
 
                 CREATE UNIQUE INDEX IF NOT EXISTS
@@ -187,6 +253,36 @@ def migrate_grocery_schema(get_connection):
 
                 CREATE INDEX IF NOT EXISTS activity_log_family_created_idx
                 ON activity_log (family_id, created_at DESC);
+
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                    grocery_templates_family_name_unique
+                ON grocery_templates (
+                    family_id,
+                    LOWER(BTRIM(name))
+                );
+
+                CREATE INDEX IF NOT EXISTS
+                    grocery_template_items_template_order_idx
+                ON grocery_template_items (
+                    template_id,
+                    sort_order,
+                    id
+                );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                    grocery_recipes_family_name_unique
+                ON grocery_recipes (
+                    family_id,
+                    LOWER(BTRIM(name))
+                );
+
+                CREATE INDEX IF NOT EXISTS
+                    grocery_recipe_ingredients_recipe_order_idx
+                ON grocery_recipe_ingredients (
+                    recipe_id,
+                    sort_order,
+                    id
+                );
                 """
             )
 

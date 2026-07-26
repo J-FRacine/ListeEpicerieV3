@@ -17,8 +17,8 @@ from utils import ensure_family_selected
 
 
 BACKUP_FORMAT = "jf-apps-liste-epicerie"
-BACKUP_VERSION = 2
-SUPPORTED_BACKUP_VERSIONS = {1, 2}
+BACKUP_VERSION = 3
+SUPPORTED_BACKUP_VERSIONS = {1, 2, 3}
 
 
 def _safe_filename(value):
@@ -63,6 +63,12 @@ def _validate_backup_document(document):
 
     if not isinstance(data.get("items", []), list):
         raise ValueError("La liste des items est invalide.")
+
+    if not isinstance(data.get("templates", []), list):
+        raise ValueError("La liste des listes modèles est invalide.")
+
+    if not isinstance(data.get("recipes", []), list):
+        raise ValueError("La liste des recettes est invalide.")
 
     return data
 
@@ -204,8 +210,8 @@ def backup_panel():
             ).classes("w-40")
 
         format_explanation = ui.label(
-            "JSON : sauvegarde complète et réimportable, "
-            "incluant magasins, notes et ordre personnalisé."
+            "JSON : sauvegarde complète et réimportable, incluant "
+            "les listes modèles et les recettes."
         ).classes("text-xs text-gray-500")
 
         def update_format_explanation():
@@ -215,7 +221,7 @@ def backup_panel():
                 if export_format_input.value == "CSV"
                 else (
                     "JSON : sauvegarde complète et réimportable, "
-                    "incluant magasins, notes et ordre personnalisé."
+                    "incluant les listes modèles et les recettes."
                 )
             )
 
@@ -318,7 +324,8 @@ def backup_panel():
 
         replacement_confirmation = ui.checkbox(
             "Je comprends que le mode Remplacer effacera les "
-            "magasins, catégories et items actuels de cette famille."
+            "magasins, catégories, items, listes modèles et recettes "
+            "actuels de cette famille."
         ).classes("mt-2")
 
         async def import_data(event):
@@ -380,16 +387,32 @@ def backup_panel():
                 message = (
                     "Importation terminée : "
                     f"{result['stores_created']} magasin(s), "
-                    f"{result['categories_created']} catégorie(s) et "
-                    f"{result['items_created']} item(s) restauré(s)."
+                    f"{result['categories_created']} catégorie(s), "
+                    f"{result['items_created']} item(s), "
+                    f"{result['templates_created']} liste(s) modèle(s) et "
+                    f"{result['recipes_created']} recette(s) restauré(s)."
                 )
             else:
                 message = (
                     "Fusion terminée : "
-                    f"{result['stores_created']} magasin(s) créé(s), "
-                    f"{result['categories_created']} catégorie(s) créée(s), "
+                    f"{result['stores_created']} magasin(s), "
+                    f"{result['categories_created']} catégorie(s), "
                     f"{result['items_created']} item(s) ajouté(s), "
-                    f"{result['items_updated']} item(s) mis à jour."
+                    f"{result['items_updated']} item(s) mis à jour, "
+                    f"{result['templates_created']} liste(s) modèle(s) créée(s), "
+                    f"{result['templates_updated']} mise(s) à jour, "
+                    f"{result['recipes_created']} recette(s) créée(s) et "
+                    f"{result['recipes_updated']} mise(s) à jour."
+                )
+
+            skipped = (
+                result.get("template_lines_skipped", 0)
+                + result.get("recipe_lines_skipped", 0)
+            )
+            if skipped:
+                message += (
+                    f" {skipped} référence(s) vers des items introuvables "
+                    "ont été ignorée(s)."
                 )
 
             ui.notify(
@@ -409,6 +432,6 @@ def backup_panel():
         ).classes("w-full mt-3")
 
         ui.label(
-            "Les sauvegardes JSON des versions 1 et 2 sont acceptées. "
+            "Les sauvegardes JSON des versions 1, 2 et 3 sont acceptées. "
             "Le format CSV sert seulement à la consultation dans Excel."
         ).classes("text-xs text-gray-500 mt-2")

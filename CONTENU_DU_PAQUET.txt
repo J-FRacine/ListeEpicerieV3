@@ -1,28 +1,17 @@
-Ce paquet contient des fichiers complets prêts à remplacer ceux du dépôt.
+CONTENU DU PAQUET
 
-Remplacements et nouveaux modules :
+Fichiers complets prêts à remplacer :
 - app.py
-- backup.py
-- categories.py
-- db.py
-- items.py
-- needs.py
-- shopping.py
 - activity.py
-- grocery_schema.py
-- grocery_common.py
-- grocery_categories.py
-- grocery_items.py
+- backup.py
+- db.py
 - grocery_backup.py
+- grocery_schema.py
 
-Fichiers PWA conservés dans le paquet :
-- pwa.py
-- manifest.webmanifest
-- service-worker.js
-- offline.html
-- logo_jf.png
-- pwa-icon-192.png
-- pwa-icon-512.png
-- pwa-icon-maskable-512.png
-- apple-touch-icon.png
-- favicon-64.png
+Nouveaux modules :
+- grocery_planning.py
+- templates.py
+- recipes.py
+
+Documentation :
+- LIRE_AVANT_INSTALLATION.txt

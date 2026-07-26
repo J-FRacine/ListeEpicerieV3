@@ -28,11 +28,13 @@ from families import families_panel
 from items import items_panel
 from maintenance import maintenance_panel
 from needs import needs_panel
+from recipes import recipes_panel
 from pwa import (
     configure_pwa,
     request_pwa_install,
 )
 from shopping import shopping_panel
+from templates import templates_panel
 from state import (
     get_current_family_id,
     set_current_family_id,
@@ -46,6 +48,8 @@ VALID_APP_TABS = {
     "items",
     "besoins",
     "categories",
+    "modeles",
+    "recettes",
     "donnees",
     "courses",
 }
@@ -64,6 +68,20 @@ MAINTENANCE_TABS = {
     "maintenance",
     "entretien",
     "diagnostic",
+}
+TEMPLATE_TABS = {
+    "modeles",
+    "modèles",
+    "modele",
+    "modèle",
+    "templates",
+    "listes-modeles",
+    "listes_modèles",
+}
+RECIPE_TABS = {
+    "recettes",
+    "recette",
+    "recipes",
 }
 BACKUP_TABS = {
     "donnees",
@@ -974,6 +992,19 @@ def show_portal(user):
             )
 
             portal_action_card(
+                title="Modèles et recettes",
+                description=(
+                    "Réutilisez des listes préparées et ajoutez les "
+                    "ingrédients de vos recettes aux besoins."
+                ),
+                icon="menu_book",
+                action_label="Planifier",
+                on_click=lambda: ui.navigate.to(
+                    "/?tab=modeles"
+                ),
+            )
+
+            portal_action_card(
                 title="Activité et corbeille",
                 description=(
                     "Consultez les dernières actions et restaurez "
@@ -1152,6 +1183,19 @@ def application_header(active_tab):
             with ui.row().classes(
                 "items-center gap-0"
             ):
+                ui.button(
+                    icon="menu_book",
+                    on_click=lambda: ui.navigate.to(
+                        "/?tab=modeles"
+                    ),
+                ).props(
+                    "flat round color=primary"
+                    if active_tab in {"modeles", "recettes"}
+                    else "flat round"
+                ).tooltip(
+                    "Listes modèles et recettes"
+                )
+
                 ui.button(
                     icon="history",
                     on_click=lambda: ui.navigate.to(
@@ -1340,6 +1384,12 @@ def index(tab="portail"):
     if normalized_tab in BACKUP_TABS:
         normalized_tab = "donnees"
 
+    if normalized_tab in TEMPLATE_TABS:
+        normalized_tab = "modeles"
+
+    if normalized_tab in RECIPE_TABS:
+        normalized_tab = "recettes"
+
     if normalized_tab in SHOPPING_TABS:
         normalized_tab = "courses"
 
@@ -1387,6 +1437,10 @@ def index(tab="portail"):
                 needs_panel()
             elif normalized_tab == "categories":
                 categories_panel()
+            elif normalized_tab == "modeles":
+                templates_panel()
+            elif normalized_tab == "recettes":
+                recipes_panel()
             elif normalized_tab == "donnees":
                 backup_panel()
 

@@ -722,6 +722,11 @@ def update_feedback_by_manager(
                 status_changed
                 or reply_changed
             )
+            reply_timestamp_changed = bool(
+                reply_changed
+                and normalized_reply
+                is not None
+            )
 
             cur.execute(
                 """
@@ -741,7 +746,6 @@ def update_feedback_by_manager(
                     replied_at = (
                         CASE
                             WHEN %s
-                                 AND %s IS NOT NULL
                             THEN NOW()
                             ELSE replied_at
                         END
@@ -764,8 +768,7 @@ def update_feedback_by_manager(
                     normalized_reply,
                     manager_user_id,
                     user_has_update,
-                    reply_changed,
-                    normalized_reply,
+                    reply_timestamp_changed,
                     normalized_status,
                     feedback_id,
                 ),

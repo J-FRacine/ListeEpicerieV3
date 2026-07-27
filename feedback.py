@@ -983,7 +983,8 @@ def feedback_panel(
                                         "Consulter",
                                         icon="visibility",
                                         on_click=(
-                                            lambda selected=row[
+                                            lambda _event,
+                                            selected=row[
                                                 "id"
                                             ]:
                                             open_user_detail(
@@ -1003,7 +1004,8 @@ def feedback_panel(
                                         ui.button(
                                             icon="edit",
                                             on_click=(
-                                                lambda selected=row[
+                                                lambda _event,
+                                                selected=row[
                                                     "id"
                                                 ]:
                                                 open_user_edit(
@@ -1538,7 +1540,8 @@ def feedback_panel(
                                         "Gérer",
                                         icon="edit_note",
                                         on_click=(
-                                            lambda selected=row[
+                                            lambda _event,
+                                            selected=row[
                                                 "id"
                                             ]:
                                             open_admin_detail(

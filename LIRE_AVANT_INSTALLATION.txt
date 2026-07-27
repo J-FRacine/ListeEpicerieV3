@@ -1,0 +1,26 @@
+CORRECTIF — BOUTONS DES COMMENTAIRES
+
+Fichier à remplacer à la racine du dépôt GitHub :
+- feedback.py
+
+PROBLÈME CORRIGÉ
+Le bouton « Gérer » recevait l’événement de clic à la place
+de l’identifiant numérique du commentaire. La fenêtre de gestion
+ne pouvait donc pas charger le commentaire sélectionné.
+
+Le même correctif a été appliqué préventivement aux boutons :
+- Consulter;
+- Modifier;
+- Gérer.
+
+INSTALLATION
+1. GitHub > Add file > Upload files.
+2. Déposer feedback.py.
+3. Faire Commit changes.
+4. Attendre le déploiement Canner.
+5. Actualiser complètement ou fermer et rouvrir la PWA.
+6. Ouvrir Administration > Commentaires reçus.
+7. Cliquer sur « Gérer ».
+
+Aucun changement de base de données.
+Aucune dépendance supplémentaire.

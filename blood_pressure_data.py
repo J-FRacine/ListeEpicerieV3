@@ -62,6 +62,36 @@ def init_blood_pressure_schema():
                 """
             )
 
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS
+                blood_pressure_reminder_settings (
+                    user_id INTEGER PRIMARY KEY
+                        REFERENCES users(id)
+                        ON DELETE CASCADE,
+                    enabled BOOLEAN NOT NULL
+                        DEFAULT FALSE,
+                    target_per_day SMALLINT NOT NULL
+                        DEFAULT 2
+                        CHECK (
+                            target_per_day
+                            BETWEEN 1 AND 10
+                        ),
+                    start_date DATE,
+                    end_date DATE,
+                    created_at TIMESTAMPTZ
+                        NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ
+                        NOT NULL DEFAULT NOW(),
+                    CHECK (
+                        start_date IS NULL
+                        OR end_date IS NULL
+                        OR end_date >= start_date
+                    )
+                );
+                """
+            )
+
             conn.commit()
 
 
@@ -418,3 +448,251 @@ def count_blood_pressure_readings_on_date(
             return int(
                 cur.fetchone()["total"]
             )
+
+
+
+def _normalize_target_per_day(
+    value,
+) -> int:
+    return _normalize_integer(
+        value,
+        label=(
+            "Le nombre de mesures "
+            "par jour"
+        ),
+        minimum=1,
+        maximum=10,
+    )
+
+
+def get_blood_pressure_reminder_settings(
+    user_id,
+):
+    """Retourne les paramètres privés de rappel."""
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    enabled,
+                    target_per_day,
+                    start_date,
+                    end_date,
+                    created_at,
+                    updated_at
+                FROM blood_pressure_reminder_settings
+                WHERE user_id = %s;
+                """,
+                (user_id,),
+            )
+
+            settings = cur.fetchone()
+
+            if settings is None:
+                return {
+                    "enabled": False,
+                    "target_per_day": 2,
+                    "start_date": None,
+                    "end_date": None,
+                    "created_at": None,
+                    "updated_at": None,
+                }
+
+            return settings
+
+
+def save_blood_pressure_reminder_settings(
+    user_id,
+    *,
+    enabled,
+    target_per_day,
+    start_date,
+    end_date,
+):
+    """Enregistre la période et l’objectif quotidien."""
+
+    target = _normalize_target_per_day(
+        target_per_day
+    )
+
+    normalized_start = (
+        _normalize_date(
+            start_date
+        )
+        if start_date
+        else None
+    )
+    normalized_end = (
+        _normalize_date(
+            end_date
+        )
+        if end_date
+        else None
+    )
+
+    if normalized_start is None:
+        raise ValueError(
+            "La date de début est obligatoire."
+        )
+
+    if normalized_end is None:
+        raise ValueError(
+            "La date de fin est obligatoire."
+        )
+
+    if normalized_end < normalized_start:
+        raise ValueError(
+            "La date de fin doit être "
+            "égale ou postérieure à "
+            "la date de début."
+        )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO
+                blood_pressure_reminder_settings (
+                    user_id,
+                    enabled,
+                    target_per_day,
+                    start_date,
+                    end_date,
+                    updated_at
+                )
+                VALUES (
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    NOW()
+                )
+                ON CONFLICT (user_id)
+                DO UPDATE SET
+                    enabled = EXCLUDED.enabled,
+                    target_per_day =
+                        EXCLUDED.target_per_day,
+                    start_date =
+                        EXCLUDED.start_date,
+                    end_date =
+                        EXCLUDED.end_date,
+                    updated_at = NOW();
+                """,
+                (
+                    user_id,
+                    bool(enabled),
+                    target,
+                    normalized_start,
+                    normalized_end,
+                ),
+            )
+
+            conn.commit()
+
+
+def get_blood_pressure_reminder_status(
+    user_id,
+    on_date,
+):
+    """Calcule le nombre de mesures restantes à une date."""
+
+    normalized_date = _normalize_date(
+        on_date
+    )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    settings.enabled,
+                    settings.target_per_day,
+                    settings.start_date,
+                    settings.end_date,
+                    (
+                        SELECT COUNT(*)
+                        FROM blood_pressure_readings
+                        AS reading
+                        WHERE reading.user_id =
+                            settings.user_id
+                          AND reading.measured_date = %s
+                    ) AS completed_count
+                FROM blood_pressure_reminder_settings
+                AS settings
+                WHERE settings.user_id = %s;
+                """,
+                (
+                    normalized_date,
+                    user_id,
+                ),
+            )
+
+            settings = cur.fetchone()
+
+            if settings is None:
+                return {
+                    "configured": False,
+                    "enabled": False,
+                    "active": False,
+                    "date": normalized_date,
+                    "target_per_day": 2,
+                    "completed_count": 0,
+                    "remaining_count": 0,
+                    "start_date": None,
+                    "end_date": None,
+                }
+
+            active = bool(
+                settings["enabled"]
+                and settings["start_date"]
+                and settings["end_date"]
+                and (
+                    settings["start_date"]
+                    <= normalized_date
+                    <= settings["end_date"]
+                )
+            )
+
+            completed_count = int(
+                settings["completed_count"]
+                or 0
+            )
+            target_per_day = int(
+                settings["target_per_day"]
+            )
+
+            remaining_count = (
+                max(
+                    target_per_day
+                    - completed_count,
+                    0,
+                )
+                if active
+                else 0
+            )
+
+            return {
+                "configured": True,
+                "enabled": bool(
+                    settings["enabled"]
+                ),
+                "active": active,
+                "date": normalized_date,
+                "target_per_day": (
+                    target_per_day
+                ),
+                "completed_count": (
+                    completed_count
+                ),
+                "remaining_count": (
+                    remaining_count
+                ),
+                "start_date": (
+                    settings["start_date"]
+                ),
+                "end_date": (
+                    settings["end_date"]
+                ),
+            }

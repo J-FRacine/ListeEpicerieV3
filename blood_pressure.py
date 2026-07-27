@@ -15,7 +15,10 @@ from blood_pressure_data import (
     count_blood_pressure_readings_on_date,
     create_blood_pressure_reading,
     delete_blood_pressure_reading,
+    get_blood_pressure_reminder_settings,
+    get_blood_pressure_reminder_status,
     list_blood_pressure_readings,
+    save_blood_pressure_reminder_settings,
     update_blood_pressure_reading,
 )
 from blood_pressure_pdf import (
@@ -83,6 +86,32 @@ BLOOD_PRESSURE_CSS = r"""
     border-radius: 12px;
     background: rgba(189, 149, 85, 0.10);
 }
+
+.jf-pressure-portal-placeholder {
+    width: 100%;
+}
+
+.jf-pressure-portal-alert {
+    width: 100%;
+    margin-top: 0.45rem;
+    padding: 0.8rem 0.95rem;
+    border: 1px solid rgba(191, 120, 18, 0.30);
+    border-left: 5px solid #bf7812;
+    border-radius: 14px;
+    background: rgba(255, 244, 219, 0.92);
+}
+
+.body--dark .jf-pressure-portal-alert {
+    background: rgba(111, 72, 18, 0.34);
+}
+
+.jf-pressure-reminder-preview {
+    width: 100%;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 14px;
+    background: var(--jf-surface);
+}
 """
 
 ui.add_css(
@@ -148,7 +177,7 @@ def _safe_filename_part(value) -> str:
     )
 
 
-async def _device_date_time():
+async def device_date_time():
     try:
         result = await ui.run_javascript(
             """
@@ -192,6 +221,119 @@ async def _device_date_time():
     )
 
 
+
+def blood_pressure_portal_reminder(
+    user_id,
+):
+    """Affiche l’avis du jour dans la carte d’accueil du Portail."""
+
+    placeholder = ui.column().classes(
+        "jf-pressure-portal-placeholder gap-0"
+    )
+
+    async def load_status():
+        try:
+            (
+                device_date,
+                _,
+            ) = await device_date_time()
+
+            status = (
+                get_blood_pressure_reminder_status(
+                    user_id,
+                    device_date,
+                )
+            )
+        except Exception:
+            return
+
+        placeholder.clear()
+
+        if (
+            not status["active"]
+            or status["remaining_count"] <= 0
+        ):
+            return
+
+        remaining = status[
+            "remaining_count"
+        ]
+        target = status[
+            "target_per_day"
+        ]
+        completed = status[
+            "completed_count"
+        ]
+
+        if remaining == 1:
+            main_text = (
+                "Il reste 1 mesure de pression "
+                "à prendre aujourd’hui."
+            )
+        else:
+            main_text = (
+                f"Il reste {remaining} mesures "
+                "de pression à prendre aujourd’hui."
+            )
+
+        with placeholder:
+            with ui.element("div").classes(
+                "jf-pressure-portal-alert"
+            ):
+                with ui.row().classes(
+                    "w-full items-center "
+                    "justify-between gap-3 flex-wrap"
+                ):
+                    with ui.row().classes(
+                        "items-start gap-3 flex-nowrap "
+                        "grow min-w-0"
+                    ):
+                        ui.icon(
+                            "monitor_heart"
+                        ).classes(
+                            "text-3xl text-warning shrink-0"
+                        )
+
+                        with ui.column().classes(
+                            "gap-0 grow min-w-0"
+                        ):
+                            ui.label(
+                                "Journal de pression"
+                            ).classes(
+                                "font-bold"
+                            )
+                            ui.label(
+                                main_text
+                            ).classes(
+                                "text-sm"
+                            )
+                            ui.label(
+                                (
+                                    f"{completed} sur {target} "
+                                    "mesure(s) enregistrée(s) "
+                                    "pour aujourd’hui."
+                                )
+                            ).classes(
+                                "text-xs jf-muted"
+                            )
+
+                    ui.button(
+                        "Saisir maintenant",
+                        icon="add_circle",
+                        on_click=lambda: ui.navigate.to(
+                            "/?tab=pression"
+                        ),
+                    ).props(
+                        "outline color=warning"
+                    )
+
+    ui.timer(
+        0.15,
+        load_status,
+        once=True,
+    )
+
+
 def blood_pressure_panel(
     current_user,
 ):
@@ -201,6 +343,24 @@ def blood_pressure_panel(
         today_server
         - timedelta(
             days=30
+        )
+    )
+    reminder_settings = (
+        get_blood_pressure_reminder_settings(
+            user_id
+        )
+    )
+    reminder_default_start = (
+        reminder_settings["start_date"]
+        or today_server
+    )
+    reminder_default_end = (
+        reminder_settings["end_date"]
+        or (
+            today_server
+            + timedelta(
+                days=13
+            )
         )
     )
 
@@ -262,6 +422,10 @@ def blood_pressure_panel(
         report_tab = ui.tab(
             "Rapport PDF",
             icon="picture_as_pdf",
+        )
+        reminder_tab = ui.tab(
+            "Rappel",
+            icon="notifications_active",
         )
 
     with ui.tab_panels(
@@ -422,7 +586,7 @@ def blood_pressure_panel(
                     (
                         device_date,
                         device_time,
-                    ) = await _device_date_time()
+                    ) = await device_date_time()
 
                     measured_date_input.value = (
                         device_date
@@ -1249,3 +1413,261 @@ def blood_pressure_panel(
                 ).classes(
                     "text-xs jf-muted"
                 )
+
+        # -------------------------------------------------
+        # RAPPEL DU PORTAIL
+        # -------------------------------------------------
+        with ui.tab_panel(
+            reminder_tab
+        ).classes(
+            "px-0"
+        ):
+            with ui.card().classes(
+                "w-full p-5"
+            ):
+                ui.label(
+                    "Rappel sur le Portail"
+                ).classes(
+                    "text-xl font-bold"
+                )
+                ui.label(
+                    "Définissez combien de mesures doivent "
+                    "être prises chaque jour et pendant "
+                    "quel intervalle de dates."
+                ).classes(
+                    "text-sm jf-muted"
+                )
+
+                reminder_enabled_input = ui.checkbox(
+                    (
+                        "Afficher un avis sur le Portail "
+                        "lorsqu’il reste des mesures à prendre"
+                    ),
+                    value=bool(
+                        reminder_settings[
+                            "enabled"
+                        ]
+                    ),
+                )
+
+                with ui.element(
+                    "div"
+                ).classes(
+                    "jf-pressure-grid mt-2"
+                ):
+                    reminder_target_input = ui.number(
+                        label=(
+                            "Nombre de mesures par jour"
+                        ),
+                        value=reminder_settings[
+                            "target_per_day"
+                        ],
+                        min=1,
+                        max=10,
+                        step=1,
+                    ).props(
+                        "inputmode=numeric"
+                    ).classes(
+                        "w-full"
+                    )
+
+                    reminder_start_input = ui.input(
+                        label="Date de début",
+                        value=(
+                            reminder_default_start
+                            .isoformat()
+                        ),
+                    ).props(
+                        "type=date"
+                    ).classes(
+                        "w-full"
+                    )
+
+                    reminder_end_input = ui.input(
+                        label="Date de fin",
+                        value=(
+                            reminder_default_end
+                            .isoformat()
+                        ),
+                    ).props(
+                        "type=date"
+                    ).classes(
+                        "w-full"
+                    )
+
+                ui.label(
+                    "Exemple : 2 mesures par jour du "
+                    "1er août au 14 août. L’avis disparaît "
+                    "automatiquement lorsque le nombre prévu "
+                    "est atteint ou lorsque la période est terminée."
+                ).classes(
+                    "text-xs jf-muted"
+                )
+
+                preview_container = ui.column().classes(
+                    "w-full gap-0 mt-2"
+                )
+
+                async def refresh_reminder_preview():
+                    try:
+                        (
+                            device_date,
+                            _,
+                        ) = await device_date_time()
+
+                        status = (
+                            get_blood_pressure_reminder_status(
+                                user_id,
+                                device_date,
+                            )
+                        )
+                    except Exception:
+                        return
+
+                    preview_container.clear()
+
+                    with preview_container:
+                        with ui.element(
+                            "div"
+                        ).classes(
+                            "jf-pressure-reminder-preview"
+                        ):
+                            ui.label(
+                                "État du rappel aujourd’hui"
+                            ).classes(
+                                "font-bold"
+                            )
+
+                            if not status[
+                                "configured"
+                            ]:
+                                ui.label(
+                                    "Aucun rappel n’est "
+                                    "encore enregistré."
+                                ).classes(
+                                    "text-sm jf-muted"
+                                )
+                            elif not status[
+                                "enabled"
+                            ]:
+                                ui.label(
+                                    "Le rappel est désactivé."
+                                ).classes(
+                                    "text-sm jf-muted"
+                                )
+                            elif not status[
+                                "active"
+                            ]:
+                                ui.label(
+                                    "La date d’aujourd’hui "
+                                    "se trouve en dehors "
+                                    "de l’intervalle configuré."
+                                ).classes(
+                                    "text-sm jf-muted"
+                                )
+                            elif status[
+                                "remaining_count"
+                            ] == 0:
+                                ui.label(
+                                    (
+                                        "Objectif atteint : "
+                                        f"{status['completed_count']} "
+                                        "mesure(s) enregistrée(s)."
+                                    )
+                                ).classes(
+                                    "text-sm text-positive"
+                                )
+                            else:
+                                ui.label(
+                                    (
+                                        f"{status['remaining_count']} "
+                                        "mesure(s) reste(nt) "
+                                        "à prendre aujourd’hui."
+                                    )
+                                ).classes(
+                                    "text-sm text-warning"
+                                )
+                                ui.label(
+                                    (
+                                        f"{status['completed_count']} "
+                                        f"sur {status['target_per_day']} "
+                                        "mesure(s) enregistrée(s)."
+                                    )
+                                ).classes(
+                                    "text-xs jf-muted"
+                                )
+
+                async def save_reminder():
+                    try:
+                        save_blood_pressure_reminder_settings(
+                            user_id,
+                            enabled=(
+                                reminder_enabled_input.value
+                            ),
+                            target_per_day=(
+                                reminder_target_input.value
+                            ),
+                            start_date=(
+                                reminder_start_input.value
+                            ),
+                            end_date=(
+                                reminder_end_input.value
+                            ),
+                        )
+                    except ValueError as error:
+                        ui.notify(
+                            str(error),
+                            type="warning",
+                        )
+                        return
+                    except Exception:
+                        ui.notify(
+                            "Le rappel n’a pas pu "
+                            "être enregistré.",
+                            type="negative",
+                        )
+                        return
+
+                    ui.notify(
+                        "Paramètres du rappel enregistrés.",
+                        type="positive",
+                    )
+
+                    await refresh_reminder_preview()
+
+                with ui.row().classes(
+                    "w-full gap-2 flex-wrap mt-2"
+                ):
+                    ui.button(
+                        "Enregistrer le rappel",
+                        icon="save",
+                        on_click=save_reminder,
+                    ).props(
+                        "color=primary"
+                    )
+
+                    ui.button(
+                        "Actualiser l’état",
+                        icon="refresh",
+                        on_click=(
+                            refresh_reminder_preview
+                        ),
+                    ).props(
+                        "outline color=primary"
+                    )
+
+                ui.label(
+                    "Cet avis apparaît seulement dans la "
+                    "carte de bienvenue du Portail. "
+                    "Il ne s’agit pas d’une notification "
+                    "poussée sur le téléphone."
+                ).classes(
+                    "text-xs jf-muted"
+                )
+
+                ui.timer(
+                    0.15,
+                    refresh_reminder_preview,
+                    once=True,
+                )
+

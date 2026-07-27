@@ -21,7 +21,10 @@ from auth import (
     set_authenticated_user,
 )
 from backup import backup_panel
-from blood_pressure import blood_pressure_panel
+from blood_pressure import (
+    blood_pressure_panel,
+    blood_pressure_portal_reminder,
+)
 from blood_pressure_data import (
     init_blood_pressure_schema,
 )
@@ -1006,6 +1009,12 @@ def portal_section(
 def show_portal(user):
     apply_theme()
 
+    allowed_app_keys = (
+        get_user_app_access(
+            user["id"]
+        )
+    )
+
     with page_container():
         with ui.card().classes("jf-hero-card"):
             with ui.row().classes(
@@ -1058,6 +1067,14 @@ def show_portal(user):
                                     "Administrateur"
                                 )
 
+                    if (
+                        "blood_pressure"
+                        in allowed_app_keys
+                    ):
+                        blood_pressure_portal_reminder(
+                            user["id"]
+                        )
+
             with ui.row().classes(
                 "w-full justify-end gap-1 mt-2 flex-wrap"
             ):
@@ -1081,12 +1098,6 @@ def show_portal(user):
                 ).props("flat round").tooltip(
                     "Déconnexion"
                 )
-
-        allowed_app_keys = (
-            get_user_app_access(
-                user["id"]
-            )
-        )
 
         accessible_families = get_accessible_families(
             user["id"]

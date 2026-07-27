@@ -138,6 +138,23 @@ Dans l’onglet **Saisie** :
 
 Il est possible d’enregistrer plus de deux mesures dans une même journée. La phase 1 ne calcule aucune moyenne et ne présente aucun graphique.
 
+### Rappel sur le Portail
+
+L’onglet **Rappel** permet de définir :
+
+- le nombre de mesures à prendre chaque jour;
+- une date de début;
+- une date de fin;
+- l’activation ou la désactivation de l’avis.
+
+Pendant cette période, la carte de bienvenue du **Portail** affiche un avis lorsqu’il reste des mesures à prendre aujourd’hui. L’avis indique combien de mesures sont déjà enregistrées et combien il en reste.
+
+Exemple : avec un objectif de deux mesures par jour, si une seule mesure a été enregistrée aujourd’hui, le Portail indique qu’il reste une mesure à prendre.
+
+L’avis disparaît automatiquement lorsque l’objectif quotidien est atteint, lorsque le rappel est désactivé ou lorsque la date se trouve hors de l’intervalle choisi.
+
+Ce rappel est seulement un avis visuel dans le Portail. Il ne produit pas de notification poussée sur le téléphone.
+
 ### Historique
 
 L’onglet **Historique** permet de choisir une plage de dates, puis de consulter, modifier ou supprimer les mesures du compte connecté.

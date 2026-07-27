@@ -31,10 +31,11 @@ from rpg_character_rules import (
     ability_modifier_for_character,
     armor_class_total,
     attack_total,
+    cmb_total,
+    cmd_total,
     flat_footed_armor_class,
     format_modifier,
     format_number,
-    grapple_total,
     initiative_total,
     save_total,
     skill_total,
@@ -110,6 +111,42 @@ RPG_CSS = r"""
 
 .jf-rpg-ravenloft {
     border-left: 5px solid #65508f;
+}
+
+.jf-rpg-skill-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    width: 100%;
+}
+
+.jf-rpg-skill-badge {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--jf-navy);
+    background: var(--jf-blue-soft);
+}
+
+.jf-rpg-skill-badge-owned {
+    color: #156c47;
+    background: rgba(33, 145, 92, 0.13);
+}
+
+.jf-rpg-skill-badge-class {
+    color: #65420e;
+    background: rgba(189, 149, 85, 0.17);
+}
+
+.jf-rpg-skill-filter-summary {
+    width: 100%;
+    padding: 0.7rem 0.85rem;
+    border-radius: 12px;
+    background: rgba(34, 70, 122, 0.07);
 }
 
 .jf-rpg-help {
@@ -919,14 +956,37 @@ def _combat_panel(
             ).classes(
                 "w-full"
             )
-            grapple_misc_input = ui.number(
-                label="Divers - Lutte",
+            cmb_misc_input = ui.number(
+                label="Divers - BMO / CMB",
                 value=character[
-                    "grapple_misc_modifier"
+                    "cmb_misc_modifier"
                 ],
                 step=1,
             ).classes(
                 "w-full"
+            )
+            cmd_misc_input = ui.number(
+                label="Divers - DMD / CMD",
+                value=character[
+                    "cmd_misc_modifier"
+                ],
+                step=1,
+            ).classes(
+                "w-full"
+            )
+
+        with ui.element("div").classes(
+            "jf-rpg-help mt-3"
+        ):
+            ui.label(
+                "Pathfinder : BMO/CMB sert à effectuer une "
+                "manœuvre de combat; DMD/CMD est la difficulté "
+                "à atteindre pour vous imposer une manœuvre. "
+                "Le bonus de déviation est ajouté automatiquement "
+                "au DMD/CMD. Ajoutez les autres bonus applicables "
+                "dans « Divers - DMD / CMD »."
+            ).classes(
+                "text-sm"
             )
 
         @ui.refreshable
@@ -982,8 +1042,14 @@ def _combat_panel(
                     "initiative_misc_modifier": (
                         initiative_misc_input.value
                     ),
+                    "cmb_misc_modifier": (
+                        cmb_misc_input.value
+                    ),
+                    "cmd_misc_modifier": (
+                        cmd_misc_input.value
+                    ),
                     "grapple_misc_modifier": (
-                        grapple_misc_input.value
+                        cmb_misc_input.value
                     ),
                 }
             )
@@ -1022,9 +1088,17 @@ def _combat_panel(
                             ),
                         ),
                         (
-                            "Lutte",
+                            "BMO / CMB",
                             format_modifier(
-                                grapple_total(
+                                cmb_total(
+                                    draft
+                                )
+                            ),
+                        ),
+                        (
+                            "DMD / CMD",
+                            str(
+                                cmd_total(
                                     draft
                                 )
                             ),
@@ -1056,7 +1130,8 @@ def _combat_panel(
             misc_ac_input,
             armor_penalty_input,
             initiative_misc_input,
-            grapple_misc_input,
+            cmb_misc_input,
+            cmd_misc_input,
         ]
 
         for control in preview_controls:
@@ -1120,8 +1195,14 @@ def _combat_panel(
                 "initiative_misc_modifier": (
                     initiative_misc_input.value
                 ),
+                "cmb_misc_modifier": (
+                    cmb_misc_input.value
+                ),
+                "cmd_misc_modifier": (
+                    cmd_misc_input.value
+                ),
                 "grapple_misc_modifier": (
-                    grapple_misc_input.value
+                    cmb_misc_input.value
                 ),
             }
 
@@ -1560,13 +1641,14 @@ def _skills_panel(
             "gap-0"
         ):
             ui.label(
-                "Compétences"
+                "Compétences Pathfinder"
             ).classes(
                 "text-xl font-bold"
             )
             ui.label(
-                "Les rangs peuvent contenir des demi-points. "
-                "La pénalité d’armure est appliquée automatiquement."
+                "Les compétences possédées ont au moins 1 rang. "
+                "Une compétence de classe avec des rangs reçoit "
+                "automatiquement le bonus de +3."
             ).classes(
                 "text-sm jf-muted"
             )
@@ -1598,19 +1680,107 @@ def _skills_panel(
     )
     editors = []
 
-    with ui.column().classes(
-        "w-full gap-3"
+    initial_owned_count = sum(
+        1
+        for skill_row in skills
+        if Decimal(
+            str(
+                skill_row[
+                    "ranks"
+                ]
+                or 0
+            )
+        ) > 0
+    )
+
+    default_filter = (
+        "owned"
+        if initial_owned_count > 0
+        else "all"
+    )
+
+    with ui.card().classes(
+        "w-full p-4"
     ):
+        with ui.row().classes(
+            "w-full items-end gap-3 flex-wrap"
+        ):
+            filter_toggle = ui.toggle(
+                {
+                    "owned": "Mes compétences",
+                    "class": "Compétences de classe",
+                    "unranked": "Sans rang",
+                    "all": "Toutes",
+                },
+                value=default_filter,
+            ).props(
+                "spread no-caps"
+            ).classes(
+                "grow min-w-[260px]"
+            )
+
+            search_input = ui.input(
+                label="Rechercher",
+                placeholder=(
+                    "Ex. Perception"
+                ),
+            ).props(
+                "clearable"
+            ).classes(
+                "grow min-w-[220px]"
+            )
+
+        count_label = ui.label(
+            ""
+        ).classes(
+            "jf-rpg-skill-filter-summary text-sm mt-3"
+        )
+
+        ui.label(
+            "Les rangs Pathfinder sont des nombres entiers. "
+            "Le filtre « Mes compétences » affiche celles "
+            "dans lesquelles au moins 1 rang a été investi."
+        ).classes(
+            "text-xs jf-muted mt-2"
+        )
+
+    empty_message = ui.card().classes(
+        "w-full p-6 items-center text-center"
+    )
+    with empty_message:
+        ui.icon(
+            "filter_alt_off"
+        ).classes(
+            "text-4xl text-gray-400"
+        )
+        empty_title = ui.label(
+            "Aucune compétence dans ce filtre"
+        ).classes(
+            "text-lg font-bold"
+        )
+        empty_detail = ui.label(
+            "Choisissez un autre filtre ou modifiez la recherche."
+        ).classes(
+            "text-sm jf-muted"
+        )
+
+    cards_container = ui.column().classes(
+        "w-full gap-3"
+    )
+
+    with cards_container:
         for skill_row in skills:
-            with ui.element("div").classes(
+            card = ui.element("div").classes(
                 "jf-rpg-skill-card"
-            ):
+            )
+
+            with card:
                 with ui.row().classes(
                     "w-full items-start "
                     "justify-between gap-2 flex-wrap"
                 ):
                     with ui.column().classes(
-                        "gap-0 grow min-w-[180px]"
+                        "gap-1 grow min-w-[180px]"
                     ):
                         name_input = ui.input(
                             label="Compétence",
@@ -1623,42 +1793,36 @@ def _skills_panel(
                             "w-full"
                         )
 
-                        indicators = []
-
-                        if skill_row[
-                            "trained_only"
-                        ]:
-                            indicators.append(
+                        with ui.element("div").classes(
+                            "jf-rpg-skill-badges"
+                        ):
+                            owned_badge = ui.label(
+                                "✓ Possédée"
+                            ).classes(
+                                "jf-rpg-skill-badge "
+                                "jf-rpg-skill-badge-owned"
+                            )
+                            class_badge = ui.label(
+                                "★ Compétence de classe"
+                            ).classes(
+                                "jf-rpg-skill-badge "
+                                "jf-rpg-skill-badge-class"
+                            )
+                            trained_badge = ui.label(
                                 "Formation requise"
+                            ).classes(
+                                "jf-rpg-skill-badge"
                             )
-
-                        if skill_row[
-                            "armor_check_applies"
-                        ]:
-                            indicators.append(
+                            armor_badge = ui.label(
                                 "Pénalité d’armure"
+                            ).classes(
+                                "jf-rpg-skill-badge"
                             )
-
-                        if skill_row[
-                            "double_armor_penalty"
-                        ]:
-                            indicators.append(
-                                "Pénalité doublée"
+                            legacy_badge = ui.label(
+                                "Ancienne compétence 3.5"
+                            ).classes(
+                                "jf-rpg-skill-badge"
                             )
-
-                        ui.label(
-                            (
-                                " · ".join(
-                                    indicators
-                                )
-                                if indicators
-                                else (
-                                    "Utilisation générale"
-                                )
-                            )
-                        ).classes(
-                            "text-xs jf-muted"
-                        )
 
                     total_label = ui.label(
                         format_number(
@@ -1734,7 +1898,7 @@ def _skills_panel(
                         ),
                         min=0,
                         max=999,
-                        step=0.5,
+                        step=1,
                     ).classes(
                         "w-full"
                     )
@@ -1772,26 +1936,46 @@ def _skills_panel(
                         ],
                     )
 
+                editor = {
+                    "row": skill_row,
+                    "container": card,
+                    "name": name_input,
+                    "ability": ability_input,
+                    "ranks": ranks_input,
+                    "misc": misc_input,
+                    "class_skill": class_input,
+                    "trained": trained_input,
+                    "armor": armor_input,
+                    "double": double_input,
+                    "total": total_label,
+                    "owned_badge": owned_badge,
+                    "class_badge": class_badge,
+                    "trained_badge": trained_badge,
+                    "armor_badge": armor_badge,
+                    "legacy_badge": legacy_badge,
+                }
+                editors.append(editor)
+
                 def update_total(
                     event=None,
                     *,
-                    ability_control=ability_input,
-                    ranks_control=ranks_input,
-                    misc_control=misc_input,
-                    armor_control=armor_input,
-                    double_control=double_input,
-                    label_control=total_label,
+                    selected=editor,
                 ):
                     ability_key = (
-                        ability_control.value
+                        selected[
+                            "ability"
+                        ].value
                         or "int"
                     )
-                    total = Decimal(
+                    ranks = Decimal(
                         str(
-                            ranks_control.value
+                            selected[
+                                "ranks"
+                            ].value
                             or 0
                         )
                     )
+                    total = ranks
                     total += Decimal(
                         ability_modifier_for_character(
                             character,
@@ -1800,32 +1984,110 @@ def _skills_panel(
                     )
                     total += Decimal(
                         _as_number(
-                            misc_control.value
+                            selected[
+                                "misc"
+                            ].value
                         )
                     )
 
-                    if armor_control.value:
+                    if (
+                        selected[
+                            "class_skill"
+                        ].value
+                        and ranks > 0
+                    ):
+                        total += Decimal(3)
+
+                    if selected[
+                        "armor"
+                    ].value:
                         penalty = _as_number(
                             character[
                                 "armor_check_penalty"
                             ]
                         )
 
-                        if double_control.value:
+                        if selected[
+                            "double"
+                        ].value:
                             penalty *= 2
 
                         total += Decimal(
                             penalty
                         )
 
-                    label_control.set_text(
-                        format_number(total)
+                    selected[
+                        "total"
+                    ].set_text(
+                        format_number(
+                            total
+                        )
+                    )
+
+                def update_indicators(
+                    event=None,
+                    *,
+                    selected=editor,
+                ):
+                    ranks = Decimal(
+                        str(
+                            selected[
+                                "ranks"
+                            ].value
+                            or 0
+                        )
+                    )
+                    selected[
+                        "owned_badge"
+                    ].set_visibility(
+                        ranks > 0
+                    )
+                    selected[
+                        "class_badge"
+                    ].set_visibility(
+                        bool(
+                            selected[
+                                "class_skill"
+                            ].value
+                        )
+                    )
+                    selected[
+                        "trained_badge"
+                    ].set_visibility(
+                        bool(
+                            selected[
+                                "trained"
+                            ].value
+                        )
+                    )
+                    selected[
+                        "armor_badge"
+                    ].set_visibility(
+                        bool(
+                            selected[
+                                "armor"
+                            ].value
+                        )
+                    )
+                    selected[
+                        "legacy_badge"
+                    ].set_visibility(
+                        (
+                            "ancienne 3.5"
+                            in str(
+                                selected[
+                                    "name"
+                                ].value
+                                or ""
+                            ).lower()
+                        )
                     )
 
                 for control in (
                     ability_input,
                     ranks_input,
                     misc_input,
+                    class_input,
                     armor_input,
                     double_input,
                 ):
@@ -1833,19 +2095,183 @@ def _skills_panel(
                         update_total
                     )
 
-                editors.append(
-                    {
-                        "row": skill_row,
-                        "name": name_input,
-                        "ability": ability_input,
-                        "ranks": ranks_input,
-                        "misc": misc_input,
-                        "class_skill": class_input,
-                        "trained": trained_input,
-                        "armor": armor_input,
-                        "double": double_input,
-                    }
+                for control in (
+                    ranks_input,
+                    class_input,
+                    trained_input,
+                    armor_input,
+                    name_input,
+                ):
+                    control.on_value_change(
+                        update_indicators
+                    )
+
+                update_total()
+                update_indicators()
+
+    def skill_state(
+        editor,
+    ):
+        ranks = Decimal(
+            str(
+                editor[
+                    "ranks"
+                ].value
+                or 0
+            )
+        )
+
+        return {
+            "owned": ranks > 0,
+            "class_skill": bool(
+                editor[
+                    "class_skill"
+                ].value
+            ),
+            "unranked": ranks == 0,
+            "name": str(
+                editor[
+                    "name"
+                ].value
+                or ""
+            ).strip().lower(),
+        }
+
+    def refresh_counts():
+        owned_count = 0
+        class_count = 0
+        unranked_count = 0
+
+        for editor in editors:
+            state = skill_state(
+                editor
+            )
+            owned_count += int(
+                state["owned"]
+            )
+            class_count += int(
+                state[
+                    "class_skill"
+                ]
+            )
+            unranked_count += int(
+                state[
+                    "unranked"
+                ]
+            )
+
+        count_label.set_text(
+            (
+                f"Mes compétences : {owned_count}  ·  "
+                f"Compétences de classe : {class_count}  ·  "
+                f"Sans rang : {unranked_count}  ·  "
+                f"Total : {len(editors)}"
+            )
+        )
+
+    def apply_filters(
+        event=None,
+    ):
+        selected_filter = (
+            filter_toggle.value
+            or "all"
+        )
+        query = str(
+            search_input.value
+            or ""
+        ).strip().lower()
+
+        visible_count = 0
+
+        for editor in editors:
+            state = skill_state(
+                editor
+            )
+
+            if selected_filter == "owned":
+                category_match = state[
+                    "owned"
+                ]
+            elif selected_filter == "class":
+                category_match = state[
+                    "class_skill"
+                ]
+            elif selected_filter == "unranked":
+                category_match = state[
+                    "unranked"
+                ]
+            else:
+                category_match = True
+
+            search_match = (
+                not query
+                or query
+                in state[
+                    "name"
+                ]
+            )
+            visible = (
+                category_match
+                and search_match
+            )
+
+            editor[
+                "container"
+            ].set_visibility(
+                visible
+            )
+            visible_count += int(
+                visible
+            )
+
+        empty_message.set_visibility(
+            visible_count == 0
+        )
+
+        if visible_count == 0:
+            if selected_filter == "owned":
+                empty_title.set_text(
+                    "Aucune compétence possédée"
                 )
+                empty_detail.set_text(
+                    "Passez à « Sans rang » ou « Toutes », "
+                    "puis investissez au moins 1 rang."
+                )
+            else:
+                empty_title.set_text(
+                    "Aucune compétence dans ce filtre"
+                )
+                empty_detail.set_text(
+                    "Choisissez un autre filtre "
+                    "ou modifiez la recherche."
+                )
+
+        refresh_counts()
+
+    filter_toggle.on_value_change(
+        apply_filters
+    )
+    search_input.on_value_change(
+        apply_filters
+    )
+
+    for editor in editors:
+        editor[
+            "ranks"
+        ].on_value_change(
+            lambda event: (
+                refresh_counts()
+            )
+        )
+        editor[
+            "class_skill"
+        ].on_value_change(
+            lambda event: (
+                refresh_counts()
+            )
+        )
+
+    apply_filters()
 
     def save_skills():
         rows = [
@@ -1898,8 +2324,14 @@ def _skills_panel(
             return
 
         ui.notify(
-            "Compétences enregistrées.",
+            "Compétences Pathfinder enregistrées.",
             type="positive",
+        )
+        ui.navigate.to(
+            _character_url(
+                character["id"],
+                "competences",
+            )
         )
 
     with ui.row().classes(

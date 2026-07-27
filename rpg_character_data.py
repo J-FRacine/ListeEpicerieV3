@@ -6,6 +6,7 @@ from uuid import uuid4
 from db import get_connection
 from rpg_character_rules import (
     ABILITY_LABELS,
+    PATHFINDER_SKILL_KEYS,
     SAVE_DEFINITIONS,
     SIZE_LABELS,
     STANDARD_SKILLS,
@@ -117,6 +118,25 @@ def _normalize_decimal(
         raise ValueError(
             f"{label} doit être compris entre "
             f"{minimum} et {maximum}."
+        )
+
+    return number
+
+
+def _normalize_skill_ranks(
+    value,
+):
+    number = _normalize_decimal(
+        value,
+        label="Les rangs",
+        minimum=Decimal("0"),
+        maximum=Decimal("999"),
+    )
+
+    if number != number.to_integral():
+        raise ValueError(
+            "Pathfinder utilise des rangs entiers. "
+            "Utilisez 0, 1, 2, 3, etc."
         )
 
     return number
@@ -243,6 +263,8 @@ def init_rpg_character_schema():
                     armor_check_penalty INTEGER NOT NULL DEFAULT 0,
                     initiative_misc_modifier INTEGER NOT NULL DEFAULT 0,
                     grapple_misc_modifier INTEGER NOT NULL DEFAULT 0,
+                    cmb_misc_modifier INTEGER NOT NULL DEFAULT 0,
+                    cmd_misc_modifier INTEGER NOT NULL DEFAULT 0,
 
                     created_at TIMESTAMPTZ
                         NOT NULL DEFAULT NOW(),
@@ -379,6 +401,86 @@ def init_rpg_character_schema():
 
             cur.execute(
                 """
+                ALTER TABLE rpg_characters
+                ADD COLUMN IF NOT EXISTS
+                cmb_misc_modifier INTEGER
+                NOT NULL DEFAULT 0;
+                """
+            )
+
+            cur.execute(
+                """
+                ALTER TABLE rpg_characters
+                ADD COLUMN IF NOT EXISTS
+                cmd_misc_modifier INTEGER
+                NOT NULL DEFAULT 0;
+                """
+            )
+
+            cur.execute(
+                """
+                UPDATE rpg_characters
+                SET cmb_misc_modifier =
+                    grapple_misc_modifier
+                WHERE cmb_misc_modifier = 0
+                  AND grapple_misc_modifier <> 0;
+                """
+            )
+
+            pathfinder_keys = sorted(
+                PATHFINDER_SKILL_KEYS
+            )
+            placeholders = ", ".join(
+                ["%s"] * len(
+                    pathfinder_keys
+                )
+            )
+
+            # Les anciennes compétences D&D 3.5 ayant des données
+            # sont conservées comme compétences personnalisées.
+            cur.execute(
+                f"""
+                UPDATE rpg_character_skills
+                SET
+                    skill_key =
+                        'legacy_35_' || id::TEXT,
+                    skill_name =
+                        skill_name
+                        || ' (ancienne 3.5)',
+                    is_custom = TRUE,
+                    sort_order =
+                        sort_order + 1000
+                WHERE is_custom = FALSE
+                  AND skill_key NOT IN (
+                      {placeholders}
+                  )
+                  AND (
+                      ranks <> 0
+                      OR misc_modifier <> 0
+                      OR class_skill = TRUE
+                  );
+                """,
+                pathfinder_keys,
+            )
+
+            # Les anciennes lignes vides sont remplacées par
+            # la liste standard Pathfinder.
+            cur.execute(
+                f"""
+                DELETE FROM rpg_character_skills
+                WHERE is_custom = FALSE
+                  AND skill_key NOT IN (
+                      {placeholders}
+                  )
+                  AND ranks = 0
+                  AND misc_modifier = 0
+                  AND class_skill = FALSE;
+                """,
+                pathfinder_keys,
+            )
+
+            cur.execute(
+                """
                 CREATE TABLE IF NOT EXISTS
                 rpg_character_attacks (
                     id BIGSERIAL PRIMARY KEY,
@@ -454,6 +556,46 @@ def _initialize_character_rows(
             )
             for save_key
             in SAVE_DEFINITIONS
+        ],
+    )
+
+    cur.executemany(
+        """
+        UPDATE rpg_character_skills
+        SET
+            skill_name = %s,
+            ability_key = %s,
+            trained_only = %s,
+            armor_check_applies = %s,
+            double_armor_penalty = %s,
+            sort_order = %s
+        WHERE character_id = %s
+          AND skill_key = %s
+          AND is_custom = FALSE;
+        """,
+        [
+            (
+                skill_name,
+                ability_key,
+                trained_only,
+                armor_check,
+                double_penalty,
+                index,
+                character_id,
+                skill_key,
+            )
+            for index, (
+                skill_key,
+                skill_name,
+                ability_key,
+                armor_check,
+                trained_only,
+                double_penalty,
+            )
+            in enumerate(
+                STANDARD_SKILLS,
+                start=1,
+            )
         ],
     )
 
@@ -864,8 +1006,26 @@ def update_rpg_character_combat(
         "deflection_bonus": ("Le bonus de déviation", -100, 100),
         "misc_ac_modifier": ("Le modificateur divers de CA", -100, 100),
         "armor_check_penalty": ("La pénalité d’armure", -100, 0),
-        "initiative_misc_modifier": ("Le modificateur divers d’initiative", -100, 100),
-        "grapple_misc_modifier": ("Le modificateur divers de lutte", -100, 100),
+        "initiative_misc_modifier": (
+            "Le modificateur divers d’initiative",
+            -100,
+            100,
+        ),
+        "grapple_misc_modifier": (
+            "L’ancien modificateur de lutte",
+            -100,
+            100,
+        ),
+        "cmb_misc_modifier": (
+            "Le modificateur divers de BMO/CMB",
+            -100,
+            100,
+        ),
+        "cmd_misc_modifier": (
+            "Le modificateur divers de DMD/CMD",
+            -100,
+            100,
+        ),
     }
 
     for field, (
@@ -928,6 +1088,8 @@ def update_rpg_character_combat(
         "armor_check_penalty",
         "initiative_misc_modifier",
         "grapple_misc_modifier",
+        "cmb_misc_modifier",
+        "cmd_misc_modifier",
     ]
 
     assignments = ",\n                    ".join(
@@ -1182,9 +1344,8 @@ def update_rpg_skills(
                         bool(row.get("trained_only")),
                         bool(row.get("armor_check_applies")),
                         bool(row.get("double_armor_penalty")),
-                        _normalize_decimal(
+                        _normalize_skill_ranks(
                             row.get("ranks"),
-                            label="Les rangs",
                         ),
                         _normalize_int(
                             row.get("misc_modifier"),

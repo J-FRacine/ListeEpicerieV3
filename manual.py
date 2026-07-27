@@ -212,9 +212,9 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
     {
         "title": "Personnages JDR",
         "icon": "casino",
-        "caption": "Créer une feuille interactive D&D 3.5 / Ravenloft",
+        "caption": "Créer une feuille interactive Pathfinder / Ravenloft",
         "keywords": (
-            "jdr personnage ravenloft dnd d&d 3.5 feuille force "
+            "jdr personnage ravenloft pathfinder feuille force "
             "dextérité constitution intelligence sagesse charisme "
             "classe armure initiative sauvegarde peur horreur folie "
             "compétence attaque points vie"
@@ -258,7 +258,17 @@ La phase 1 calcule notamment :
 - la classe d’armure de contact;
 - la classe d’armure lorsque le personnage est pris au dépourvu;
 - l’initiative;
-- le modificateur de lutte.
+- le **BMO / CMB**;
+- le **DMD / CMD**.
+
+### BMO / CMB et DMD / CMD
+
+- **BMO / CMB** : bonus de manœuvre offensive, utilisé pour effectuer une manœuvre de combat;
+- **DMD / CMD** : degré de manœuvre défensive, utilisé comme difficulté pour résister à une manœuvre.
+
+Le BMO/CMB tient compte du bonus de base à l’attaque, de la Force — ou de la Dextérité pour les créatures très petites —, de la taille et du modificateur divers.
+
+Le DMD/CMD tient compte de 10, du bonus de base à l’attaque, de la Force, de la Dextérité, de la taille, du bonus de déviation et du modificateur divers propre au DMD/CMD.
 
 Les points de vie, dégâts non létaux, vitesse, réduction des dégâts, résistance à la magie, bonus d’armure, bouclier et autres modificateurs restent modifiables.
 
@@ -275,19 +285,34 @@ L’onglet **Sauvegardes** comprend :
 
 Le total combine automatiquement le bonus de base, la caractéristique correspondante, la magie, les modificateurs divers et temporaires. Un champ permet de conserver les modificateurs conditionnels.
 
-### Compétences
+### Compétences Pathfinder
 
-La liste de départ reprend les compétences principales de la feuille D&D 3.5 / Ravenloft. Pour chaque compétence, l’utilisateur peut modifier :
+La liste de départ utilise maintenant les compétences de Pathfinder 1re édition, notamment Acrobaties, Perception, Discrétion, Linguistique et les différentes Connaissances.
+
+Pour chaque compétence, l’utilisateur peut modifier :
 
 - le nom;
 - la caractéristique associée;
-- les rangs, y compris les demi-rangs;
+- les rangs entiers;
 - le modificateur divers;
 - le statut de compétence de classe;
 - la formation requise;
 - l’application de la pénalité d’armure.
 
-Le total est recalculé automatiquement. Il est aussi possible d’ajouter des compétences personnalisées.
+Une compétence est considérée comme **possédée** lorsqu’au moins 1 rang y est investi. Une compétence de classe possédée reçoit automatiquement le bonus Pathfinder de **+3**.
+
+### Filtres rapides
+
+Quatre filtres permettent de réduire la longue liste :
+
+- **Mes compétences** : seulement les compétences avec au moins 1 rang;
+- **Compétences de classe** : toutes les compétences cochées comme compétences de classe;
+- **Sans rang** : les compétences où aucun rang n’est encore investi;
+- **Toutes** : l’ensemble de la liste.
+
+Un champ de recherche permet aussi de retrouver rapidement une compétence. Des pastilles indiquent **Possédée**, **Compétence de classe**, **Formation requise** et **Pénalité d’armure**.
+
+Lors de la migration, les anciennes compétences D&D 3.5 sans données sont remplacées par la liste Pathfinder. Une ancienne compétence contenant déjà des rangs ou des modificateurs est conservée comme compétence personnalisée avec la mention **ancienne 3.5**, afin de ne perdre aucune donnée.
 
 ### Attaques
 

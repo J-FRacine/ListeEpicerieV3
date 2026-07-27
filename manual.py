@@ -78,7 +78,7 @@ Le Portail est le point central de **JF Apps**. Sa grille **Applications** conti
 - Finances;
 - Personnages JDR.
 
-Les applications 2, 3 et 4 apparaissent comme **Bientôt** tant qu’elles ne sont pas développées.
+Le **Journal de pression** et **Personnages JDR** sont disponibles. L’application **Finances** apparaît comme **Bientôt** tant qu’elle n’est pas développée.
 
 Les fonctions propres à la liste d’épicerie — modèles, recettes, bibliothèque, activité, corbeille et sauvegardes — se trouvent maintenant à l’intérieur de cette application.
 
@@ -207,6 +207,109 @@ Le rapport contient :
 ### Préparer le courriel
 
 Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un sujet et un texte proposés. Le PDF doit généralement être joint manuellement, car les navigateurs ne permettent pas d’ajouter automatiquement une pièce jointe à un courriel.
+""",
+    },
+    {
+        "title": "Personnages JDR",
+        "icon": "casino",
+        "caption": "Créer une feuille interactive D&D 3.5 / Ravenloft",
+        "keywords": (
+            "jdr personnage ravenloft dnd d&d 3.5 feuille force "
+            "dextérité constitution intelligence sagesse charisme "
+            "classe armure initiative sauvegarde peur horreur folie "
+            "compétence attaque points vie"
+        ),
+        "content": """
+### Données privées et plusieurs personnages
+
+Chaque personnage appartient uniquement à l’utilisateur connecté. Il n’est pas partagé avec une famille ou un autre compte pendant la phase 1.
+
+L’utilisateur peut créer plusieurs personnages, passer de l’un à l’autre et supprimer un personnage avec confirmation.
+
+### Identité
+
+L’onglet **Identité** permet de saisir :
+
+- nom du personnage et nom du joueur;
+- campagne;
+- classe et niveau;
+- race, alignement et divinité;
+- catégorie de taille;
+- âge, genre, taille physique et poids;
+- yeux, cheveux et peau;
+- points d’expérience.
+
+### Caractéristiques et combat
+
+L’onglet **Combat** contient les six caractéristiques :
+
+- FOR - Force;
+- DEX - Dextérité;
+- CON - Constitution;
+- INT - Intelligence;
+- SAG - Sagesse;
+- CHA - Charisme.
+
+Le modificateur est calculé automatiquement. Un score temporaire peut être inscrit pour représenter un effet magique, une maladie ou une autre modification temporaire.
+
+La phase 1 calcule notamment :
+
+- la classe d’armure totale;
+- la classe d’armure de contact;
+- la classe d’armure lorsque le personnage est pris au dépourvu;
+- l’initiative;
+- le modificateur de lutte.
+
+Les points de vie, dégâts non létaux, vitesse, réduction des dégâts, résistance à la magie, bonus d’armure, bouclier et autres modificateurs restent modifiables.
+
+### Jets de sauvegarde Ravenloft
+
+L’onglet **Sauvegardes** comprend :
+
+- Vigueur;
+- Réflexes;
+- Volonté;
+- Peur;
+- Horreur;
+- Folie.
+
+Le total combine automatiquement le bonus de base, la caractéristique correspondante, la magie, les modificateurs divers et temporaires. Un champ permet de conserver les modificateurs conditionnels.
+
+### Compétences
+
+La liste de départ reprend les compétences principales de la feuille D&D 3.5 / Ravenloft. Pour chaque compétence, l’utilisateur peut modifier :
+
+- le nom;
+- la caractéristique associée;
+- les rangs, y compris les demi-rangs;
+- le modificateur divers;
+- le statut de compétence de classe;
+- la formation requise;
+- l’application de la pénalité d’armure.
+
+Le total est recalculé automatiquement. Il est aussi possible d’ajouter des compétences personnalisées.
+
+### Attaques
+
+L’utilisateur peut enregistrer autant d’attaques que nécessaire avec :
+
+- nom;
+- caractéristique utilisée;
+- bonus magique et divers;
+- dégâts;
+- critique;
+- portée;
+- type;
+- notes;
+- munitions actuelles et maximums.
+
+Le bonus total d’attaque combine le bonus de base à l’attaque, le modificateur de caractéristique, la taille, la magie et les modificateurs divers.
+
+### Limites de la phase 1
+
+L’équipement, les dons, les capacités spéciales, les langues, les sorts, l’impression PDF, la progression avancée et les groupes de campagne seront ajoutés dans les phases suivantes.
+
+La feuille est inspirée de la structure fournie, mais l’interface est adaptée aux téléphones et aux ordinateurs plutôt que de reproduire exactement la mise en page du document papier.
 """,
     },
     {
@@ -631,8 +734,8 @@ def manual_panel():
                 "text-2xl font-bold"
             )
             ui.label(
-                "Guide du Portail JF Apps, de la liste d’épicerie "
-                "et du journal de pression."
+                "Guide du Portail JF Apps, de la liste d’épicerie, "
+                "du journal de pression et des personnages JDR."
             ).classes(
                 "text-sm text-gray-500"
             )
@@ -652,10 +755,10 @@ def manual_panel():
             "font-bold"
         )
         ui.label(
-            "La liste d’épicerie et le Journal de pression "
-            "sont documentés. Il sera complété lorsque "
-            "les applications Finances et Personnages JDR "
-            "seront ajoutées."
+            "La liste d’épicerie, le Journal de pression "
+            "et Personnages JDR sont documentés. "
+            "Le manuel sera complété avec l’application Finances "
+            "et les prochaines phases."
         ).classes(
             "text-sm text-gray-600"
         )

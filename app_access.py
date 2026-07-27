@@ -41,10 +41,10 @@ APP_DEFINITIONS = {
         "short_label": "JDR",
         "icon": "casino",
         "description": (
-            "Feuilles de personnage interactives "
-            "pour Donjons & Dragons et Ravenloft."
+            "Feuilles privées et interactives "
+            "inspirées de D&D 3.5 et Ravenloft."
         ),
-        "available": False,
+        "available": True,
     },
 }
 

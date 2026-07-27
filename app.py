@@ -43,6 +43,10 @@ from manual import manual_panel
 from needs import needs_panel
 from onboarding import getting_started_panel
 from recipes import recipes_panel
+from rpg_character import rpg_character_panel
+from rpg_character_data import (
+    init_rpg_character_schema,
+)
 from shared_library import shared_library_panel
 from pwa import (
     configure_pwa,
@@ -139,6 +143,15 @@ BLOOD_PRESSURE_TABS = {
     "journal_pression",
     "blood-pressure",
     "blood_pressure",
+}
+RPG_TABS = {
+    "jdr",
+    "personnages",
+    "personnage",
+    "characters",
+    "character",
+    "rpg",
+    "ravenloft",
 }
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -1206,13 +1219,15 @@ def show_portal(user):
                 portal_action_card(
                     title="Personnages JDR",
                     description=(
-                        "Feuilles de personnage interactives "
-                        "pour Donjons & Dragons et Ravenloft."
+                        "Créez et utilisez vos feuilles privées "
+                        "inspirées de D&D 3.5 et Ravenloft."
                     ),
                     icon="casino",
-                    action_label="Bientôt",
+                    action_label="Ouvrir",
                     badge="App 4",
-                    enabled=False,
+                    on_click=lambda: ui.navigate.to(
+                        "/?tab=jdr"
+                    ),
                 )
 
             if visible_app_count == 0:
@@ -1692,6 +1707,7 @@ def index(
     tab="portail",
     section=None,
     quick=None,
+    character=None,
 ):
     apply_theme()
 
@@ -1807,6 +1823,39 @@ def index(
                 ),
                 quick_entry=(
                     quick_entry
+                ),
+            )
+
+        return
+
+    if normalized_tab in RPG_TABS:
+        if not user_has_app_access(
+            user["id"],
+            "rpg",
+        ):
+            with page_container():
+                portal_header(
+                    "Accès non autorisé"
+                )
+                show_app_access_denied(
+                    "Personnages JDR"
+                )
+            return
+
+        set_current_tab("jdr")
+
+        with page_container():
+            portal_header(
+                "Personnages JDR"
+            )
+            rpg_character_panel(
+                user,
+                selected_character_id=(
+                    character
+                ),
+                initial_section=(
+                    section
+                    or "identite"
                 ),
             )
 
@@ -1932,6 +1981,7 @@ def index(
 init_db()
 init_app_access_schema()
 init_blood_pressure_schema()
+init_rpg_character_schema()
 
 storage_secret = os.getenv("STORAGE_SECRET")
 

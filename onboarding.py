@@ -145,6 +145,46 @@ ONBOARDING_CSS = r"""
     background: var(--jf-blue-soft);
 }
 
+.jf-button-guide-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.jf-button-guide-card {
+    width: 100%;
+    min-height: 10.5rem;
+    padding: 1rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 16px;
+    background: var(--jf-surface);
+}
+
+.jf-button-guide-icon {
+    width: 2.9rem;
+    height: 2.9rem;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    border-radius: 14px;
+    color: var(--jf-navy);
+    background: var(--jf-blue-soft);
+}
+
+.jf-button-guide-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--jf-navy);
+    background: rgba(34, 70, 122, 0.08);
+}
+
 @media (max-width: 860px) {
     .jf-flow-main {
         grid-template-columns: 1fr;
@@ -420,6 +460,211 @@ def _navigate_to_categories_section(
     )
 
 
+
+
+def _button_guide_card(
+    *,
+    title,
+    icon,
+    place,
+    description,
+    note,
+):
+    with ui.element("div").classes(
+        "jf-button-guide-card"
+    ):
+        with ui.row().classes(
+            "w-full items-start justify-between gap-3 flex-nowrap"
+        ):
+            with ui.element("div").classes(
+                "jf-button-guide-icon"
+            ):
+                ui.icon(icon).classes("text-2xl")
+
+            ui.label(place).classes(
+                "jf-button-guide-badge"
+            )
+
+        ui.label(title).classes(
+            "font-bold mt-3"
+        )
+        ui.label(description).classes(
+            "text-sm jf-muted"
+        )
+        ui.label(note).classes(
+            "text-xs mt-2"
+        )
+
+
+def _quick_interface_guide():
+    with ui.card().classes(
+        "w-full p-4"
+    ):
+        with ui.row().classes(
+            "w-full items-start justify-between gap-3 flex-wrap"
+        ):
+            with ui.column().classes("gap-0"):
+                ui.label(
+                    "Repères rapides de l’interface"
+                ).classes(
+                    "text-xl font-bold"
+                )
+                ui.label(
+                    "Une vue simple des boutons principaux "
+                    "pour ne pas avoir à deviner où aller."
+                ).classes(
+                    "text-sm jf-muted"
+                )
+
+            ui.icon(
+                "touch_app"
+            ).classes(
+                "text-4xl text-primary"
+            )
+
+        with ui.element("div").classes(
+            "jf-flow-note mt-3"
+        ):
+            with ui.row().classes(
+                "items-start gap-2 flex-nowrap"
+            ):
+                ui.icon(
+                    "lightbulb"
+                ).classes(
+                    "text-xl text-primary shrink-0"
+                )
+                ui.label(
+                    "Le bouton Planification regroupe les listes modèles, "
+                    "les recettes et la bibliothèque partagée. "
+                    "C’est souvent le moins évident la première fois."
+                ).classes(
+                    "text-sm"
+                )
+
+        ui.label(
+            "Barre du bas"
+        ).classes(
+            "text-lg font-bold mt-4"
+        )
+        ui.label(
+            "Les écrans utilisés tous les jours."
+        ).classes(
+            "text-sm jf-muted mb-2"
+        )
+
+        with ui.element("div").classes(
+            "jf-button-guide-grid"
+        ):
+            _button_guide_card(
+                title="Items",
+                icon="inventory_2",
+                place="Barre du bas",
+                description=(
+                    "Le catalogue de votre famille."
+                ),
+                note=(
+                    "Ajoutez et modifiez vos produits de base."
+                ),
+            )
+            _button_guide_card(
+                title="Besoins",
+                icon="shopping_cart",
+                place="Barre du bas",
+                description=(
+                    "La liste active de ce que vous devez acheter."
+                ),
+                note=(
+                    "C’est ici que vous préparez vos achats "
+                    "et lancez le Mode courses."
+                ),
+            )
+            _button_guide_card(
+                title="Catégories",
+                icon="category",
+                place="Barre du bas",
+                description=(
+                    "L’organisation des catégories et des magasins."
+                ),
+                note=(
+                    "Vous y définissez l’ordre pratique pour les courses."
+                ),
+            )
+            _button_guide_card(
+                title="Portail",
+                icon="apps",
+                place="Barre du bas",
+                description=(
+                    "Le retour vers l’accueil général de JF Apps."
+                ),
+                note=(
+                    "Utilisez-le pour changer d’outil ou revenir à l’aide."
+                ),
+            )
+
+        ui.label(
+            "Outils du haut"
+        ).classes(
+            "text-lg font-bold mt-5"
+        )
+        ui.label(
+            "Des raccourcis vers les fonctions avancées."
+        ).classes(
+            "text-sm jf-muted mb-2"
+        )
+
+        with ui.element("div").classes(
+            "jf-button-guide-grid"
+        ):
+            _button_guide_card(
+                title="Planification",
+                icon="menu_book",
+                place="En-tête",
+                description=(
+                    "Le centre pour les listes modèles, "
+                    "les recettes et la bibliothèque partagée."
+                ),
+                note=(
+                    "À utiliser lorsque vous voulez préparer des achats "
+                    "réutilisables ou copier une recette."
+                ),
+            )
+            _button_guide_card(
+                title="Activité et corbeille",
+                icon="history",
+                place="En-tête",
+                description=(
+                    "L’historique récent et les éléments supprimés."
+                ),
+                note=(
+                    "Très utile pour restaurer quelque chose supprimé "
+                    "par erreur."
+                ),
+            )
+            _button_guide_card(
+                title="Données",
+                icon="settings",
+                place="En-tête",
+                description=(
+                    "Les outils de sauvegarde, d’importation "
+                    "et d’exportation."
+                ),
+                note=(
+                    "C’est l’endroit pour sécuriser vos données "
+                    "ou les transférer."
+                ),
+            )
+            _button_guide_card(
+                title="Manuel",
+                icon="help",
+                place="En-tête",
+                description=(
+                    "L’aide détaillée de toutes les fonctions."
+                ),
+                note=(
+                    "À consulter si vous avez un doute sur un écran "
+                    "ou un bouton."
+                ),
+            )
 def _checklist_card(
     *,
     number,
@@ -671,6 +916,8 @@ def getting_started_panel():
 
     organization_diagram()
 
+    _quick_interface_guide()
+
     with ui.row().classes(
         "w-full items-center justify-between "
         "gap-2 flex-wrap"
@@ -846,7 +1093,8 @@ def getting_started_panel():
                 )
                 ui.label(
                     "Le manuel explique chaque écran "
-                    "et chaque bouton."
+                    "et chaque bouton. Le guide visuel ci-dessus "
+                    "présente aussi les raccourcis les plus utiles."
                 ).classes(
                     "text-sm jf-muted"
                 )

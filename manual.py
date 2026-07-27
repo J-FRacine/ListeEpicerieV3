@@ -33,6 +33,21 @@ Depuis le Portail :
 
 La page **Commencer ici** indique automatiquement les étapes déjà terminées.
 
+### Repères visuels dans Commencer ici
+
+La page **Commencer ici** contient aussi un guide visuel rapide des principaux boutons :
+
+- **Items** : le catalogue de base;
+- **Besoins** : la liste active d’achats;
+- **Catégories** : l’organisation des catégories et des magasins;
+- **Portail** : le retour à l’accueil général;
+- **Planification** : les listes modèles, les recettes et la bibliothèque partagée;
+- **Activité et corbeille** : l’historique récent et les suppressions récupérables;
+- **Données** : importation, exportation et sauvegarde;
+- **Manuel** : l’aide détaillée.
+
+Ce repère est conçu pour qu’un nouvel utilisateur comprenne rapidement où cliquer, sans devoir fouiller dans toute l’application.
+
 ### Installer JF Apps sur un appareil
 
 - Dans le Portail, utilisez **Installer JF Apps**.
@@ -91,6 +106,8 @@ Le nombre affiché près de **Besoins** indique combien d'articles restent dans 
 - **Roue dentée** : données, importation et exportation;
 - **Point d'interrogation** : manuel d'utilisation;
 - **Grille** : retour au Portail.
+
+Le bouton **Planification** est souvent le moins évident au départ. Retenez qu’il ouvre tout ce qui sert à préparer des achats à l’avance : vos modèles réutilisables, vos recettes et la bibliothèque publique de partage.
 
 Sur téléphone, ces outils sont présentés sous forme d’icônes afin de conserver assez d’espace pour le contenu.
 """,

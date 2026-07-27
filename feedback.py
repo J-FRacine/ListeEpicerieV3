@@ -522,6 +522,12 @@ def feedback_panel(
             def open_user_detail(
                 feedback_id,
             ):
+                ui.notify(
+                    "Ouverture du commentaire…",
+                    type="info",
+                    timeout=800,
+                )
+
                 try:
                     feedback = (
                         get_user_feedback(
@@ -651,18 +657,21 @@ def feedback_panel(
                             feedback_id
                         )
 
+                        def close_user_dialog():
+                            dialog.close()
+                            render_own_feedback.refresh()
+
                         with ui.row().classes(
                             "w-full justify-end mt-3"
                         ):
                             ui.button(
                                 "Fermer",
-                                on_click=dialog.close,
+                                on_click=close_user_dialog,
                             ).props(
                                 "color=primary"
                             )
 
                 dialog.open()
-                render_own_feedback.refresh()
 
             def open_user_edit(
                 feedback_id,
@@ -979,17 +988,25 @@ def feedback_panel(
                                 with ui.row().classes(
                                     "gap-1 shrink-0"
                                 ):
+                                    feedback_id = int(
+                                        row[
+                                            "id"
+                                        ]
+                                    )
+
+                                    def view_selected_feedback(
+                                        _event=None,
+                                        selected_id=feedback_id,
+                                    ):
+                                        open_user_detail(
+                                            selected_id
+                                        )
+
                                     ui.button(
                                         "Consulter",
                                         icon="visibility",
                                         on_click=(
-                                            lambda _event,
-                                            selected=row[
-                                                "id"
-                                            ]:
-                                            open_user_detail(
-                                                selected
-                                            )
+                                            view_selected_feedback
                                         ),
                                     ).props(
                                         "flat dense color=primary"
@@ -1001,16 +1018,18 @@ def feedback_panel(
                                         ]
                                         not in CLOSED_FEEDBACK_STATUSES
                                     ):
+                                        def edit_selected_feedback(
+                                            _event=None,
+                                            selected_id=feedback_id,
+                                        ):
+                                            open_user_edit(
+                                                selected_id
+                                            )
+
                                         ui.button(
                                             icon="edit",
                                             on_click=(
-                                                lambda _event,
-                                                selected=row[
-                                                    "id"
-                                                ]:
-                                                open_user_edit(
-                                                    selected
-                                                )
+                                                edit_selected_feedback
                                             ),
                                         ).props(
                                             "flat dense round "
@@ -1220,6 +1239,12 @@ def feedback_panel(
                 def open_admin_detail(
                     feedback_id,
                 ):
+                    ui.notify(
+                        "Ouverture du commentaire…",
+                        type="info",
+                        timeout=800,
+                    )
+
                     try:
                         mark_feedback_manager_read(
                             feedback_id
@@ -1370,12 +1395,16 @@ def feedback_panel(
                                 )
                                 render_admin_feedback.refresh()
 
+                            def close_admin_dialog():
+                                dialog.close()
+                                render_admin_feedback.refresh()
+
                             with ui.row().classes(
                                 "w-full justify-end gap-2 mt-3"
                             ):
                                 ui.button(
                                     "Fermer",
-                                    on_click=dialog.close,
+                                    on_click=close_admin_dialog,
                                 ).props(
                                     "flat"
                                 )
@@ -1388,7 +1417,6 @@ def feedback_panel(
                                 )
 
                     dialog.open()
-                    render_admin_feedback.refresh()
 
                 @ui.refreshable
                 def render_admin_feedback():
@@ -1536,17 +1564,25 @@ def feedback_panel(
                                             "text-sm"
                                         )
 
+                                    feedback_id = int(
+                                        row[
+                                            "id"
+                                        ]
+                                    )
+
+                                    def manage_selected_feedback(
+                                        _event=None,
+                                        selected_id=feedback_id,
+                                    ):
+                                        open_admin_detail(
+                                            selected_id
+                                        )
+
                                     ui.button(
                                         "Gérer",
                                         icon="edit_note",
                                         on_click=(
-                                            lambda _event,
-                                            selected=row[
-                                                "id"
-                                            ]:
-                                            open_admin_detail(
-                                                selected
-                                            )
+                                            manage_selected_feedback
                                         ),
                                     ).props(
                                         "outline dense color=primary"

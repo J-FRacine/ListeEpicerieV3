@@ -279,6 +279,59 @@ PATHFINDER_SKILL_KEYS = {
     for definition in STANDARD_SKILLS
 }
 
+SKILL_ENGLISH_NAMES = {
+    "acrobatics": "Acrobatics",
+    "appraise": "Appraise",
+    "bluff": "Bluff",
+    "climb": "Climb",
+    "craft_1": "Craft (1)",
+    "craft_2": "Craft (2)",
+    "craft_3": "Craft (3)",
+    "diplomacy": "Diplomacy",
+    "disable_device": "Disable Device",
+    "disguise": "Disguise",
+    "escape_artist": "Escape Artist",
+    "fly": "Fly",
+    "handle_animal": "Handle Animal",
+    "heal": "Heal",
+    "intimidate": "Intimidate",
+    "knowledge_arcana": "Knowledge (arcana)",
+    "knowledge_dungeoneering": (
+        "Knowledge (dungeoneering)"
+    ),
+    "knowledge_engineering": (
+        "Knowledge (engineering)"
+    ),
+    "knowledge_geography": (
+        "Knowledge (geography)"
+    ),
+    "knowledge_history": "Knowledge (history)",
+    "knowledge_local": "Knowledge (local)",
+    "knowledge_nature": "Knowledge (nature)",
+    "knowledge_nobility": (
+        "Knowledge (nobility)"
+    ),
+    "knowledge_religion": (
+        "Knowledge (religion)"
+    ),
+    "knowledge_planes": "Knowledge (planes)",
+    "linguistics": "Linguistics",
+    "perception": "Perception",
+    "perform_1": "Perform (1)",
+    "perform_2": "Perform (2)",
+    "perform_3": "Perform (3)",
+    "profession_1": "Profession (1)",
+    "profession_2": "Profession (2)",
+    "ride": "Ride",
+    "sense_motive": "Sense Motive",
+    "sleight_of_hand": "Sleight of Hand",
+    "spellcraft": "Spellcraft",
+    "stealth": "Stealth",
+    "survival": "Survival",
+    "swim": "Swim",
+    "use_magic_device": "Use Magic Device",
+}
+
 
 def as_int(value, default=0) -> int:
     if value in (None, ""):

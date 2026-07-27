@@ -310,7 +310,26 @@ Quatre filtres permettent de réduire la longue liste :
 - **Sans rang** : les compétences où aucun rang n’est encore investi;
 - **Toutes** : l’ensemble de la liste.
 
-Un champ de recherche permet aussi de retrouver rapidement une compétence. Des pastilles indiquent **Possédée**, **Compétence de classe**, **Formation requise** et **Pénalité d’armure**.
+Un champ de recherche permet aussi de retrouver rapidement une compétence. La recherche fonctionne autant avec le nom français qu’avec le nom anglais.
+
+### Noms français et anglais
+
+Chaque compétence standard affiche maintenant :
+
+- son nom français;
+- le nom anglais utilisé dans les règles Pathfinder.
+
+Exemples :
+
+- Acrobaties — **Acrobatics**;
+- Sabotage — **Disable Device**;
+- Psychologie — **Sense Motive**;
+- Escamotage — **Sleight of Hand**;
+- Art de la magie — **Spellcraft**.
+
+Le nom anglais peut être modifié au besoin. Lors de l’ajout d’une compétence personnalisée, le nom anglais est facultatif.
+
+Des pastilles indiquent **Possédée**, **Compétence de classe**, **Formation requise** et **Pénalité d’armure**.
 
 Lors de la migration, les anciennes compétences D&D 3.5 sans données sont remplacées par la liste Pathfinder. Une ancienne compétence contenant déjà des rangs ou des modificateurs est conservée comme compétence personnalisée avec la mention **ancienne 3.5**, afin de ne perdre aucune donnée.
 

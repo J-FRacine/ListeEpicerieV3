@@ -1543,9 +1543,19 @@ def _skill_dialog(
             )
 
             name_input = ui.input(
-                label="Nom",
+                label="Nom français",
             ).props(
                 "autofocus maxlength=120"
+            ).classes(
+                "w-full"
+            )
+            english_name_input = ui.input(
+                label="Nom anglais (facultatif)",
+                placeholder=(
+                    "Ex. Knowledge (local)"
+                ),
+            ).props(
+                "maxlength=120"
             ).classes(
                 "w-full"
             )
@@ -1579,6 +1589,9 @@ def _skill_dialog(
                         user_id,
                         character["id"],
                         skill_name=name_input.value,
+                        english_name=(
+                            english_name_input.value
+                        ),
                         ability_key=(
                             ability_input.value
                         ),
@@ -1722,7 +1735,7 @@ def _skills_panel(
             search_input = ui.input(
                 label="Rechercher",
                 placeholder=(
-                    "Ex. Perception"
+                    "Ex. Perception ou Acrobatics"
                 ),
             ).props(
                 "clearable"
@@ -1739,7 +1752,8 @@ def _skills_panel(
         ui.label(
             "Les rangs Pathfinder sont des nombres entiers. "
             "Le filtre « Mes compétences » affiche celles "
-            "dans lesquelles au moins 1 rang a été investi."
+            "dans lesquelles au moins 1 rang a été investi. "
+            "La recherche fonctionne en français et en anglais."
         ).classes(
             "text-xs jf-muted mt-2"
         )
@@ -1783,10 +1797,27 @@ def _skills_panel(
                         "gap-1 grow min-w-[180px]"
                     ):
                         name_input = ui.input(
-                            label="Compétence",
+                            label="Nom français",
                             value=skill_row[
                                 "skill_name"
                             ],
+                        ).props(
+                            "maxlength=120"
+                        ).classes(
+                            "w-full"
+                        )
+
+                        english_name_input = ui.input(
+                            label="Nom anglais",
+                            value=(
+                                skill_row[
+                                    "english_name"
+                                ]
+                                or ""
+                            ),
+                            placeholder=(
+                                "Nom utilisé dans les règles anglaises"
+                            ),
                         ).props(
                             "maxlength=120"
                         ).classes(
@@ -1940,6 +1971,9 @@ def _skills_panel(
                     "row": skill_row,
                     "container": card,
                     "name": name_input,
+                    "english_name": (
+                        english_name_input
+                    ),
                     "ability": ability_input,
                     "ranks": ranks_input,
                     "misc": misc_input,
@@ -2101,6 +2135,7 @@ def _skills_panel(
                     trained_input,
                     armor_input,
                     name_input,
+                    english_name_input,
                 ):
                     control.on_value_change(
                         update_indicators
@@ -2132,6 +2167,12 @@ def _skills_panel(
             "name": str(
                 editor[
                     "name"
+                ].value
+                or ""
+            ).strip().lower(),
+            "english_name": str(
+                editor[
+                    "english_name"
                 ].value
                 or ""
             ).strip().lower(),
@@ -2209,6 +2250,10 @@ def _skills_panel(
                 in state[
                     "name"
                 ]
+                or query
+                in state[
+                    "english_name"
+                ]
             )
             visible = (
                 category_match
@@ -2281,6 +2326,9 @@ def _skills_panel(
                 ]["id"],
                 "skill_name": editor[
                     "name"
+                ].value,
+                "english_name": editor[
+                    "english_name"
                 ].value,
                 "ability_key": editor[
                     "ability"

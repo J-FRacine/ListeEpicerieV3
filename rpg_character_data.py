@@ -8,6 +8,7 @@ from rpg_character_rules import (
     ABILITY_LABELS,
     PATHFINDER_SKILL_KEYS,
     SAVE_DEFINITIONS,
+    SKILL_ENGLISH_NAMES,
     SIZE_LABELS,
     STANDARD_SKILLS,
 )
@@ -352,6 +353,7 @@ def init_rpg_character_schema():
                         ON DELETE CASCADE,
                     skill_key TEXT NOT NULL,
                     skill_name TEXT NOT NULL,
+                    english_name TEXT,
                     ability_key TEXT NOT NULL
                         CHECK (
                             ability_key IN (
@@ -396,6 +398,14 @@ def init_rpg_character_schema():
                     sort_order,
                     skill_name
                 );
+                """
+            )
+
+            cur.execute(
+                """
+                ALTER TABLE rpg_character_skills
+                ADD COLUMN IF NOT EXISTS
+                english_name TEXT;
                 """
             )
 
@@ -564,6 +574,7 @@ def _initialize_character_rows(
         UPDATE rpg_character_skills
         SET
             skill_name = %s,
+            english_name = %s,
             ability_key = %s,
             trained_only = %s,
             armor_check_applies = %s,
@@ -576,6 +587,9 @@ def _initialize_character_rows(
         [
             (
                 skill_name,
+                SKILL_ENGLISH_NAMES.get(
+                    skill_key
+                ),
                 ability_key,
                 trained_only,
                 armor_check,
@@ -605,6 +619,7 @@ def _initialize_character_rows(
             character_id,
             skill_key,
             skill_name,
+            english_name,
             ability_key,
             trained_only,
             armor_check_applies,
@@ -613,6 +628,7 @@ def _initialize_character_rows(
             is_custom
         )
         VALUES (
+            %s,
             %s,
             %s,
             %s,
@@ -633,6 +649,9 @@ def _initialize_character_rows(
                 character_id,
                 skill_key,
                 skill_name,
+                SKILL_ENGLISH_NAMES.get(
+                    skill_key
+                ),
                 ability_key,
                 trained_only,
                 armor_check,
@@ -1275,6 +1294,7 @@ def list_rpg_skills(
                     id,
                     skill_key,
                     skill_name,
+                    english_name,
                     ability_key,
                     class_skill,
                     trained_only,
@@ -1335,9 +1355,14 @@ def update_rpg_skills(
                     (
                         _normalize_text(
                             row.get("skill_name"),
-                            label="Le nom de la compétence",
+                            label="Le nom français de la compétence",
                             maximum=120,
                             required=True,
+                        ),
+                        _normalize_text(
+                            row.get("english_name"),
+                            label="Le nom anglais de la compétence",
+                            maximum=120,
                         ),
                         ability_key,
                         bool(row.get("class_skill")),
@@ -1363,6 +1388,7 @@ def update_rpg_skills(
                 UPDATE rpg_character_skills
                 SET
                     skill_name = %s,
+                    english_name = %s,
                     ability_key = %s,
                     class_skill = %s,
                     trained_only = %s,
@@ -1384,6 +1410,7 @@ def create_custom_rpg_skill(
     character_id,
     *,
     skill_name,
+    english_name=None,
     ability_key,
     trained_only=False,
     armor_check_applies=False,
@@ -1391,9 +1418,14 @@ def create_custom_rpg_skill(
 ):
     name = _normalize_text(
         skill_name,
-        label="Le nom de la compétence",
+        label="Le nom français de la compétence",
         maximum=120,
         required=True,
+    )
+    english = _normalize_text(
+        english_name,
+        label="Le nom anglais de la compétence",
+        maximum=120,
     )
     ability = str(
         ability_key
@@ -1439,6 +1471,7 @@ def create_custom_rpg_skill(
                     character_id,
                     skill_key,
                     skill_name,
+                    english_name,
                     ability_key,
                     trained_only,
                     armor_check_applies,
@@ -1455,6 +1488,7 @@ def create_custom_rpg_skill(
                     %s,
                     %s,
                     %s,
+                    %s,
                     TRUE
                 )
                 RETURNING id;
@@ -1463,6 +1497,7 @@ def create_custom_rpg_skill(
                     character_id,
                     skill_key,
                     name,
+                    english,
                     ability,
                     bool(trained_only),
                     bool(armor_check_applies),

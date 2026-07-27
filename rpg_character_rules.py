@@ -758,16 +758,37 @@ def skill_class_bonus(
     return 0
 
 
-def skill_total(
+def skill_breakdown(
     character,
     skill_row,
 ):
+    """Retourne chaque composante du calcul Pathfinder."""
+
+    ability_key = (
+        skill_row.get(
+            "ability_key"
+        )
+        or "int"
+    )
     ability_mod = (
         ability_modifier_for_character(
             character,
-            skill_row.get(
-                "ability_key"
-            ),
+            ability_key,
+        )
+    )
+    ranks = as_decimal(
+        skill_row.get(
+            "ranks"
+        )
+    )
+    misc_modifier = as_int(
+        skill_row.get(
+            "misc_modifier"
+        )
+    )
+    class_bonus = (
+        skill_class_bonus(
+            skill_row
         )
     )
 
@@ -787,31 +808,41 @@ def skill_total(
         ):
             armor_penalty *= 2
 
-    return (
-        as_decimal(
-            skill_row.get(
-                "ranks"
-            )
-        )
+    total = (
+        ranks
         + Decimal(
             ability_mod
         )
         + Decimal(
-            as_int(
-                skill_row.get(
-                    "misc_modifier"
-                )
-            )
+            misc_modifier
         )
         + Decimal(
             armor_penalty
         )
         + Decimal(
-            skill_class_bonus(
-                skill_row
-            )
+            class_bonus
         )
     )
+
+    return {
+        "ability_key": ability_key,
+        "ability_modifier": ability_mod,
+        "ranks": ranks,
+        "class_bonus": class_bonus,
+        "misc_modifier": misc_modifier,
+        "armor_penalty": armor_penalty,
+        "total": total,
+    }
+
+
+def skill_total(
+    character,
+    skill_row,
+):
+    return skill_breakdown(
+        character,
+        skill_row,
+    )["total"]
 
 
 def attack_total(

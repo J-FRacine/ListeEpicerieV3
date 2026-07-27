@@ -314,22 +314,37 @@ Un champ de recherche permet aussi de retrouver rapidement une compétence. La r
 
 ### Noms français et anglais
 
-Chaque compétence standard affiche maintenant :
-
-- son nom français;
-- le nom anglais utilisé dans les règles Pathfinder.
+Le nom français et le nom anglais sont affichés sur une seule ligne compacte.
 
 Exemples :
 
-- Acrobaties — **Acrobatics**;
-- Sabotage — **Disable Device**;
-- Psychologie — **Sense Motive**;
-- Escamotage — **Sleight of Hand**;
-- Art de la magie — **Spellcraft**.
+- **Acrobaties — Acrobatics**;
+- **Sabotage — Disable Device**;
+- **Psychologie — Sense Motive**;
+- **Escamotage — Sleight of Hand**;
+- **Art de la magie — Spellcraft**.
 
-Le nom anglais peut être modifié au besoin. Lors de l’ajout d’une compétence personnalisée, le nom anglais est facultatif.
+Le petit bouton de modification permet d’ouvrir une fenêtre pour corriger séparément les deux noms. Lors de l’ajout d’une compétence personnalisée, le nom anglais demeure facultatif.
 
-Des pastilles indiquent **Possédée**, **Compétence de classe**, **Formation requise** et **Pénalité d’armure**.
+Des pastilles compactes indiquent **Possédée**, **Classe**, **Formation** et **Armure**.
+
+### Présentation compacte
+
+Les champs **Carac.**, **Rangs** et **Divers**, ainsi que les cases **Classe**, **Formation**, **Armure** et **×2**, sont placés sur une seule ligne lorsque la largeur de l’écran le permet. Sur téléphone, ils se replacent automatiquement sur quelques lignes plus courtes.
+
+### Vérification du calcul
+
+Sous chaque compétence, l’application montre la formule complète utilisée pour calculer le total.
+
+Exemple pour Dressage / Handle Animal :
+
+```text
+CHA -2 + rangs +1 + classe +3 + divers +0 = total +2
+```
+
+Le bonus de compétence de classe de **+3** est ajouté automatiquement lorsque la compétence possède au moins 1 rang. Il ne faut donc pas inscrire ce bonus une deuxième fois dans **Divers**.
+
+Lorsque l’application détecte une compétence de classe possédée avec **Divers +3**, elle affiche un avertissement et un bouton permettant de remettre rapidement **Divers** à zéro. Aucun changement n’est appliqué automatiquement, car un bonus divers de +3 peut parfois être légitime.
 
 Lors de la migration, les anciennes compétences D&D 3.5 sans données sont remplacées par la liste Pathfinder. Une ancienne compétence contenant déjà des rangs ou des modificateurs est conservée comme compétence personnalisée avec la mention **ancienne 3.5**, afin de ne perdre aucune donnée.
 

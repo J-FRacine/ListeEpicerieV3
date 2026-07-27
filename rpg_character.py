@@ -38,6 +38,7 @@ from rpg_character_rules import (
     format_number,
     initiative_total,
     save_total,
+    skill_breakdown,
     skill_total,
     touch_armor_class,
 )
@@ -172,13 +173,162 @@ RPG_CSS = r"""
 }
 
 .jf-rpg-skill-total {
-    min-width: 3.4rem;
-    padding: 0.25rem 0.65rem;
+    min-width: 3rem;
+    padding: 0.2rem 0.58rem;
     border-radius: 999px;
     text-align: center;
     color: white;
     background: var(--jf-navy);
+    font-size: 0.95rem;
     font-weight: 800;
+}
+
+.jf-rpg-skill-card {
+    padding: 0.58rem 0.7rem;
+    border-radius: 13px;
+}
+
+.jf-rpg-skill-header {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: 100%;
+    min-width: 0;
+}
+
+.jf-rpg-skill-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--jf-navy);
+    font-size: 0.98rem;
+    font-weight: 800;
+}
+
+.body--dark .jf-rpg-skill-name {
+    color: #dceaf6;
+}
+
+.jf-rpg-skill-edit-button {
+    flex: 0 0 auto;
+}
+
+.jf-rpg-skill-badges-compact {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.jf-rpg-skill-badges-compact .jf-rpg-skill-badge {
+    padding: 0.12rem 0.42rem;
+    font-size: 0.66rem;
+}
+
+.jf-rpg-skill-controls {
+    display: grid;
+    grid-template-columns:
+        minmax(6.5rem, 8.5rem)
+        minmax(4.6rem, 5.7rem)
+        minmax(4.6rem, 5.7rem)
+        max-content
+        max-content
+        max-content
+        max-content;
+    align-items: center;
+    gap: 0.25rem 0.55rem;
+    width: 100%;
+    margin-top: 0.35rem;
+}
+
+.jf-rpg-skill-control .q-field__control {
+    min-height: 36px;
+    height: 36px;
+}
+
+.jf-rpg-skill-control .q-field__native,
+.jf-rpg-skill-control .q-field__input,
+.jf-rpg-skill-control .q-field__label {
+    font-size: 0.78rem;
+}
+
+.jf-rpg-skill-check {
+    margin: 0;
+    white-space: nowrap;
+}
+
+.jf-rpg-skill-check .q-checkbox__label {
+    font-size: 0.74rem;
+}
+
+.jf-rpg-skill-check .q-checkbox__inner {
+    font-size: 32px;
+}
+
+.jf-rpg-skill-calculation {
+    width: 100%;
+    margin-top: 0.3rem;
+    padding: 0.28rem 0.5rem;
+    border-radius: 9px;
+    color: var(--jf-muted);
+    background: rgba(34, 70, 122, 0.055);
+    font-size: 0.72rem;
+}
+
+.jf-rpg-skill-warning {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.45rem;
+    width: 100%;
+    margin-top: 0.28rem;
+    padding: 0.28rem 0.5rem;
+    border-radius: 9px;
+    color: #75500f;
+    background: rgba(189, 149, 85, 0.16);
+    font-size: 0.72rem;
+}
+
+@media (max-width: 980px) {
+    .jf-rpg-skill-controls {
+        grid-template-columns:
+            minmax(6.5rem, 1.2fr)
+            minmax(4.6rem, 0.7fr)
+            minmax(4.6rem, 0.7fr)
+            repeat(2, max-content);
+    }
+}
+
+@media (max-width: 680px) {
+    .jf-rpg-skill-header {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .jf-rpg-skill-badges-compact {
+        flex-basis: 100%;
+    }
+
+    .jf-rpg-skill-controls {
+        grid-template-columns:
+            minmax(6rem, 1fr)
+            minmax(4.4rem, 0.65fr)
+            minmax(4.4rem, 0.65fr)
+            repeat(2, max-content);
+    }
+
+    .jf-rpg-skill-check .q-checkbox__label {
+        font-size: 0.7rem;
+    }
+}
+
+@media (max-width: 470px) {
+    .jf-rpg-skill-controls {
+        grid-template-columns:
+            minmax(5.8rem, 1fr)
+            minmax(4.2rem, 0.75fr)
+            minmax(4.2rem, 0.75fr);
+    }
 }
 
 .jf-rpg-section-actions {
@@ -1642,6 +1792,87 @@ def _skill_dialog(
     dialog.open()
 
 
+
+def _skill_display_name(
+    french_name,
+    english_name,
+) -> str:
+    french = str(
+        french_name
+        or ""
+    ).strip()
+    english = str(
+        english_name
+        or ""
+    ).strip()
+
+    if french and english:
+        return (
+            f"{french} — {english}"
+        )
+
+    return french or english or "Compétence sans nom"
+
+
+def _skill_breakdown_text(
+    breakdown,
+) -> str:
+    ability_label = ABILITY_LABELS.get(
+        breakdown[
+            "ability_key"
+        ],
+        str(
+            breakdown[
+                "ability_key"
+            ]
+        ).upper(),
+    )
+
+    parts = [
+        (
+            f"{ability_label} "
+            f"{format_modifier(breakdown['ability_modifier'])}"
+        ),
+        (
+            "rangs "
+            f"{format_modifier(breakdown['ranks'])}"
+        ),
+        (
+            "classe "
+            f"{format_modifier(breakdown['class_bonus'])}"
+        ),
+        (
+            "divers "
+            f"{format_modifier(breakdown['misc_modifier'])}"
+        ),
+    ]
+
+    if (
+        breakdown[
+            "armor_penalty"
+        ]
+        != 0
+    ):
+        parts.append(
+            (
+                "armure "
+                f"{format_modifier(breakdown['armor_penalty'])}"
+            )
+        )
+
+    return (
+        " + ".join(
+            parts
+        )
+        + " = total "
+        + format_modifier(
+            breakdown[
+                "total"
+            ]
+        )
+    )
+
+
 def _skills_panel(
     user_id,
     character,
@@ -1660,8 +1891,8 @@ def _skills_panel(
             )
             ui.label(
                 "Les compétences possédées ont au moins 1 rang. "
-                "Une compétence de classe avec des rangs reçoit "
-                "automatiquement le bonus de +3."
+                "Le bonus de +3 d’une compétence de classe est "
+                "ajouté automatiquement."
             ).classes(
                 "text-sm jf-muted"
             )
@@ -1751,9 +1982,9 @@ def _skills_panel(
 
         ui.label(
             "Les rangs Pathfinder sont des nombres entiers. "
-            "Le filtre « Mes compétences » affiche celles "
-            "dans lesquelles au moins 1 rang a été investi. "
-            "La recherche fonctionne en français et en anglais."
+            "Les noms français et anglais sont réunis sur une "
+            "seule ligne. La formule complète apparaît sous "
+            "chaque compétence."
         ).classes(
             "text-xs jf-muted mt-2"
         )
@@ -1761,6 +1992,7 @@ def _skills_panel(
     empty_message = ui.card().classes(
         "w-full p-6 items-center text-center"
     )
+
     with empty_message:
         ui.icon(
             "filter_alt_off"
@@ -1779,81 +2011,87 @@ def _skills_panel(
         )
 
     cards_container = ui.column().classes(
-        "w-full gap-3"
+        "w-full gap-2"
     )
 
     with cards_container:
         for skill_row in skills:
+            name_state = {
+                "fr": str(
+                    skill_row[
+                        "skill_name"
+                    ]
+                    or ""
+                ).strip(),
+                "en": str(
+                    skill_row[
+                        "english_name"
+                    ]
+                    or ""
+                ).strip(),
+            }
+
             card = ui.element("div").classes(
                 "jf-rpg-skill-card"
             )
 
             with card:
-                with ui.row().classes(
-                    "w-full items-start "
-                    "justify-between gap-2 flex-wrap"
+                with ui.element("div").classes(
+                    "jf-rpg-skill-header"
                 ):
-                    with ui.column().classes(
-                        "gap-1 grow min-w-[180px]"
-                    ):
-                        name_input = ui.input(
-                            label="Nom français",
-                            value=skill_row[
-                                "skill_name"
+                    name_label = ui.label(
+                        _skill_display_name(
+                            name_state[
+                                "fr"
                             ],
-                        ).props(
-                            "maxlength=120"
-                        ).classes(
-                            "w-full"
+                            name_state[
+                                "en"
+                            ],
                         )
+                    ).classes(
+                        "jf-rpg-skill-name grow"
+                    )
 
-                        english_name_input = ui.input(
-                            label="Nom anglais",
-                            value=(
-                                skill_row[
-                                    "english_name"
-                                ]
-                                or ""
-                            ),
-                            placeholder=(
-                                "Nom utilisé dans les règles anglaises"
-                            ),
-                        ).props(
-                            "maxlength=120"
+                    edit_name_button = ui.button(
+                        icon="edit",
+                    ).props(
+                        "flat dense round color=primary"
+                    ).classes(
+                        "jf-rpg-skill-edit-button"
+                    ).tooltip(
+                        "Modifier les noms"
+                    )
+
+                    with ui.element("div").classes(
+                        "jf-rpg-skill-badges-compact"
+                    ):
+                        owned_badge = ui.label(
+                            "✓ Possédée"
                         ).classes(
-                            "w-full"
+                            "jf-rpg-skill-badge "
+                            "jf-rpg-skill-badge-owned"
                         )
-
-                        with ui.element("div").classes(
-                            "jf-rpg-skill-badges"
-                        ):
-                            owned_badge = ui.label(
-                                "✓ Possédée"
-                            ).classes(
-                                "jf-rpg-skill-badge "
-                                "jf-rpg-skill-badge-owned"
-                            )
-                            class_badge = ui.label(
-                                "★ Compétence de classe"
-                            ).classes(
-                                "jf-rpg-skill-badge "
-                                "jf-rpg-skill-badge-class"
-                            )
-                            trained_badge = ui.label(
-                                "Formation requise"
-                            ).classes(
-                                "jf-rpg-skill-badge"
-                            )
-                            armor_badge = ui.label(
-                                "Pénalité d’armure"
-                            ).classes(
-                                "jf-rpg-skill-badge"
-                            )
-                            legacy_badge = ui.label(
-                                "Ancienne compétence 3.5"
-                            ).classes(
-                                "jf-rpg-skill-badge"
-                            )
+                        class_badge = ui.label(
+                            "★ Classe"
+                        ).classes(
+                            "jf-rpg-skill-badge "
+                            "jf-rpg-skill-badge-class"
+                        )
+                        trained_badge = ui.label(
+                            "Formation"
+                        ).classes(
+                            "jf-rpg-skill-badge"
+                        )
+                        armor_badge = ui.label(
+                            "Armure"
+                        ).classes(
+                            "jf-rpg-skill-badge"
+                        )
+                        legacy_badge = ui.label(
+                            "Ancienne 3.5"
+                        ).classes(
+                            "jf-rpg-skill-badge"
+                        )
 
                     total_label = ui.label(
                         format_number(
@@ -1903,23 +2141,26 @@ def _skills_panel(
                             icon="delete",
                             on_click=remove_skill,
                         ).props(
-                            "flat round color=negative"
+                            "flat dense round color=negative"
                         ).tooltip(
                             "Supprimer la compétence personnalisée"
                         )
 
                 with ui.element("div").classes(
-                    "jf-rpg-grid mt-2"
+                    "jf-rpg-skill-controls"
                 ):
                     ability_input = ui.select(
                         ABILITY_LABELS,
-                        label="Caractéristique",
+                        label="Carac.",
                         value=skill_row[
                             "ability_key"
                         ],
+                    ).props(
+                        "dense outlined options-dense"
                     ).classes(
-                        "w-full"
+                        "jf-rpg-skill-control"
                     )
+
                     ranks_input = ui.number(
                         label="Rangs",
                         value=float(
@@ -1930,50 +2171,98 @@ def _skills_panel(
                         min=0,
                         max=999,
                         step=1,
+                    ).props(
+                        "dense outlined"
                     ).classes(
-                        "w-full"
+                        "jf-rpg-skill-control"
                     )
+
                     misc_input = ui.number(
                         label="Divers",
                         value=skill_row[
                             "misc_modifier"
                         ],
                         step=1,
+                    ).props(
+                        "dense outlined"
                     ).classes(
-                        "w-full"
+                        "jf-rpg-skill-control"
                     )
+
                     class_input = ui.checkbox(
-                        "Compétence de classe",
+                        "Classe",
                         value=skill_row[
                             "class_skill"
                         ],
+                    ).classes(
+                        "jf-rpg-skill-check"
+                    ).tooltip(
+                        "Compétence de classe"
                     )
+
                     trained_input = ui.checkbox(
-                        "Formation requise",
+                        "Formation",
                         value=skill_row[
                             "trained_only"
                         ],
+                    ).classes(
+                        "jf-rpg-skill-check"
+                    ).tooltip(
+                        "Formation requise"
                     )
+
                     armor_input = ui.checkbox(
-                        "Pénalité d’armure",
+                        "Armure",
                         value=skill_row[
                             "armor_check_applies"
                         ],
+                    ).classes(
+                        "jf-rpg-skill-check"
+                    ).tooltip(
+                        "La pénalité d’armure s’applique"
                     )
+
                     double_input = ui.checkbox(
-                        "Pénalité doublée",
+                        "×2",
                         value=skill_row[
                             "double_armor_penalty"
                         ],
+                    ).classes(
+                        "jf-rpg-skill-check"
+                    ).tooltip(
+                        "Doubler la pénalité d’armure"
+                    )
+
+                calculation_label = ui.label(
+                    ""
+                ).classes(
+                    "jf-rpg-skill-calculation"
+                )
+
+                warning_row = ui.element("div").classes(
+                    "jf-rpg-skill-warning"
+                )
+
+                with warning_row:
+                    ui.label(
+                        "Le +3 de compétence de classe est déjà "
+                        "automatique. Vérifiez si « Divers +3 » "
+                        "le répète."
+                    ).classes(
+                        "grow"
+                    )
+
+                    clear_duplicate_button = ui.button(
+                        "Mettre Divers à 0",
+                    ).props(
+                        "flat dense no-caps color=warning"
                     )
 
                 editor = {
                     "row": skill_row,
                     "container": card,
-                    "name": name_input,
-                    "english_name": (
-                        english_name_input
-                    ),
+                    "name_state": name_state,
+                    "name_label": name_label,
                     "ability": ability_input,
                     "ranks": ranks_input,
                     "misc": misc_input,
@@ -1982,80 +2271,99 @@ def _skills_panel(
                     "armor": armor_input,
                     "double": double_input,
                     "total": total_label,
+                    "calculation": calculation_label,
+                    "warning": warning_row,
                     "owned_badge": owned_badge,
                     "class_badge": class_badge,
                     "trained_badge": trained_badge,
                     "armor_badge": armor_badge,
                     "legacy_badge": legacy_badge,
                 }
-                editors.append(editor)
+                editors.append(
+                    editor
+                )
 
                 def update_total(
                     event=None,
                     *,
                     selected=editor,
                 ):
-                    ability_key = (
-                        selected[
-                            "ability"
-                        ].value
-                        or "int"
-                    )
-                    ranks = Decimal(
-                        str(
+                    row = {
+                        "ability_key": (
+                            selected[
+                                "ability"
+                            ].value
+                            or "int"
+                        ),
+                        "ranks": (
                             selected[
                                 "ranks"
                             ].value
                             or 0
-                        )
-                    )
-                    total = ranks
-                    total += Decimal(
-                        ability_modifier_for_character(
-                            character,
-                            ability_key,
-                        )
-                    )
-                    total += Decimal(
-                        _as_number(
+                        ),
+                        "misc_modifier": (
                             selected[
                                 "misc"
                             ].value
+                            or 0
+                        ),
+                        "class_skill": bool(
+                            selected[
+                                "class_skill"
+                            ].value
+                        ),
+                        "armor_check_applies": bool(
+                            selected[
+                                "armor"
+                            ].value
+                        ),
+                        "double_armor_penalty": bool(
+                            selected[
+                                "double"
+                            ].value
+                        ),
+                    }
+
+                    breakdown = (
+                        skill_breakdown(
+                            character,
+                            row,
                         )
                     )
-
-                    if (
-                        selected[
-                            "class_skill"
-                        ].value
-                        and ranks > 0
-                    ):
-                        total += Decimal(3)
-
-                    if selected[
-                        "armor"
-                    ].value:
-                        penalty = _as_number(
-                            character[
-                                "armor_check_penalty"
-                            ]
-                        )
-
-                        if selected[
-                            "double"
-                        ].value:
-                            penalty *= 2
-
-                        total += Decimal(
-                            penalty
-                        )
 
                     selected[
                         "total"
                     ].set_text(
                         format_number(
-                            total
+                            breakdown[
+                                "total"
+                            ]
                         )
+                    )
+
+                    selected[
+                        "calculation"
+                    ].set_text(
+                        _skill_breakdown_text(
+                            breakdown
+                        )
+                    )
+
+                    duplicate_class_bonus = (
+                        breakdown[
+                            "class_bonus"
+                        ]
+                        == 3
+                        and breakdown[
+                            "misc_modifier"
+                        ]
+                        == 3
+                    )
+
+                    selected[
+                        "warning"
+                    ].set_visibility(
+                        duplicate_class_bonus
                     )
 
                 def update_indicators(
@@ -2071,6 +2379,7 @@ def _skills_panel(
                             or 0
                         )
                     )
+
                     selected[
                         "owned_badge"
                     ].set_visibility(
@@ -2108,14 +2417,138 @@ def _skills_panel(
                     ].set_visibility(
                         (
                             "ancienne 3.5"
-                            in str(
-                                selected[
-                                    "name"
-                                ].value
-                                or ""
-                            ).lower()
+                            in selected[
+                                "name_state"
+                            ][
+                                "fr"
+                            ].lower()
                         )
                     )
+
+                def open_name_dialog(
+                    event=None,
+                    *,
+                    selected=editor,
+                ):
+                    with ui.dialog() as dialog:
+                        with ui.card().classes(
+                            "w-full max-w-lg p-5"
+                        ):
+                            ui.label(
+                                "Modifier les noms de la compétence"
+                            ).classes(
+                                "text-xl font-bold"
+                            )
+
+                            french_input = ui.input(
+                                label="Nom français",
+                                value=selected[
+                                    "name_state"
+                                ][
+                                    "fr"
+                                ],
+                            ).props(
+                                "autofocus maxlength=120"
+                            ).classes(
+                                "w-full"
+                            )
+
+                            english_input = ui.input(
+                                label="Nom anglais",
+                                value=selected[
+                                    "name_state"
+                                ][
+                                    "en"
+                                ],
+                            ).props(
+                                "maxlength=120"
+                            ).classes(
+                                "w-full"
+                            )
+
+                            def apply_names():
+                                french = str(
+                                    french_input.value
+                                    or ""
+                                ).strip()
+                                english = str(
+                                    english_input.value
+                                    or ""
+                                ).strip()
+
+                                if not french:
+                                    ui.notify(
+                                        "Le nom français est obligatoire.",
+                                        type="warning",
+                                    )
+                                    return
+
+                                selected[
+                                    "name_state"
+                                ][
+                                    "fr"
+                                ] = french
+                                selected[
+                                    "name_state"
+                                ][
+                                    "en"
+                                ] = english
+
+                                selected[
+                                    "name_label"
+                                ].set_text(
+                                    _skill_display_name(
+                                        french,
+                                        english,
+                                    )
+                                )
+
+                                update_indicators(
+                                    selected=selected
+                                )
+                                apply_filters()
+                                dialog.close()
+
+                            with ui.row().classes(
+                                "w-full justify-end gap-2 mt-3"
+                            ):
+                                ui.button(
+                                    "Annuler",
+                                    on_click=dialog.close,
+                                ).props(
+                                    "flat"
+                                )
+                                ui.button(
+                                    "Appliquer",
+                                    icon="check",
+                                    on_click=apply_names,
+                                ).props(
+                                    "color=primary"
+                                )
+
+                    dialog.open()
+
+                edit_name_button.on(
+                    "click",
+                    open_name_dialog,
+                )
+
+                def clear_duplicate(
+                    event=None,
+                    *,
+                    selected=editor,
+                ):
+                    selected[
+                        "misc"
+                    ].value = 0
+                    update_total(
+                        selected=selected
+                    )
+
+                clear_duplicate_button.on(
+                    "click",
+                    clear_duplicate,
+                )
 
                 for control in (
                     ability_input,
@@ -2134,8 +2567,6 @@ def _skills_panel(
                     class_input,
                     trained_input,
                     armor_input,
-                    name_input,
-                    english_name_input,
                 ):
                     control.on_value_change(
                         update_indicators
@@ -2164,18 +2595,16 @@ def _skills_panel(
                 ].value
             ),
             "unranked": ranks == 0,
-            "name": str(
-                editor[
-                    "name"
-                ].value
-                or ""
-            ).strip().lower(),
-            "english_name": str(
-                editor[
-                    "english_name"
-                ].value
-                or ""
-            ).strip().lower(),
+            "name": editor[
+                "name_state"
+            ][
+                "fr"
+            ].lower(),
+            "english_name": editor[
+                "name_state"
+            ][
+                "en"
+            ].lower(),
         }
 
     def refresh_counts():
@@ -2188,7 +2617,9 @@ def _skills_panel(
                 editor
             )
             owned_count += int(
-                state["owned"]
+                state[
+                    "owned"
+                ]
             )
             class_count += int(
                 state[
@@ -2323,13 +2754,19 @@ def _skills_panel(
             {
                 "id": editor[
                     "row"
-                ]["id"],
+                ][
+                    "id"
+                ],
                 "skill_name": editor[
-                    "name"
-                ].value,
+                    "name_state"
+                ][
+                    "fr"
+                ],
                 "english_name": editor[
-                    "english_name"
-                ].value,
+                    "name_state"
+                ][
+                    "en"
+                ],
                 "ability_key": editor[
                     "ability"
                 ].value,
@@ -2358,7 +2795,9 @@ def _skills_panel(
         try:
             update_rpg_skills(
                 user_id,
-                character["id"],
+                character[
+                    "id"
+                ],
                 rows,
             )
         except Exception as error:
@@ -2377,7 +2816,9 @@ def _skills_panel(
         )
         ui.navigate.to(
             _character_url(
-                character["id"],
+                character[
+                    "id"
+                ],
                 "competences",
             )
         )

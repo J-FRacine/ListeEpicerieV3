@@ -136,12 +136,6 @@ BLOOD_PRESSURE_CSS = r"""
     background: var(--jf-blue-soft);
 }
 
-.jf-pressure-alert-overdue {
-    border-color: rgba(190, 50, 50, 0.32);
-    border-left-color: #be3232;
-    background: rgba(255, 232, 232, 0.94);
-}
-
 .jf-pressure-alert-due {
     border-color: rgba(191, 120, 18, 0.30);
     border-left-color: #bf7812;
@@ -152,10 +146,6 @@ BLOOD_PRESSURE_CSS = r"""
     border-color: rgba(34, 70, 122, 0.25);
     border-left-color: var(--jf-blue);
     background: rgba(231, 240, 250, 0.94);
-}
-
-.body--dark .jf-pressure-alert-overdue {
-    background: rgba(115, 34, 34, 0.35);
 }
 
 .body--dark .jf-pressure-alert-upcoming {
@@ -308,22 +298,14 @@ def _reminder_state_text(
         next_slot["end_time"],
     )
 
-    if status["state"] == "overdue":
+    if status["state"] == "due":
         main_text = (
-            f"La prise « {label} » est en retard."
+            f"La prise « {label} » reste à faire aujourd’hui."
         )
         detail_text = (
-            f"Plage prévue : {hour_range}. "
-            f"Il reste {remaining} prise(s) aujourd’hui."
-        )
-        visual_state = "overdue"
-    elif status["state"] == "due":
-        main_text = (
-            f"La prise « {label} » est à faire maintenant."
-        )
-        detail_text = (
-            f"Plage prévue : {hour_range}. "
-            f"Il reste {remaining} prise(s) aujourd’hui."
+            f"Plage suggérée : {hour_range}. "
+            "Une prise faite en dehors de cette plage "
+            "compte quand même."
         )
         visual_state = "due"
     else:
@@ -332,7 +314,7 @@ def _reminder_state_text(
             "de pression aujourd’hui."
         )
         detail_text = (
-            f"Prochaine prise : « {label} », "
+            f"Prochaine prise suggérée : « {label} », "
             f"de {hour_range}."
         )
         visual_state = "upcoming"
@@ -455,15 +437,10 @@ def blood_pressure_portal_reminder(
                     ):
                         ui.icon(
                             (
-                                "warning"
+                                "notifications_active"
                                 if visual_state
-                                == "overdue"
-                                else (
-                                    "notifications_active"
-                                    if visual_state
-                                    == "due"
-                                    else "schedule"
-                                )
+                                == "due"
+                                else "schedule"
                             )
                         ).classes(
                             "text-3xl text-warning shrink-0"
@@ -1756,8 +1733,9 @@ def blood_pressure_panel(
                     )
 
                 ui.label(
-                    "Une mesure complète une prise seulement "
-                    "si son heure se trouve dans la plage choisie."
+                    "Les plages servent de repères pour les avis. "
+                    "Toute mesure enregistrée dans la journée "
+                    "compte comme une prise, même hors plage."
                 ).classes(
                     "text-xs jf-muted"
                 )
@@ -1985,7 +1963,9 @@ def blood_pressure_panel(
                     ui.label(
                         "Les plages ne peuvent pas se chevaucher "
                         "et doivent commencer et finir dans la "
-                        "même journée."
+                        "même journée. Elles restent toutefois "
+                        "indicatives : une prise faite plus tôt "
+                        "ou plus tard compte quand même."
                     ).classes(
                         "text-sm"
                     )
@@ -2076,15 +2056,10 @@ def blood_pressure_panel(
                                     main_text
                                 ).classes(
                                     (
-                                        "text-sm text-negative"
+                                        "text-sm text-warning"
                                         if status["state"]
-                                        == "overdue"
-                                        else (
-                                            "text-sm text-warning"
-                                            if status["state"]
-                                            == "due"
-                                            else "text-sm text-primary"
-                                        )
+                                        == "due"
+                                        else "text-sm text-primary"
                                     )
                                 )
                                 ui.label(
@@ -2144,18 +2119,9 @@ def blood_pressure_panel(
                                             )
                                         elif slot[
                                             "status"
-                                        ] == "overdue":
-                                            status_text = (
-                                                "En retard"
-                                            )
-                                            status_class = (
-                                                "text-negative"
-                                            )
-                                        elif slot[
-                                            "status"
                                         ] == "due":
                                             status_text = (
-                                                "À faire maintenant"
+                                                "À prendre aujourd’hui"
                                             )
                                             status_class = (
                                                 "text-warning"

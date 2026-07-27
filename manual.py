@@ -155,16 +155,19 @@ Exemple :
 
 Les heures sont choisies par l’utilisateur. Les plages ne peuvent pas se chevaucher et doivent se terminer dans la même journée.
 
-Une mesure complète une prise seulement lorsque son heure se trouve dans la plage correspondante. Les mesures supplémentaires restent dans l’historique, même lorsqu’elles ne correspondent à aucune plage.
+Les plages sont seulement des **repères pour les avis**. Toute mesure enregistrée pendant la journée compte comme une prise complétée, même si elle est faite avant ou après la plage suggérée.
+
+Les mesures de la journée sont associées dans l’ordre chronologique aux prises prévues. Par exemple, avec deux prises quotidiennes, la première mesure de la journée complète la première prise et la deuxième mesure complète la seconde. Les mesures supplémentaires restent dans l’historique.
 
 ### Avis détaillé
 
 Pendant la période configurée, la grande carte de bienvenue du **Portail** peut indiquer :
 
-- la prochaine prise et son horaire;
-- qu’une prise est à faire maintenant;
-- qu’une prise est en retard;
-- le nombre de prises complétées et restantes aujourd’hui.
+- la prochaine prise et son horaire suggéré;
+- qu’une prise reste à faire aujourd’hui;
+- le nombre de prises complétées et restantes.
+
+L’application n’utilise plus la notion de prise **en retard**. Une mesure faite hors de la plage proposée compte normalement.
 
 L’avis disparaît lorsque toutes les prises prévues sont complétées, lorsque le rappel est désactivé ou lorsque la date se trouve hors de la période choisie.
 

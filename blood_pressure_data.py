@@ -1049,7 +1049,12 @@ def get_blood_pressure_reminder_status(
     on_date,
     current_time=None,
 ):
-    """Calcule l’état de chaque prise à partir de l’heure de l’appareil."""
+    """Calcule les prises complétées sans notion de retard.
+
+    Les plages servent de repères pour l’avis.
+    Toute mesure faite dans la journée compte,
+    même si son heure est hors de la plage prévue.
+    """
 
     normalized_date = _normalize_date(
         on_date
@@ -1149,36 +1154,26 @@ def get_blood_pressure_reminder_status(
 
     slot_statuses = []
 
-    for slot in slots:
-        matching_time = next(
-            (
-                reading_time
-                for reading_time
-                in reading_times
-                if (
-                    slot["start_time"]
-                    <= reading_time
-                    <= slot["end_time"]
-                )
-            ),
-            None,
+    for index, slot in enumerate(
+        slots
+    ):
+        completed_time = (
+            reading_times[index]
+            if index < len(
+                reading_times
+            )
+            else None
         )
 
         completed = (
-            matching_time is not None
+            completed_time is not None
         )
 
         if completed:
             status = "completed"
         elif (
             normalized_current_time
-            > slot["end_time"]
-        ):
-            status = "overdue"
-        elif (
-            slot["start_time"]
-            <= normalized_current_time
-            <= slot["end_time"]
+            >= slot["start_time"]
         ):
             status = "due"
         else:
@@ -1199,16 +1194,15 @@ def get_blood_pressure_reminder_status(
                 ),
                 "completed": completed,
                 "completed_time": (
-                    matching_time
+                    completed_time
                 ),
                 "status": status,
             }
         )
 
-    completed_count = sum(
-        1
-        for slot in slot_statuses
-        if slot["completed"]
+    completed_count = min(
+        len(readings),
+        len(slot_statuses),
     )
     remaining_count = (
         max(
@@ -1226,12 +1220,6 @@ def get_blood_pressure_reminder_status(
         if not slot["completed"]
     ]
 
-    overdue_slots = [
-        slot
-        for slot in pending_slots
-        if slot["status"]
-        == "overdue"
-    ]
     due_slots = [
         slot
         for slot in pending_slots
@@ -1251,9 +1239,6 @@ def get_blood_pressure_reminder_status(
     elif remaining_count == 0:
         state = "complete"
         next_slot = None
-    elif overdue_slots:
-        state = "overdue"
-        next_slot = overdue_slots[0]
     elif due_slots:
         state = "due"
         next_slot = due_slots[0]

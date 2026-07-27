@@ -1,6 +1,7 @@
 from nicegui import ui
 
 from auth import get_current_user
+from onboarding import organization_diagram
 
 
 MANUAL_SECTIONS = [
@@ -19,11 +20,18 @@ MANUAL_SECTIONS = [
 2. Entrez votre adresse courriel et votre mot de passe.
 3. Après la connexion, le **Portail** présente les applications et les outils auxquels vous avez accès.
 
-### Première connexion : créez votre famille
+### Première connexion : commencez par créer votre famille
 
-Une **famille** est l’espace où sont conservés vos items, besoins, magasins, catégories, listes modèles et recettes. Même lorsque vous utilisez l’application seul, vous devez d’abord créer votre famille.
+Une **famille** est l’espace où sont conservés vos items, besoins, magasins, catégories, listes modèles et recettes. Même lorsque vous utilisez l’application seul, vous devez obligatoirement créer une famille avant de commencer.
 
-Depuis le Portail, ouvrez **Familles**, puis utilisez **Créer une famille**. Après cette étape, la liste d’épicerie et les autres fonctions familiales deviennent accessibles.
+Depuis le Portail :
+
+1. ouvrez **Commencer ici** pour voir le parcours visuel;
+2. utilisez **Créer ma famille**;
+3. ajoutez ensuite vos magasins et vos catégories;
+4. créez enfin vos premiers items.
+
+La page **Commencer ici** indique automatiquement les étapes déjà terminées.
 
 ### Installer JF Apps sur un appareil
 
@@ -48,7 +56,22 @@ Utilisez l'icône de déconnexion située dans l'en-tête du Portail ou de certa
         "content": """
 ### Portail
 
-Le Portail est le point central de **JF Apps**. Il donne accès à la liste d'épicerie, aux modèles et recettes, à l'activité, aux familles, au compte et aux outils administratifs autorisés.
+Le Portail est le point central de **JF Apps**. Sa grille **Applications** contient seulement les grandes applications :
+
+- Liste d’épicerie;
+- Journal de pression;
+- Finances;
+- Personnages JDR.
+
+Les applications 2, 3 et 4 apparaissent comme **Bientôt** tant qu’elles ne sont pas développées.
+
+Les fonctions propres à la liste d’épicerie — modèles, recettes, bibliothèque, activité, corbeille et sauvegardes — se trouvent maintenant à l’intérieur de cette application.
+
+Le Portail contient aussi :
+
+- **Mon espace** : familles et compte;
+- **Aide et démarrage** : Commencer ici et Manuel;
+- **Administration** : utilisateurs et maintenance, pour les administrateurs.
 
 ### Barre de navigation de la liste d'épicerie
 
@@ -61,13 +84,15 @@ La barre située au bas de l'écran permet d'ouvrir rapidement :
 
 Le nombre affiché près de **Besoins** indique combien d'articles restent dans la liste.
 
-### Icônes dans l'en-tête
+### Outils dans l'en-tête de l’épicerie
 
-- Livre : listes modèles et recettes;
-- Horloge : activité et corbeille;
-- Roue dentée : données, importation et exportation;
-- Point d'interrogation : manuel d'utilisation;
-- Grille : retour au Portail.
+- **Livre / Planification** : listes modèles, recettes et bibliothèque partagée;
+- **Horloge** : activité et corbeille;
+- **Roue dentée** : données, importation et exportation;
+- **Point d'interrogation** : manuel d'utilisation;
+- **Grille** : retour au Portail.
+
+Sur téléphone, ces outils sont présentés sous forme d’icônes afin de conserver assez d’espace pour le contenu.
 """,
     },
     {
@@ -498,6 +523,23 @@ def manual_panel():
             "artérielle et l’application financière seront ajoutés."
         ).classes(
             "text-sm text-gray-600"
+        )
+
+    organization_diagram(
+        compact=True,
+    )
+
+    with ui.row().classes(
+        "w-full justify-end"
+    ):
+        ui.button(
+            "Ouvrir le parcours complet",
+            icon="rocket_launch",
+            on_click=lambda: ui.navigate.to(
+                "/?tab=demarrage"
+            ),
+        ).props(
+            "outline color=primary"
         )
 
     search_state = {

@@ -29,6 +29,7 @@ from items import items_panel
 from maintenance import maintenance_panel
 from manual import manual_panel
 from needs import needs_panel
+from onboarding import getting_started_panel
 from recipes import recipes_panel
 from shared_library import shared_library_panel
 from pwa import (
@@ -52,6 +53,8 @@ VALID_APP_TABS = {
     "categories",
     "modeles",
     "recettes",
+    "bibliotheque",
+    "activite",
     "donnees",
     "courses",
 }
@@ -76,6 +79,14 @@ MANUAL_TABS = {
     "aide",
     "help",
     "guide",
+}
+GETTING_STARTED_TABS = {
+    "demarrage",
+    "démarrage",
+    "commencer",
+    "onboarding",
+    "premiers-pas",
+    "premiers_pas",
 }
 LIBRARY_TABS = {
     "bibliotheque",
@@ -379,6 +390,31 @@ body.body--dark {
     color: var(--jf-navy);
     font-size: 1.12rem;
     font-weight: 800;
+}
+
+.jf-action-card-disabled {
+    opacity: 0.78;
+}
+
+.jf-action-card-disabled:hover {
+    transform: none;
+    border-color: var(--jf-border);
+    box-shadow: var(--jf-shadow);
+}
+
+.jf-card-badge {
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    color: var(--jf-navy);
+    background: var(--jf-blue-soft);
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.jf-section-description {
+    margin-top: -0.55rem;
+    color: var(--jf-muted);
+    font-size: 0.88rem;
 }
 
 .body--dark .jf-action-title {
@@ -880,15 +916,39 @@ def portal_action_card(
     description,
     icon,
     action_label,
-    on_click,
+    on_click=None,
     color="primary",
+    badge=None,
+    enabled=True,
 ):
-    with ui.card().classes("jf-action-card"):
+    card_classes = (
+        "jf-action-card"
+        if enabled
+        else (
+            "jf-action-card "
+            "jf-action-card-disabled"
+        )
+    )
+
+    with ui.card().classes(card_classes):
         with ui.column().classes("gap-3"):
-            with ui.element("div").classes(
-                "jf-action-icon"
+            with ui.row().classes(
+                "w-full items-start "
+                "justify-between gap-2"
             ):
-                ui.icon(icon).classes("text-2xl")
+                with ui.element("div").classes(
+                    "jf-action-icon"
+                ):
+                    ui.icon(icon).classes(
+                        "text-2xl"
+                    )
+
+                if badge:
+                    ui.label(
+                        badge
+                    ).classes(
+                        "jf-card-badge"
+                    )
 
             with ui.column().classes("gap-1"):
                 ui.label(title).classes(
@@ -898,13 +958,33 @@ def portal_action_card(
                     "text-sm jf-muted"
                 )
 
-        ui.button(
-            action_label,
-            icon="arrow_forward",
-            on_click=on_click,
-        ).props(
-            f"flat color={color}"
-        ).classes("self-start")
+        if enabled:
+            ui.button(
+                action_label,
+                icon="arrow_forward",
+                on_click=on_click,
+            ).props(
+                f"flat color={color}"
+            ).classes("self-start")
+        else:
+            ui.button(
+                action_label,
+                icon="schedule",
+            ).props(
+                "flat disable"
+            ).classes("self-start")
+
+
+def portal_section(
+    title,
+    description,
+):
+    ui.label(title).classes(
+        "jf-section-title"
+    )
+    ui.label(description).classes(
+        "jf-section-description"
+    )
 
 
 def show_portal(user):
@@ -1022,12 +1102,17 @@ def show_portal(user):
                                 "Voir le guide de démarrage",
                                 icon="help_outline",
                                 on_click=lambda: ui.navigate.to(
-                                    "/?tab=manuel"
+                                    "/?tab=demarrage"
                                 ),
                             ).props("outline color=primary")
 
-        ui.label("Applications").classes(
-            "jf-section-title"
+        portal_section(
+            "Applications",
+            (
+                "Les grandes applications de JF Apps. "
+                "Les outils propres à l’épicerie se trouvent "
+                "maintenant à l’intérieur de cette application."
+            ),
         )
 
         with ui.element("div").classes(
@@ -1036,8 +1121,8 @@ def show_portal(user):
             portal_action_card(
                 title="Liste d’épicerie",
                 description=(
-                    "Gérez les items, les besoins, les magasins "
-                    "et les catégories de vos familles."
+                    "Gérez les items, besoins, magasins, "
+                    "catégories, modèles et recettes."
                 ),
                 icon="shopping_cart",
                 action_label="Ouvrir",
@@ -1047,69 +1132,57 @@ def show_portal(user):
             )
 
             portal_action_card(
-                title="Modèles et recettes",
+                title="Journal de pression",
                 description=(
-                    "Réutilisez des listes préparées et ajoutez les "
-                    "ingrédients de vos recettes aux besoins."
+                    "Saisissez vos mesures de pression "
+                    "artérielle et votre pouls."
                 ),
-                icon="menu_book",
-                action_label="Planifier",
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=modeles"
-                ),
+                icon="monitor_heart",
+                action_label="Bientôt",
+                badge="App 2",
+                enabled=False,
             )
 
             portal_action_card(
-                title="Bibliothèque partagée",
+                title="Finances",
                 description=(
-                    "Consultez les recettes et listes modèles publiées "
-                    "et copiez-les dans votre famille."
+                    "Suivez manuellement les revenus, "
+                    "dépenses, budgets et transactions récurrentes."
                 ),
-                icon="public",
-                action_label="Consulter",
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=bibliotheque"
-                ),
+                icon="account_balance_wallet",
+                action_label="Bientôt",
+                badge="App 3",
+                enabled=False,
             )
 
             portal_action_card(
-                title="Activité et corbeille",
+                title="Personnages JDR",
                 description=(
-                    "Consultez les dernières actions et restaurez "
-                    "les éléments supprimés par erreur."
+                    "Feuilles de personnage interactives "
+                    "pour Donjons & Dragons et Ravenloft."
                 ),
-                icon="history",
-                action_label="Consulter",
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=activite"
-                ),
+                icon="casino",
+                action_label="Bientôt",
+                badge="App 4",
+                enabled=False,
             )
 
-            portal_action_card(
-                title="Manuel d’utilisation",
-                description=(
-                    "Retrouvez les instructions pour toutes les "
-                    "fonctions actuellement disponibles."
-                ),
-                icon="help_center",
-                action_label="Consulter",
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=manuel"
-                ),
-            )
-
-        ui.label("Administration du portail").classes(
-            "jf-section-title mt-2"
+        portal_section(
+            "Mon espace",
+            (
+                "Vos renseignements personnels, vos familles "
+                "et les personnes avec qui vous collaborez."
+            ),
         )
 
         with ui.element("div").classes(
             "jf-card-grid"
         ):
             portal_action_card(
-                title="Familles",
+                title="Mes familles",
                 description=(
-                    "Choisissez la famille active "
-                    "et gérez les espaces partagés."
+                    "Créez une famille, choisissez l’espace "
+                    "actif et gérez les accès partagés."
                 ),
                 icon="groups",
                 action_label="Gérer",
@@ -1131,7 +1204,55 @@ def show_portal(user):
                 ),
             )
 
-            if user["is_admin"]:
+        portal_section(
+            "Aide et démarrage",
+            (
+                "Comprenez l’organisation des données et "
+                "retrouvez rapidement les instructions."
+            ),
+        )
+
+        with ui.element("div").classes(
+            "jf-card-grid"
+        ):
+            portal_action_card(
+                title="Commencer ici",
+                description=(
+                    "Suivez le parcours visuel : famille, "
+                    "magasins, catégories, items et utilisation."
+                ),
+                icon="rocket_launch",
+                action_label="Voir les étapes",
+                on_click=lambda: ui.navigate.to(
+                    "/?tab=demarrage"
+                ),
+            )
+
+            portal_action_card(
+                title="Manuel d’utilisation",
+                description=(
+                    "Consultez les explications détaillées "
+                    "pour toutes les fonctions disponibles."
+                ),
+                icon="help_center",
+                action_label="Consulter",
+                on_click=lambda: ui.navigate.to(
+                    "/?tab=manuel"
+                ),
+            )
+
+        if user["is_admin"]:
+            portal_section(
+                "Administration",
+                (
+                    "Fonctions réservées à la gestion "
+                    "du portail et au diagnostic."
+                ),
+            )
+
+            with ui.element("div").classes(
+                "jf-card-grid"
+            ):
                 portal_action_card(
                     title="Utilisateurs",
                     description=(
@@ -1148,9 +1269,8 @@ def show_portal(user):
                 portal_action_card(
                     title="Centre de maintenance",
                     description=(
-                        "Vérifiez l’intégrité, les doublons, "
-                        "les éléments inutilisés et la taille "
-                        "de la base."
+                        "Diagnostiquez l’intégrité et "
+                        "l’organisation de la base."
                     ),
                     icon="health_and_safety",
                     action_label="Diagnostiquer",
@@ -1158,27 +1278,6 @@ def show_portal(user):
                         "/?tab=maintenance"
                     ),
                 )
-
-
-def ensure_valid_family(user_id):
-    families = get_accessible_families(user_id)
-
-    if not families:
-        set_current_family_id(None)
-        return False
-
-    valid_ids = {
-        family["id"]
-        for family in families
-    }
-    current_family_id = get_current_family_id()
-
-    if current_family_id not in valid_ids:
-        set_current_family_id(
-            families[0]["id"]
-        )
-
-    return True
 
 
 def show_no_family_message():
@@ -1205,7 +1304,7 @@ def show_no_family_message():
                 "Voir le guide de démarrage",
                 icon="help_outline",
                 on_click=lambda: ui.navigate.to(
-                    "/?tab=manuel"
+                    "/?tab=demarrage"
                 ),
             ).props("outline color=primary")
 
@@ -1272,35 +1371,55 @@ def application_header(active_tab):
             with ui.row().classes(
                 "items-center gap-0"
             ):
-                ui.button(
+                planning_button = ui.button(
                     icon="menu_book",
-                    on_click=lambda: ui.navigate.to(
-                        "/?tab=modeles"
-                    ),
                 ).props(
                     "flat round color=primary"
-                    if active_tab in {"modeles", "recettes"}
+                    if active_tab in {
+                        "modeles",
+                        "recettes",
+                        "bibliotheque",
+                    }
                     else "flat round"
                 ).tooltip(
-                    "Listes modèles et recettes"
+                    "Planification"
                 )
+
+                with planning_button:
+                    with ui.menu().props(
+                        "auto-close"
+                    ):
+                        ui.menu_item(
+                            "Listes modèles",
+                            lambda: ui.navigate.to(
+                                "/?tab=modeles"
+                            ),
+                        )
+                        ui.menu_item(
+                            "Recettes",
+                            lambda: ui.navigate.to(
+                                "/?tab=recettes"
+                            ),
+                        )
+                        ui.separator()
+                        ui.menu_item(
+                            "Bibliothèque partagée",
+                            lambda: ui.navigate.to(
+                                "/?tab=bibliotheque"
+                            ),
+                        )
 
                 ui.button(
                     icon="history",
                     on_click=lambda: ui.navigate.to(
                         "/?tab=activite"
                     ),
-                ).props("flat round").tooltip(
+                ).props(
+                    "flat round color=primary"
+                    if active_tab == "activite"
+                    else "flat round"
+                ).tooltip(
                     "Activité et corbeille"
-                )
-
-                ui.button(
-                    icon="help_outline",
-                    on_click=lambda: ui.navigate.to(
-                        "/?tab=manuel"
-                    ),
-                ).props("flat round").tooltip(
-                    "Manuel d’utilisation"
                 )
 
                 ui.button(
@@ -1314,6 +1433,15 @@ def application_header(active_tab):
                     else "flat round"
                 ).tooltip(
                     "Données et sauvegarde"
+                )
+
+                ui.button(
+                    icon="help_outline",
+                    on_click=lambda: ui.navigate.to(
+                        "/?tab=manuel"
+                    ),
+                ).props("flat round").tooltip(
+                    "Manuel d’utilisation"
                 )
 
                 ui.button(
@@ -1453,16 +1581,12 @@ def index(tab="portail"):
 
         return
 
-    if normalized_tab in ACTIVITY_TABS:
-        set_current_tab("activite")
+    if normalized_tab in GETTING_STARTED_TABS:
+        set_current_tab("demarrage")
 
         with page_container():
-            portal_header("Activité et corbeille")
-
-            if not ensure_valid_family(user["id"]):
-                show_no_family_message()
-            else:
-                activity_panel()
+            portal_header("Commencer ici")
+            getting_started_panel()
 
         return
 
@@ -1472,15 +1596,6 @@ def index(tab="portail"):
         with page_container():
             portal_header("Manuel d’utilisation")
             manual_panel()
-
-        return
-
-    if normalized_tab in LIBRARY_TABS:
-        set_current_tab("bibliotheque")
-
-        with page_container():
-            portal_header("Bibliothèque partagée")
-            shared_library_panel()
 
         return
 
@@ -1496,6 +1611,12 @@ def index(tab="portail"):
             maintenance_panel()
 
         return
+
+    if normalized_tab in ACTIVITY_TABS:
+        normalized_tab = "activite"
+
+    if normalized_tab in LIBRARY_TABS:
+        normalized_tab = "bibliotheque"
 
     if normalized_tab in BACKUP_TABS:
         normalized_tab = "donnees"
@@ -1557,6 +1678,10 @@ def index(tab="portail"):
                 templates_panel()
             elif normalized_tab == "recettes":
                 recipes_panel()
+            elif normalized_tab == "bibliotheque":
+                shared_library_panel()
+            elif normalized_tab == "activite":
+                activity_panel()
             elif normalized_tab == "donnees":
                 backup_panel()
 

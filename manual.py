@@ -252,6 +252,8 @@ L’onglet **Combat** contient les six caractéristiques :
 
 Le modificateur est calculé automatiquement. Un score temporaire peut être inscrit pour représenter un effet magique, une maladie ou une autre modification temporaire.
 
+La présentation est maintenant plus compacte : les six caractéristiques peuvent tenir sur une seule ligne sur un grand écran. Chaque carte affiche le score, le score temporaire et le modificateur sans occuper inutilement de hauteur. Sur téléphone, les cartes se replacent automatiquement sur deux colonnes, puis une seule lorsque nécessaire.
+
 La phase 1 calcule notamment :
 
 - la classe d’armure totale;
@@ -266,11 +268,29 @@ La phase 1 calcule notamment :
 - **BMO / CMB** : bonus de manœuvre offensive, utilisé pour effectuer une manœuvre de combat;
 - **DMD / CMD** : degré de manœuvre défensive, utilisé comme difficulté pour résister à une manœuvre.
 
-Le BMO/CMB tient compte du bonus de base à l’attaque, de la Force — ou de la Dextérité pour les créatures très petites —, de la taille et du modificateur divers.
+**BMO/CMB = BBA + modificateur de Force** — ou Dextérité pour une créature Très petite ou plus petite — **+ modificateur spécial de taille + divers**.
 
-Le DMD/CMD tient compte de 10, du bonus de base à l’attaque, de la Force, de la Dextérité, de la taille, du bonus de déviation et du modificateur divers propre au DMD/CMD.
+**DMD/CMD = 10 + BBA + modificateur de Force + modificateur de Dextérité + modificateur spécial de taille + bonus de déviation + autres bonus applicables + divers**.
 
-Les points de vie, dégâts non létaux, vitesse, réduction des dégâts, résistance à la magie, bonus d’armure, bouclier et autres modificateurs restent modifiables.
+Les bonus d’esquive et les autres bonus applicables doivent être inscrits dans **Divers – DMD/CMD**. Les pénalités négatives inscrites dans **Divers CA** sont appliquées automatiquement au DMD/CMD.
+
+Les champs de **Combat et défenses** sont plus courts et plus denses. Les valeurs numériques, généralement limitées à quelques chiffres, sont regroupées sur davantage de colonnes sur ordinateur et se replacent proprement sur téléphone.
+
+### Règles de calcul intégrées
+
+Un bouton **Règles de calcul**, placé près des boutons d’enregistrement, ouvre une aide détaillée destinée aux joueurs moins familiers avec Pathfinder ou Ravenloft.
+
+La fenêtre regroupe :
+
+- le calcul des modificateurs de caractéristiques;
+- la CA totale, la CA de contact et la CA pris au dépourvu;
+- l’initiative;
+- le BMO/CMB et le DMD/CMD;
+- Vigueur, Réflexes, Volonté, Peur, Horreur et Folie;
+- les compétences;
+- les bonus d’attaque.
+
+Chaque rubrique présente la formule générale et, lorsque des données sont disponibles, un exemple calculé avec les valeurs du personnage actuel.
 
 ### Jets de sauvegarde Ravenloft
 

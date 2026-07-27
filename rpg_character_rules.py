@@ -455,237 +455,223 @@ def combat_maneuver_size_modifier(
     )
 
 
+def armor_class_breakdown(
+    character,
+):
+    """Décompose les trois formes de classe d’armure."""
+
+    dex_modifier = ability_modifier_for_character(
+        character,
+        "dex",
+    )
+    size_modifier = ac_size_modifier(
+        character.get("size_key")
+    )
+    armor_bonus = as_int(character.get("armor_bonus"))
+    shield_bonus = as_int(character.get("shield_bonus"))
+    natural_bonus = as_int(
+        character.get("natural_armor_bonus")
+    )
+    deflection_bonus = as_int(
+        character.get("deflection_bonus")
+    )
+    misc_modifier = as_int(
+        character.get("misc_ac_modifier")
+    )
+    flat_footed_dex = min(dex_modifier, 0)
+
+    total = (
+        10
+        + armor_bonus
+        + shield_bonus
+        + dex_modifier
+        + size_modifier
+        + natural_bonus
+        + deflection_bonus
+        + misc_modifier
+    )
+    touch = (
+        10
+        + dex_modifier
+        + size_modifier
+        + deflection_bonus
+        + misc_modifier
+    )
+    flat_footed = (
+        10
+        + armor_bonus
+        + shield_bonus
+        + flat_footed_dex
+        + size_modifier
+        + natural_bonus
+        + deflection_bonus
+        + misc_modifier
+    )
+
+    return {
+        "base": 10,
+        "armor_bonus": armor_bonus,
+        "shield_bonus": shield_bonus,
+        "dex_modifier": dex_modifier,
+        "flat_footed_dex_modifier": flat_footed_dex,
+        "size_modifier": size_modifier,
+        "natural_armor_bonus": natural_bonus,
+        "deflection_bonus": deflection_bonus,
+        "misc_modifier": misc_modifier,
+        "total": total,
+        "touch": touch,
+        "flat_footed": flat_footed,
+    }
+
+
 def armor_class_total(
     character,
 ) -> int:
-    dex_modifier = (
-        ability_modifier_for_character(
-            character,
-            "dex",
-        )
-    )
-
-    return (
-        10
-        + as_int(
-            character.get(
-                "armor_bonus"
-            )
-        )
-        + as_int(
-            character.get(
-                "shield_bonus"
-            )
-        )
-        + dex_modifier
-        + ac_size_modifier(
-            character.get(
-                "size_key"
-            )
-        )
-        + as_int(
-            character.get(
-                "natural_armor_bonus"
-            )
-        )
-        + as_int(
-            character.get(
-                "deflection_bonus"
-            )
-        )
-        + as_int(
-            character.get(
-                "misc_ac_modifier"
-            )
-        )
-    )
+    return armor_class_breakdown(character)["total"]
 
 
 def touch_armor_class(
     character,
 ) -> int:
-    dex_modifier = (
-        ability_modifier_for_character(
-            character,
-            "dex",
-        )
-    )
-
-    return (
-        10
-        + dex_modifier
-        + ac_size_modifier(
-            character.get(
-                "size_key"
-            )
-        )
-        + as_int(
-            character.get(
-                "deflection_bonus"
-            )
-        )
-        + as_int(
-            character.get(
-                "misc_ac_modifier"
-            )
-        )
-    )
+    return armor_class_breakdown(character)["touch"]
 
 
 def flat_footed_armor_class(
     character,
 ) -> int:
-    dex_modifier = (
-        ability_modifier_for_character(
-            character,
-            "dex",
-        )
+    return armor_class_breakdown(character)["flat_footed"]
+
+
+def initiative_breakdown(
+    character,
+):
+    dex_modifier = ability_modifier_for_character(
+        character,
+        "dex",
+    )
+    misc_modifier = as_int(
+        character.get("initiative_misc_modifier")
     )
 
-    return (
-        10
-        + as_int(
-            character.get(
-                "armor_bonus"
-            )
-        )
-        + as_int(
-            character.get(
-                "shield_bonus"
-            )
-        )
-        + min(
-            dex_modifier,
-            0,
-        )
-        + ac_size_modifier(
-            character.get(
-                "size_key"
-            )
-        )
-        + as_int(
-            character.get(
-                "natural_armor_bonus"
-            )
-        )
-        + as_int(
-            character.get(
-                "deflection_bonus"
-            )
-        )
-        + as_int(
-            character.get(
-                "misc_ac_modifier"
-            )
-        )
-    )
+    return {
+        "dex_modifier": dex_modifier,
+        "misc_modifier": misc_modifier,
+        "total": dex_modifier + misc_modifier,
+    }
 
 
 def initiative_total(
     character,
 ) -> int:
-    return (
-        ability_modifier_for_character(
-            character,
-            "dex",
-        )
-        + as_int(
-            character.get(
-                "initiative_misc_modifier"
-            )
-        )
+    return initiative_breakdown(character)["total"]
+
+
+def cmb_breakdown(
+    character,
+):
+    """Décompose le BMO/CMB de Pathfinder 1re édition."""
+
+    size_key = str(
+        character.get("size_key") or "medium"
     )
+    ability_key = (
+        "dex"
+        if size_key in TINY_OR_SMALLER_SIZE_KEYS
+        else "str"
+    )
+    base_attack_bonus = as_int(
+        character.get("base_attack_bonus")
+    )
+    ability_mod = ability_modifier_for_character(
+        character,
+        ability_key,
+    )
+    size_modifier = combat_maneuver_size_modifier(
+        size_key
+    )
+    misc_modifier = as_int(
+        character.get("cmb_misc_modifier")
+    )
+
+    return {
+        "ability_key": ability_key,
+        "base_attack_bonus": base_attack_bonus,
+        "ability_modifier": ability_mod,
+        "size_modifier": size_modifier,
+        "misc_modifier": misc_modifier,
+        "total": (
+            base_attack_bonus
+            + ability_mod
+            + size_modifier
+            + misc_modifier
+        ),
+    }
 
 
 def cmb_total(
     character,
 ) -> int:
-    """Bonus de manœuvre offensive / Combat Maneuver Bonus."""
+    return cmb_breakdown(character)["total"]
 
-    size_key = str(
-        character.get(
-            "size_key"
-        )
-        or "medium"
+
+def cmd_breakdown(
+    character,
+):
+    """Décompose le DMD/CMD de Pathfinder 1re édition."""
+
+    base_attack_bonus = as_int(
+        character.get("base_attack_bonus")
+    )
+    strength_modifier = ability_modifier_for_character(
+        character,
+        "str",
+    )
+    dexterity_modifier = ability_modifier_for_character(
+        character,
+        "dex",
+    )
+    size_modifier = combat_maneuver_size_modifier(
+        character.get("size_key")
+    )
+    deflection_bonus = as_int(
+        character.get("deflection_bonus")
+    )
+    automatic_ac_penalty = min(
+        as_int(character.get("misc_ac_modifier")),
+        0,
+    )
+    misc_modifier = as_int(
+        character.get("cmd_misc_modifier")
     )
 
-    ability_key = (
-        "dex"
-        if size_key
-        in TINY_OR_SMALLER_SIZE_KEYS
-        else "str"
+    total = (
+        10
+        + base_attack_bonus
+        + strength_modifier
+        + dexterity_modifier
+        + size_modifier
+        + deflection_bonus
+        + automatic_ac_penalty
+        + misc_modifier
     )
 
-    return (
-        as_int(
-            character.get(
-                "base_attack_bonus"
-            )
-        )
-        + ability_modifier_for_character(
-            character,
-            ability_key,
-        )
-        + combat_maneuver_size_modifier(
-            size_key
-        )
-        + as_int(
-            character.get(
-                "cmb_misc_modifier"
-            )
-        )
-    )
+    return {
+        "base": 10,
+        "base_attack_bonus": base_attack_bonus,
+        "strength_modifier": strength_modifier,
+        "dexterity_modifier": dexterity_modifier,
+        "size_modifier": size_modifier,
+        "deflection_bonus": deflection_bonus,
+        "automatic_ac_penalty": automatic_ac_penalty,
+        "misc_modifier": misc_modifier,
+        "total": total,
+    }
 
 
 def cmd_total(
     character,
 ) -> int:
-    """Degré de manœuvre défensive / Combat Maneuver Defense."""
-
-    misc_ac_modifier = as_int(
-        character.get(
-            "misc_ac_modifier"
-        )
-    )
-
-    # Toutes les pénalités à la CA s’appliquent au DMD/CMD.
-    automatic_ac_penalty = min(
-        misc_ac_modifier,
-        0,
-    )
-
-    return (
-        10
-        + as_int(
-            character.get(
-                "base_attack_bonus"
-            )
-        )
-        + ability_modifier_for_character(
-            character,
-            "str",
-        )
-        + ability_modifier_for_character(
-            character,
-            "dex",
-        )
-        + combat_maneuver_size_modifier(
-            character.get(
-                "size_key"
-            )
-        )
-        + as_int(
-            character.get(
-                "deflection_bonus"
-            )
-        )
-        + automatic_ac_penalty
-        + as_int(
-            character.get(
-                "cmd_misc_modifier"
-            )
-        )
-    )
+    return cmd_breakdown(character)["total"]
 
 
 def grapple_total(
@@ -698,42 +684,51 @@ def grapple_total(
     )
 
 
+def save_breakdown(
+    character,
+    save_row,
+):
+    definition = SAVE_DEFINITIONS[
+        save_row["save_key"]
+    ]
+    ability_key = definition["ability_key"]
+    base_save = as_int(save_row.get("base_save"))
+    ability_mod = ability_modifier_for_character(
+        character,
+        ability_key,
+    )
+    magic_modifier = as_int(
+        save_row.get("magic_modifier")
+    )
+    misc_modifier = as_int(
+        save_row.get("misc_modifier")
+    )
+    temporary_modifier = as_int(
+        save_row.get("temporary_modifier")
+    )
+
+    return {
+        "ability_key": ability_key,
+        "base_save": base_save,
+        "ability_modifier": ability_mod,
+        "magic_modifier": magic_modifier,
+        "misc_modifier": misc_modifier,
+        "temporary_modifier": temporary_modifier,
+        "total": (
+            base_save
+            + ability_mod
+            + magic_modifier
+            + misc_modifier
+            + temporary_modifier
+        ),
+    }
+
+
 def save_total(
     character,
     save_row,
 ) -> int:
-    definition = SAVE_DEFINITIONS[
-        save_row["save_key"]
-    ]
-
-    return (
-        as_int(
-            save_row.get(
-                "base_save"
-            )
-        )
-        + ability_modifier_for_character(
-            character,
-            definition[
-                "ability_key"
-            ],
-        )
-        + as_int(
-            save_row.get(
-                "magic_modifier"
-            )
-        )
-        + as_int(
-            save_row.get(
-                "misc_modifier"
-            )
-        )
-        + as_int(
-            save_row.get(
-                "temporary_modifier"
-            )
-        )
-    )
+    return save_breakdown(character, save_row)["total"]
 
 
 def skill_class_bonus(
@@ -845,36 +840,48 @@ def skill_total(
     )["total"]
 
 
+def attack_breakdown(
+    character,
+    attack_row,
+):
+    ability_key = attack_row.get("ability_key") or "str"
+    base_attack_bonus = as_int(
+        character.get("base_attack_bonus")
+    )
+    ability_mod = ability_modifier_for_character(
+        character,
+        ability_key,
+    )
+    size_modifier = ac_size_modifier(
+        character.get("size_key")
+    )
+    magic_bonus = as_int(
+        attack_row.get("magic_bonus")
+    )
+    misc_bonus = as_int(
+        attack_row.get("misc_bonus")
+    )
+
+    return {
+        "ability_key": ability_key,
+        "base_attack_bonus": base_attack_bonus,
+        "ability_modifier": ability_mod,
+        "size_modifier": size_modifier,
+        "magic_bonus": magic_bonus,
+        "misc_bonus": misc_bonus,
+        "total": (
+            base_attack_bonus
+            + ability_mod
+            + size_modifier
+            + magic_bonus
+            + misc_bonus
+        ),
+    }
+
+
 def attack_total(
     character,
     attack_row,
 ) -> int:
-    return (
-        as_int(
-            character.get(
-                "base_attack_bonus"
-            )
-        )
-        + ability_modifier_for_character(
-            character,
-            attack_row.get(
-                "ability_key"
-            )
-            or "str",
-        )
-        + ac_size_modifier(
-            character.get(
-                "size_key"
-            )
-        )
-        + as_int(
-            attack_row.get(
-                "magic_bonus"
-            )
-        )
-        + as_int(
-            attack_row.get(
-                "misc_bonus"
-            )
-        )
-    )
+    return attack_breakdown(character, attack_row)["total"]
+

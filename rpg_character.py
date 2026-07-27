@@ -29,14 +29,20 @@ from rpg_character_rules import (
     SIZE_LABELS,
     ability_modifier,
     ability_modifier_for_character,
+    armor_class_breakdown,
     armor_class_total,
+    attack_breakdown,
     attack_total,
+    cmb_breakdown,
     cmb_total,
+    cmd_breakdown,
     cmd_total,
     flat_footed_armor_class,
     format_modifier,
     format_number,
+    initiative_breakdown,
     initiative_total,
+    save_breakdown,
     save_total,
     skill_breakdown,
     skill_total,
@@ -328,6 +334,143 @@ RPG_CSS = r"""
             minmax(5.8rem, 1fr)
             minmax(4.2rem, 0.75fr)
             minmax(4.2rem, 0.75fr);
+    }
+}
+
+.jf-rpg-ability-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+.jf-rpg-ability-card {
+    padding: 0.58rem 0.65rem;
+    border-radius: 13px;
+}
+
+.jf-rpg-ability-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+    width: 100%;
+}
+
+.jf-rpg-ability-title {
+    min-width: 0;
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+.jf-rpg-ability-modifier {
+    flex: 0 0 auto;
+    min-width: 2.45rem;
+    padding: 0.12rem 0.42rem;
+    border-radius: 999px;
+    text-align: center;
+    color: white;
+    background: var(--jf-navy);
+    font-size: 0.92rem;
+    font-weight: 800;
+}
+
+.jf-rpg-ability-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.35rem;
+    width: 100%;
+    margin-top: 0.35rem;
+}
+
+.jf-rpg-compact-field .q-field__control {
+    min-height: 38px;
+    height: 38px;
+}
+
+.jf-rpg-compact-field .q-field__native,
+.jf-rpg-compact-field .q-field__input,
+.jf-rpg-compact-field .q-field__label {
+    font-size: 0.78rem;
+}
+
+.jf-rpg-combat-grid {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(7.25rem, 1fr));
+    gap: 0.45rem 0.55rem;
+    width: 100%;
+}
+
+.jf-rpg-result-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(6.5rem, 1fr));
+    gap: 0.55rem;
+    width: 100%;
+}
+
+.jf-rpg-result-item {
+    padding: 0.45rem 0.55rem;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.52);
+}
+
+.body--dark .jf-rpg-result-item {
+    background: rgba(0, 0, 0, 0.12);
+}
+
+.jf-rpg-rules-formula {
+    width: 100%;
+    margin-top: 0.3rem;
+    padding: 0.55rem 0.65rem;
+    border-radius: 10px;
+    background: var(--jf-blue-soft);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.jf-rpg-rules-example {
+    width: 100%;
+    margin-top: 0.35rem;
+    padding: 0.55rem 0.65rem;
+    border-left: 4px solid var(--jf-gold);
+    border-radius: 9px;
+    background: rgba(189, 149, 85, 0.09);
+    font-size: 0.8rem;
+}
+
+@media (max-width: 1180px) {
+    .jf-rpg-ability-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .jf-rpg-combat-grid {
+        grid-template-columns: repeat(5, minmax(7rem, 1fr));
+    }
+
+    .jf-rpg-result-grid {
+        grid-template-columns: repeat(3, minmax(6.5rem, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .jf-rpg-ability-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .jf-rpg-combat-grid {
+        grid-template-columns: repeat(3, minmax(6.5rem, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    .jf-rpg-ability-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .jf-rpg-combat-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .jf-rpg-result-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
@@ -856,12 +999,371 @@ def _identity_panel(
             )
 
 
+
+def _signed_rule_part(
+    label,
+    value,
+) -> str:
+    return f"{label} {format_modifier(value)}"
+
+
+def _calculation_rules_dialog(
+    user_id,
+    character,
+):
+    """Ouvre une aide complète avec formules et exemples actuels."""
+
+    try:
+        saves = list_rpg_saves(
+            user_id,
+            character["id"],
+        )
+    except Exception:
+        saves = []
+
+    try:
+        skills = list_rpg_skills(
+            user_id,
+            character["id"],
+        )
+    except Exception:
+        skills = []
+
+    try:
+        attacks = list_rpg_attacks(
+            user_id,
+            character["id"],
+        )
+    except Exception:
+        attacks = []
+
+    ac = armor_class_breakdown(character)
+    initiative = initiative_breakdown(character)
+    cmb = cmb_breakdown(character)
+    cmd = cmd_breakdown(character)
+
+    def formula_block(
+        title,
+        formula,
+        example,
+        note=None,
+    ):
+        ui.label(title).classes(
+            "font-bold mt-2"
+        )
+        ui.label(formula).classes(
+            "jf-rpg-rules-formula"
+        )
+        ui.label(
+            f"Avec ce personnage : {example}"
+        ).classes(
+            "jf-rpg-rules-example"
+        )
+        if note:
+            ui.label(note).classes(
+                "text-xs jf-muted mt-1"
+            )
+
+    with ui.dialog() as dialog:
+        with ui.card().classes(
+            "w-full max-w-5xl p-0 max-h-[90vh] overflow-auto"
+        ):
+            with ui.row().classes(
+                "w-full items-center justify-between gap-3 p-4 pb-2"
+            ):
+                with ui.column().classes("gap-0"):
+                    ui.label(
+                        "Règles de calcul"
+                    ).classes(
+                        "text-2xl font-bold"
+                    )
+                    ui.label(
+                        "Formules Pathfinder et Ravenloft, avec des exemples calculés à partir du personnage."
+                    ).classes(
+                        "text-sm jf-muted"
+                    )
+                ui.button(
+                    icon="close",
+                    on_click=dialog.close,
+                ).props(
+                    "flat round"
+                )
+
+            with ui.column().classes(
+                "w-full gap-2 px-4 pb-4"
+            ):
+                with ui.expansion(
+                    "Caractéristiques",
+                    icon="tune",
+                    value=True,
+                ).props(
+                    "expand-separator"
+                ).classes("w-full"):
+                    ui.label(
+                        "Modificateur = arrondi inférieur de ((score effectif − 10) ÷ 2). Le score temporaire remplace le score normal lorsqu’il est rempli."
+                    ).classes(
+                        "jf-rpg-rules-formula"
+                    )
+                    ability_examples = []
+                    for ability_key in ABILITY_LABELS:
+                        score = character.get(
+                            f"{ability_key}_temp_score"
+                        ) or character.get(
+                            f"{ability_key}_score"
+                        )
+                        ability_examples.append(
+                            f"{ABILITY_LABELS[ability_key]} {score} → {format_modifier(ability_modifier_for_character(character, ability_key))}"
+                        )
+                    ui.label(
+                        "Avec ce personnage : " + "  ·  ".join(ability_examples)
+                    ).classes(
+                        "jf-rpg-rules-example"
+                    )
+
+                with ui.expansion(
+                    "Classe d’armure et initiative",
+                    icon="shield",
+                    value=True,
+                ).props(
+                    "expand-separator"
+                ).classes("w-full"):
+                    formula_block(
+                        "CA totale",
+                        "CA = 10 + armure + bouclier + DEX + taille + armure naturelle + déviation + divers",
+                        " + ".join([
+                            "10",
+                            _signed_rule_part("armure", ac["armor_bonus"]),
+                            _signed_rule_part("bouclier", ac["shield_bonus"]),
+                            _signed_rule_part("DEX", ac["dex_modifier"]),
+                            _signed_rule_part("taille", ac["size_modifier"]),
+                            _signed_rule_part("naturelle", ac["natural_armor_bonus"]),
+                            _signed_rule_part("déviation", ac["deflection_bonus"]),
+                            _signed_rule_part("divers", ac["misc_modifier"]),
+                        ]) + f" = {ac['total']}",
+                    )
+                    formula_block(
+                        "CA de contact",
+                        "CA de contact = 10 + DEX + taille + déviation + divers",
+                        " + ".join([
+                            "10",
+                            _signed_rule_part("DEX", ac["dex_modifier"]),
+                            _signed_rule_part("taille", ac["size_modifier"]),
+                            _signed_rule_part("déviation", ac["deflection_bonus"]),
+                            _signed_rule_part("divers", ac["misc_modifier"]),
+                        ]) + f" = {ac['touch']}",
+                        "L’armure, le bouclier et l’armure naturelle ne protègent normalement pas contre une attaque de contact.",
+                    )
+                    formula_block(
+                        "CA pris au dépourvu",
+                        "CA pris au dépourvu = 10 + armure + bouclier + DEX négative seulement + taille + armure naturelle + déviation + divers",
+                        " + ".join([
+                            "10",
+                            _signed_rule_part("armure", ac["armor_bonus"]),
+                            _signed_rule_part("bouclier", ac["shield_bonus"]),
+                            _signed_rule_part("DEX retenue", ac["flat_footed_dex_modifier"]),
+                            _signed_rule_part("taille", ac["size_modifier"]),
+                            _signed_rule_part("naturelle", ac["natural_armor_bonus"]),
+                            _signed_rule_part("déviation", ac["deflection_bonus"]),
+                            _signed_rule_part("divers", ac["misc_modifier"]),
+                        ]) + f" = {ac['flat_footed']}",
+                        "Un bonus positif de DEX est retiré; une pénalité de DEX demeure.",
+                    )
+                    formula_block(
+                        "Initiative",
+                        "Initiative = modificateur de DEX + divers",
+                        " + ".join([
+                            _signed_rule_part("DEX", initiative["dex_modifier"]),
+                            _signed_rule_part("divers", initiative["misc_modifier"]),
+                        ]) + f" = {format_modifier(initiative['total'])}",
+                    )
+
+                with ui.expansion(
+                    "BMO / CMB et DMD / CMD",
+                    icon="sports_martial_arts",
+                    value=True,
+                ).props(
+                    "expand-separator"
+                ).classes("w-full"):
+                    cmb_ability = ABILITY_LABELS.get(
+                        cmb["ability_key"],
+                        cmb["ability_key"].upper(),
+                    )
+                    formula_block(
+                        "BMO / CMB",
+                        "BMO/CMB = BBA + modificateur de Force (ou Dextérité pour une créature Très petite ou plus petite) + modificateur spécial de taille + divers",
+                        " + ".join([
+                            _signed_rule_part("BBA", cmb["base_attack_bonus"]),
+                            _signed_rule_part(cmb_ability, cmb["ability_modifier"]),
+                            _signed_rule_part("taille spéciale", cmb["size_modifier"]),
+                            _signed_rule_part("divers", cmb["misc_modifier"]),
+                        ]) + f" = {format_modifier(cmb['total'])}",
+                    )
+                    formula_block(
+                        "DMD / CMD",
+                        "DMD/CMD = 10 + BBA + FOR + DEX + modificateur spécial de taille + déviation + autres bonus applicables + divers",
+                        " + ".join([
+                            "10",
+                            _signed_rule_part("BBA", cmd["base_attack_bonus"]),
+                            _signed_rule_part("FOR", cmd["strength_modifier"]),
+                            _signed_rule_part("DEX", cmd["dexterity_modifier"]),
+                            _signed_rule_part("taille spéciale", cmd["size_modifier"]),
+                            _signed_rule_part("déviation", cmd["deflection_bonus"]),
+                            _signed_rule_part("pénalités CA", cmd["automatic_ac_penalty"]),
+                            _signed_rule_part("divers", cmd["misc_modifier"]),
+                        ]) + f" = {cmd['total']}",
+                        "Les bonus d’esquive et les autres bonus applicables doivent être inscrits dans Divers – DMD/CMD. Les pénalités négatives du champ Divers CA sont appliquées automatiquement.",
+                    )
+
+                with ui.expansion(
+                    "Jets de sauvegarde",
+                    icon="health_and_safety",
+                ).props(
+                    "expand-separator"
+                ).classes("w-full"):
+                    ui.label(
+                        "Total = base + modificateur de caractéristique + magie + divers + temporaire"
+                    ).classes(
+                        "jf-rpg-rules-formula"
+                    )
+                    if saves:
+                        for save_row in saves:
+                            breakdown = save_breakdown(
+                                character,
+                                save_row,
+                            )
+                            definition = SAVE_DEFINITIONS[
+                                save_row["save_key"]
+                            ]
+                            ability_label = ABILITY_LABELS[
+                                breakdown["ability_key"]
+                            ]
+                            example = " + ".join([
+                                _signed_rule_part("base", breakdown["base_save"]),
+                                _signed_rule_part(ability_label, breakdown["ability_modifier"]),
+                                _signed_rule_part("magie", breakdown["magic_modifier"]),
+                                _signed_rule_part("divers", breakdown["misc_modifier"]),
+                                _signed_rule_part("temp.", breakdown["temporary_modifier"]),
+                            ]) + f" = {format_modifier(breakdown['total'])}"
+                            formula_block(
+                                definition["label"],
+                                f"{definition['label']} = base + {ability_label} + magie + divers + temporaire",
+                                example,
+                                "Peur, Horreur et Folie utilisent actuellement la Sagesse dans cette feuille Ravenloft.",
+                            )
+                    else:
+                        ui.label(
+                            "Aucun jet de sauvegarde n’est disponible pour construire un exemple."
+                        ).classes("text-sm jf-muted")
+
+                with ui.expansion(
+                    "Compétences",
+                    icon="psychology",
+                ).props(
+                    "expand-separator"
+                ).classes("w-full"):
+                    ui.label(
+                        "Total = caractéristique + rangs + bonus de compétence de classe (+3 si au moins 1 rang) + divers + pénalité d’armure"
+                    ).classes(
+                        "jf-rpg-rules-formula"
+                    )
+                    sample_skill = next(
+                        (
+                            row for row in skills
+                            if row.get("skill_key") == "handle_animal"
+                            and Decimal(str(row.get("ranks") or 0)) > 0
+                        ),
+                        None,
+                    ) or next(
+                        (
+                            row for row in skills
+                            if Decimal(str(row.get("ranks") or 0)) > 0
+                        ),
+                        None,
+                    )
+                    if sample_skill:
+                        breakdown = skill_breakdown(
+                            character,
+                            sample_skill,
+                        )
+                        ability_label = ABILITY_LABELS[
+                            breakdown["ability_key"]
+                        ]
+                        example = " + ".join([
+                            _signed_rule_part(ability_label, breakdown["ability_modifier"]),
+                            _signed_rule_part("rangs", breakdown["ranks"]),
+                            _signed_rule_part("classe", breakdown["class_bonus"]),
+                            _signed_rule_part("divers", breakdown["misc_modifier"]),
+                            _signed_rule_part("armure", breakdown["armor_penalty"]),
+                        ]) + f" = {format_modifier(breakdown['total'])}"
+                        formula_block(
+                            _skill_display_name(
+                                sample_skill.get("skill_name"),
+                                sample_skill.get("english_name"),
+                            ),
+                            "Caractéristique + rangs + classe + divers + armure",
+                            example,
+                            "Le bonus de classe +3 est automatique et ne doit pas être recopié dans Divers.",
+                        )
+                    else:
+                        ui.label(
+                            "Ajoutez au moins 1 rang dans une compétence pour obtenir un exemple personnalisé."
+                        ).classes("text-sm jf-muted")
+
+                with ui.expansion(
+                    "Attaques",
+                    icon="gps_fixed",
+                ).props(
+                    "expand-separator"
+                ).classes("w-full"):
+                    ui.label(
+                        "Bonus d’attaque = BBA + caractéristique + modificateur de taille à la CA + magie + divers"
+                    ).classes(
+                        "jf-rpg-rules-formula"
+                    )
+                    if attacks:
+                        attack = attacks[0]
+                        breakdown = attack_breakdown(
+                            character,
+                            attack,
+                        )
+                        ability_label = ABILITY_LABELS[
+                            breakdown["ability_key"]
+                        ]
+                        example = " + ".join([
+                            _signed_rule_part("BBA", breakdown["base_attack_bonus"]),
+                            _signed_rule_part(ability_label, breakdown["ability_modifier"]),
+                            _signed_rule_part("taille", breakdown["size_modifier"]),
+                            _signed_rule_part("magie", breakdown["magic_bonus"]),
+                            _signed_rule_part("divers", breakdown["misc_bonus"]),
+                        ]) + f" = {format_modifier(breakdown['total'])}"
+                        formula_block(
+                            attack.get("attack_name") or "Première attaque",
+                            "BBA + caractéristique + taille + magie + divers",
+                            example,
+                        )
+                    else:
+                        ui.label(
+                            "Ajoutez une attaque pour obtenir un exemple personnalisé."
+                        ).classes("text-sm jf-muted")
+
+                with ui.row().classes(
+                    "w-full justify-end mt-2"
+                ):
+                    ui.button(
+                        "Fermer",
+                        icon="close",
+                        on_click=dialog.close,
+                    ).props("outline")
+
+    dialog.open()
+
+
 def _combat_panel(
     user_id,
     character,
 ):
     with ui.card().classes(
-        "w-full p-5"
+        "w-full p-4"
     ):
         ui.label(
             "Caractéristiques"
@@ -869,9 +1371,7 @@ def _combat_panel(
             "text-xl font-bold"
         )
         ui.label(
-            "Le modificateur est calculé automatiquement. "
-            "Un score temporaire, lorsqu’il est inscrit, "
-            "remplace le score normal pour les calculs."
+            "Le score temporaire remplace le score normal pour les calculs. Les six caractéristiques tiennent sur une seule ligne sur grand écran."
         ).classes(
             "text-sm jf-muted"
         )
@@ -879,54 +1379,58 @@ def _combat_panel(
         ability_inputs = {}
 
         with ui.element("div").classes(
-            "jf-rpg-ability-grid mt-3"
+            "jf-rpg-ability-grid mt-2"
         ):
             for ability_key in ABILITY_LABELS:
                 with ui.element("div").classes(
                     "jf-rpg-ability-card"
                 ):
-                    ui.label(
-                        (
-                            f"{ABILITY_LABELS[ability_key]} - "
-                            f"{ABILITY_LONG_LABELS[ability_key]}"
+                    with ui.element("div").classes(
+                        "jf-rpg-ability-header"
+                    ):
+                        ui.label(
+                            f"{ABILITY_LABELS[ability_key]} — {ABILITY_LONG_LABELS[ability_key]}"
+                        ).classes(
+                            "jf-rpg-ability-title"
                         )
-                    ).classes(
-                        "font-bold"
-                    )
+                        modifier_label = ui.label(
+                            ""
+                        ).classes(
+                            "jf-rpg-ability-modifier"
+                        )
 
-                    score_input = ui.number(
-                        label="Score",
-                        value=character[
-                            f"{ability_key}_score"
-                        ],
-                        min=1,
-                        max=100,
-                        step=1,
-                    ).props(
-                        "inputmode=numeric"
-                    ).classes(
-                        "w-full"
-                    )
+                    with ui.element("div").classes(
+                        "jf-rpg-ability-fields"
+                    ):
+                        score_input = ui.number(
+                            label="Score",
+                            value=character[
+                                f"{ability_key}_score"
+                            ],
+                            min=1,
+                            max=100,
+                            step=1,
+                        ).props(
+                            "dense outlined inputmode=numeric"
+                        ).classes(
+                            "jf-rpg-compact-field"
+                        )
 
-                    temp_input = ui.number(
-                        label="Score temporaire",
-                        value=character[
-                            f"{ability_key}_temp_score"
-                        ],
-                        min=1,
-                        max=100,
-                        step=1,
-                    ).props(
-                        "inputmode=numeric clearable"
-                    ).classes(
-                        "w-full"
-                    )
-
-                    modifier_label = ui.label(
-                        ""
-                    ).classes(
-                        "jf-rpg-stat-value"
-                    )
+                        temp_input = ui.number(
+                            label="Temp.",
+                            value=character[
+                                f"{ability_key}_temp_score"
+                            ],
+                            min=1,
+                            max=100,
+                            step=1,
+                        ).props(
+                            "dense outlined inputmode=numeric clearable"
+                        ).classes(
+                            "jf-rpg-compact-field"
+                        ).tooltip(
+                            "Score temporaire"
+                        )
 
                     def update_modifier(
                         _=None,
@@ -952,15 +1456,13 @@ def _combat_panel(
                     )
                     update_modifier()
 
-                    ability_inputs[
-                        ability_key
-                    ] = {
+                    ability_inputs[ability_key] = {
                         "score": score_input,
                         "temp": temp_input,
                     }
 
     with ui.card().classes(
-        "w-full p-5"
+        "w-full p-4"
     ):
         ui.label(
             "Combat et défenses"
@@ -969,302 +1471,202 @@ def _combat_panel(
         )
 
         with ui.element("div").classes(
-            "jf-rpg-grid mt-2"
+            "jf-rpg-combat-grid mt-2"
         ):
             max_hp_input = ui.number(
-                label="Points de vie maximums",
-                value=character[
-                    "max_hp"
-                ],
+                label="PV maximums",
+                value=character["max_hp"],
                 step=1,
-            ).classes(
-                "w-full"
-            )
+            ).props(
+                "dense outlined inputmode=numeric"
+            ).classes("jf-rpg-compact-field")
             current_hp_input = ui.number(
-                label="Points de vie actuels",
-                value=character[
-                    "current_hp"
-                ],
+                label="PV actuels",
+                value=character["current_hp"],
                 step=1,
-            ).classes(
-                "w-full"
-            )
+            ).props(
+                "dense outlined inputmode=numeric"
+            ).classes("jf-rpg-compact-field")
             nonlethal_input = ui.number(
                 label="Dégâts non létaux",
-                value=character[
-                    "nonlethal_damage"
-                ],
+                value=character["nonlethal_damage"],
                 min=0,
                 step=1,
-            ).classes(
-                "w-full"
-            )
+            ).props(
+                "dense outlined inputmode=numeric"
+            ).classes("jf-rpg-compact-field")
             speed_input = ui.input(
                 label="Vitesse",
-                value=character[
-                    "speed"
-                ] or "",
+                value=character["speed"] or "",
                 placeholder="Ex. 30 ft",
             ).props(
-                "maxlength=80"
-            ).classes(
-                "w-full"
-            )
+                "dense outlined maxlength=80"
+            ).classes("jf-rpg-compact-field")
             dr_input = ui.input(
-                label="Réduction des dégâts",
-                value=character[
-                    "damage_reduction"
-                ] or "",
+                label="Réduction dégâts",
+                value=character["damage_reduction"] or "",
                 placeholder="Ex. 5/argent",
             ).props(
-                "maxlength=80"
-            ).classes(
-                "w-full"
+                "dense outlined maxlength=80"
+            ).classes("jf-rpg-compact-field").tooltip(
+                "Réduction des dégâts"
             )
             sr_input = ui.number(
-                label="Résistance à la magie",
-                value=character[
-                    "spell_resistance"
-                ],
+                label="Résistance magie",
+                value=character["spell_resistance"],
                 min=0,
                 step=1,
             ).props(
-                "clearable"
-            ).classes(
-                "w-full"
+                "dense outlined clearable inputmode=numeric"
+            ).classes("jf-rpg-compact-field").tooltip(
+                "Résistance à la magie"
             )
             bab_input = ui.number(
-                label="Bonus de base à l’attaque",
-                value=character[
-                    "base_attack_bonus"
-                ],
+                label="BBA",
+                value=character["base_attack_bonus"],
                 step=1,
-            ).classes(
-                "w-full"
+            ).props(
+                "dense outlined inputmode=numeric"
+            ).classes("jf-rpg-compact-field").tooltip(
+                "Bonus de base à l’attaque"
             )
             armor_input = ui.number(
-                label="Bonus d’armure",
-                value=character[
-                    "armor_bonus"
-                ],
+                label="Armure",
+                value=character["armor_bonus"],
                 step=1,
-            ).classes(
-                "w-full"
+            ).props(
+                "dense outlined inputmode=numeric"
+            ).classes("jf-rpg-compact-field").tooltip(
+                "Bonus d’armure"
             )
             shield_input = ui.number(
-                label="Bonus de bouclier",
-                value=character[
-                    "shield_bonus"
-                ],
+                label="Bouclier",
+                value=character["shield_bonus"],
                 step=1,
-            ).classes(
-                "w-full"
+            ).props(
+                "dense outlined inputmode=numeric"
+            ).classes("jf-rpg-compact-field").tooltip(
+                "Bonus de bouclier"
             )
             natural_input = ui.number(
                 label="Armure naturelle",
-                value=character[
-                    "natural_armor_bonus"
-                ],
+                value=character["natural_armor_bonus"],
                 step=1,
-            ).classes(
-                "w-full"
-            )
+            ).props(
+                "dense outlined inputmode=numeric"
+            ).classes("jf-rpg-compact-field")
             deflection_input = ui.number(
-                label="Bonus de déviation",
-                value=character[
-                    "deflection_bonus"
-                ],
+                label="Déviation",
+                value=character["deflection_bonus"],
                 step=1,
-            ).classes(
-                "w-full"
+            ).props(
+                "dense outlined inputmode=numeric"
+            ).classes("jf-rpg-compact-field").tooltip(
+                "Bonus de déviation"
             )
             misc_ac_input = ui.number(
-                label="Modificateur divers de CA",
-                value=character[
-                    "misc_ac_modifier"
-                ],
+                label="Divers CA",
+                value=character["misc_ac_modifier"],
                 step=1,
-            ).classes(
-                "w-full"
-            )
+            ).props(
+                "dense outlined inputmode=numeric"
+            ).classes("jf-rpg-compact-field")
             armor_penalty_input = ui.number(
-                label="Pénalité d’armure",
-                value=character[
-                    "armor_check_penalty"
-                ],
+                label="Pénalité armure",
+                value=character["armor_check_penalty"],
                 max=0,
                 step=1,
-            ).classes(
-                "w-full"
-            )
+            ).props(
+                "dense outlined inputmode=numeric"
+            ).classes("jf-rpg-compact-field")
             initiative_misc_input = ui.number(
-                label="Divers - Initiative",
-                value=character[
-                    "initiative_misc_modifier"
-                ],
+                label="Divers initiative",
+                value=character["initiative_misc_modifier"],
                 step=1,
-            ).classes(
-                "w-full"
-            )
+            ).props(
+                "dense outlined inputmode=numeric"
+            ).classes("jf-rpg-compact-field")
             cmb_misc_input = ui.number(
-                label="Divers - BMO / CMB",
-                value=character[
-                    "cmb_misc_modifier"
-                ],
+                label="Divers BMO/CMB",
+                value=character["cmb_misc_modifier"],
                 step=1,
-            ).classes(
-                "w-full"
-            )
+            ).props(
+                "dense outlined inputmode=numeric"
+            ).classes("jf-rpg-compact-field")
             cmd_misc_input = ui.number(
-                label="Divers - DMD / CMD",
-                value=character[
-                    "cmd_misc_modifier"
-                ],
+                label="Divers DMD/CMD",
+                value=character["cmd_misc_modifier"],
                 step=1,
-            ).classes(
-                "w-full"
-            )
+            ).props(
+                "dense outlined inputmode=numeric"
+            ).classes("jf-rpg-compact-field")
 
         with ui.element("div").classes(
             "jf-rpg-help mt-3"
         ):
-            ui.label(
-                "Pathfinder : BMO/CMB sert à effectuer une "
-                "manœuvre de combat; DMD/CMD est la difficulté "
-                "à atteindre pour vous imposer une manœuvre. "
-                "Le bonus de déviation est ajouté automatiquement "
-                "au DMD/CMD. Ajoutez les autres bonus applicables "
-                "dans « Divers - DMD / CMD »."
-            ).classes(
-                "text-sm"
-            )
+            ui.markdown(
+                """
+**BMO / CMB** = BBA + modificateur de Force *(ou Dextérité pour une créature Très petite ou plus petite)* + modificateur spécial de taille + divers.
+
+**DMD / CMD** = 10 + BBA + modificateur de Force + modificateur de Dextérité + modificateur spécial de taille + bonus de déviation + autres bonus applicables + divers.
+
+Les bonus d’esquive et les autres bonus applicables doivent être inscrits dans **Divers – DMD/CMD**. Les pénalités négatives inscrites dans **Divers CA** sont appliquées automatiquement au DMD/CMD.
+                """
+            ).classes("text-sm")
+
+        def current_draft():
+            draft = dict(character)
+
+            for ability_key, controls in ability_inputs.items():
+                draft[f"{ability_key}_score"] = controls["score"].value
+                draft[f"{ability_key}_temp_score"] = controls["temp"].value
+
+            draft.update({
+                "max_hp": max_hp_input.value,
+                "current_hp": current_hp_input.value,
+                "nonlethal_damage": nonlethal_input.value,
+                "speed": speed_input.value,
+                "damage_reduction": dr_input.value,
+                "spell_resistance": sr_input.value,
+                "base_attack_bonus": bab_input.value,
+                "armor_bonus": armor_input.value,
+                "shield_bonus": shield_input.value,
+                "natural_armor_bonus": natural_input.value,
+                "deflection_bonus": deflection_input.value,
+                "misc_ac_modifier": misc_ac_input.value,
+                "armor_check_penalty": armor_penalty_input.value,
+                "initiative_misc_modifier": initiative_misc_input.value,
+                "cmb_misc_modifier": cmb_misc_input.value,
+                "cmd_misc_modifier": cmd_misc_input.value,
+                "grapple_misc_modifier": cmb_misc_input.value,
+            })
+            return draft
 
         @ui.refreshable
         def render_preview():
-            draft = dict(
-                character
-            )
-
-            for ability_key, controls in (
-                ability_inputs.items()
-            ):
-                draft[
-                    f"{ability_key}_score"
-                ] = controls[
-                    "score"
-                ].value
-                draft[
-                    f"{ability_key}_temp_score"
-                ] = controls[
-                    "temp"
-                ].value
-
-            draft.update(
-                {
-                    "max_hp": max_hp_input.value,
-                    "current_hp": (
-                        current_hp_input.value
-                    ),
-                    "nonlethal_damage": (
-                        nonlethal_input.value
-                    ),
-                    "base_attack_bonus": (
-                        bab_input.value
-                    ),
-                    "armor_bonus": (
-                        armor_input.value
-                    ),
-                    "shield_bonus": (
-                        shield_input.value
-                    ),
-                    "natural_armor_bonus": (
-                        natural_input.value
-                    ),
-                    "deflection_bonus": (
-                        deflection_input.value
-                    ),
-                    "misc_ac_modifier": (
-                        misc_ac_input.value
-                    ),
-                    "armor_check_penalty": (
-                        armor_penalty_input.value
-                    ),
-                    "initiative_misc_modifier": (
-                        initiative_misc_input.value
-                    ),
-                    "cmb_misc_modifier": (
-                        cmb_misc_input.value
-                    ),
-                    "cmd_misc_modifier": (
-                        cmd_misc_input.value
-                    ),
-                    "grapple_misc_modifier": (
-                        cmb_misc_input.value
-                    ),
-                }
-            )
+            draft = current_draft()
 
             with ui.element("div").classes(
                 "jf-rpg-summary mt-3"
             ):
                 with ui.element("div").classes(
-                    "jf-rpg-grid"
+                    "jf-rpg-result-grid"
                 ):
                     for label, value in (
-                        (
-                            "CA totale",
-                            armor_class_total(
-                                draft
-                            ),
-                        ),
-                        (
-                            "CA de contact",
-                            touch_armor_class(
-                                draft
-                            ),
-                        ),
-                        (
-                            "Pris au dépourvu",
-                            flat_footed_armor_class(
-                                draft
-                            ),
-                        ),
-                        (
-                            "Initiative",
-                            format_modifier(
-                                initiative_total(
-                                    draft
-                                )
-                            ),
-                        ),
-                        (
-                            "BMO / CMB",
-                            format_modifier(
-                                cmb_total(
-                                    draft
-                                )
-                            ),
-                        ),
-                        (
-                            "DMD / CMD",
-                            str(
-                                cmd_total(
-                                    draft
-                                )
-                            ),
-                        ),
+                        ("CA totale", armor_class_total(draft)),
+                        ("CA contact", touch_armor_class(draft)),
+                        ("Pris au dépourvu", flat_footed_armor_class(draft)),
+                        ("Initiative", format_modifier(initiative_total(draft))),
+                        ("BMO / CMB", format_modifier(cmb_total(draft))),
+                        ("DMD / CMD", str(cmd_total(draft))),
                     ):
-                        with ui.column().classes(
-                            "gap-0"
+                        with ui.element("div").classes(
+                            "jf-rpg-result-item"
                         ):
-                            ui.label(
-                                label
-                            ).classes(
+                            ui.label(label).classes(
                                 "text-xs jf-muted"
                             )
-                            ui.label(
-                                str(value)
-                            ).classes(
+                            ui.label(str(value)).classes(
                                 "jf-rpg-stat-value"
                             )
 
@@ -1286,89 +1688,21 @@ def _combat_panel(
 
         for control in preview_controls:
             control.on_value_change(
-                lambda event: (
-                    render_preview.refresh()
-                )
+                lambda event: render_preview.refresh()
             )
 
         for controls in ability_inputs.values():
             controls["score"].on_value_change(
-                lambda event: (
-                    render_preview.refresh()
-                )
+                lambda event: render_preview.refresh()
             )
             controls["temp"].on_value_change(
-                lambda event: (
-                    render_preview.refresh()
-                )
+                lambda event: render_preview.refresh()
             )
 
         render_preview()
 
         def save_combat():
-            values = {
-                "max_hp": max_hp_input.value,
-                "current_hp": (
-                    current_hp_input.value
-                ),
-                "nonlethal_damage": (
-                    nonlethal_input.value
-                ),
-                "speed": speed_input.value,
-                "damage_reduction": (
-                    dr_input.value
-                ),
-                "spell_resistance": (
-                    sr_input.value
-                ),
-                "base_attack_bonus": (
-                    bab_input.value
-                ),
-                "armor_bonus": (
-                    armor_input.value
-                ),
-                "shield_bonus": (
-                    shield_input.value
-                ),
-                "natural_armor_bonus": (
-                    natural_input.value
-                ),
-                "deflection_bonus": (
-                    deflection_input.value
-                ),
-                "misc_ac_modifier": (
-                    misc_ac_input.value
-                ),
-                "armor_check_penalty": (
-                    armor_penalty_input.value
-                ),
-                "initiative_misc_modifier": (
-                    initiative_misc_input.value
-                ),
-                "cmb_misc_modifier": (
-                    cmb_misc_input.value
-                ),
-                "cmd_misc_modifier": (
-                    cmd_misc_input.value
-                ),
-                "grapple_misc_modifier": (
-                    cmb_misc_input.value
-                ),
-            }
-
-            for ability_key, controls in (
-                ability_inputs.items()
-            ):
-                values[
-                    f"{ability_key}_score"
-                ] = controls[
-                    "score"
-                ].value
-                values[
-                    f"{ability_key}_temp_score"
-                ] = controls[
-                    "temp"
-                ].value
+            values = current_draft()
 
             try:
                 update_rpg_character_combat(
@@ -1379,10 +1713,7 @@ def _combat_panel(
             except Exception as error:
                 _safe_notify_error(
                     error,
-                    (
-                        "Les caractéristiques "
-                        "n’ont pas pu être enregistrées."
-                    ),
+                    "Les caractéristiques n’ont pas pu être enregistrées.",
                 )
                 return
 
@@ -1397,9 +1728,22 @@ def _combat_panel(
                 )
             )
 
+        def open_rules():
+            _calculation_rules_dialog(
+                user_id,
+                current_draft(),
+            )
+
         with ui.row().classes(
-            "jf-rpg-section-actions"
+            "jf-rpg-section-actions gap-2 flex-wrap"
         ):
+            ui.button(
+                "Règles de calcul",
+                icon="menu_book",
+                on_click=open_rules,
+            ).props(
+                "outline color=primary"
+            )
             ui.button(
                 "Enregistrer les caractéristiques",
                 icon="save",
@@ -1666,8 +2010,18 @@ def _saves_panel(
             )
 
         with ui.row().classes(
-            "jf-rpg-section-actions"
+            "jf-rpg-section-actions gap-2 flex-wrap"
         ):
+            ui.button(
+                "Règles de calcul",
+                icon="menu_book",
+                on_click=lambda: _calculation_rules_dialog(
+                    user_id,
+                    character,
+                ),
+            ).props(
+                "outline color=primary"
+            )
             ui.button(
                 "Enregistrer les sauvegardes",
                 icon="save",
@@ -2824,8 +3178,18 @@ def _skills_panel(
         )
 
     with ui.row().classes(
-        "jf-rpg-section-actions"
+        "jf-rpg-section-actions gap-2 flex-wrap"
     ):
+        ui.button(
+            "Règles de calcul",
+            icon="menu_book",
+            on_click=lambda: _calculation_rules_dialog(
+                user_id,
+                character,
+            ),
+        ).props(
+            "outline color=primary"
+        )
         ui.button(
             "Enregistrer les compétences",
             icon="save",

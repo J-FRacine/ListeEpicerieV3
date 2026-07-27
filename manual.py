@@ -419,9 +419,23 @@ Un administrateur peut notamment :
 
 - créer un compte;
 - attribuer ou retirer des accès aux familles;
+- choisir les applications visibles et utilisables par chaque utilisateur;
 - gérer les rôles autorisés;
 - activer ou désactiver un utilisateur;
 - consulter les informations nécessaires à l'administration.
+
+### Applications accessibles
+
+Le bouton **Applications** dans la fiche d’un compte permet d’autoriser :
+
+- Liste d’épicerie;
+- Journal de pression;
+- Finances;
+- Personnages JDR.
+
+Une application non autorisée ne paraît pas dans le Portail et ses écrans sont bloqués. Les applications encore en développement peuvent être attribuées à l’avance; elles affichent alors **Bientôt**.
+
+Un administrateur du portail possède automatiquement tous les accès.
 
 Les mots de passe ne doivent jamais être communiqués ou conservés en clair.
 """,

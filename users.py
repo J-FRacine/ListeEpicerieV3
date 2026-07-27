@@ -1,5 +1,13 @@
 from nicegui import ui
 
+from app_access import (
+    ALL_APP_KEYS,
+    APP_DEFINITIONS,
+    app_labels,
+    list_user_app_access_for_admin,
+    set_user_app_access_for_admin,
+)
+
 from auth import (
     hash_password,
     normalize_email,
@@ -32,6 +40,16 @@ def users_panel(current_user):
         for family in families
     }
     users = list_users_for_admin(actor_user_id)
+    access_by_user = (
+        list_user_app_access_for_admin(
+            actor_user_id
+        )
+    )
+    app_options = {
+        app_key: definition["label"]
+        for app_key, definition
+        in APP_DEFINITIONS.items()
+    }
 
     with ui.row().classes(
         "w-full items-start justify-between gap-3 flex-wrap"
@@ -39,7 +57,8 @@ def users_panel(current_user):
         with ui.column().classes("gap-0"):
             ui.label("Utilisateurs").classes("text-2xl font-bold")
             ui.label(
-                "Créez les comptes et choisissez leurs familles."
+                "Créez les comptes et choisissez leurs "
+                "familles et applications."
             ).classes("text-sm text-gray-500")
 
         ui.label(
@@ -75,6 +94,23 @@ def users_panel(current_user):
             label="Familles accessibles",
         ).props("use-chips").classes("w-full")
 
+        app_input = ui.select(
+            app_options,
+            value=["grocery"],
+            multiple=True,
+            label="Applications accessibles",
+        ).props(
+            "use-chips options-dense"
+        ).classes("w-full")
+
+        ui.label(
+            "Les applications à venir peuvent être "
+            "attribuées dès maintenant. Elles apparaîtront "
+            "avec la mention « Bientôt »."
+        ).classes(
+            "text-xs text-gray-500"
+        )
+
         admin_input = ui.checkbox(
             "Administrateur du portail — accès à toutes les familles"
         )
@@ -90,14 +126,23 @@ def users_panel(current_user):
             try:
                 validate_password(password_input.value or "")
                 password_hash = hash_password(password_input.value)
-                create_user_for_admin(
-                    actor_user_id,
-                    name_input.value,
-                    email_input.value,
-                    password_hash,
-                    family_input.value or [],
-                    is_admin=admin_input.value,
+                new_user_id = (
+                    create_user_for_admin(
+                        actor_user_id,
+                        name_input.value,
+                        email_input.value,
+                        password_hash,
+                        family_input.value or [],
+                        is_admin=admin_input.value,
+                    )
                 )
+
+                if not admin_input.value:
+                    set_user_app_access_for_admin(
+                        actor_user_id,
+                        new_user_id,
+                        app_input.value or [],
+                    )
             except (ValueError, PermissionError) as error:
                 ui.notify(str(error), type="warning")
                 return
@@ -152,6 +197,113 @@ def users_panel(current_user):
                         icon="save",
                         on_click=save_memberships,
                     ).props("color=primary")
+
+        dialog.open()
+
+    def open_app_access_dialog(user):
+        with ui.dialog() as dialog:
+            with ui.card().classes(
+                "w-full max-w-lg p-5"
+            ):
+                ui.label(
+                    "Applications accessibles"
+                ).classes(
+                    "text-xl font-bold"
+                )
+                ui.label(
+                    user["display_name"]
+                ).classes(
+                    "font-bold"
+                )
+
+                if user["is_admin"]:
+                    ui.label(
+                        "Un administrateur du portail "
+                        "a automatiquement accès à "
+                        "toutes les applications."
+                    ).classes(
+                        "text-sm text-gray-500"
+                    )
+
+                    with ui.row().classes(
+                        "w-full justify-end mt-3"
+                    ):
+                        ui.button(
+                            "Fermer",
+                            on_click=dialog.close,
+                        ).props("flat")
+                else:
+                    current_keys = sorted(
+                        access_by_user.get(
+                            user["id"],
+                            set(),
+                        )
+                    )
+
+                    applications_input = ui.select(
+                        app_options,
+                        value=current_keys,
+                        multiple=True,
+                        label="Applications",
+                    ).props(
+                        "use-chips options-dense"
+                    ).classes(
+                        "w-full"
+                    )
+
+                    ui.label(
+                        "Une application retirée disparaît "
+                        "du portail et ses routes deviennent "
+                        "inaccessibles pour ce compte."
+                    ).classes(
+                        "text-sm text-gray-500"
+                    )
+
+                    def save_app_access():
+                        try:
+                            set_user_app_access_for_admin(
+                                actor_user_id,
+                                user["id"],
+                                (
+                                    applications_input.value
+                                    or []
+                                ),
+                            )
+                        except (
+                            ValueError,
+                            PermissionError,
+                        ) as error:
+                            ui.notify(
+                                str(error),
+                                type="warning",
+                            )
+                            return
+
+                        dialog.close()
+                        ui.notify(
+                            "Accès aux applications "
+                            "mis à jour.",
+                            type="positive",
+                        )
+                        ui.navigate.to(
+                            "/?tab=utilisateurs"
+                        )
+
+                    with ui.row().classes(
+                        "w-full justify-end "
+                        "gap-2 mt-3"
+                    ):
+                        ui.button(
+                            "Annuler",
+                            on_click=dialog.close,
+                        ).props("flat")
+                        ui.button(
+                            "Enregistrer",
+                            icon="save",
+                            on_click=save_app_access,
+                        ).props(
+                            "color=primary"
+                        )
 
         dialog.open()
 
@@ -243,6 +395,33 @@ def users_panel(current_user):
                                 else "Aucune famille attribuée"
                             ).classes("text-sm text-gray-500")
 
+                            user_app_keys = (
+                                set(ALL_APP_KEYS)
+                                if user["is_admin"]
+                                else access_by_user.get(
+                                    user["id"],
+                                    set(),
+                                )
+                            )
+                            user_app_names = app_labels(
+                                user_app_keys
+                            )
+
+                            ui.label(
+                                (
+                                    "Applications : "
+                                    + ", ".join(
+                                        user_app_names
+                                    )
+                                )
+                                if user_app_names
+                                else (
+                                    "Applications : aucune"
+                                )
+                            ).classes(
+                                "text-sm text-gray-500"
+                            )
+
                     with ui.row().classes("items-center gap-0"):
                         ui.button(
                             icon="groups",
@@ -252,6 +431,19 @@ def users_panel(current_user):
                         ).props("flat round color=primary").tooltip(
                             "Gérer les familles"
                         )
+                        ui.button(
+                            icon="apps",
+                            on_click=lambda selected=user: (
+                                open_app_access_dialog(
+                                    selected
+                                )
+                            ),
+                        ).props(
+                            "flat round color=primary"
+                        ).tooltip(
+                            "Gérer les applications"
+                        )
+
                         ui.button(
                             icon="password",
                             on_click=lambda selected=user: (

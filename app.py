@@ -7,6 +7,11 @@ from pathlib import Path
 from nicegui import app, run, ui
 
 from activity import activity_panel
+from app_access import (
+    get_user_app_access,
+    init_app_access_schema,
+    user_has_app_access,
+)
 from auth import (
     authenticate,
     clear_session,
@@ -1066,11 +1071,20 @@ def show_portal(user):
                     "Déconnexion"
                 )
 
+        allowed_app_keys = (
+            get_user_app_access(
+                user["id"]
+            )
+        )
+
         accessible_families = get_accessible_families(
             user["id"]
         )
 
-        if not accessible_families:
+        if (
+            "grocery" in allowed_app_keys
+            and not accessible_families
+        ):
             with ui.card().classes(
                 "w-full p-5 border-l-4 border-primary"
             ):
@@ -1118,54 +1132,93 @@ def show_portal(user):
         with ui.element("div").classes(
             "jf-card-grid"
         ):
-            portal_action_card(
-                title="Liste d’épicerie",
-                description=(
-                    "Gérez les items, besoins, magasins, "
-                    "catégories, modèles et recettes."
-                ),
-                icon="shopping_cart",
-                action_label="Ouvrir",
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=items"
-                ),
-            )
+            visible_app_count = 0
 
-            portal_action_card(
-                title="Journal de pression",
-                description=(
-                    "Saisissez vos mesures de pression "
-                    "artérielle et votre pouls."
-                ),
-                icon="monitor_heart",
-                action_label="Bientôt",
-                badge="App 2",
-                enabled=False,
-            )
+            if "grocery" in allowed_app_keys:
+                visible_app_count += 1
+                portal_action_card(
+                    title="Liste d’épicerie",
+                    description=(
+                        "Gérez les items, besoins, magasins, "
+                        "catégories, modèles et recettes."
+                    ),
+                    icon="shopping_cart",
+                    action_label="Ouvrir",
+                    on_click=lambda: ui.navigate.to(
+                        "/?tab=items"
+                    ),
+                )
 
-            portal_action_card(
-                title="Finances",
-                description=(
-                    "Suivez manuellement les revenus, "
-                    "dépenses, budgets et transactions récurrentes."
-                ),
-                icon="account_balance_wallet",
-                action_label="Bientôt",
-                badge="App 3",
-                enabled=False,
-            )
+            if "blood_pressure" in allowed_app_keys:
+                visible_app_count += 1
+                portal_action_card(
+                    title="Journal de pression",
+                    description=(
+                        "Saisissez vos mesures de pression "
+                        "artérielle et votre pouls."
+                    ),
+                    icon="monitor_heart",
+                    action_label="Bientôt",
+                    badge="App 2",
+                    enabled=False,
+                )
 
-            portal_action_card(
-                title="Personnages JDR",
-                description=(
-                    "Feuilles de personnage interactives "
-                    "pour Donjons & Dragons et Ravenloft."
-                ),
-                icon="casino",
-                action_label="Bientôt",
-                badge="App 4",
-                enabled=False,
-            )
+            if "finances" in allowed_app_keys:
+                visible_app_count += 1
+                portal_action_card(
+                    title="Finances",
+                    description=(
+                        "Suivez manuellement les revenus, "
+                        "dépenses, budgets et transactions récurrentes."
+                    ),
+                    icon="account_balance_wallet",
+                    action_label="Bientôt",
+                    badge="App 3",
+                    enabled=False,
+                )
+
+            if "rpg" in allowed_app_keys:
+                visible_app_count += 1
+                portal_action_card(
+                    title="Personnages JDR",
+                    description=(
+                        "Feuilles de personnage interactives "
+                        "pour Donjons & Dragons et Ravenloft."
+                    ),
+                    icon="casino",
+                    action_label="Bientôt",
+                    badge="App 4",
+                    enabled=False,
+                )
+
+            if visible_app_count == 0:
+                with ui.card().classes(
+                    "jf-action-card"
+                ):
+                    with ui.element(
+                        "div"
+                    ).classes(
+                        "jf-action-icon"
+                    ):
+                        ui.icon(
+                            "apps_outage"
+                        ).classes(
+                            "text-2xl"
+                        )
+
+                    ui.label(
+                        "Aucune application attribuée"
+                    ).classes(
+                        "jf-action-title"
+                    )
+
+                    ui.label(
+                        "Un administrateur doit choisir "
+                        "les applications auxquelles "
+                        "votre compte peut accéder."
+                    ).classes(
+                        "text-sm jf-muted"
+                    )
 
         portal_section(
             "Mon espace",
@@ -1215,18 +1268,19 @@ def show_portal(user):
         with ui.element("div").classes(
             "jf-card-grid"
         ):
-            portal_action_card(
-                title="Commencer ici",
-                description=(
-                    "Suivez le parcours visuel : famille, "
-                    "magasins, catégories, items et utilisation."
-                ),
-                icon="rocket_launch",
-                action_label="Voir les étapes",
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=demarrage"
-                ),
-            )
+            if "grocery" in allowed_app_keys:
+                portal_action_card(
+                    title="Commencer ici",
+                    description=(
+                        "Suivez le parcours visuel : famille, "
+                        "magasins, catégories, items et utilisation."
+                    ),
+                    icon="rocket_launch",
+                    action_label="Voir les étapes",
+                    on_click=lambda: ui.navigate.to(
+                        "/?tab=demarrage"
+                    ),
+                )
 
             portal_action_card(
                 title="Manuel d’utilisation",
@@ -1280,6 +1334,32 @@ def show_portal(user):
                 )
 
 
+def ensure_valid_family(user_id):
+    families = get_accessible_families(
+        user_id
+    )
+
+    if not families:
+        set_current_family_id(None)
+        return False
+
+    valid_ids = {
+        family["id"]
+        for family in families
+    }
+
+    current_family_id = (
+        get_current_family_id()
+    )
+
+    if current_family_id not in valid_ids:
+        set_current_family_id(
+            families[0]["id"]
+        )
+
+    return True
+
+
 def show_no_family_message():
     with ui.card().classes("w-full p-6"):
         ui.icon("group_off").classes(
@@ -1307,6 +1387,47 @@ def show_no_family_message():
                     "/?tab=demarrage"
                 ),
             ).props("outline color=primary")
+
+
+def show_app_access_denied(
+    app_name,
+):
+    with ui.card().classes(
+        "w-full p-6 border-l-4 border-negative"
+    ):
+        ui.icon(
+            "lock"
+        ).classes(
+            "text-5xl text-negative"
+        )
+        ui.label(
+            "Accès non autorisé"
+        ).classes(
+            "text-xl font-bold"
+        )
+        ui.label(
+            f"Votre compte n’a pas accès à "
+            f"l’application « {app_name} »."
+        ).classes(
+            "jf-muted"
+        )
+        ui.label(
+            "Demandez à un administrateur du portail "
+            "de modifier vos applications autorisées."
+        ).classes(
+            "text-sm jf-muted"
+        )
+        ui.button(
+            "Retour au portail",
+            icon="apps",
+            on_click=lambda: ui.navigate.to(
+                "/?tab=portail"
+            ),
+        ).props(
+            "color=primary"
+        ).classes(
+            "mt-2"
+        )
 
 
 def portal_header(title):
@@ -1582,6 +1703,19 @@ def index(tab="portail"):
         return
 
     if normalized_tab in GETTING_STARTED_TABS:
+        if not user_has_app_access(
+            user["id"],
+            "grocery",
+        ):
+            with page_container():
+                portal_header(
+                    "Accès non autorisé"
+                )
+                show_app_access_denied(
+                    "Liste d’épicerie"
+                )
+            return
+
         set_current_tab("demarrage")
 
         with page_container():
@@ -1631,7 +1765,23 @@ def index(tab="portail"):
         normalized_tab = "courses"
 
     if normalized_tab not in VALID_APP_TABS:
-        normalized_tab = "items"
+        ui.navigate.to(
+            "/?tab=portail"
+        )
+        return
+
+    if not user_has_app_access(
+        user["id"],
+        "grocery",
+    ):
+        with page_container():
+            portal_header(
+                "Accès non autorisé"
+            )
+            show_app_access_denied(
+                "Liste d’épicerie"
+            )
+        return
 
     set_current_tab(normalized_tab)
 
@@ -1692,6 +1842,7 @@ def index(tab="portail"):
 
 
 init_db()
+init_app_access_schema()
 
 storage_secret = os.getenv("STORAGE_SECRET")
 

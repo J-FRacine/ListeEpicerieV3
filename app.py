@@ -1688,7 +1688,11 @@ def bottom_navigation(
     title="JF Apps",
     language="fr",
 )
-def index(tab="portail"):
+def index(
+    tab="portail",
+    section=None,
+    quick=None,
+):
     apply_theme()
 
     if needs_initial_admin_setup():
@@ -1782,8 +1786,28 @@ def index(tab="portail"):
             portal_header(
                 "Journal de pression"
             )
+            quick_entry = (
+                str(
+                    quick
+                    or ""
+                ).strip().lower()
+                in {
+                    "1",
+                    "true",
+                    "oui",
+                    "yes",
+                }
+            )
+
             blood_pressure_panel(
-                user
+                user,
+                initial_section=(
+                    section
+                    or "saisie"
+                ),
+                quick_entry=(
+                    quick_entry
+                ),
             )
 
         return

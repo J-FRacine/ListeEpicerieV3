@@ -92,6 +92,51 @@ def init_blood_pressure_schema():
                 """
             )
 
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS
+                blood_pressure_reminder_slots (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL
+                        REFERENCES users(id)
+                        ON DELETE CASCADE,
+                    label TEXT NOT NULL,
+                    start_time TIME NOT NULL,
+                    end_time TIME NOT NULL,
+                    sort_order SMALLINT NOT NULL
+                        CHECK (
+                            sort_order BETWEEN 1 AND 10
+                        ),
+                    created_at TIMESTAMPTZ
+                        NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ
+                        NOT NULL DEFAULT NOW(),
+                    UNIQUE (
+                        user_id,
+                        sort_order
+                    ),
+                    CHECK (
+                        CHAR_LENGTH(label)
+                        BETWEEN 1 AND 60
+                    ),
+                    CHECK (
+                        end_time > start_time
+                    )
+                );
+                """
+            )
+
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS
+                blood_pressure_reminder_slots_user_idx
+                ON blood_pressure_reminder_slots (
+                    user_id,
+                    sort_order
+                );
+                """
+            )
+
             conn.commit()
 
 
@@ -451,24 +496,371 @@ def count_blood_pressure_readings_on_date(
 
 
 
+
+MAX_REMINDER_SLOTS = 10
+
+
 def _normalize_target_per_day(
     value,
 ) -> int:
     return _normalize_integer(
         value,
         label=(
-            "Le nombre de mesures "
+            "Le nombre de prises "
             "par jour"
         ),
         minimum=1,
-        maximum=10,
+        maximum=MAX_REMINDER_SLOTS,
     )
+
+
+def _minutes_from_time(
+    value,
+) -> int:
+    normalized = _normalize_time(
+        value
+    )
+
+    return (
+        normalized.hour * 60
+        + normalized.minute
+    )
+
+
+def _default_reminder_slots(
+    target_per_day,
+):
+    """Crée des horaires de départ pour les anciens réglages."""
+
+    target = _normalize_target_per_day(
+        target_per_day
+    )
+
+    if target == 1:
+        return [
+            {
+                "label": "Prise quotidienne",
+                "start_time": time(
+                    hour=6,
+                    minute=0,
+                ),
+                "end_time": time(
+                    hour=22,
+                    minute=0,
+                ),
+                "sort_order": 1,
+            }
+        ]
+
+    if target == 2:
+        return [
+            {
+                "label": "Matin",
+                "start_time": time(
+                    hour=6,
+                    minute=0,
+                ),
+                "end_time": time(
+                    hour=11,
+                    minute=0,
+                ),
+                "sort_order": 1,
+            },
+            {
+                "label": "Soir",
+                "start_time": time(
+                    hour=17,
+                    minute=0,
+                ),
+                "end_time": time(
+                    hour=22,
+                    minute=0,
+                ),
+                "sort_order": 2,
+            },
+        ]
+
+    if target == 3:
+        return [
+            {
+                "label": "Matin",
+                "start_time": time(
+                    hour=6,
+                    minute=0,
+                ),
+                "end_time": time(
+                    hour=10,
+                    minute=0,
+                ),
+                "sort_order": 1,
+            },
+            {
+                "label": "Après-midi",
+                "start_time": time(
+                    hour=12,
+                    minute=0,
+                ),
+                "end_time": time(
+                    hour=16,
+                    minute=0,
+                ),
+                "sort_order": 2,
+            },
+            {
+                "label": "Soir",
+                "start_time": time(
+                    hour=18,
+                    minute=0,
+                ),
+                "end_time": time(
+                    hour=22,
+                    minute=0,
+                ),
+                "sort_order": 3,
+            },
+        ]
+
+    day_start = 6 * 60
+    day_end = 22 * 60
+    segment = max(
+        (day_end - day_start)
+        // target,
+        30,
+    )
+    slots = []
+
+    for index in range(target):
+        start_minutes = (
+            day_start
+            + index * segment
+        )
+        end_minutes = (
+            day_end
+            if index == target - 1
+            else (
+                day_start
+                + (index + 1) * segment
+                - 1
+            )
+        )
+
+        slots.append(
+            {
+                "label": (
+                    f"Prise {index + 1}"
+                ),
+                "start_time": time(
+                    hour=(
+                        start_minutes // 60
+                    ),
+                    minute=(
+                        start_minutes % 60
+                    ),
+                ),
+                "end_time": time(
+                    hour=(
+                        end_minutes // 60
+                    ),
+                    minute=(
+                        end_minutes % 60
+                    ),
+                ),
+                "sort_order": (
+                    index + 1
+                ),
+            }
+        )
+
+    return slots
+
+
+def _fetch_reminder_slots(
+    cur,
+    user_id,
+):
+    cur.execute(
+        """
+        SELECT
+            id,
+            label,
+            start_time,
+            end_time,
+            sort_order,
+            created_at,
+            updated_at
+        FROM blood_pressure_reminder_slots
+        WHERE user_id = %s
+        ORDER BY
+            sort_order,
+            start_time,
+            id;
+        """,
+        (user_id,),
+    )
+
+    return cur.fetchall()
+
+
+def _insert_reminder_slots(
+    cur,
+    user_id,
+    slots,
+):
+    cur.executemany(
+        """
+        INSERT INTO blood_pressure_reminder_slots (
+            user_id,
+            label,
+            start_time,
+            end_time,
+            sort_order
+        )
+        VALUES (
+            %s,
+            %s,
+            %s,
+            %s,
+            %s
+        );
+        """,
+        [
+            (
+                user_id,
+                slot["label"],
+                slot["start_time"],
+                slot["end_time"],
+                slot["sort_order"],
+            )
+            for slot in slots
+        ],
+    )
+
+
+def _ensure_reminder_slots(
+    cur,
+    user_id,
+    target_per_day,
+):
+    slots = _fetch_reminder_slots(
+        cur,
+        user_id,
+    )
+
+    if slots:
+        return slots
+
+    default_slots = (
+        _default_reminder_slots(
+            target_per_day
+        )
+    )
+
+    _insert_reminder_slots(
+        cur,
+        user_id,
+        default_slots,
+    )
+
+    return _fetch_reminder_slots(
+        cur,
+        user_id,
+    )
+
+
+def _normalize_reminder_slots(
+    slots,
+):
+    if not slots:
+        raise ValueError(
+            "Ajoutez au moins une prise quotidienne."
+        )
+
+    if len(slots) > MAX_REMINDER_SLOTS:
+        raise ValueError(
+            "Un maximum de 10 prises quotidiennes "
+            "peut être configuré."
+        )
+
+    normalized = []
+
+    for index, slot in enumerate(
+        slots,
+        start=1,
+    ):
+        label = str(
+            slot.get("label")
+            or ""
+        ).strip()
+
+        if not label:
+            label = (
+                f"Prise {index}"
+            )
+
+        if len(label) > 60:
+            raise ValueError(
+                "Le nom d’une prise ne peut pas "
+                "dépasser 60 caractères."
+            )
+
+        start_time = _normalize_time(
+            slot.get("start_time")
+        )
+        end_time = _normalize_time(
+            slot.get("end_time")
+        )
+
+        if end_time <= start_time:
+            raise ValueError(
+                f"La plage « {label} » doit se terminer "
+                "après son heure de début."
+            )
+
+        normalized.append(
+            {
+                "label": label,
+                "start_time": start_time,
+                "end_time": end_time,
+            }
+        )
+
+    normalized.sort(
+        key=lambda slot: (
+            slot["start_time"],
+            slot["end_time"],
+            slot["label"].lower(),
+        )
+    )
+
+    previous = None
+
+    for index, slot in enumerate(
+        normalized,
+        start=1,
+    ):
+        if (
+            previous is not None
+            and slot["start_time"]
+            <= previous["end_time"]
+        ):
+            raise ValueError(
+                (
+                    f"Les plages « {previous['label']} » "
+                    f"et « {slot['label']} » se chevauchent. "
+                    "Laissez au moins une minute entre elles."
+                )
+            )
+
+        slot["sort_order"] = index
+        previous = slot
+
+    return normalized
 
 
 def get_blood_pressure_reminder_settings(
     user_id,
 ):
-    """Retourne les paramètres privés de rappel."""
+    """Retourne la période et les plages horaires privées."""
 
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -491,30 +883,46 @@ def get_blood_pressure_reminder_settings(
 
             if settings is None:
                 return {
+                    "configured": False,
                     "enabled": False,
                     "target_per_day": 2,
                     "start_date": None,
                     "end_date": None,
                     "created_at": None,
                     "updated_at": None,
+                    "slots": (
+                        _default_reminder_slots(
+                            2
+                        )
+                    ),
                 }
 
-            return settings
+            slots = _ensure_reminder_slots(
+                cur,
+                user_id,
+                settings[
+                    "target_per_day"
+                ],
+            )
+
+            conn.commit()
+
+            return {
+                **settings,
+                "configured": True,
+                "slots": slots,
+            }
 
 
-def save_blood_pressure_reminder_settings(
+def save_blood_pressure_reminder_schedule(
     user_id,
     *,
     enabled,
-    target_per_day,
     start_date,
     end_date,
+    slots,
 ):
-    """Enregistre la période et l’objectif quotidien."""
-
-    target = _normalize_target_per_day(
-        target_per_day
-    )
+    """Enregistre la période et les plages choisies par l’utilisateur."""
 
     normalized_start = (
         _normalize_date(
@@ -547,6 +955,12 @@ def save_blood_pressure_reminder_settings(
             "égale ou postérieure à "
             "la date de début."
         )
+
+    normalized_slots = (
+        _normalize_reminder_slots(
+            slots
+        )
+    )
 
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -583,23 +997,72 @@ def save_blood_pressure_reminder_settings(
                 (
                     user_id,
                     bool(enabled),
-                    target,
+                    len(
+                        normalized_slots
+                    ),
                     normalized_start,
                     normalized_end,
                 ),
             )
 
+            cur.execute(
+                """
+                DELETE FROM
+                blood_pressure_reminder_slots
+                WHERE user_id = %s;
+                """,
+                (user_id,),
+            )
+
+            _insert_reminder_slots(
+                cur,
+                user_id,
+                normalized_slots,
+            )
+
             conn.commit()
+
+
+def save_blood_pressure_reminder_settings(
+    user_id,
+    *,
+    enabled,
+    target_per_day,
+    start_date,
+    end_date,
+):
+    """Compatibilité avec l’ancien réglage par simple quantité."""
+
+    save_blood_pressure_reminder_schedule(
+        user_id,
+        enabled=enabled,
+        start_date=start_date,
+        end_date=end_date,
+        slots=_default_reminder_slots(
+            target_per_day
+        ),
+    )
 
 
 def get_blood_pressure_reminder_status(
     user_id,
     on_date,
+    current_time=None,
 ):
-    """Calcule le nombre de mesures restantes à une date."""
+    """Calcule l’état de chaque prise à partir de l’heure de l’appareil."""
 
     normalized_date = _normalize_date(
         on_date
+    )
+    normalized_current_time = (
+        _normalize_time(
+            current_time
+        )
+        if current_time is not None
+        else time(
+            hour=12,
+            minute=0,
+        )
     )
 
     with get_connection() as conn:
@@ -607,26 +1070,14 @@ def get_blood_pressure_reminder_status(
             cur.execute(
                 """
                 SELECT
-                    settings.enabled,
-                    settings.target_per_day,
-                    settings.start_date,
-                    settings.end_date,
-                    (
-                        SELECT COUNT(*)
-                        FROM blood_pressure_readings
-                        AS reading
-                        WHERE reading.user_id =
-                            settings.user_id
-                          AND reading.measured_date = %s
-                    ) AS completed_count
+                    enabled,
+                    target_per_day,
+                    start_date,
+                    end_date
                 FROM blood_pressure_reminder_settings
-                AS settings
-                WHERE settings.user_id = %s;
+                WHERE user_id = %s;
                 """,
-                (
-                    normalized_date,
-                    user_id,
-                ),
+                (user_id,),
             )
 
             settings = cur.fetchone()
@@ -637,62 +1088,212 @@ def get_blood_pressure_reminder_status(
                     "enabled": False,
                     "active": False,
                     "date": normalized_date,
+                    "current_time": (
+                        normalized_current_time
+                    ),
                     "target_per_day": 2,
                     "completed_count": 0,
                     "remaining_count": 0,
+                    "total_readings_count": 0,
                     "start_date": None,
                     "end_date": None,
+                    "state": "not_configured",
+                    "slots": [],
+                    "next_slot": None,
                 }
 
-            active = bool(
-                settings["enabled"]
-                and settings["start_date"]
-                and settings["end_date"]
-                and (
-                    settings["start_date"]
-                    <= normalized_date
-                    <= settings["end_date"]
+            slots = _ensure_reminder_slots(
+                cur,
+                user_id,
+                settings[
+                    "target_per_day"
+                ],
+            )
+
+            cur.execute(
+                """
+                SELECT
+                    id,
+                    measured_time
+                FROM blood_pressure_readings
+                WHERE user_id = %s
+                  AND measured_date = %s
+                ORDER BY
+                    measured_time,
+                    id;
+                """,
+                (
+                    user_id,
+                    normalized_date,
+                ),
+            )
+
+            readings = cur.fetchall()
+            conn.commit()
+
+    active = bool(
+        settings["enabled"]
+        and settings["start_date"]
+        and settings["end_date"]
+        and (
+            settings["start_date"]
+            <= normalized_date
+            <= settings["end_date"]
+        )
+    )
+
+    reading_times = [
+        reading["measured_time"]
+        for reading in readings
+    ]
+
+    slot_statuses = []
+
+    for slot in slots:
+        matching_time = next(
+            (
+                reading_time
+                for reading_time
+                in reading_times
+                if (
+                    slot["start_time"]
+                    <= reading_time
+                    <= slot["end_time"]
                 )
-            )
+            ),
+            None,
+        )
 
-            completed_count = int(
-                settings["completed_count"]
-                or 0
-            )
-            target_per_day = int(
-                settings["target_per_day"]
-            )
+        completed = (
+            matching_time is not None
+        )
 
-            remaining_count = (
-                max(
-                    target_per_day
-                    - completed_count,
-                    0,
-                )
-                if active
-                else 0
-            )
+        if completed:
+            status = "completed"
+        elif (
+            normalized_current_time
+            > slot["end_time"]
+        ):
+            status = "overdue"
+        elif (
+            slot["start_time"]
+            <= normalized_current_time
+            <= slot["end_time"]
+        ):
+            status = "due"
+        else:
+            status = "upcoming"
 
-            return {
-                "configured": True,
-                "enabled": bool(
-                    settings["enabled"]
+        slot_statuses.append(
+            {
+                "id": slot["id"],
+                "label": slot["label"],
+                "start_time": (
+                    slot["start_time"]
                 ),
-                "active": active,
-                "date": normalized_date,
-                "target_per_day": (
-                    target_per_day
+                "end_time": (
+                    slot["end_time"]
                 ),
-                "completed_count": (
-                    completed_count
+                "sort_order": (
+                    slot["sort_order"]
                 ),
-                "remaining_count": (
-                    remaining_count
+                "completed": completed,
+                "completed_time": (
+                    matching_time
                 ),
-                "start_date": (
-                    settings["start_date"]
-                ),
-                "end_date": (
-                    settings["end_date"]
-                ),
+                "status": status,
             }
+        )
+
+    completed_count = sum(
+        1
+        for slot in slot_statuses
+        if slot["completed"]
+    )
+    remaining_count = (
+        max(
+            len(slot_statuses)
+            - completed_count,
+            0,
+        )
+        if active
+        else 0
+    )
+
+    pending_slots = [
+        slot
+        for slot in slot_statuses
+        if not slot["completed"]
+    ]
+
+    overdue_slots = [
+        slot
+        for slot in pending_slots
+        if slot["status"]
+        == "overdue"
+    ]
+    due_slots = [
+        slot
+        for slot in pending_slots
+        if slot["status"]
+        == "due"
+    ]
+    upcoming_slots = [
+        slot
+        for slot in pending_slots
+        if slot["status"]
+        == "upcoming"
+    ]
+
+    if not active:
+        state = "inactive"
+        next_slot = None
+    elif remaining_count == 0:
+        state = "complete"
+        next_slot = None
+    elif overdue_slots:
+        state = "overdue"
+        next_slot = overdue_slots[0]
+    elif due_slots:
+        state = "due"
+        next_slot = due_slots[0]
+    else:
+        state = "upcoming"
+        next_slot = (
+            upcoming_slots[0]
+            if upcoming_slots
+            else pending_slots[0]
+        )
+
+    return {
+        "configured": True,
+        "enabled": bool(
+            settings["enabled"]
+        ),
+        "active": active,
+        "date": normalized_date,
+        "current_time": (
+            normalized_current_time
+        ),
+        "target_per_day": len(
+            slot_statuses
+        ),
+        "completed_count": (
+            completed_count
+        ),
+        "remaining_count": (
+            remaining_count
+        ),
+        "total_readings_count": len(
+            readings
+        ),
+        "start_date": (
+            settings["start_date"]
+        ),
+        "end_date": (
+            settings["end_date"]
+        ),
+        "state": state,
+        "slots": slot_statuses,
+        "next_slot": next_slot,
+    }

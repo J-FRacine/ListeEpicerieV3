@@ -18,7 +18,7 @@ from blood_pressure_data import (
     get_blood_pressure_reminder_settings,
     get_blood_pressure_reminder_status,
     list_blood_pressure_readings,
-    save_blood_pressure_reminder_settings,
+    save_blood_pressure_reminder_schedule,
     update_blood_pressure_reading,
 )
 from blood_pressure_pdf import (
@@ -111,6 +111,55 @@ BLOOD_PRESSURE_CSS = r"""
     border: 1px solid var(--jf-border);
     border-radius: 14px;
     background: var(--jf-surface);
+}
+
+.jf-pressure-slot-card {
+    width: 100%;
+    padding: 0.95rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 15px;
+    background: var(--jf-surface);
+}
+
+.jf-pressure-slot-status {
+    width: 100%;
+    padding: 0.7rem 0.8rem;
+    border-radius: 12px;
+    background: rgba(34, 70, 122, 0.07);
+}
+
+.jf-pressure-quick-entry {
+    width: 100%;
+    padding: 0.85rem 1rem;
+    border-left: 5px solid var(--jf-blue);
+    border-radius: 13px;
+    background: var(--jf-blue-soft);
+}
+
+.jf-pressure-alert-overdue {
+    border-color: rgba(190, 50, 50, 0.32);
+    border-left-color: #be3232;
+    background: rgba(255, 232, 232, 0.94);
+}
+
+.jf-pressure-alert-due {
+    border-color: rgba(191, 120, 18, 0.30);
+    border-left-color: #bf7812;
+    background: rgba(255, 244, 219, 0.92);
+}
+
+.jf-pressure-alert-upcoming {
+    border-color: rgba(34, 70, 122, 0.25);
+    border-left-color: var(--jf-blue);
+    background: rgba(231, 240, 250, 0.94);
+}
+
+.body--dark .jf-pressure-alert-overdue {
+    background: rgba(115, 34, 34, 0.35);
+}
+
+.body--dark .jf-pressure-alert-upcoming {
+    background: rgba(30, 58, 92, 0.42);
 }
 """
 
@@ -222,10 +271,126 @@ async def device_date_time():
 
 
 
+
+def _hour_range_text(
+    start_time,
+    end_time,
+) -> str:
+    return (
+        f"{_time_text(start_time)} "
+        f"à {_time_text(end_time)}"
+    )
+
+
+def _reminder_state_text(
+    status,
+):
+    next_slot = status.get(
+        "next_slot"
+    )
+    remaining = int(
+        status.get(
+            "remaining_count"
+        )
+        or 0
+    )
+
+    if not next_slot:
+        return (
+            "",
+            "",
+            "upcoming",
+        )
+
+    label = next_slot["label"]
+    hour_range = _hour_range_text(
+        next_slot["start_time"],
+        next_slot["end_time"],
+    )
+
+    if status["state"] == "overdue":
+        main_text = (
+            f"La prise « {label} » est en retard."
+        )
+        detail_text = (
+            f"Plage prévue : {hour_range}. "
+            f"Il reste {remaining} prise(s) aujourd’hui."
+        )
+        visual_state = "overdue"
+    elif status["state"] == "due":
+        main_text = (
+            f"La prise « {label} » est à faire maintenant."
+        )
+        detail_text = (
+            f"Plage prévue : {hour_range}. "
+            f"Il reste {remaining} prise(s) aujourd’hui."
+        )
+        visual_state = "due"
+    else:
+        main_text = (
+            f"Il reste {remaining} prise(s) "
+            "de pression aujourd’hui."
+        )
+        detail_text = (
+            f"Prochaine prise : « {label} », "
+            f"de {hour_range}."
+        )
+        visual_state = "upcoming"
+
+    return (
+        main_text,
+        detail_text,
+        visual_state,
+    )
+
+
+def _default_new_slot(
+    current_slots,
+):
+    index = len(
+        current_slots
+    ) + 1
+
+    defaults = [
+        (
+            "Matin",
+            "06:00",
+            "11:00",
+        ),
+        (
+            "Soir",
+            "17:00",
+            "22:00",
+        ),
+        (
+            "Après-midi",
+            "12:00",
+            "16:00",
+        ),
+    ]
+
+    if index <= len(defaults):
+        label, start_time, end_time = (
+            defaults[
+                index - 1
+            ]
+        )
+    else:
+        label = f"Prise {index}"
+        start_time = "12:00"
+        end_time = "13:00"
+
+    return {
+        "label": label,
+        "start_time": start_time,
+        "end_time": end_time,
+    }
+
+
 def blood_pressure_portal_reminder(
     user_id,
 ):
-    """Affiche l’avis du jour dans la carte d’accueil du Portail."""
+    """Affiche l’avis détaillé selon l’heure de l’appareil."""
 
     placeholder = ui.column().classes(
         "jf-pressure-portal-placeholder gap-0"
@@ -235,13 +400,14 @@ def blood_pressure_portal_reminder(
         try:
             (
                 device_date,
-                _,
+                device_time,
             ) = await device_date_time()
 
             status = (
                 get_blood_pressure_reminder_status(
                     user_id,
                     device_date,
+                    device_time,
                 )
             )
         except Exception:
@@ -255,30 +421,29 @@ def blood_pressure_portal_reminder(
         ):
             return
 
-        remaining = status[
-            "remaining_count"
+        (
+            main_text,
+            detail_text,
+            visual_state,
+        ) = _reminder_state_text(
+            status
+        )
+
+        completed = status[
+            "completed_count"
         ]
         target = status[
             "target_per_day"
         ]
-        completed = status[
-            "completed_count"
-        ]
 
-        if remaining == 1:
-            main_text = (
-                "Il reste 1 mesure de pression "
-                "à prendre aujourd’hui."
-            )
-        else:
-            main_text = (
-                f"Il reste {remaining} mesures "
-                "de pression à prendre aujourd’hui."
-            )
+        alert_class = (
+            "jf-pressure-portal-alert "
+            f"jf-pressure-alert-{visual_state}"
+        )
 
         with placeholder:
             with ui.element("div").classes(
-                "jf-pressure-portal-alert"
+                alert_class
             ):
                 with ui.row().classes(
                     "w-full items-center "
@@ -289,7 +454,17 @@ def blood_pressure_portal_reminder(
                         "grow min-w-0"
                     ):
                         ui.icon(
-                            "monitor_heart"
+                            (
+                                "warning"
+                                if visual_state
+                                == "overdue"
+                                else (
+                                    "notifications_active"
+                                    if visual_state
+                                    == "due"
+                                    else "schedule"
+                                )
+                            )
                         ).classes(
                             "text-3xl text-warning shrink-0"
                         )
@@ -305,13 +480,18 @@ def blood_pressure_portal_reminder(
                             ui.label(
                                 main_text
                             ).classes(
-                                "text-sm"
+                                "text-sm font-bold"
+                            )
+                            ui.label(
+                                detail_text
+                            ).classes(
+                                "text-xs"
                             )
                             ui.label(
                                 (
                                     f"{completed} sur {target} "
-                                    "mesure(s) enregistrée(s) "
-                                    "pour aujourd’hui."
+                                    "prise(s) complétée(s) "
+                                    "aujourd’hui."
                                 )
                             ).classes(
                                 "text-xs jf-muted"
@@ -322,6 +502,8 @@ def blood_pressure_portal_reminder(
                         icon="add_circle",
                         on_click=lambda: ui.navigate.to(
                             "/?tab=pression"
+                            "&section=saisie"
+                            "&quick=1"
                         ),
                     ).props(
                         "outline color=warning"
@@ -336,6 +518,9 @@ def blood_pressure_portal_reminder(
 
 def blood_pressure_panel(
     current_user,
+    *,
+    initial_section="saisie",
+    quick_entry=False,
 ):
     user_id = current_user["id"]
     today_server = date.today()
@@ -428,9 +613,28 @@ def blood_pressure_panel(
             icon="notifications_active",
         )
 
+    normalized_section = str(
+        initial_section
+        or "saisie"
+    ).strip().lower()
+
+    initial_tab = {
+        "saisie": entry_tab,
+        "entry": entry_tab,
+        "historique": history_tab,
+        "history": history_tab,
+        "rapport": report_tab,
+        "pdf": report_tab,
+        "rappel": reminder_tab,
+        "reminder": reminder_tab,
+    }.get(
+        normalized_section,
+        entry_tab,
+    )
+
     with ui.tab_panels(
         tabs,
-        value=entry_tab,
+        value=initial_tab,
     ).classes(
         "w-full bg-transparent"
     ):
@@ -442,6 +646,34 @@ def blood_pressure_panel(
         ).classes(
             "px-0"
         ):
+            if quick_entry:
+                with ui.element("div").classes(
+                    "jf-pressure-quick-entry mb-3"
+                ):
+                    with ui.row().classes(
+                        "items-start gap-2 flex-nowrap"
+                    ):
+                        ui.icon(
+                            "bolt"
+                        ).classes(
+                            "text-2xl text-primary shrink-0"
+                        )
+                        with ui.column().classes(
+                            "gap-0"
+                        ):
+                            ui.label(
+                                "Saisie rapide depuis le Portail"
+                            ).classes(
+                                "font-bold"
+                            )
+                            ui.label(
+                                "La date et l’heure de cet appareil "
+                                "sont déjà proposées. Enregistrez la "
+                                "mesure puis revenez directement au Portail."
+                            ).classes(
+                                "text-sm jf-muted"
+                            )
+
             with ui.card().classes(
                 "w-full p-5"
             ):
@@ -500,7 +732,11 @@ def blood_pressure_panel(
                         max=400,
                         step=1,
                     ).props(
-                        "inputmode=numeric"
+                        (
+                            "inputmode=numeric autofocus"
+                            if quick_entry
+                            else "inputmode=numeric"
+                        )
                     ).classes(
                         "w-full"
                     )
@@ -602,7 +838,10 @@ def blood_pressure_panel(
                     pulse_input.value = None
                     note_input.value = ""
 
-                async def save_reading():
+                async def save_reading(
+                    *,
+                    return_to_portal=False,
+                ):
                     try:
                         create_blood_pressure_reading(
                             user_id,
@@ -632,9 +871,40 @@ def blood_pressure_panel(
                         type="positive",
                     )
 
+                    render_history.refresh()
+
+                    if return_to_portal:
+                        ui.navigate.to(
+                            "/?tab=portail"
+                        )
+                        return
+
                     clear_measure_values()
                     await use_device_now()
-                    render_history.refresh()
+
+                    if quick_entry:
+                        try:
+                            await ui.run_javascript(
+                                """
+                                setTimeout(() => {
+                                    const field =
+                                        document.querySelector(
+                                            'input[autofocus]'
+                                        );
+                                    if (field) {
+                                        field.focus();
+                                    }
+                                }, 120);
+                                """,
+                                timeout=3.0,
+                            )
+                        except Exception:
+                            pass
+
+                async def save_and_return():
+                    await save_reading(
+                        return_to_portal=True
+                    )
 
                 measured_date_input.on_value_change(
                     lambda event: (
@@ -652,6 +922,15 @@ def blood_pressure_panel(
                     ).props(
                         "color=primary"
                     )
+
+                    if quick_entry:
+                        ui.button(
+                            "Enregistrer et revenir au Portail",
+                            icon="keyboard_return",
+                            on_click=save_and_return,
+                        ).props(
+                            "outline color=primary"
+                        )
 
                     ui.button(
                         "Date et heure actuelles",
@@ -1426,14 +1705,13 @@ def blood_pressure_panel(
                 "w-full p-5"
             ):
                 ui.label(
-                    "Rappel sur le Portail"
+                    "Horaires et rappel"
                 ).classes(
                     "text-xl font-bold"
                 )
                 ui.label(
-                    "Définissez combien de mesures doivent "
-                    "être prises chaque jour et pendant "
-                    "quel intervalle de dates."
+                    "Choisissez vos propres plages horaires "
+                    "pour chaque prise quotidienne."
                 ).classes(
                     "text-sm jf-muted"
                 )
@@ -1441,7 +1719,7 @@ def blood_pressure_panel(
                 reminder_enabled_input = ui.checkbox(
                     (
                         "Afficher un avis sur le Portail "
-                        "lorsqu’il reste des mesures à prendre"
+                        "lorsqu’une prise reste à faire"
                     ),
                     value=bool(
                         reminder_settings[
@@ -1450,27 +1728,9 @@ def blood_pressure_panel(
                     ),
                 )
 
-                with ui.element(
-                    "div"
-                ).classes(
-                    "jf-pressure-grid mt-2"
+                with ui.row().classes(
+                    "w-full gap-3 flex-wrap mt-2"
                 ):
-                    reminder_target_input = ui.number(
-                        label=(
-                            "Nombre de mesures par jour"
-                        ),
-                        value=reminder_settings[
-                            "target_per_day"
-                        ],
-                        min=1,
-                        max=10,
-                        step=1,
-                    ).props(
-                        "inputmode=numeric"
-                    ).classes(
-                        "w-full"
-                    )
-
                     reminder_start_input = ui.input(
                         label="Date de début",
                         value=(
@@ -1480,7 +1740,7 @@ def blood_pressure_panel(
                     ).props(
                         "type=date"
                     ).classes(
-                        "w-full"
+                        "grow min-w-[180px]"
                     )
 
                     reminder_end_input = ui.input(
@@ -1492,33 +1752,260 @@ def blood_pressure_panel(
                     ).props(
                         "type=date"
                     ).classes(
-                        "w-full"
+                        "grow min-w-[180px]"
                     )
 
                 ui.label(
-                    "Exemple : 2 mesures par jour du "
-                    "1er août au 14 août. L’avis disparaît "
-                    "automatiquement lorsque le nombre prévu "
-                    "est atteint ou lorsque la période est terminée."
+                    "Une mesure complète une prise seulement "
+                    "si son heure se trouve dans la plage choisie."
                 ).classes(
                     "text-xs jf-muted"
                 )
 
+                slot_models = [
+                    {
+                        "label": slot[
+                            "label"
+                        ],
+                        "start_time": (
+                            _time_text(
+                                slot[
+                                    "start_time"
+                                ]
+                            )
+                        ),
+                        "end_time": (
+                            _time_text(
+                                slot[
+                                    "end_time"
+                                ]
+                            )
+                        ),
+                    }
+                    for slot in reminder_settings[
+                        "slots"
+                    ]
+                ]
+
+                def update_slot(
+                    index,
+                    field,
+                    value,
+                ):
+                    if (
+                        0
+                        <= index
+                        < len(slot_models)
+                    ):
+                        slot_models[
+                            index
+                        ][field] = value
+
+                def remove_slot(index):
+                    if len(slot_models) <= 1:
+                        ui.notify(
+                            "Conservez au moins "
+                            "une prise quotidienne.",
+                            type="warning",
+                        )
+                        return
+
+                    if (
+                        0
+                        <= index
+                        < len(slot_models)
+                    ):
+                        slot_models.pop(
+                            index
+                        )
+                        render_slots.refresh()
+
+                def add_slot():
+                    if len(slot_models) >= 10:
+                        ui.notify(
+                            "Un maximum de 10 prises "
+                            "peut être configuré.",
+                            type="warning",
+                        )
+                        return
+
+                    slot_models.append(
+                        _default_new_slot(
+                            slot_models
+                        )
+                    )
+                    render_slots.refresh()
+
+                @ui.refreshable
+                def render_slots():
+                    ui.label(
+                        (
+                            "1 prise quotidienne"
+                            if len(slot_models) == 1
+                            else (
+                                f"{len(slot_models)} "
+                                "prises quotidiennes"
+                            )
+                        )
+                    ).classes(
+                        "text-lg font-bold mt-4"
+                    )
+
+                    with ui.column().classes(
+                        "w-full gap-3 mt-1"
+                    ):
+                        for index, slot in enumerate(
+                            slot_models
+                        ):
+                            with ui.element(
+                                "div"
+                            ).classes(
+                                "jf-pressure-slot-card"
+                            ):
+                                with ui.row().classes(
+                                    "w-full items-center "
+                                    "justify-between gap-2"
+                                ):
+                                    ui.label(
+                                        f"Prise {index + 1}"
+                                    ).classes(
+                                        "font-bold"
+                                    )
+
+                                    if len(
+                                        slot_models
+                                    ) > 1:
+                                        ui.button(
+                                            icon="delete",
+                                            on_click=(
+                                                lambda _=None,
+                                                selected=index:
+                                                remove_slot(
+                                                    selected
+                                                )
+                                            ),
+                                        ).props(
+                                            "flat round color=negative"
+                                        ).tooltip(
+                                            "Retirer cette prise"
+                                        )
+
+                                with ui.element(
+                                    "div"
+                                ).classes(
+                                    "jf-pressure-grid mt-2"
+                                ):
+                                    label_input = ui.input(
+                                        label="Nom",
+                                        value=slot[
+                                            "label"
+                                        ],
+                                        placeholder=(
+                                            "Ex. Matin"
+                                        ),
+                                    ).props(
+                                        "maxlength=60"
+                                    ).classes(
+                                        "w-full"
+                                    )
+
+                                    start_input = ui.input(
+                                        label="Début",
+                                        value=slot[
+                                            "start_time"
+                                        ],
+                                    ).props(
+                                        "type=time step=60"
+                                    ).classes(
+                                        "w-full"
+                                    )
+
+                                    end_input = ui.input(
+                                        label="Fin",
+                                        value=slot[
+                                            "end_time"
+                                        ],
+                                    ).props(
+                                        "type=time step=60"
+                                    ).classes(
+                                        "w-full"
+                                    )
+
+                                    label_input.on_value_change(
+                                        (
+                                            lambda event,
+                                            selected=index:
+                                            update_slot(
+                                                selected,
+                                                "label",
+                                                event.value,
+                                            )
+                                        )
+                                    )
+                                    start_input.on_value_change(
+                                        (
+                                            lambda event,
+                                            selected=index:
+                                            update_slot(
+                                                selected,
+                                                "start_time",
+                                                event.value,
+                                            )
+                                        )
+                                    )
+                                    end_input.on_value_change(
+                                        (
+                                            lambda event,
+                                            selected=index:
+                                            update_slot(
+                                                selected,
+                                                "end_time",
+                                                event.value,
+                                            )
+                                        )
+                                    )
+
+                render_slots()
+
+                ui.button(
+                    "Ajouter une prise",
+                    icon="add",
+                    on_click=add_slot,
+                ).props(
+                    "outline color=primary"
+                ).classes(
+                    "mt-2"
+                )
+
+                with ui.element(
+                    "div"
+                ).classes(
+                    "jf-pressure-report-note mt-3"
+                ):
+                    ui.label(
+                        "Les plages ne peuvent pas se chevaucher "
+                        "et doivent commencer et finir dans la "
+                        "même journée."
+                    ).classes(
+                        "text-sm"
+                    )
+
                 preview_container = ui.column().classes(
-                    "w-full gap-0 mt-2"
+                    "w-full gap-2 mt-3"
                 )
 
                 async def refresh_reminder_preview():
                     try:
                         (
                             device_date,
-                            _,
+                            device_time,
                         ) = await device_date_time()
 
                         status = (
                             get_blood_pressure_reminder_status(
                                 user_id,
                                 device_date,
+                                device_time,
                             )
                         )
                     except Exception:
@@ -1542,8 +2029,8 @@ def blood_pressure_panel(
                                 "configured"
                             ]:
                                 ui.label(
-                                    "Aucun rappel n’est "
-                                    "encore enregistré."
+                                    "Enregistrez d’abord "
+                                    "vos horaires."
                                 ).classes(
                                     "text-sm jf-muted"
                                 )
@@ -1561,7 +2048,7 @@ def blood_pressure_panel(
                                 ui.label(
                                     "La date d’aujourd’hui "
                                     "se trouve en dehors "
-                                    "de l’intervalle configuré."
+                                    "de la période configurée."
                                 ).classes(
                                     "text-sm jf-muted"
                                 )
@@ -1570,42 +2057,129 @@ def blood_pressure_panel(
                             ] == 0:
                                 ui.label(
                                     (
-                                        "Objectif atteint : "
-                                        f"{status['completed_count']} "
-                                        "mesure(s) enregistrée(s)."
+                                        "Toutes les prises "
+                                        "prévues aujourd’hui "
+                                        "sont complétées."
                                     )
                                 ).classes(
                                     "text-sm text-positive"
                                 )
                             else:
-                                ui.label(
-                                    (
-                                        f"{status['remaining_count']} "
-                                        "mesure(s) reste(nt) "
-                                        "à prendre aujourd’hui."
-                                    )
-                                ).classes(
-                                    "text-sm text-warning"
+                                (
+                                    main_text,
+                                    detail_text,
+                                    _,
+                                ) = _reminder_state_text(
+                                    status
                                 )
                                 ui.label(
+                                    main_text
+                                ).classes(
                                     (
-                                        f"{status['completed_count']} "
-                                        f"sur {status['target_per_day']} "
-                                        "mesure(s) enregistrée(s)."
+                                        "text-sm text-negative"
+                                        if status["state"]
+                                        == "overdue"
+                                        else (
+                                            "text-sm text-warning"
+                                            if status["state"]
+                                            == "due"
+                                            else "text-sm text-primary"
+                                        )
                                     )
+                                )
+                                ui.label(
+                                    detail_text
                                 ).classes(
                                     "text-xs jf-muted"
                                 )
 
+                        if status[
+                            "configured"
+                        ]:
+                            for slot in status[
+                                "slots"
+                            ]:
+                                with ui.element(
+                                    "div"
+                                ).classes(
+                                    "jf-pressure-slot-status"
+                                ):
+                                    with ui.row().classes(
+                                        "w-full items-center "
+                                        "justify-between gap-2 "
+                                        "flex-wrap"
+                                    ):
+                                        with ui.column().classes(
+                                            "gap-0"
+                                        ):
+                                            ui.label(
+                                                slot[
+                                                    "label"
+                                                ]
+                                            ).classes(
+                                                "font-bold"
+                                            )
+                                            ui.label(
+                                                _hour_range_text(
+                                                    slot[
+                                                        "start_time"
+                                                    ],
+                                                    slot[
+                                                        "end_time"
+                                                    ],
+                                                )
+                                            ).classes(
+                                                "text-xs jf-muted"
+                                            )
+
+                                        if slot[
+                                            "status"
+                                        ] == "completed":
+                                            status_text = (
+                                                "Complétée à "
+                                                f"{_time_text(slot['completed_time'])}"
+                                            )
+                                            status_class = (
+                                                "text-positive"
+                                            )
+                                        elif slot[
+                                            "status"
+                                        ] == "overdue":
+                                            status_text = (
+                                                "En retard"
+                                            )
+                                            status_class = (
+                                                "text-negative"
+                                            )
+                                        elif slot[
+                                            "status"
+                                        ] == "due":
+                                            status_text = (
+                                                "À faire maintenant"
+                                            )
+                                            status_class = (
+                                                "text-warning"
+                                            )
+                                        else:
+                                            status_text = (
+                                                "À venir"
+                                            )
+                                            status_class = (
+                                                "text-primary"
+                                            )
+
+                                        ui.label(
+                                            status_text
+                                        ).classes(
+                                            f"text-sm {status_class}"
+                                        )
+
                 async def save_reminder():
                     try:
-                        save_blood_pressure_reminder_settings(
+                        save_blood_pressure_reminder_schedule(
                             user_id,
                             enabled=(
                                 reminder_enabled_input.value
-                            ),
-                            target_per_day=(
-                                reminder_target_input.value
                             ),
                             start_date=(
                                 reminder_start_input.value
@@ -1613,6 +2187,7 @@ def blood_pressure_panel(
                             end_date=(
                                 reminder_end_input.value
                             ),
+                            slots=slot_models,
                         )
                     except ValueError as error:
                         ui.notify(
@@ -1622,24 +2197,24 @@ def blood_pressure_panel(
                         return
                     except Exception:
                         ui.notify(
-                            "Le rappel n’a pas pu "
-                            "être enregistré.",
+                            "Les horaires n’ont pas pu "
+                            "être enregistrés.",
                             type="negative",
                         )
                         return
 
                     ui.notify(
-                        "Paramètres du rappel enregistrés.",
+                        "Horaires et rappel enregistrés.",
                         type="positive",
                     )
 
                     await refresh_reminder_preview()
 
                 with ui.row().classes(
-                    "w-full gap-2 flex-wrap mt-2"
+                    "w-full gap-2 flex-wrap mt-3"
                 ):
                     ui.button(
-                        "Enregistrer le rappel",
+                        "Enregistrer les horaires",
                         icon="save",
                         on_click=save_reminder,
                     ).props(
@@ -1657,10 +2232,9 @@ def blood_pressure_panel(
                     )
 
                 ui.label(
-                    "Cet avis apparaît seulement dans la "
-                    "carte de bienvenue du Portail. "
-                    "Il ne s’agit pas d’une notification "
-                    "poussée sur le téléphone."
+                    "L’avis est affiché dans la grande carte "
+                    "de bienvenue du Portail. Il ne s’agit "
+                    "pas d’une notification poussée."
                 ).classes(
                     "text-xs jf-muted"
                 )
@@ -1670,4 +2244,3 @@ def blood_pressure_panel(
                     refresh_reminder_preview,
                     once=True,
                 )
-

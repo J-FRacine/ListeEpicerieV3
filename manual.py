@@ -138,20 +138,41 @@ Dans l’onglet **Saisie** :
 
 Il est possible d’enregistrer plus de deux mesures dans une même journée. La phase 1 ne calcule aucune moyenne et ne présente aucun graphique.
 
-### Rappel sur le Portail
+### Horaires et rappel sur le Portail
 
 L’onglet **Rappel** permet de définir :
 
-- le nombre de mesures à prendre chaque jour;
 - une date de début;
 - une date de fin;
-- l’activation ou la désactivation de l’avis.
+- l’activation ou la désactivation de l’avis;
+- une ou plusieurs prises quotidiennes;
+- un nom et une plage horaire pour chaque prise.
 
-Pendant cette période, la carte de bienvenue du **Portail** affiche un avis lorsqu’il reste des mesures à prendre aujourd’hui. L’avis indique combien de mesures sont déjà enregistrées et combien il en reste.
+Exemple :
 
-Exemple : avec un objectif de deux mesures par jour, si une seule mesure a été enregistrée aujourd’hui, le Portail indique qu’il reste une mesure à prendre.
+- **Matin** : de 6 h à 11 h;
+- **Soir** : de 17 h à 22 h.
 
-L’avis disparaît automatiquement lorsque l’objectif quotidien est atteint, lorsque le rappel est désactivé ou lorsque la date se trouve hors de l’intervalle choisi.
+Les heures sont choisies par l’utilisateur. Les plages ne peuvent pas se chevaucher et doivent se terminer dans la même journée.
+
+Une mesure complète une prise seulement lorsque son heure se trouve dans la plage correspondante. Les mesures supplémentaires restent dans l’historique, même lorsqu’elles ne correspondent à aucune plage.
+
+### Avis détaillé
+
+Pendant la période configurée, la grande carte de bienvenue du **Portail** peut indiquer :
+
+- la prochaine prise et son horaire;
+- qu’une prise est à faire maintenant;
+- qu’une prise est en retard;
+- le nombre de prises complétées et restantes aujourd’hui.
+
+L’avis disparaît lorsque toutes les prises prévues sont complétées, lorsque le rappel est désactivé ou lorsque la date se trouve hors de la période choisie.
+
+### Saisie rapide depuis le Portail
+
+Le bouton **Saisir maintenant** ouvre directement l’onglet **Saisie**. La date et l’heure de l’appareil sont proposées et le champ **Systolique** reçoit automatiquement le curseur.
+
+Le bouton **Enregistrer et revenir au Portail** permet d’enregistrer la mesure puis de retourner immédiatement à la page d’accueil.
 
 Ce rappel est seulement un avis visuel dans le Portail. Il ne produit pas de notification poussée sur le téléphone.
 

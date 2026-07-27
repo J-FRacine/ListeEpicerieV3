@@ -85,8 +85,8 @@ Les fonctions propres à la liste d’épicerie — modèles, recettes, biblioth
 Le Portail contient aussi :
 
 - **Mon espace** : familles et compte;
-- **Aide et démarrage** : Commencer ici et Manuel;
-- **Administration** : utilisateurs et maintenance, pour les administrateurs.
+- **Aide et démarrage** : Commencer ici, Commentaires et suggestions, puis Manuel;
+- **Administration** : utilisateurs, commentaires reçus et maintenance, pour les administrateurs.
 
 ### Barre de navigation de la liste d'épicerie
 
@@ -110,6 +110,67 @@ Le nombre affiché près de **Besoins** indique combien d'articles restent dans 
 Le bouton **Planification** est souvent le moins évident au départ. Retenez qu’il ouvre tout ce qui sert à préparer des achats à l’avance : vos modèles réutilisables, vos recettes et la bibliothèque publique de partage.
 
 Sur téléphone, ces outils sont présentés sous forme d’icônes afin de conserver assez d’espace pour le contenu.
+""",
+    },
+    {
+        "title": "Commentaires et suggestions",
+        "icon": "rate_review",
+        "caption": "Partager une idée et suivre la réponse",
+        "keywords": (
+            "commentaire suggestion amélioration problème réponse "
+            "statut gestionnaire nouveau étude planifié terminé refusé"
+        ),
+        "content": """
+### Transmettre un commentaire
+
+Depuis le Portail, ouvrez **Commentaires et suggestions**, puis l’onglet **Nouveau**.
+
+Choisissez l’application concernée, inscrivez un sujet clair et décrivez le problème observé ou l’amélioration souhaitée.
+
+### Confidentialité
+
+Chaque utilisateur voit uniquement :
+
+- ses propres commentaires;
+- le statut attribué;
+- la réponse qui lui est destinée;
+- l’historique de suivi de son commentaire.
+
+Les commentaires ne sont pas partagés avec une famille ni avec les autres utilisateurs ordinaires.
+
+### Mes commentaires
+
+L’onglet **Mes commentaires** permet de filtrer par application ou par statut, puis de rechercher dans le sujet et le texte.
+
+Un indicateur **Nouvelle réponse** apparaît lorsqu’un gestionnaire a répondu ou modifié le statut. Le Portail affiche aussi un compteur de réponses non lues.
+
+Un commentaire peut être modifié tant que son statut n’est pas **Terminé** ou **Refusé**.
+
+### Statuts
+
+Les statuts disponibles sont :
+
+- **Nouveau**;
+- **À l’étude**;
+- **Planifié**;
+- **En cours**;
+- **Terminé**;
+- **Refusé**.
+
+### Gestion administrative
+
+Les administrateurs disposent d’un onglet **Gestion** et d’une carte **Commentaires reçus** dans la section Administration du Portail.
+
+Ils peuvent :
+
+- consulter tous les commentaires;
+- filtrer par application et statut;
+- rechercher un utilisateur, un sujet ou un texte;
+- attribuer un statut;
+- répondre à l’utilisateur;
+- consulter l’historique des changements.
+
+Lorsqu’une réponse ou un statut change, l’utilisateur reçoit un indicateur de réponse non lue dans JF Apps. Il ne s’agit pas d’une notification poussée sur le téléphone.
 """,
     },
     {
@@ -183,12 +244,15 @@ Ce rappel est seulement un avis visuel dans le Portail. Il ne produit pas de not
 
 L’onglet **Historique** permet de choisir une plage de dates, puis de consulter, modifier ou supprimer les mesures du compte connecté.
 
-Chaque fiche affiche :
+L’affichage est compact : chaque date forme un seul bloc et chaque mesure occupe une ligne contenant :
 
 - l’heure;
 - la pression systolique et diastolique;
 - le pouls;
-- la note facultative.
+- la note facultative;
+- les boutons de modification et de suppression.
+
+Sur téléphone, la note se replace automatiquement sous les valeurs pour conserver une bonne lisibilité.
 
 ### Rapport PDF
 

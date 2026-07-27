@@ -71,6 +71,156 @@ BLOOD_PRESSURE_CSS = r"""
     background: var(--jf-blue-soft);
 }
 
+.jf-pressure-history-filter-card {
+    padding: 0.85rem 1rem;
+}
+
+.jf-pressure-history-filter-row {
+    display: grid;
+    grid-template-columns:
+        minmax(10rem, 13rem)
+        minmax(10rem, 13rem)
+        auto;
+    align-items: end;
+    gap: 0.65rem;
+    width: 100%;
+    margin-top: 0.55rem;
+}
+
+.jf-pressure-history-date .q-field__control {
+    min-height: 38px;
+    height: 38px;
+}
+
+.jf-pressure-history-date .q-field__native,
+.jf-pressure-history-date .q-field__input,
+.jf-pressure-history-date .q-field__label {
+    font-size: 0.82rem;
+}
+
+.jf-pressure-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    width: 100%;
+    margin-top: 0.65rem;
+}
+
+.jf-pressure-history-day-card {
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid var(--jf-border);
+    border-radius: 13px;
+    background: var(--jf-surface);
+}
+
+.jf-pressure-history-day-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.42rem 0.7rem;
+    border-left: 4px solid var(--jf-blue);
+    background: var(--jf-blue-soft);
+    font-size: 0.82rem;
+}
+
+.jf-pressure-history-row {
+    display: grid;
+    grid-template-columns:
+        4.5rem
+        6.2rem
+        5.8rem
+        minmax(0, 1fr)
+        auto;
+    grid-template-areas:
+        "time pressure pulse note actions";
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 43px;
+    padding: 0.32rem 0.55rem;
+    border-top: 1px solid var(--jf-border);
+}
+
+.jf-pressure-history-time {
+    grid-area: time;
+    color: var(--jf-blue);
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+.jf-pressure-history-pressure {
+    grid-area: pressure;
+    color: var(--jf-navy);
+    font-size: 1.05rem;
+    font-weight: 850;
+}
+
+.body--dark .jf-pressure-history-pressure {
+    color: #dceaf6;
+}
+
+.jf-pressure-history-pulse {
+    grid-area: pulse;
+    font-size: 0.8rem;
+}
+
+.jf-pressure-history-note {
+    grid-area: note;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--jf-muted);
+    font-size: 0.76rem;
+}
+
+.jf-pressure-history-actions {
+    grid-area: actions;
+    display: flex;
+    gap: 0;
+    justify-self: end;
+}
+
+@media (max-width: 650px) {
+    .jf-pressure-history-filter-row {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .jf-pressure-history-filter-button {
+        grid-column: 1 / -1;
+        justify-self: start;
+    }
+
+    .jf-pressure-history-row {
+        grid-template-columns:
+            4rem 5.8rem 1fr auto;
+        grid-template-areas:
+            "time pressure pulse actions"
+            "note note note note";
+        row-gap: 0.1rem;
+    }
+
+    .jf-pressure-history-note:empty {
+        display: none;
+    }
+}
+
+@media (max-width: 420px) {
+    .jf-pressure-history-filter-row {
+        grid-template-columns: 1fr;
+    }
+
+    .jf-pressure-history-filter-button {
+        grid-column: auto;
+    }
+
+    .jf-pressure-history-row {
+        grid-template-columns:
+            3.7rem 5.4rem 1fr auto;
+        padding-inline: 0.4rem;
+    }
+}
+
 .jf-pressure-private {
     width: 100%;
     padding: 0.85rem 1rem;
@@ -932,39 +1082,48 @@ def blood_pressure_panel(
             "px-0"
         ):
             with ui.card().classes(
-                "w-full p-5"
+                "w-full jf-pressure-history-filter-card"
             ):
-                ui.label(
-                    "Historique"
-                ).classes(
-                    "text-xl font-bold"
-                )
-                ui.label(
-                    "Filtrez, modifiez ou supprimez "
-                    "vos propres mesures."
-                ).classes(
-                    "text-sm jf-muted"
-                )
-
                 with ui.row().classes(
-                    "w-full gap-3 flex-wrap mt-2"
+                    "w-full items-start "
+                    "justify-between gap-2 flex-wrap"
+                ):
+                    with ui.column().classes(
+                        "gap-0"
+                    ):
+                        ui.label(
+                            "Historique"
+                        ).classes(
+                            "text-lg font-bold"
+                        )
+                        ui.label(
+                            "Filtrez, modifiez ou supprimez "
+                            "vos propres mesures."
+                        ).classes(
+                            "text-xs jf-muted"
+                        )
+
+                with ui.element(
+                    "div"
+                ).classes(
+                    "jf-pressure-history-filter-row"
                 ):
                     history_start_input = ui.input(
                         label="Du",
                         value=default_start.isoformat(),
                     ).props(
-                        "type=date"
+                        "type=date dense outlined"
                     ).classes(
-                        "grow min-w-[180px]"
+                        "jf-pressure-history-date"
                     )
 
                     history_end_input = ui.input(
                         label="Au",
                         value=today_server.isoformat(),
                     ).props(
-                        "type=date"
+                        "type=date dense outlined"
                     ).classes(
-                        "grow min-w-[180px]"
+                        "jf-pressure-history-date"
                     )
 
                     ui.button(
@@ -974,9 +1133,9 @@ def blood_pressure_panel(
                             render_history.refresh()
                         ),
                     ).props(
-                        "outline color=primary"
+                        "outline dense color=primary"
                     ).classes(
-                        "self-end"
+                        "jf-pressure-history-filter-button"
                     )
 
             def open_edit_dialog(
@@ -1219,7 +1378,7 @@ def blood_pressure_panel(
                             "égale ou postérieure "
                             "à la date de début."
                         ).classes(
-                            "text-negative"
+                            "text-negative mt-2"
                         )
                         return
 
@@ -1234,7 +1393,7 @@ def blood_pressure_panel(
                     ui.label(
                         str(error)
                     ).classes(
-                        "text-negative"
+                        "text-negative mt-2"
                     )
                     return
                 except Exception:
@@ -1242,14 +1401,14 @@ def blood_pressure_panel(
                         "L’historique n’a pas pu "
                         "être chargé."
                     ).classes(
-                        "text-negative"
+                        "text-negative mt-2"
                     )
                     return
 
                 if not readings:
                     with ui.card().classes(
-                        "w-full p-6 items-center "
-                        "text-center mt-3"
+                        "w-full p-5 items-center "
+                        "text-center mt-2"
                     ):
                         ui.icon(
                             "monitor_heart"
@@ -1264,7 +1423,9 @@ def blood_pressure_panel(
                         )
                     return
 
-                grouped = defaultdict(list)
+                grouped = defaultdict(
+                    list
+                )
 
                 for reading in readings:
                     grouped[
@@ -1275,91 +1436,106 @@ def blood_pressure_panel(
                         reading
                     )
 
-                for day in sorted(
-                    grouped,
-                    reverse=True,
+                with ui.element(
+                    "div"
+                ).classes(
+                    "jf-pressure-history-list"
                 ):
-                    with ui.element(
-                        "div"
-                    ).classes(
-                        "jf-pressure-day mt-3"
+                    for day in sorted(
+                        grouped,
+                        reverse=True,
                     ):
-                        with ui.row().classes(
-                            "w-full items-center "
-                            "justify-between gap-2"
-                        ):
-                            ui.label(
-                                _date_text(day)
-                            ).classes(
-                                "font-bold"
-                            )
-                            ui.label(
-                                (
-                                    "1 mesure"
-                                    if len(grouped[day]) == 1
-                                    else (
-                                        f"{len(grouped[day])} "
-                                        "mesures"
-                                    )
-                                )
-                            ).classes(
-                                "text-xs jf-muted"
-                            )
-
-                    with ui.element(
-                        "div"
-                    ).classes(
-                        "jf-pressure-grid mt-2"
-                    ):
-                        for reading in sorted(
-                            grouped[day],
-                            key=lambda item: (
-                                item[
-                                    "measured_time"
-                                ],
-                                item["id"],
-                            ),
+                        with ui.element(
+                            "section"
+                        ).classes(
+                            "jf-pressure-history-day-card"
                         ):
                             with ui.element(
                                 "div"
                             ).classes(
-                                "jf-pressure-reading-card"
+                                "jf-pressure-history-day-header"
                             ):
-                                with ui.row().classes(
-                                    "w-full items-start "
-                                    "justify-between gap-2"
-                                ):
-                                    with ui.column().classes(
-                                        "gap-0"
-                                    ):
-                                        ui.label(
-                                            _time_text(
-                                                reading[
-                                                    "measured_time"
-                                                ]
-                                            )
-                                        ).classes(
-                                            "font-bold text-primary"
+                                ui.label(
+                                    _date_text(
+                                        day
+                                    )
+                                ).classes(
+                                    "font-bold"
+                                )
+                                ui.label(
+                                    (
+                                        "1 mesure"
+                                        if len(
+                                            grouped[
+                                                day
+                                            ]
+                                        ) == 1
+                                        else (
+                                            f"{len(grouped[day])} "
+                                            "mesures"
                                         )
-                                        ui.label(
-                                            (
-                                                f"{reading['systolic']}/"
-                                                f"{reading['diastolic']}"
-                                            )
-                                        ).classes(
-                                            "jf-pressure-value"
-                                        )
-                                        ui.label(
-                                            (
-                                                f"Pouls : "
-                                                f"{reading['pulse']}"
-                                            )
-                                        ).classes(
-                                            "text-sm"
-                                        )
+                                    )
+                                ).classes(
+                                    "text-xs jf-muted"
+                                )
 
-                                    with ui.row().classes(
-                                        "gap-0"
+                            for reading in sorted(
+                                grouped[
+                                    day
+                                ],
+                                key=lambda item: (
+                                    item[
+                                        "measured_time"
+                                    ],
+                                    item[
+                                        "id"
+                                    ],
+                                ),
+                            ):
+                                with ui.element(
+                                    "div"
+                                ).classes(
+                                    "jf-pressure-history-row"
+                                ):
+                                    ui.label(
+                                        _time_text(
+                                            reading[
+                                                "measured_time"
+                                            ]
+                                        )
+                                    ).classes(
+                                        "jf-pressure-history-time"
+                                    )
+
+                                    ui.label(
+                                        (
+                                            f"{reading['systolic']}/"
+                                            f"{reading['diastolic']}"
+                                        )
+                                    ).classes(
+                                        "jf-pressure-history-pressure"
+                                    )
+
+                                    ui.label(
+                                        (
+                                            f"Pouls {reading['pulse']}"
+                                        )
+                                    ).classes(
+                                        "jf-pressure-history-pulse"
+                                    )
+
+                                    ui.label(
+                                        reading[
+                                            "note"
+                                        ] or ""
+                                    ).classes(
+                                        "jf-pressure-history-note"
+                                    )
+
+                                    with ui.element(
+                                        "div"
+                                    ).classes(
+                                        "jf-pressure-history-actions"
                                     ):
                                         ui.button(
                                             icon="edit",
@@ -1370,7 +1546,8 @@ def blood_pressure_panel(
                                                 )
                                             ),
                                         ).props(
-                                            "flat round color=primary"
+                                            "flat dense round "
+                                            "size=sm color=primary"
                                         ).tooltip(
                                             "Modifier"
                                         )
@@ -1384,20 +1561,11 @@ def blood_pressure_panel(
                                                 )
                                             ),
                                         ).props(
-                                            "flat round color=negative"
+                                            "flat dense round "
+                                            "size=sm color=negative"
                                         ).tooltip(
                                             "Supprimer"
                                         )
-
-                                if reading["note"]:
-                                    ui.separator().classes(
-                                        "my-2"
-                                    )
-                                    ui.label(
-                                        reading["note"]
-                                    ).classes(
-                                        "text-sm jf-muted"
-                                    )
 
             render_history()
 

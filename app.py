@@ -37,6 +37,12 @@ from db import (
     needs_initial_admin_setup,
 )
 from families import families_panel
+from feedback import feedback_panel
+from feedback_data import (
+    count_feedback_attention,
+    count_user_unread_feedback,
+    init_feedback_schema,
+)
 from items import items_panel
 from maintenance import maintenance_panel
 from manual import manual_panel
@@ -152,6 +158,14 @@ RPG_TABS = {
     "character",
     "rpg",
     "ravenloft",
+}
+FEEDBACK_TABS = {
+    "commentaires",
+    "commentaire",
+    "suggestions",
+    "suggestion",
+    "feedback",
+    "avis",
 }
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -1028,6 +1042,24 @@ def show_portal(user):
         )
     )
 
+    try:
+        unread_feedback_count = (
+            count_user_unread_feedback(
+                user["id"]
+            )
+        )
+    except Exception:
+        unread_feedback_count = 0
+
+    try:
+        feedback_attention_count = (
+            count_feedback_attention()
+            if user["is_admin"]
+            else 0
+        )
+    except Exception:
+        feedback_attention_count = 0
+
     with page_container():
         with ui.card().classes("jf-hero-card"):
             with ui.row().classes(
@@ -1220,7 +1252,7 @@ def show_portal(user):
                     title="Personnages JDR",
                     description=(
                         "Créez et utilisez vos feuilles privées "
-                        "inspirées de D&D 3.5 et Ravenloft."
+                        "Pathfinder dans l’univers Ravenloft."
                     ),
                     icon="casino",
                     action_label="Ouvrir",
@@ -1336,6 +1368,42 @@ def show_portal(user):
                 )
 
             portal_action_card(
+                title="Commentaires et suggestions",
+                description=(
+                    "Signalez un problème, proposez une amélioration "
+                    "et consultez les réponses reçues."
+                ),
+                icon="rate_review",
+                action_label=(
+                    "Voir mes commentaires"
+                    if unread_feedback_count
+                    else "Partager une idée"
+                ),
+                badge=(
+                    (
+                        f"{unread_feedback_count} "
+                        + (
+                            "réponse"
+                            if unread_feedback_count == 1
+                            else "réponses"
+                        )
+                    )
+                    if unread_feedback_count
+                    else None
+                ),
+                on_click=lambda: ui.navigate.to(
+                    (
+                        "/?tab=commentaires&section=mes"
+                        if unread_feedback_count
+                        else (
+                            "/?tab=commentaires"
+                            "&section=nouveau"
+                        )
+                    )
+                ),
+            )
+
+            portal_action_card(
                 title="Manuel d’utilisation",
                 description=(
                     "Consultez les explications détaillées "
@@ -1370,6 +1438,28 @@ def show_portal(user):
                     action_label="Gérer",
                     on_click=lambda: ui.navigate.to(
                         "/?tab=utilisateurs"
+                    ),
+                )
+
+                portal_action_card(
+                    title="Commentaires reçus",
+                    description=(
+                        "Consultez les suggestions, répondez "
+                        "aux utilisateurs et attribuez un statut."
+                    ),
+                    icon="mark_chat_unread",
+                    action_label="Gérer",
+                    badge=(
+                        (
+                            f"{feedback_attention_count} "
+                            "à traiter"
+                        )
+                        if feedback_attention_count
+                        else None
+                    ),
+                    on_click=lambda: ui.navigate.to(
+                        "/?tab=commentaires"
+                        "&section=gestion"
                     ),
                 )
 
@@ -1861,6 +1951,23 @@ def index(
 
         return
 
+    if normalized_tab in FEEDBACK_TABS:
+        set_current_tab("commentaires")
+
+        with page_container():
+            portal_header(
+                "Commentaires et suggestions"
+            )
+            feedback_panel(
+                user,
+                initial_section=(
+                    section
+                    or "mes"
+                ),
+            )
+
+        return
+
     if normalized_tab in MANUAL_TABS:
         set_current_tab("manuel")
 
@@ -1982,6 +2089,7 @@ init_db()
 init_app_access_schema()
 init_blood_pressure_schema()
 init_rpg_character_schema()
+init_feedback_schema()
 
 storage_secret = os.getenv("STORAGE_SECRET")
 

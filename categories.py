@@ -1,4 +1,4 @@
-from nicegui import ui
+from nicegui import app, ui
 
 from auth import get_current_user_id
 from db import (
@@ -22,12 +22,55 @@ from state import (
 from utils import ensure_family_selected
 
 
+def _section_storage_key(family_id):
+    return (
+        f"categories_active_section_{family_id}"
+    )
+
+
+def _remember_section(
+    family_id,
+    section,
+):
+    normalized_section = (
+        "stores"
+        if section == "stores"
+        else "categories"
+    )
+
+    app.storage.user[
+        _section_storage_key(family_id)
+    ] = normalized_section
+
+
+def _reload_categories(
+    family_id,
+    section,
+):
+    _remember_section(
+        family_id,
+        section,
+    )
+    _reload_categories(family_id, "categories")
+
+
 def categories_panel():
     user_id = get_current_user_id()
     family_id = get_current_family_id()
 
     if user_id is None or not ensure_family_selected(family_id):
         return
+
+    active_section = app.storage.user.get(
+        _section_storage_key(family_id),
+        "categories",
+    )
+
+    if active_section not in {
+        "categories",
+        "stores",
+    }:
+        active_section = "categories"
 
     families = get_accessible_families(user_id)
     if not families:
@@ -57,7 +100,10 @@ def categories_panel():
             set_current_family_id(
                 family_by_name[event.value]
             ),
-            ui.navigate.to("/?tab=categories"),
+            _reload_categories(
+                family_by_name[event.value],
+                active_section,
+            ),
         ),
     ).classes("w-full")
 
@@ -78,24 +124,35 @@ def categories_panel():
         "dans Besoins et Mode courses."
     ).classes("text-sm text-gray-500")
 
-    with ui.tabs().classes("w-full") as tabs:
-        category_tab = ui.tab(
-            "Catégories",
+    def section_changed(event):
+        _remember_section(
+            family_id,
+            event.value,
+        )
+
+    with ui.tabs(
+        value=active_section,
+        on_change=section_changed,
+    ).classes("w-full") as tabs:
+        ui.tab(
+            "categories",
+            label="Catégories",
             icon="category",
         )
-        store_tab = ui.tab(
-            "Magasins",
+        ui.tab(
+            "stores",
+            label="Magasins",
             icon="storefront",
         )
 
     with ui.tab_panels(
         tabs,
-        value=category_tab,
+        value=active_section,
     ).classes(
         "w-full bg-transparent p-0"
     ):
         with ui.tab_panel(
-            category_tab
+            "categories"
         ).classes("p-0 gap-3"):
             _category_section(
                 user_id,
@@ -104,7 +161,7 @@ def categories_panel():
             )
 
         with ui.tab_panel(
-            store_tab
+            "stores"
         ).classes("p-0 gap-3"):
             _store_section(
                 user_id,
@@ -152,7 +209,7 @@ def _category_section(
                     "Catégorie ajoutée.",
                     type="positive",
                 )
-                ui.navigate.to("/?tab=categories")
+                _reload_categories(family_id, "categories")
 
             new_input.on("keydown.enter", add)
             ui.button(
@@ -284,8 +341,9 @@ def _category_section(
                             f"{count} item(s) déplacé(s).",
                             type="positive",
                         )
-                        ui.navigate.to(
-                            "/?tab=categories"
+                        _reload_categories(
+                            family_id,
+                            "categories",
                         )
 
                     with ui.row().classes(
@@ -351,8 +409,9 @@ def _category_section(
                             "Catégorie déplacée dans la corbeille.",
                             type="positive",
                         )
-                        ui.navigate.to(
-                            "/?tab=categories"
+                        _reload_categories(
+                            family_id,
+                            "categories",
                         )
 
                     with ui.row().classes(
@@ -410,6 +469,7 @@ def _category_section(
                             family_id,
                             selected["id"],
                             -1,
+                            "categories",
                         )
                     ),
                 ).props("flat round dense")
@@ -426,6 +486,7 @@ def _category_section(
                             family_id,
                             selected["id"],
                             1,
+                            "categories",
                         )
                     ),
                 ).props("flat round dense")
@@ -494,7 +555,7 @@ def _store_section(
                     "Magasin ajouté.",
                     type="positive",
                 )
-                ui.navigate.to("/?tab=categories")
+                _reload_categories(family_id, "stores")
 
             new_input.on("keydown.enter", add)
             ui.button(
@@ -606,8 +667,9 @@ def _store_section(
                             "Magasin déplacé dans la corbeille.",
                             type="positive",
                         )
-                        ui.navigate.to(
-                            "/?tab=categories"
+                        _reload_categories(
+                            family_id,
+                            "stores",
                         )
 
                     with ui.row().classes(
@@ -663,6 +725,7 @@ def _store_section(
                             family_id,
                             selected["id"],
                             -1,
+                            "stores",
                         )
                     ),
                 ).props("flat round dense")
@@ -679,6 +742,7 @@ def _store_section(
                             family_id,
                             selected["id"],
                             1,
+                            "stores",
                         )
                     ),
                 ).props("flat round dense")
@@ -707,6 +771,7 @@ def _move_and_reload(
     family_id,
     entry_id,
     direction,
+    section,
 ):
     try:
         function(
@@ -725,4 +790,7 @@ def _move_and_reload(
         )
         return
 
-    ui.navigate.to("/?tab=categories")
+    _reload_categories(
+        family_id,
+        section,
+    )

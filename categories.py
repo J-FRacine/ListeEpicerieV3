@@ -51,7 +51,7 @@ def _reload_categories(
         family_id,
         section,
     )
-    _reload_categories(family_id, "categories")
+    ui.navigate.to("/?tab=categories")
 
 
 def categories_panel():
@@ -261,8 +261,9 @@ def _category_section(
                         "Catégorie renommée.",
                         type="positive",
                     )
-                    ui.navigate.to(
-                        "/?tab=categories"
+                    _reload_categories(
+                        family_id,
+                        "categories",
                     )
 
                 with ui.row().classes(
@@ -601,8 +602,9 @@ def _store_section(
                         "Magasin renommé.",
                         type="positive",
                     )
-                    ui.navigate.to(
-                        "/?tab=categories"
+                    _reload_categories(
+                        family_id,
+                        "stores",
                     )
 
                 with ui.row().classes(

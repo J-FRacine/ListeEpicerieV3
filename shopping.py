@@ -51,13 +51,16 @@ def start_shopping_session(user_id, family_id):
             "La liste des besoins est vide."
         )
 
+    initial_item_ids = [
+        item["id"]
+        for item in items
+    ]
+
     app.storage.user[
         _session_key(family_id)
     ] = {
-        "item_ids": [
-            item["id"]
-            for item in items
-        ],
+        "item_ids": initial_item_ids,
+        "last_current_ids": initial_item_ids,
         "started_at": time.time(),
     }
     app.storage.user.pop(
@@ -66,27 +69,112 @@ def start_shopping_session(user_id, family_id):
     )
 
 
-def _ensure_session(family_id, current_needs):
+def _ensure_session(
+    family_id,
+    current_needs,
+):
     key = _session_key(family_id)
     session = app.storage.user.get(key) or {
         "item_ids": [],
         "started_at": time.time(),
     }
 
-    observed = {
+    current_ids = {
+        int(item["id"])
+        for item in current_needs
+    }
+
+    observed_ids = {
         int(value)
         for value in session.get(
             "item_ids",
             [],
         )
     }
-    observed.update(
-        item["id"]
-        for item in current_needs
+
+    previous_current_values = (
+        session.get(
+            "last_current_ids"
+        )
     )
-    session["item_ids"] = sorted(observed)
+
+    if previous_current_values is None:
+        # Première vérification après le déploiement
+        # ou reprise d’une ancienne session :
+        # ne pas annoncer tous les items existants.
+        newly_added_ids = set()
+    else:
+        previous_current_ids = {
+            int(value)
+            for value
+            in previous_current_values
+        }
+        newly_added_ids = (
+            current_ids
+            - previous_current_ids
+        )
+
+    observed_ids.update(
+        current_ids
+    )
+
+    session["item_ids"] = sorted(
+        observed_ids
+    )
+    session["last_current_ids"] = sorted(
+        current_ids
+    )
+
     app.storage.user[key] = session
-    return session
+
+    return (
+        session,
+        newly_added_ids,
+    )
+
+
+def _mark_item_as_seen(
+    family_id,
+    item_id,
+):
+    """Évite qu’une restauration locale soit annoncée comme un ajout."""
+
+    key = _session_key(family_id)
+    session = app.storage.user.get(key)
+
+    if not session:
+        return
+
+    last_current_ids = {
+        int(value)
+        for value in session.get(
+            "last_current_ids",
+            [],
+        )
+    }
+    observed_ids = {
+        int(value)
+        for value in session.get(
+            "item_ids",
+            [],
+        )
+    }
+
+    last_current_ids.add(
+        int(item_id)
+    )
+    observed_ids.add(
+        int(item_id)
+    )
+
+    session["last_current_ids"] = sorted(
+        last_current_ids
+    )
+    session["item_ids"] = sorted(
+        observed_ids
+    )
+
+    app.storage.user[key] = session
 
 
 def _clear_session(family_id):
@@ -169,10 +257,61 @@ def shopping_panel():
             if item["needed"] == 1
         ]
 
-        session = _ensure_session(
+        (
+            session,
+            newly_added_ids,
+        ) = _ensure_session(
             family_id,
             current,
         )
+
+        current_by_id = {
+            int(item["id"]): item
+            for item in current
+        }
+
+        newly_added_items = [
+            current_by_id[item_id]
+            for item_id
+            in sorted(newly_added_ids)
+            if item_id in current_by_id
+        ]
+
+        if newly_added_items:
+            if len(newly_added_items) == 1:
+                notification_text = (
+                    "Nouvel article ajouté pendant "
+                    "les courses : "
+                    f"« {newly_added_items[0]['name']} »."
+                )
+            else:
+                displayed_names = ", ".join(
+                    item["name"]
+                    for item
+                    in newly_added_items[:4]
+                )
+
+                if len(newly_added_items) > 4:
+                    displayed_names += (
+                        f" et "
+                        f"{len(newly_added_items) - 4} "
+                        "autre(s)"
+                    )
+
+                notification_text = (
+                    f"{len(newly_added_items)} nouveaux "
+                    "articles ajoutés pendant les courses : "
+                    f"{displayed_names}."
+                )
+
+            ui.notify(
+                notification_text,
+                type="info",
+                icon="add_shopping_cart",
+                timeout=10000,
+                close_button=True,
+            )
+
         observed_ids = {
             int(value)
             for value in session.get(
@@ -271,6 +410,10 @@ def shopping_panel():
                             undo_key,
                             None,
                         )
+                        _mark_item_as_seen(
+                            family_id,
+                            pending["item_id"],
+                        )
                         render_shopping.refresh()
 
                     ui.button(
@@ -350,6 +493,28 @@ def shopping_panel():
                 all_keys,
             )
         )
+
+        if newly_added_items:
+            for added_item in newly_added_items:
+                added_store = added_item["store"]
+                added_category = added_item[
+                    "category"
+                ]
+
+                open_groups.add(
+                    f"store::{added_store}"
+                )
+                open_groups.add(
+                    "category::"
+                    f"{added_store}::"
+                    f"{added_category}"
+                )
+
+            app.storage.user[
+                open_storage_key
+            ] = sorted(
+                open_groups
+            )
 
         def save_open(key, is_open):
             values = set(

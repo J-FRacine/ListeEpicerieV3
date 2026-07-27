@@ -205,6 +205,10 @@ Depuis **Besoins**, utilisez **Commencer les courses**. Une session interrompue 
 - Le dernier article coché peut être restauré avec **Annuler**.
 - Un groupe terminé disparaît automatiquement.
 - La liste s'actualise régulièrement pour afficher les changements faits par un autre membre.
+- Lorsqu’un nouvel item est ajouté aux besoins pendant que vous êtes en **Mode courses**, un avis apparaît avec son nom.
+- Le magasin et la catégorie du nouvel item sont ouverts automatiquement afin qu’il soit facile à repérer.
+
+L’avis est affiché seulement pour un véritable ajout détecté pendant la session. Restaurer vous-même un article avec **Annuler** ne produit pas un faux avis.
 
 ### Terminer
 

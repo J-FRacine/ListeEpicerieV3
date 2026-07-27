@@ -21,6 +21,10 @@ from auth import (
     set_authenticated_user,
 )
 from backup import backup_panel
+from blood_pressure import blood_pressure_panel
+from blood_pressure_data import (
+    init_blood_pressure_schema,
+)
 from categories import categories_panel
 from db import (
     create_first_admin,
@@ -125,6 +129,13 @@ SHOPPING_TABS = {
     "course",
     "magasin",
     "shopping",
+}
+BLOOD_PRESSURE_TABS = {
+    "pression",
+    "journal-pression",
+    "journal_pression",
+    "blood-pressure",
+    "blood_pressure",
 }
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -1154,13 +1165,15 @@ def show_portal(user):
                 portal_action_card(
                     title="Journal de pression",
                     description=(
-                        "Saisissez vos mesures de pression "
-                        "artérielle et votre pouls."
+                        "Consignez vos mesures privées "
+                        "et produisez un rapport PDF."
                     ),
                     icon="monitor_heart",
-                    action_label="Bientôt",
+                    action_label="Ouvrir",
                     badge="App 2",
-                    enabled=False,
+                    on_click=lambda: ui.navigate.to(
+                        "/?tab=pression"
+                    ),
                 )
 
             if "finances" in allowed_app_keys:
@@ -1282,6 +1295,20 @@ def show_portal(user):
                     ),
                 )
 
+            if "blood_pressure" in allowed_app_keys:
+                portal_action_card(
+                    title="Démarrer le journal",
+                    description=(
+                        "Saisie, historique privé "
+                        "et création du rapport PDF."
+                    ),
+                    icon="monitor_heart",
+                    action_label="Ouvrir",
+                    on_click=lambda: ui.navigate.to(
+                        "/?tab=pression"
+                    ),
+                )
+
             portal_action_card(
                 title="Manuel d’utilisation",
                 description=(
@@ -1311,7 +1338,7 @@ def show_portal(user):
                     title="Utilisateurs",
                     description=(
                         "Créez les comptes et attribuez "
-                        "les accès aux familles."
+                        "les familles et applications."
                     ),
                     icon="manage_accounts",
                     action_label="Gérer",
@@ -1724,6 +1751,32 @@ def index(tab="portail"):
 
         return
 
+    if normalized_tab in BLOOD_PRESSURE_TABS:
+        if not user_has_app_access(
+            user["id"],
+            "blood_pressure",
+        ):
+            with page_container():
+                portal_header(
+                    "Accès non autorisé"
+                )
+                show_app_access_denied(
+                    "Journal de pression"
+                )
+            return
+
+        set_current_tab("pression")
+
+        with page_container():
+            portal_header(
+                "Journal de pression"
+            )
+            blood_pressure_panel(
+                user
+            )
+
+        return
+
     if normalized_tab in MANUAL_TABS:
         set_current_tab("manuel")
 
@@ -1843,6 +1896,7 @@ def index(tab="portail"):
 
 init_db()
 init_app_access_schema()
+init_blood_pressure_schema()
 
 storage_secret = os.getenv("STORAGE_SECRET")
 

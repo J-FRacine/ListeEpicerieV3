@@ -21,10 +21,10 @@ APP_DEFINITIONS = {
         "short_label": "Pression",
         "icon": "monitor_heart",
         "description": (
-            "Mesures de pression artérielle "
-            "et du pouls."
+            "Mesures privées de pression "
+            "artérielle et du pouls."
         ),
-        "available": False,
+        "available": True,
     },
     "finances": {
         "label": "Finances",

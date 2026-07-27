@@ -113,6 +113,62 @@ Sur téléphone, ces outils sont présentés sous forme d’icônes afin de cons
 """,
     },
     {
+        "title": "Journal de pression",
+        "icon": "monitor_heart",
+        "caption": "Saisir, consulter et imprimer les mesures",
+        "keywords": (
+            "pression artérielle systolique diastolique pouls "
+            "date heure appareil privé note historique pdf rapport "
+            "aucune donnée courriel"
+        ),
+        "content": """
+### Données privées
+
+Le **Journal de pression** appartient uniquement à l’utilisateur connecté. Les mesures ne sont jamais partagées avec une famille ni avec un autre compte.
+
+### Ajouter une mesure
+
+Dans l’onglet **Saisie** :
+
+1. la date et l’heure de l’appareil sont proposées automatiquement;
+2. vérifiez-les ou modifiez-les au besoin;
+3. inscrivez la pression systolique, la pression diastolique et le pouls;
+4. ajoutez éventuellement une note;
+5. utilisez **Enregistrer**.
+
+Il est possible d’enregistrer plus de deux mesures dans une même journée. La phase 1 ne calcule aucune moyenne et ne présente aucun graphique.
+
+### Historique
+
+L’onglet **Historique** permet de choisir une plage de dates, puis de consulter, modifier ou supprimer les mesures du compte connecté.
+
+Chaque fiche affiche :
+
+- l’heure;
+- la pression systolique et diastolique;
+- le pouls;
+- la note facultative.
+
+### Rapport PDF
+
+Dans **Rapport PDF**, inscrivez le **nom complet à imprimer**, puis choisissez la date de début et la date de fin.
+
+Le rapport contient :
+
+- le nom indiqué;
+- l’intervalle choisi;
+- une ligne pour chaque date de l’intervalle;
+- les deux premières mesures de la journée sur la même ligne;
+- les mesures supplémentaires sur une ligne marquée **suite**;
+- les notes associées;
+- la mention **Aucune donnée pour ce jour** lorsqu’aucune mesure n’existe à une date donnée.
+
+### Préparer le courriel
+
+Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un sujet et un texte proposés. Le PDF doit généralement être joint manuellement, car les navigateurs ne permettent pas d’ajouter automatiquement une pièce jointe à un courriel.
+""",
+    },
+    {
         "title": "Familles et partage",
         "icon": "groups",
         "caption": "Espaces de données partagés",
@@ -534,7 +590,8 @@ def manual_panel():
                 "text-2xl font-bold"
             )
             ui.label(
-                "Guide du Portail JF Apps et de la liste d’épicerie."
+                "Guide du Portail JF Apps, de la liste d’épicerie "
+                "et du journal de pression."
             ).classes(
                 "text-sm text-gray-500"
             )
@@ -554,8 +611,10 @@ def manual_panel():
             "font-bold"
         )
         ui.label(
-            "Il sera complété lorsque le journal de pression "
-            "artérielle et l’application financière seront ajoutés."
+            "La liste d’épicerie et le Journal de pression "
+            "sont documentés. Il sera complété lorsque "
+            "les applications Finances et Personnages JDR "
+            "seront ajoutées."
         ).classes(
             "text-sm text-gray-600"
         )

@@ -104,9 +104,9 @@ def users_panel(current_user):
         ).classes("w-full")
 
         ui.label(
-            "Les applications à venir peuvent être "
-            "attribuées dès maintenant. Elles apparaîtront "
-            "avec la mention « Bientôt »."
+            "Le Journal de pression est disponible. "
+            "Les applications Finances et Personnages JDR "
+            "restent affichées avec la mention « Bientôt »."
         ).classes(
             "text-xs text-gray-500"
         )

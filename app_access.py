@@ -21,8 +21,8 @@ APP_DEFINITIONS = {
         "short_label": "Pression",
         "icon": "monitor_heart",
         "description": (
-            "Mesures privées de pression "
-            "artérielle et du pouls."
+            "Mesures de pression artérielle "
+            "et du pouls."
         ),
         "available": True,
     },
@@ -31,18 +31,18 @@ APP_DEFINITIONS = {
         "short_label": "Finances",
         "icon": "account_balance_wallet",
         "description": (
-            "Revenus, dépenses, budgets "
+            "Dépenses variables, revenus, objectifs "
             "et transactions récurrentes."
         ),
-        "available": False,
+        "available": True,
     },
     "rpg": {
         "label": "Personnages JDR",
         "short_label": "JDR",
         "icon": "casino",
         "description": (
-            "Feuilles privées et interactives "
-            "inspirées de D&D 3.5 et Ravenloft."
+            "Feuilles de personnage interactives "
+            "Pathfinder dans l’univers Ravenloft."
         ),
         "available": True,
     },

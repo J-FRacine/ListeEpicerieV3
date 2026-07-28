@@ -43,6 +43,8 @@ from feedback_data import (
     count_user_unread_feedback,
     init_feedback_schema,
 )
+from finances import finances_panel
+from finances_data import init_finances_schema
 from items import items_panel
 from maintenance import maintenance_panel
 from manual import manual_panel
@@ -54,6 +56,8 @@ from rpg_character_data import (
     init_rpg_character_schema,
 )
 from shared_library import shared_library_panel
+from release_notes import release_notes_panel
+from app_versions import version_label
 from pwa import (
     configure_pwa,
     request_pwa_install,
@@ -166,6 +170,19 @@ FEEDBACK_TABS = {
     "suggestion",
     "feedback",
     "avis",
+}
+FINANCE_TABS = {
+    "finances",
+    "finance",
+    "budget",
+    "depenses",
+    "dépenses",
+}
+RELEASE_TABS = {
+    "nouveautes",
+    "nouveautés",
+    "versions",
+    "releases",
 }
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -1237,13 +1254,15 @@ def show_portal(user):
                 portal_action_card(
                     title="Finances",
                     description=(
-                        "Suivez manuellement les revenus, "
-                        "dépenses, budgets et transactions récurrentes."
+                        "Suivez les dépenses variables, revenus, "
+                        "objectifs et transactions récurrentes."
                     ),
                     icon="account_balance_wallet",
-                    action_label="Bientôt",
-                    badge="App 3",
-                    enabled=False,
+                    action_label="Ouvrir",
+                    badge=version_label("finances"),
+                    on_click=lambda: ui.navigate.to(
+                        "/?tab=finances"
+                    ),
                 )
 
             if "rpg" in allowed_app_keys:
@@ -1400,6 +1419,20 @@ def show_portal(user):
                             "&section=nouveau"
                         )
                     )
+                ),
+            )
+
+            portal_action_card(
+                title="Nouveautés et versions",
+                description=(
+                    "Consultez les changements importants "
+                    "et les versions publiées."
+                ),
+                icon="new_releases",
+                action_label="Consulter",
+                badge="Nouveau",
+                on_click=lambda: ui.navigate.to(
+                    "/?tab=nouveautes"
                 ),
             )
 
@@ -1918,6 +1951,30 @@ def index(
 
         return
 
+    if normalized_tab in FINANCE_TABS:
+        if not user_has_app_access(
+            user["id"],
+            "finances",
+        ):
+            with page_container():
+                portal_header("Accès non autorisé")
+                show_app_access_denied("Finances")
+            return
+
+        set_current_tab("finances")
+
+        with page_container():
+            portal_header("Finances")
+            finances_panel(
+                user,
+                initial_section=(
+                    section
+                    or "tableau"
+                ),
+            )
+
+        return
+
     if normalized_tab in RPG_TABS:
         if not user_has_app_access(
             user["id"],
@@ -1965,6 +2022,15 @@ def index(
                     or "mes"
                 ),
             )
+
+        return
+
+    if normalized_tab in RELEASE_TABS:
+        set_current_tab("nouveautes")
+
+        with page_container():
+            portal_header("Nouveautés et versions")
+            release_notes_panel()
 
         return
 
@@ -2090,6 +2156,7 @@ init_app_access_schema()
 init_blood_pressure_schema()
 init_rpg_character_schema()
 init_feedback_schema()
+init_finances_schema()
 
 storage_secret = os.getenv("STORAGE_SECRET")
 

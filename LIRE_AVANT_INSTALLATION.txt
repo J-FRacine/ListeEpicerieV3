@@ -1,26 +1,82 @@
-CORRECTIF — BOUTONS DES COMMENTAIRES
+JF APPS — FINANCES V1.0.0
 
-Fichier à remplacer à la racine du dépôt GitHub :
-- feedback.py
+Fichiers complets à déposer ENSEMBLE à la racine du dépôt GitHub :
+- app.py
+- app_access.py
+- app_versions.py
+- release_notes.py
+- finances.py
+- finances_data.py
+- manual.py
 
-PROBLÈME CORRIGÉ
-Le bouton « Gérer » recevait l’événement de clic à la place
-de l’identifiant numérique du commentaire. La fenêtre de gestion
-ne pouvait donc pas charger le commentaire sélectionné.
+NOUVELLE APPLICATION
+Finances V1.0.0 comprend :
+- dépenses et revenus manuels;
+- saisie rapide compacte pour téléphone;
+- catégories et sous-catégories;
+- étiquettes multiples;
+- transactions récurrentes paramétrables;
+- occurrences à confirmer ou automatiques;
+- objectifs mensuels par catégorie, sous-catégorie ou étiquette;
+- report configurable : aucun, inutilisé, dépassement ou les deux;
+- plafond de report facultatif;
+- tableau de bord mensuel;
+- historique compact et filtres;
+- exportations CSV et JSON;
+- confidentialité stricte par utilisateur.
 
-Le même correctif a été appliqué préventivement aux boutons :
-- Consulter;
-- Modifier;
-- Gérer.
+VERSIONS ET ANNONCES
+- Finances commence à V1.0.0.
+- Une carte « Nouveautés et versions » est ajoutée au Portail.
+- Les versions importantes sont définies dans app_versions.py.
+- Leur présentation se trouve dans release_notes.py.
+- Pour une petite correction invisible, il n’est pas nécessaire
+  d’annoncer une nouvelle version.
+- Pour une nouvelle fonction ou un changement important :
+  incrémenter la version et ajouter une note de version.
+
+CONVENTION RETENUE
+- correction : 1.0.1;
+- amélioration compatible : 1.1.0;
+- changement majeur : 2.0.0.
+
+BASE DE DONNÉES
+Les tables Finances sont créées automatiquement.
+Aucun script SQL manuel n’est nécessaire.
+Aucune nouvelle dépendance Python n’est requise.
+
+ACCÈS
+L’application Finances devient disponible dans la gestion des accès.
+L’administrateur y accède automatiquement.
+Pour donner l’accès à un ami :
+1. ouvrir Utilisateurs;
+2. modifier l’utilisateur;
+3. activer Finances;
+4. enregistrer.
 
 INSTALLATION
-1. GitHub > Add file > Upload files.
-2. Déposer feedback.py.
-3. Faire Commit changes.
-4. Attendre le déploiement Canner.
-5. Actualiser complètement ou fermer et rouvrir la PWA.
-6. Ouvrir Administration > Commentaires reçus.
-7. Cliquer sur « Gérer ».
+1. Ouvrir le dépôt GitHub.
+2. Choisir Add file > Upload files.
+3. Déposer les sept fichiers ensemble.
+4. Faire Commit changes.
+5. Attendre le déploiement Canner.
+6. Actualiser avec Ctrl+F5 ou rouvrir la PWA.
+7. Vérifier la carte Finances V1.0.0.
+8. Tester une catégorie, une étiquette, une dépense,
+   une récurrence, un objectif avec report et les deux exportations.
 
-Aucun changement de base de données.
-Aucune dépendance supplémentaire.
+IMPORTANT
+Cette V1 prépare une évolution vers une comptabilité complète
+en V3 ou V4, mais n’affiche pas encore les comptes bancaires,
+rapprochements, transferts ou écritures comptables.
+
+VÉRIFICATIONS EFFECTUÉES
+- syntaxe Python;
+- imports internes;
+- routes du Portail;
+- initialisation automatique du schéma;
+- documentation intégrée;
+- présence des fonctions principales.
+
+Le fonctionnement réel avec NiceGUI et PostgreSQL doit être confirmé
+après le premier déploiement sur Canner.

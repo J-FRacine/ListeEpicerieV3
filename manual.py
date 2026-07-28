@@ -85,8 +85,8 @@ Les fonctions propres à la liste d’épicerie — modèles, recettes, biblioth
 Le Portail contient aussi :
 
 - **Mon espace** : familles et compte;
-- **Aide et démarrage** : Commencer ici, Commentaires et suggestions, puis Manuel;
-- **Administration** : utilisateurs, commentaires reçus et maintenance, pour les administrateurs.
+- **Aide et démarrage** : Commencer ici et Manuel;
+- **Administration** : utilisateurs et maintenance, pour les administrateurs.
 
 ### Barre de navigation de la liste d'épicerie
 
@@ -113,64 +113,71 @@ Sur téléphone, ces outils sont présentés sous forme d’icônes afin de cons
 """,
     },
     {
-        "title": "Commentaires et suggestions",
-        "icon": "rate_review",
-        "caption": "Partager une idée et suivre la réponse",
+        "title": "Finances — V1.0.0",
+        "icon": "account_balance_wallet",
+        "caption": "Dépenses variables, revenus et objectifs mensuels",
         "keywords": (
-            "commentaire suggestion amélioration problème réponse "
-            "statut gestionnaire nouveau étude planifié terminé refusé"
+            "finances dépenses revenus récurrences catégories "
+            "sous-catégories étiquettes objectifs report csv json"
         ),
         "content": """
-### Transmettre un commentaire
+### Objectif de la V1
 
-Depuis le Portail, ouvrez **Commentaires et suggestions**, puis l’onglet **Nouveau**.
+La V1 de **Finances** sert au suivi manuel des dépenses variables et des revenus. Elle ne constitue pas encore une comptabilité complète.
 
-Choisissez l’application concernée, inscrivez un sujet clair et décrivez le problème observé ou l’amélioration souhaitée.
+Les comptes bancaires, rapprochements, transferts et écritures comptables sont prévus seulement pour une version future, probablement V3 ou V4.
 
 ### Confidentialité
 
-Chaque utilisateur voit uniquement :
+Toutes les données financières sont strictement privées à l’utilisateur connecté. Elles ne sont jamais partagées avec une famille ou un autre compte.
 
-- ses propres commentaires;
-- le statut attribué;
-- la réponse qui lui est destinée;
-- l’historique de suivi de son commentaire.
+### Saisie rapide
 
-Les commentaires ne sont pas partagés avec une famille ni avec les autres utilisateurs ordinaires.
+La saisie permet d’enregistrer une dépense ou un revenu, la date, le montant, une description, une catégorie ou sous-catégorie, plusieurs étiquettes, une note facultative et un statut confirmé ou prévu.
 
-### Mes commentaires
+Les champs principaux sont compacts pour faciliter l’utilisation sur téléphone.
 
-L’onglet **Mes commentaires** permet de filtrer par application ou par statut, puis de rechercher dans le sujet et le texte.
+### Catégories, sous-catégories et étiquettes
 
-Un indicateur **Nouvelle réponse** apparaît lorsqu’un gestionnaire a répondu ou modifié le statut. Le Portail affiche aussi un compteur de réponses non lues.
+Une transaction peut avoir une catégorie ou une sous-catégorie, ainsi que plusieurs étiquettes.
 
-Un commentaire peut être modifié tant que son statut n’est pas **Terminé** ou **Refusé**.
+Une même dépense peut compter dans plusieurs objectifs par étiquette. Les objectifs par étiquette ne doivent donc pas être additionnés pour calculer le total général.
 
-### Statuts
+### Transactions récurrentes
 
-Les statuts disponibles sont :
+Une dépense ou un revenu récurrent peut être configuré en jours, semaines, mois ou années.
 
-- **Nouveau**;
-- **À l’étude**;
-- **Planifié**;
-- **En cours**;
-- **Terminé**;
-- **Refusé**.
+Deux modes sont disponibles :
 
-### Gestion administrative
+- **À confirmer** : l’occurrence devient une transaction prévue;
+- **Création automatique** : l’occurrence est immédiatement confirmée.
 
-Les administrateurs disposent d’un onglet **Gestion** et d’une carte **Commentaires reçus** dans la section Administration du Portail.
+### Objectifs mensuels
 
-Ils peuvent :
+Un objectif peut viser une catégorie, une sous-catégorie ou une étiquette.
 
-- consulter tous les commentaires;
-- filtrer par application et statut;
-- rechercher un utilisateur, un sujet ou un texte;
-- attribuer un statut;
-- répondre à l’utilisateur;
-- consulter l’historique des changements.
+Chaque objectif possède une politique de report :
 
-Lorsqu’une réponse ou un statut change, l’utilisateur reçoit un indicateur de réponse non lue dans JF Apps. Il ne s’agit pas d’une notification poussée sur le téléphone.
+- aucun report;
+- report du montant inutilisé;
+- report du dépassement;
+- report des deux.
+
+Un plafond de report facultatif peut être défini. Les mois déjà créés conservent leur montant de base et leur politique même si l’objectif est modifié plus tard.
+
+### Tableau de bord et historique
+
+Le tableau de bord affiche les dépenses, revenus, différence, transactions prévues et progression des objectifs.
+
+L’historique compact regroupe les transactions par date et permet de filtrer par dates, type, statut, catégorie, étiquette et texte.
+
+### Exporter
+
+L’onglet **Exporter** produit un fichier CSV pour Excel et un fichier JSON complet de sécurité.
+
+### Versions
+
+La version de l’application apparaît près de son nom. Le Portail contient aussi une page **Nouveautés et versions**.
 """,
     },
     {
@@ -244,15 +251,12 @@ Ce rappel est seulement un avis visuel dans le Portail. Il ne produit pas de not
 
 L’onglet **Historique** permet de choisir une plage de dates, puis de consulter, modifier ou supprimer les mesures du compte connecté.
 
-L’affichage est compact : chaque date forme un seul bloc et chaque mesure occupe une ligne contenant :
+Chaque fiche affiche :
 
 - l’heure;
 - la pression systolique et diastolique;
 - le pouls;
-- la note facultative;
-- les boutons de modification et de suppression.
-
-Sur téléphone, la note se replace automatiquement sous les valeurs pour conserver une bonne lisibilité.
+- la note facultative.
 
 ### Rapport PDF
 

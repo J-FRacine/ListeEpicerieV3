@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from calendar import monthrange
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 import csv
+import hashlib
 import io
 import json
+import re
+import unicodedata
+from zoneinfo import ZoneInfo
 
 from db import get_connection
 
@@ -177,6 +181,25 @@ def init_finances_schema():
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS finance_transactions_user_date_idx
                 ON finance_transactions (user_id, transaction_date DESC, id DESC);
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS import_source TEXT;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS import_key TEXT;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS imported_at TIMESTAMPTZ;
+            """)
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                finance_transactions_import_key_uq
+                ON finance_transactions (user_id, import_source, import_key)
+                WHERE import_source IS NOT NULL
+                  AND import_key IS NOT NULL;
             """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS finance_transaction_tags (
@@ -953,6 +976,571 @@ def goal_progress(user_id, month_value):
             return results
 
 
+
+def _normalized_header(value):
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(character for character in text if not unicodedata.combining(character))
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+def _row_lookup(row):
+    return {_normalized_header(key): value for key, value in row.items()}
+
+
+def _pick(row, *names):
+    lookup = _row_lookup(row)
+    for name in names:
+        key = _normalized_header(name)
+        if key in lookup:
+            return lookup[key]
+    return None
+
+
+def _parse_import_amount(value):
+    text = str(value or "").strip().replace("\u00a0", "").replace(" ", "")
+    if not text:
+        raise ValueError("Montant absent.")
+    if "," in text and "." not in text:
+        text = text.replace(",", ".")
+    try:
+        amount = abs(Decimal(text)).quantize(Decimal("0.01"))
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValueError("Le montant est invalide.")
+    if amount <= 0:
+        raise ValueError("Le montant doit être supérieur à zéro.")
+    return amount
+
+
+def _parse_import_type(value):
+    normalized = _normalized_header(value)
+    if normalized in {"expense", "depense", "depenses"}:
+        return "expense"
+    if normalized in {"income", "revenu", "revenus"}:
+        return "income"
+    raise ValueError(f"Type de transaction inconnu : {value}")
+
+
+def _parse_import_status(value):
+    normalized = _normalized_header(value)
+    if not normalized or normalized in {"confirmed", "confirmee", "confirme"}:
+        return "confirmed"
+    if normalized in {"planned", "prevue", "prevu", "a confirmer"}:
+        return "planned"
+    raise ValueError(f"Statut inconnu : {value}")
+
+
+def _split_import_tags(value):
+    if isinstance(value, list):
+        candidates = value
+    else:
+        candidates = re.split(r"\s*[|;,]\s*", str(value or "").strip())
+    result = []
+    seen = set()
+    for candidate in candidates:
+        name = str(candidate or "").strip()
+        key = name.casefold()
+        if name and key not in seen:
+            seen.add(key)
+            result.append(name[:80])
+    return result
+
+
+def _stable_import_key(source, payload, occurrence):
+    canonical = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return f"{digest}:{occurrence}"
+
+
+def _parse_spendee_rows(rows):
+    normalized_rows = []
+    errors = []
+    occurrence_counts = {}
+    timezone = ZoneInfo("America/Toronto")
+
+    for row_number, row in enumerate(rows, start=2):
+        try:
+            currency = str(_pick(row, "Currency") or "CAD").strip().upper()
+            if currency and currency != "CAD":
+                raise ValueError(
+                    f"La devise {currency} n’est pas prise en charge par cette V1."
+                )
+
+            original_timestamp = str(_pick(row, "Date") or "").strip()
+            timestamp = datetime.fromisoformat(original_timestamp.replace("Z", "+00:00"))
+            if timestamp.tzinfo is not None:
+                transaction_date = timestamp.astimezone(timezone).date()
+            else:
+                transaction_date = timestamp.date()
+
+            category_name = str(_pick(row, "Category name") or "").strip()
+            original_note = str(_pick(row, "Note") or "").strip()
+            description = original_note or category_name or "Transaction importée"
+            tag_names = _split_import_tags(_pick(row, "Labels"))
+            transaction_type = _parse_import_type(_pick(row, "Type"))
+            amount = _parse_import_amount(_pick(row, "Amount"))
+
+            payload = {
+                "date": original_timestamp,
+                "wallet": str(_pick(row, "Wallet") or "").strip(),
+                "type": transaction_type,
+                "category": category_name,
+                "amount": str(amount),
+                "currency": currency,
+                "note": original_note,
+                "tags": tag_names,
+                "author": str(_pick(row, "Author") or "").strip(),
+            }
+            base = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+            occurrence_counts[base] = occurrence_counts.get(base, 0) + 1
+
+            normalized_rows.append(
+                {
+                    "transaction_date": transaction_date,
+                    "transaction_type": transaction_type,
+                    "amount": amount,
+                    "description": description[:160],
+                    "category_name": category_name[:100] or None,
+                    "tag_names": tag_names,
+                    "note": None,
+                    "status": "confirmed",
+                    "import_source": "spendee",
+                    "import_key": _stable_import_key(
+                        "spendee", payload, occurrence_counts[base]
+                    ),
+                    "original_row": row_number,
+                }
+            )
+        except Exception as error:
+            errors.append(f"Ligne {row_number} : {error}")
+
+    return normalized_rows, errors, "Spendee CSV"
+
+
+def _parse_jf_csv_rows(rows):
+    normalized_rows = []
+    errors = []
+    occurrence_counts = {}
+
+    for row_number, row in enumerate(rows, start=2):
+        try:
+            raw_date = str(_pick(row, "Date", "transaction_date") or "").strip()
+            if "T" in raw_date:
+                transaction_date = datetime.fromisoformat(
+                    raw_date.replace("Z", "+00:00")
+                ).date()
+            else:
+                transaction_date = date.fromisoformat(raw_date)
+
+            transaction_type = _parse_import_type(
+                _pick(row, "Type", "transaction_type")
+            )
+            amount = _parse_import_amount(_pick(row, "Montant", "Amount", "amount"))
+            category_name = str(
+                _pick(row, "Catégorie", "Category", "category_full_name") or ""
+            ).strip()
+            tag_names = _split_import_tags(
+                _pick(row, "Étiquettes", "Tags", "tag_names")
+            )
+            description = str(
+                _pick(row, "Description", "description")
+                or category_name
+                or "Transaction importée"
+            ).strip()
+            note = str(_pick(row, "Note", "note") or "").strip() or None
+            status = _parse_import_status(_pick(row, "Statut", "status"))
+            source = str(
+                _pick(row, "Source importation", "import_source")
+                or "jf_apps_csv"
+            ).strip()[:80]
+            supplied_key = str(
+                _pick(row, "Clé importation", "Cle importation", "import_key")
+                or ""
+            ).strip()
+
+            payload = {
+                "date": transaction_date.isoformat(),
+                "type": transaction_type,
+                "amount": str(amount),
+                "description": description,
+                "category": category_name,
+                "tags": tag_names,
+                "note": note,
+                "status": status,
+            }
+            base = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+            occurrence_counts[base] = occurrence_counts.get(base, 0) + 1
+            import_key = supplied_key or _stable_import_key(
+                source, payload, occurrence_counts[base]
+            )
+
+            normalized_rows.append(
+                {
+                    "transaction_date": transaction_date,
+                    "transaction_type": transaction_type,
+                    "amount": amount,
+                    "description": description[:160],
+                    "category_name": category_name[:100] or None,
+                    "tag_names": tag_names,
+                    "note": note,
+                    "status": status,
+                    "import_source": source,
+                    "import_key": import_key[:180],
+                    "original_row": row_number,
+                }
+            )
+        except Exception as error:
+            errors.append(f"Ligne {row_number} : {error}")
+
+    return normalized_rows, errors, "JF Apps CSV"
+
+
+def _parse_jf_json(document):
+    if not isinstance(document, dict) or not isinstance(document.get("transactions"), list):
+        raise ValueError("Le fichier JSON ne contient pas une sauvegarde Finances reconnue.")
+    rows = []
+    for item in document["transactions"]:
+        if isinstance(item, dict):
+            rows.append(item)
+    parsed, errors, _ = _parse_jf_csv_rows(rows)
+    return parsed, errors, "JF Apps JSON"
+
+
+def _csv_rows(text):
+    sample = text[:4096]
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
+    except csv.Error:
+        dialect = csv.excel
+    return list(csv.DictReader(io.StringIO(text), dialect=dialect))
+
+
+def _existing_import_state(user_id, rows):
+    if not rows:
+        return set(), set()
+
+    keys = [row["import_key"] for row in rows if row.get("import_key")]
+    sources = [row["import_source"] for row in rows if row.get("import_source")]
+    start_date = min(row["transaction_date"] for row in rows)
+    end_date = max(row["transaction_date"] for row in rows)
+
+    imported = set()
+    exact = set()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            if keys:
+                cur.execute(
+                    """
+                    SELECT import_source, import_key
+                    FROM finance_transactions
+                    WHERE user_id = %s
+                      AND import_key = ANY(%s)
+                      AND import_source = ANY(%s);
+                    """,
+                    (user_id, keys, sources),
+                )
+                imported = {
+                    (str(row["import_source"]), str(row["import_key"]))
+                    for row in cur.fetchall()
+                }
+
+            cur.execute(
+                """
+                SELECT
+                    transaction.transaction_date,
+                    transaction.transaction_type,
+                    transaction.amount,
+                    LOWER(TRIM(transaction.description)) AS description_key,
+                    LOWER(TRIM(COALESCE(
+                        CASE
+                            WHEN parent.id IS NULL THEN category.name
+                            ELSE parent.name || ' › ' || category.name
+                        END,
+                        ''
+                    ))) AS category_key
+                FROM finance_transactions AS transaction
+                LEFT JOIN finance_categories AS category
+                    ON category.id = transaction.category_id
+                LEFT JOIN finance_categories AS parent
+                    ON parent.id = category.parent_id
+                WHERE transaction.user_id = %s
+                  AND transaction.transaction_date BETWEEN %s AND %s;
+                """,
+                (user_id, start_date, end_date),
+            )
+            exact = {
+                (
+                    row["transaction_date"],
+                    row["transaction_type"],
+                    Decimal(row["amount"]),
+                    row["description_key"],
+                    row["category_key"],
+                )
+                for row in cur.fetchall()
+            }
+    return imported, exact
+
+
+def prepare_finance_import(user_id, filename, text):
+    if not str(text or "").strip():
+        raise ValueError("Le fichier est vide.")
+
+    lower_name = str(filename or "").lower()
+    if lower_name.endswith(".json") or str(text).lstrip().startswith("{"):
+        rows, errors, format_name = _parse_jf_json(json.loads(text))
+    else:
+        csv_rows = _csv_rows(text)
+        if not csv_rows:
+            raise ValueError("Le fichier CSV ne contient aucune transaction.")
+        headers = {_normalized_header(key) for key in csv_rows[0].keys()}
+        if {"wallet", "category name", "currency", "labels"}.issubset(headers):
+            rows, errors, format_name = _parse_spendee_rows(csv_rows)
+        else:
+            rows, errors, format_name = _parse_jf_csv_rows(csv_rows)
+
+    imported_keys, exact_keys = _existing_import_state(user_id, rows)
+    already_imported = 0
+    possible_duplicates = 0
+
+    for row in rows:
+        source_key = (row["import_source"], row["import_key"])
+        exact_key = (
+            row["transaction_date"],
+            row["transaction_type"],
+            Decimal(row["amount"]),
+            row["description"].strip().lower(),
+            str(row.get("category_name") or "").strip().lower(),
+        )
+        if source_key in imported_keys:
+            row["duplicate_reason"] = "already_imported"
+            already_imported += 1
+        elif exact_key in exact_keys:
+            row["duplicate_reason"] = "possible_duplicate"
+            possible_duplicates += 1
+        else:
+            row["duplicate_reason"] = None
+
+    return {
+        "format": format_name,
+        "rows": rows,
+        "errors": errors,
+        "total_rows": len(rows) + len(errors),
+        "valid_rows": len(rows),
+        "already_imported": already_imported,
+        "possible_duplicates": possible_duplicates,
+        "categories": sorted(
+            {row["category_name"] for row in rows if row.get("category_name")},
+            key=str.casefold,
+        ),
+        "tags": sorted(
+            {tag for row in rows for tag in row.get("tag_names", [])},
+            key=str.casefold,
+        ),
+    }
+
+
+def _get_or_create_category_for_import(cur, user_id, path, transaction_type):
+    if not path:
+        return None, 0
+
+    parts = [part.strip() for part in re.split(r"\s*(?:›|>)\s*", path) if part.strip()]
+    parts = parts[:2]
+    parent_id = None
+    created = 0
+
+    for index, name in enumerate(parts):
+        cur.execute(
+            """
+            SELECT id, category_type
+            FROM finance_categories
+            WHERE user_id = %s
+              AND parent_id IS NOT DISTINCT FROM %s
+              AND LOWER(name) = LOWER(%s)
+            LIMIT 1;
+            """,
+            (user_id, parent_id, name),
+        )
+        category = cur.fetchone()
+        if category:
+            category_id = int(category["id"])
+            if category["category_type"] not in {transaction_type, "both"}:
+                cur.execute(
+                    """
+                    UPDATE finance_categories
+                    SET category_type = 'both', is_active = TRUE, updated_at = NOW()
+                    WHERE id = %s;
+                    """,
+                    (category_id,),
+                )
+            else:
+                cur.execute(
+                    "UPDATE finance_categories SET is_active=TRUE WHERE id=%s;",
+                    (category_id,),
+                )
+        else:
+            cur.execute(
+                """
+                INSERT INTO finance_categories (
+                    user_id, parent_id, name, category_type
+                )
+                VALUES (%s, %s, %s, %s)
+                RETURNING id;
+                """,
+                (user_id, parent_id, name[:100], transaction_type),
+            )
+            category_id = int(cur.fetchone()["id"])
+            created += 1
+        parent_id = category_id
+
+    return parent_id, created
+
+
+def _get_or_create_tag_for_import(cur, user_id, name):
+    cur.execute(
+        """
+        SELECT id
+        FROM finance_tags
+        WHERE user_id = %s AND LOWER(name) = LOWER(%s)
+        LIMIT 1;
+        """,
+        (user_id, name),
+    )
+    row = cur.fetchone()
+    if row:
+        tag_id = int(row["id"])
+        cur.execute(
+            "UPDATE finance_tags SET is_active=TRUE WHERE id=%s;",
+            (tag_id,),
+        )
+        return tag_id, 0
+
+    cur.execute(
+        """
+        INSERT INTO finance_tags (user_id, name)
+        VALUES (%s, %s)
+        RETURNING id;
+        """,
+        (user_id, name[:80]),
+    )
+    return int(cur.fetchone()["id"]), 1
+
+
+def import_finance_rows(user_id, rows, skip_possible_duplicates=True):
+    imported_count = 0
+    skipped_count = 0
+    categories_created = 0
+    tags_created = 0
+    failures = []
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            for row in rows:
+                cur.execute("SAVEPOINT finance_import_row;")
+                row_categories_created = 0
+                row_tags_created = 0
+                try:
+                    if row.get("duplicate_reason") == "already_imported":
+                        skipped_count += 1
+                        cur.execute("RELEASE SAVEPOINT finance_import_row;")
+                        continue
+                    if (
+                        skip_possible_duplicates
+                        and row.get("duplicate_reason") == "possible_duplicate"
+                    ):
+                        skipped_count += 1
+                        cur.execute("RELEASE SAVEPOINT finance_import_row;")
+                        continue
+
+                    category_id, created = _get_or_create_category_for_import(
+                        cur,
+                        user_id,
+                        row.get("category_name"),
+                        row["transaction_type"],
+                    )
+                    row_categories_created += created
+
+                    cur.execute(
+                        """
+                        INSERT INTO finance_transactions (
+                            user_id,
+                            transaction_date,
+                            transaction_type,
+                            amount,
+                            description,
+                            category_id,
+                            note,
+                            status,
+                            import_source,
+                            import_key,
+                            imported_at
+                        )
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+                        ON CONFLICT DO NOTHING
+                        RETURNING id;
+                        """,
+                        (
+                            user_id,
+                            row["transaction_date"],
+                            row["transaction_type"],
+                            row["amount"],
+                            row["description"],
+                            category_id,
+                            row.get("note"),
+                            row["status"],
+                            row["import_source"],
+                            row["import_key"],
+                        ),
+                    )
+                    inserted = cur.fetchone()
+                    if not inserted:
+                        skipped_count += 1
+                        cur.execute("ROLLBACK TO SAVEPOINT finance_import_row;")
+                        cur.execute("RELEASE SAVEPOINT finance_import_row;")
+                        continue
+
+                    transaction_id = int(inserted["id"])
+                    for tag_name in row.get("tag_names", []):
+                        tag_id, created = _get_or_create_tag_for_import(
+                            cur, user_id, tag_name
+                        )
+                        row_tags_created += created
+                        cur.execute(
+                            """
+                            INSERT INTO finance_transaction_tags (
+                                transaction_id, tag_id
+                            )
+                            VALUES (%s, %s)
+                            ON CONFLICT DO NOTHING;
+                            """,
+                            (transaction_id, tag_id),
+                        )
+                    imported_count += 1
+                    categories_created += row_categories_created
+                    tags_created += row_tags_created
+                    cur.execute("RELEASE SAVEPOINT finance_import_row;")
+                except Exception as error:
+                    cur.execute("ROLLBACK TO SAVEPOINT finance_import_row;")
+                    cur.execute("RELEASE SAVEPOINT finance_import_row;")
+                    failures.append(
+                        f"Ligne {row.get('original_row', '?')} : {error}"
+                    )
+                    continue
+            conn.commit()
+
+    return {
+        "imported": imported_count,
+        "skipped": skipped_count,
+        "categories_created": categories_created,
+        "tags_created": tags_created,
+        "failures": failures,
+    }
+
+
 def export_finances(user_id):
     transactions = list_transactions(user_id, limit=100000)
     categories = list_categories(user_id, include_inactive=True)
@@ -965,6 +1553,7 @@ def export_finances(user_id):
     writer.writerow([
         "Date", "Type", "Description", "Montant", "Catégorie",
         "Étiquettes", "Note", "Statut", "Récurrence",
+        "Source importation", "Clé importation",
     ])
     for row in reversed(transactions):
         writer.writerow([
@@ -977,6 +1566,8 @@ def export_finances(user_id):
             row["note"] or "",
             TRANSACTION_STATUSES[row["status"]],
             "Oui" if row["recurrence_id"] else "Non",
+            row.get("import_source") or "jf_apps",
+            row.get("import_key") or "",
         ])
 
     def serial(value):
@@ -990,7 +1581,7 @@ def export_finances(user_id):
 
     payload = {
         "format": "JF Apps Finances",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "categories": [serial(dict(row)) for row in categories],
         "tags": [serial(dict(row)) for row in tags],
         "transactions": [serial(dict(row)) for row in transactions],

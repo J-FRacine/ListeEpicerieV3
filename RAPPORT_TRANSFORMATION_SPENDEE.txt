@@ -1,0 +1,24 @@
+TRANSFORMATION DU FICHIER SPENDEE
+
+Fichier source : transactions_export_2026-07-29_portefeuille-de-tresorerie.csv
+Fichier produit : spendee_90_jours_pret_pour_jf_apps.csv
+
+Transactions : 102
+- Dépenses : 92
+- Revenus : 10
+
+Période après conversion au fuseau America/Toronto :
+- du 2026-04-30
+- au 2026-07-19
+
+Catégories distinctes : 9
+Étiquettes distinctes : 8
+Dates ajustées par rapport au jour UTC : 7
+
+RÈGLES DE TRANSFORMATION
+- le montant est rendu positif; le type indique Dépense ou Revenu;
+- la note Spendee devient la description principale lorsqu’elle existe;
+- la catégorie Spendee est conservée comme catégorie;
+- les labels Spendee deviennent des étiquettes;
+- les transactions sont confirmées et non récurrentes;
+- une clé stable est ajoutée pour éviter une double importation.

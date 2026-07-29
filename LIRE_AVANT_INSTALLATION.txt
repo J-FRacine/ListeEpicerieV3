@@ -1,82 +1,48 @@
-JF APPS — FINANCES V1.0.0
+JF APPS — FINANCES V1.1.0 — IMPORTATION
 
-Fichiers complets à déposer ENSEMBLE à la racine du dépôt GitHub :
-- app.py
-- app_access.py
-- app_versions.py
-- release_notes.py
+Fichiers complets à remplacer à la racine de GitHub :
 - finances.py
 - finances_data.py
+- app_versions.py
 - manual.py
 
-NOUVELLE APPLICATION
-Finances V1.0.0 comprend :
-- dépenses et revenus manuels;
-- saisie rapide compacte pour téléphone;
-- catégories et sous-catégories;
-- étiquettes multiples;
-- transactions récurrentes paramétrables;
-- occurrences à confirmer ou automatiques;
-- objectifs mensuels par catégorie, sous-catégorie ou étiquette;
-- report configurable : aucun, inutilisé, dépassement ou les deux;
-- plafond de report facultatif;
-- tableau de bord mensuel;
-- historique compact et filtres;
-- exportations CSV et JSON;
-- confidentialité stricte par utilisateur.
+Fichier de données prêt à importer :
+- spendee_90_jours_pret_pour_jf_apps.csv
 
-VERSIONS ET ANNONCES
-- Finances commence à V1.0.0.
-- Une carte « Nouveautés et versions » est ajoutée au Portail.
-- Les versions importantes sont définies dans app_versions.py.
-- Leur présentation se trouve dans release_notes.py.
-- Pour une petite correction invisible, il n’est pas nécessaire
-  d’annoncer une nouvelle version.
-- Pour une nouvelle fonction ou un changement important :
-  incrémenter la version et ajouter une note de version.
+INSTALLATION DU CODE
+1. GitHub > Add file > Upload files.
+2. Déposer les quatre fichiers Python ensemble.
+3. Faire Commit changes.
+4. Attendre le déploiement Canner.
+5. Actualiser complètement avec Ctrl+F5 ou rouvrir la PWA.
+6. La carte Finances doit afficher V1.1.0.
 
-CONVENTION RETENUE
-- correction : 1.0.1;
-- amélioration compatible : 1.1.0;
-- changement majeur : 2.0.0.
+IMPORTATION DES DONNÉES
+1. Ouvrir Finances.
+2. Ouvrir l’onglet Exporter.
+3. Dans Importer des transactions, choisir :
+   spendee_90_jours_pret_pour_jf_apps.csv
+4. Vérifier la prévisualisation.
+5. Laisser cochée l’option qui ignore les transactions identiques.
+6. Cliquer sur Importer.
+
+Le fichier Spendee original peut aussi être sélectionné directement.
+Le fichier transformé est fourni pour rendre les données faciles à lire
+et pour figer la conversion des dates au fuseau America/Toronto.
+
+PROTECTIONS
+- prévisualisation obligatoire;
+- détection des clés déjà importées;
+- détection des transactions identiques déjà présentes;
+- création automatique des catégories et étiquettes;
+- erreurs de lignes affichées sans bloquer les autres lignes;
+- aucune suppression des données existantes.
 
 BASE DE DONNÉES
-Les tables Finances sont créées automatiquement.
-Aucun script SQL manuel n’est nécessaire.
-Aucune nouvelle dépendance Python n’est requise.
+Trois colonnes sont ajoutées automatiquement à finance_transactions :
+- import_source;
+- import_key;
+- imported_at.
 
-ACCÈS
-L’application Finances devient disponible dans la gestion des accès.
-L’administrateur y accède automatiquement.
-Pour donner l’accès à un ami :
-1. ouvrir Utilisateurs;
-2. modifier l’utilisateur;
-3. activer Finances;
-4. enregistrer.
-
-INSTALLATION
-1. Ouvrir le dépôt GitHub.
-2. Choisir Add file > Upload files.
-3. Déposer les sept fichiers ensemble.
-4. Faire Commit changes.
-5. Attendre le déploiement Canner.
-6. Actualiser avec Ctrl+F5 ou rouvrir la PWA.
-7. Vérifier la carte Finances V1.0.0.
-8. Tester une catégorie, une étiquette, une dépense,
-   une récurrence, un objectif avec report et les deux exportations.
-
-IMPORTANT
-Cette V1 prépare une évolution vers une comptabilité complète
-en V3 ou V4, mais n’affiche pas encore les comptes bancaires,
-rapprochements, transferts ou écritures comptables.
-
-VÉRIFICATIONS EFFECTUÉES
-- syntaxe Python;
-- imports internes;
-- routes du Portail;
-- initialisation automatique du schéma;
-- documentation intégrée;
-- présence des fonctions principales.
-
-Le fonctionnement réel avec NiceGUI et PostgreSQL doit être confirmé
-après le premier déploiement sur Canner.
+Aucun script SQL manuel.
+Aucune nouvelle dépendance Python.

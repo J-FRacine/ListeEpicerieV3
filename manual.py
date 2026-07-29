@@ -113,7 +113,7 @@ Sur téléphone, ces outils sont présentés sous forme d’icônes afin de cons
 """,
     },
     {
-        "title": "Finances — V1.0.0",
+        "title": "Finances — V1.1.0",
         "icon": "account_balance_wallet",
         "caption": "Dépenses variables, revenus et objectifs mensuels",
         "keywords": (
@@ -171,9 +171,23 @@ Le tableau de bord affiche les dépenses, revenus, différence, transactions pr�
 
 L’historique compact regroupe les transactions par date et permet de filtrer par dates, type, statut, catégorie, étiquette et texte.
 
+### Importer
+
+L’onglet **Exporter** contient aussi la zone d’importation. Les formats reconnus sont :
+
+- le CSV original de Spendee;
+- le CSV exporté par JF Apps;
+- le JSON exporté par JF Apps.
+
+Avant l’importation, l’application présente le nombre de transactions valides, les transactions déjà importées, les doublons possibles, les catégories et les étiquettes détectées.
+
+Les catégories et étiquettes absentes sont créées automatiquement. Par défaut, les transactions identiques déjà présentes sont ignorées. Cette protection peut être désactivée dans la prévisualisation lorsqu’il s’agit réellement de deux dépenses distinctes.
+
+Pour les exports Spendee contenant un horodatage UTC, la date est convertie selon le fuseau **America/Toronto**, adapté au Québec.
+
 ### Exporter
 
-L’onglet **Exporter** produit un fichier CSV pour Excel et un fichier JSON complet de sécurité.
+L’onglet **Exporter** produit un fichier CSV pour Excel et un fichier JSON complet de sécurité. Les futures exportations contiennent aussi une source et une clé d’importation afin d’éviter de réimporter deux fois les mêmes transactions.
 
 ### Versions
 

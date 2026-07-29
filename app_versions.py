@@ -3,10 +3,27 @@ from __future__ import annotations
 PORTAL_VERSION = "1.0.0"
 
 APP_VERSIONS = {
-    "finances": "1.0.0",
+    "finances": "1.1.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "version": "1.1.0",
+        "date": "2026-07-29",
+        "title": "Finances — importation contrôlée",
+        "summary": (
+            "Ajout de l’importation CSV et JSON avec prévisualisation, "
+            "création des catégories et détection des doublons."
+        ),
+        "changes": [
+            "Importation directe des fichiers CSV de Spendee.",
+            "Importation des CSV et JSON exportés par JF Apps.",
+            "Prévisualisation avant l’ajout des transactions.",
+            "Création automatique des catégories et étiquettes manquantes.",
+            "Détection des transactions déjà importées et des doublons possibles.",
+            "Conservation de clés d’importation dans les futures exportations.",
+        ],
+    },
     {
         "version": "1.0.0",
         "date": "2026-07-28",

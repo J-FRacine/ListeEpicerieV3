@@ -13,9 +13,15 @@ from finances_data import (
     CARRY_POLICIES,
     CONFIRMATION_MODES,
     FREQUENCY_UNITS,
+    PAYMENT_METHOD_TYPES,
+    RECONCILIATION_SESSION_STATUSES,
     RECONCILIATION_STATUSES,
     TRANSACTION_STATUSES,
     TRANSACTION_TYPES,
+    bulk_assign_payment_method,
+    cancel_reconciliation_session,
+    count_unassigned_confirmed_transactions,
+    create_reconciliation_session,
     dashboard_expense_kpis,
     dashboard_summary,
     delete_transaction,
@@ -23,18 +29,23 @@ from finances_data import (
     ensure_default_finance_payment_methods,
     export_finances,
     generate_due_recurrences,
+    get_reconciliation_session,
     get_transaction,
     goal_progress,
     import_finance_rows,
     list_categories,
     list_goals,
     list_payment_methods,
+    list_reconciliation_sessions,
     list_recurrences,
     list_tags,
     list_transactions,
+    list_unassigned_transactions,
+    list_unreconciled_transactions,
     move_payment_method,
-    payment_reconciliation_summary,
+    payment_predicted_balance_summary,
     prepare_finance_import,
+    remove_transaction_from_reconciliation_session,
     save_category,
     save_goal,
     save_payment_method,
@@ -362,6 +373,128 @@ FINANCE_CSS = r"""
 
 ui.add_css(FINANCE_CSS, shared=True)
 
+ui.add_css(
+    r"""
+    .jf-finance-balance-grid {
+        display:grid;
+        grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));
+        gap:.55rem;
+        width:100%;
+    }
+    .jf-finance-balance-card {
+        width:100%;
+        padding:.65rem .72rem;
+        border:1px solid var(--jf-border);
+        border-radius:12px;
+        background:var(--jf-surface);
+    }
+    .jf-finance-balance-main {
+        width:100%;
+        color:var(--jf-navy);
+        font-size:1.08rem;
+        font-weight:850;
+        text-align:right;
+        white-space:nowrap;
+    }
+    .body--dark .jf-finance-balance-main {color:#dceaf6;}
+    .jf-finance-balance-line {
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto;
+        align-items:center;
+        gap:.5rem;
+        width:100%;
+        font-size:.72rem;
+    }
+    .jf-finance-balance-line > :last-child {
+        min-width:6.5rem;
+        text-align:right;
+        font-weight:750;
+    }
+    .jf-finance-reconcile-toolbar {
+        display:grid;
+        grid-template-columns:minmax(12rem,1.3fr) minmax(9rem,.8fr)
+            minmax(9rem,.8fr) minmax(10rem,1fr);
+        align-items:end;
+        gap:.5rem;
+        width:100%;
+    }
+    .jf-finance-reconcile-row {
+        display:grid;
+        grid-template-columns:auto 5.4rem minmax(0,1fr) 7.5rem;
+        align-items:center;
+        gap:.45rem;
+        min-height:42px;
+        padding:.28rem .4rem;
+        border:1px solid var(--jf-border);
+        border-radius:9px;
+        background:var(--jf-surface);
+    }
+    .jf-finance-reconcile-date {
+        color:var(--jf-muted);
+        font-size:.7rem;
+        white-space:nowrap;
+    }
+    .jf-finance-reconcile-description {
+        min-width:0;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+        font-size:.8rem;
+        font-weight:750;
+    }
+    .jf-finance-reconcile-amount {
+        text-align:right;
+        font-size:.82rem;
+        font-weight:850;
+        white-space:nowrap;
+    }
+    .jf-finance-selection-summary {
+        position:sticky;
+        bottom:.35rem;
+        z-index:4;
+        width:100%;
+        padding:.65rem .75rem;
+        border:1px solid var(--jf-border);
+        border-radius:12px;
+        box-shadow:0 3px 12px rgba(0,0,0,.12);
+        background:var(--jf-surface);
+    }
+    .jf-finance-session-card {
+        width:100%;
+        padding:.6rem .7rem;
+        border:1px solid var(--jf-border);
+        border-radius:11px;
+        background:var(--jf-surface);
+    }
+    .jf-finance-session-cancelled {opacity:.68;}
+    .jf-finance-warning-card {
+        width:100%;
+        padding:.55rem .65rem;
+        border-left:4px solid #c6861a;
+        border-radius:10px;
+        background:rgba(198,134,26,.10);
+    }
+    @media(max-width:760px){
+        .jf-finance-reconcile-toolbar {
+            grid-template-columns:1fr 1fr;
+        }
+        .jf-finance-reconcile-search {grid-column:1/-1;}
+    }
+    @media(max-width:520px){
+        .jf-finance-reconcile-toolbar {grid-template-columns:1fr;}
+        .jf-finance-reconcile-search {grid-column:auto;}
+        .jf-finance-reconcile-row {
+            grid-template-columns:auto 4.5rem minmax(0,1fr) 6.5rem;
+            gap:.3rem;
+            padding-inline:.25rem;
+        }
+        .jf-finance-reconcile-description {font-size:.74rem;}
+        .jf-finance-reconcile-amount {font-size:.75rem;}
+    }
+    """,
+    shared=True,
+)
+
 
 def _money(value):
     amount = Decimal(value or 0)
@@ -370,6 +503,18 @@ def _money(value):
 
 def _signed(value, transaction_type):
     return ("-" if transaction_type == "expense" else "+") + _money(value)
+
+
+
+def _payment_effect(value, transaction_type):
+    sign = "+" if transaction_type == "expense" else "-"
+    return sign + _money(value)
+
+
+def _balance_money(value):
+    amount = Decimal(value or 0)
+    sign = "-" if amount < 0 else ""
+    return sign + _money(amount)
 
 
 def _month_label(month):
@@ -754,6 +899,7 @@ def finances_panel(current_user, initial_section=None):
         history_tab = ui.tab("Historique", icon="history")
         recurring_tab = ui.tab("Récurrences", icon="repeat")
         goals_tab = ui.tab("Objectifs", icon="track_changes")
+        reconciliation_tab = ui.tab("Conciliation", icon="fact_check")
         organization_tab = ui.tab("Organisation", icon="category")
         export_tab = ui.tab("Exporter", icon="download")
 
@@ -769,7 +915,9 @@ def finances_panel(current_user, initial_section=None):
         "etiquettes": organization_tab,
         "étiquettes": organization_tab,
         "paiements": organization_tab,
-        "conciliation": history_tab,
+        "conciliation": reconciliation_tab,
+        "releve": reconciliation_tab,
+        "relevé": reconciliation_tab,
         "exporter": export_tab,
     }
 
@@ -804,11 +952,11 @@ def finances_panel(current_user, initial_section=None):
                     user_id,
                     month_state["value"],
                 )
-                reconciliation_rows = (
-                    payment_reconciliation_summary(
-                        user_id,
-                        month_state["value"],
-                    )
+                predicted_rows = payment_predicted_balance_summary(
+                    user_id
+                )
+                unassigned_count = count_unassigned_confirmed_transactions(
+                    user_id
                 )
 
                 with dashboard_box:
@@ -1089,7 +1237,7 @@ def finances_panel(current_user, initial_section=None):
                                                 "jf-finance-kpi-name"
                                             )
                                             ui.label(
-                                                _money(total)
+                                                _balance_money(total)
                                             ).classes(
                                                 (
                                                     "jf-finance-kpi-value "
@@ -1148,158 +1296,131 @@ def finances_panel(current_user, initial_section=None):
                                                 )
                                             )
 
-                    if reconciliation_rows:
-                        ui.label(
-                            "Conciliation du mois"
-                        ).classes(
-                            "text-lg font-bold mt-1"
-                        )
-
-                        with ui.element(
-                            "div"
-                        ).classes(
-                            "jf-finance-reconciliation-grid"
+                    if unassigned_count:
+                        with ui.element("div").classes(
+                            "jf-finance-warning-card mt-1"
                         ):
-                            for row in reconciliation_rows:
-                                with ui.element(
-                                    "section"
-                                ).classes(
-                                    "jf-finance-reconciliation-card"
+                            with ui.row().classes(
+                                "w-full items-center justify-between gap-2"
+                            ):
+                                ui.label(
+                                    f"{unassigned_count} transaction(s) "
+                                    "confirmée(s) sans mode de paiement"
+                                ).classes("text-sm font-bold")
+                                ui.button(
+                                    "Classer",
+                                    icon="playlist_add_check",
+                                    on_click=lambda: tabs.set_value(
+                                        reconciliation_tab
+                                    ),
+                                ).props("flat dense color=primary")
+
+                    if predicted_rows:
+                        ui.label(
+                            "Soldes prévus par mode de paiement"
+                        ).classes("text-lg font-bold mt-1")
+                        ui.label(
+                            "Cumulatifs sur tous les mois; aucune remise à zéro "
+                            "automatique au début du mois."
+                        ).classes("text-xs jf-muted")
+
+                        with ui.element("div").classes(
+                            "jf-finance-balance-grid"
+                        ):
+                            for row in predicted_rows:
+                                if (
+                                    not row["is_active"]
+                                    and Decimal(row["predicted_balance"]) == 0
+                                ):
+                                    continue
+
+                                with ui.element("section").classes(
+                                    "jf-finance-balance-card"
                                 ):
                                     with ui.row().classes(
-                                        "w-full items-center "
+                                        "w-full items-start "
                                         "justify-between gap-2"
                                     ):
+                                        with ui.column().classes("gap-0 min-w-0"):
+                                            ui.label(
+                                                row["payment_method_name"]
+                                            ).classes("text-sm font-bold")
+                                            ui.label(
+                                                PAYMENT_METHOD_TYPES.get(
+                                                    row["method_type"],
+                                                    "Autre",
+                                                )
+                                            ).classes("text-xs jf-muted")
                                         ui.label(
-                                            row[
-                                                "payment_method_name"
-                                            ]
+                                            f"{row['confirmed_count']} à concilier"
                                         ).classes(
-                                            "text-sm font-bold"
-                                        )
-                                        ui.label(
-                                            (
-                                                f"{row['unreconciled_count']} "
-                                                "à concilier"
-                                            )
-                                        ).classes(
-                                            (
-                                                "jf-finance-"
-                                                "reconciliation-chip"
-                                            )
+                                            "jf-finance-reconciliation-chip"
                                         )
 
-                                    if Decimal(
-                                        row[
-                                            "expense_total"
-                                        ]
-                                    ) > 0:
-                                        with ui.element(
-                                            "div"
-                                        ).classes(
-                                            "jf-finance-"
-                                            "reconciliation-row"
+                                    ui.label(
+                                        _balance_money(row["predicted_balance"])
+                                    ).classes(
+                                        "jf-finance-balance-main mt-1"
+                                    )
+                                    ui.label("Solde prévu").classes(
+                                        "text-xs jf-muted text-right w-full"
+                                    )
+
+                                    with ui.element("div").classes(
+                                        "jf-finance-balance-line mt-1"
+                                    ):
+                                        ui.label("Confirmé non concilié")
+                                        ui.label(
+                                            _balance_money(row["current_balance"])
+                                        )
+
+                                    if Decimal(row["planned_impact"]) != 0:
+                                        with ui.element("div").classes(
+                                            "jf-finance-balance-line"
                                         ):
+                                            ui.label("Transactions prévues")
                                             ui.label(
-                                                "Dépenses"
-                                            )
-                                            ui.label(
-                                                _money(
-                                                    row[
-                                                        "expense_total"
-                                                    ]
-                                                )
-                                            ).classes(
-                                                (
-                                                    "jf-finance-"
-                                                    "reconciliation-value "
-                                                    "jf-finance-expense"
-                                                )
+                                                _balance_money(row["planned_impact"])
                                             )
 
                                     if Decimal(
-                                        row[
-                                            "income_total"
-                                        ]
-                                    ) > 0:
-                                        with ui.element(
-                                            "div"
-                                        ).classes(
-                                            "jf-finance-"
-                                            "reconciliation-row"
+                                        row["opening_balance_pending"]
+                                    ) != 0:
+                                        with ui.element("div").classes(
+                                            "jf-finance-balance-line"
                                         ):
+                                            ui.label("Ajustement initial")
                                             ui.label(
-                                                "Revenus"
-                                            )
-                                            ui.label(
-                                                _money(
-                                                    row[
-                                                        "income_total"
-                                                    ]
-                                                )
-                                            ).classes(
-                                                (
-                                                    "jf-finance-"
-                                                    "reconciliation-value "
-                                                    "jf-finance-income"
+                                                _balance_money(
+                                                    row["opening_balance_pending"]
                                                 )
                                             )
 
-                                    if Decimal(
-                                        row[
-                                            "unreconciled_expense_total"
-                                        ]
-                                    ) > 0:
-                                        with ui.element(
-                                            "div"
-                                        ).classes(
-                                            "jf-finance-"
-                                            "reconciliation-row"
-                                        ):
-                                            ui.label(
-                                                "Dépenses à concilier"
-                                            )
-                                            ui.label(
-                                                _money(
-                                                    row[
-                                                        "unreconciled_expense_total"
-                                                    ]
-                                                )
-                                            ).classes(
-                                                (
-                                                    "jf-finance-"
-                                                    "reconciliation-value "
-                                                    "jf-finance-expense"
-                                                )
-                                            )
+                                    if row["oldest_unreconciled_date"]:
+                                        ui.label(
+                                            "Plus ancienne : "
+                                            + row[
+                                                "oldest_unreconciled_date"
+                                            ].strftime("%d/%m/%Y")
+                                        ).classes("text-xs jf-muted mt-1")
 
-                                    if Decimal(
-                                        row[
-                                            "unreconciled_income_total"
-                                        ]
-                                    ) > 0:
-                                        with ui.element(
-                                            "div"
-                                        ).classes(
-                                            "jf-finance-"
-                                            "reconciliation-row"
-                                        ):
-                                            ui.label(
-                                                "Revenus à concilier"
-                                            )
-                                            ui.label(
-                                                _money(
-                                                    row[
-                                                        "unreconciled_income_total"
-                                                    ]
-                                                )
-                                            ).classes(
-                                                (
-                                                    "jf-finance-"
-                                                    "reconciliation-value "
-                                                    "jf-finance-income"
-                                                )
-                                            )
+                                    if row["last_reconciliation_date"]:
+                                        ui.label(
+                                            "Dernière conciliation : "
+                                            + row[
+                                                "last_reconciliation_date"
+                                            ].strftime("%d/%m/%Y")
+                                        ).classes("text-xs jf-muted")
+
+                                    ui.button(
+                                        "Concilier",
+                                        icon="fact_check",
+                                        on_click=lambda: tabs.set_value(
+                                            reconciliation_tab
+                                        ),
+                                    ).props(
+                                        "flat dense color=primary"
+                                    ).classes("mt-1")
 
             def change_month(
                 offset,
@@ -2632,6 +2753,1015 @@ def finances_panel(current_user, initial_section=None):
 
             render_goals()
 
+        # CONCILIATION
+        with ui.tab_panel(reconciliation_tab).classes("px-0"):
+            payment_options = _payment_options(
+                user_id,
+                include_none=False,
+            )
+            first_payment_id = (
+                next(iter(payment_options))
+                if payment_options
+                else None
+            )
+            reconciliation_selected = set()
+            reconciliation_rows_by_id = {}
+            unassigned_selected = set()
+
+            with ui.card().classes("w-full p-3"):
+                ui.label("Conciliation par relevé").classes(
+                    "text-xl font-bold"
+                )
+                ui.label(
+                    "Les soldes traversent les mois. Une transaction "
+                    "disparaît du solde confirmé dès sa conciliation."
+                ).classes("text-xs jf-muted")
+
+                reconciliation_payment = ui.select(
+                    payment_options,
+                    value=first_payment_id,
+                    label="Mode de paiement",
+                ).props(
+                    "dense outlined options-dense"
+                ).classes("w-full mt-2")
+
+                with ui.element("div").classes(
+                    "jf-finance-reconcile-toolbar mt-2"
+                ):
+                    reconciliation_start = ui.input(
+                        label="Du — facultatif",
+                        value="",
+                    ).props(
+                        "type=date dense outlined"
+                    ).classes("jf-finance-field")
+
+                    reconciliation_end = ui.input(
+                        label="Au — facultatif",
+                        value="",
+                    ).props(
+                        "type=date dense outlined"
+                    ).classes("jf-finance-field")
+
+                    reconciliation_query = ui.input(
+                        label="Rechercher",
+                    ).props(
+                        "dense outlined clearable"
+                    ).classes(
+                        "jf-finance-field jf-finance-reconcile-search"
+                    )
+
+                    ui.button(
+                        "Actualiser",
+                        icon="refresh",
+                        on_click=lambda: (
+                            refresh_reconciliation_screen()
+                        ),
+                    ).props("outline dense color=primary")
+
+            reconciliation_balance_box = ui.column().classes(
+                "w-full gap-2"
+            )
+
+            with ui.card().classes("w-full p-3"):
+                ui.label("Données du relevé").classes(
+                    "text-lg font-bold"
+                )
+
+                with ui.element("div").classes(
+                    "jf-finance-form-grid"
+                ):
+                    statement_date = ui.input(
+                        label="Date du relevé",
+                        value=date.today().isoformat(),
+                    ).props(
+                        "type=date dense outlined"
+                    ).classes("jf-finance-field")
+
+                    statement_balance = ui.number(
+                        label="Solde du relevé",
+                        step=.01,
+                    ).props(
+                        "dense outlined clearable"
+                    ).classes("jf-finance-field")
+
+                    due_date = ui.input(
+                        label="Date de paiement",
+                        value="",
+                    ).props(
+                        "type=date dense outlined"
+                    ).classes(
+                        "jf-finance-field jf-finance-description"
+                    )
+
+                reconciliation_date_input = ui.input(
+                    label="Date de conciliation",
+                    value=date.today().isoformat(),
+                ).props(
+                    "type=date dense outlined"
+                ).classes("w-full")
+
+                reconciliation_note = ui.textarea(
+                    label="Note facultative",
+                ).props(
+                    "dense outlined autogrow maxlength=1000"
+                ).classes("w-full")
+
+                include_opening_balance = ui.checkbox(
+                    "Inclure l’ajustement initial",
+                    value=False,
+                ).classes("text-sm")
+                opening_balance_label = ui.label("").classes(
+                    "text-xs jf-muted"
+                )
+
+            ui.label("Transactions non conciliées").classes(
+                "text-lg font-bold mt-1"
+            )
+            reconciliation_transactions_box = ui.column().classes(
+                "w-full gap-1"
+            )
+            reconciliation_selection_box = ui.column().classes(
+                "w-full"
+            )
+
+            def selected_reconciliation_total():
+                total = Decimal("0.00")
+                for transaction_id in reconciliation_selected:
+                    row = reconciliation_rows_by_id.get(
+                        int(transaction_id)
+                    )
+                    if not row:
+                        continue
+                    amount_value = Decimal(row["amount"])
+                    total += (
+                        amount_value
+                        if row["transaction_type"] == "expense"
+                        else -amount_value
+                    )
+
+                if include_opening_balance.value:
+                    selected_method = int(
+                        reconciliation_payment.value or 0
+                    )
+                    for summary_row in (
+                        payment_predicted_balance_summary(user_id)
+                    ):
+                        if (
+                            int(summary_row["payment_method_id"])
+                            == selected_method
+                        ):
+                            total += Decimal(
+                                summary_row["opening_balance_pending"]
+                            )
+                            break
+                return total
+
+            @ui.refreshable
+            def render_reconciliation_balance():
+                reconciliation_balance_box.clear()
+                selected_id = reconciliation_payment.value
+
+                with reconciliation_balance_box:
+                    if not selected_id:
+                        include_opening_balance.visible = False
+                        opening_balance_label.visible = False
+                        ui.label(
+                            "Créez d’abord un mode de paiement."
+                        ).classes("text-sm jf-muted")
+                        return
+
+                    selected_summary = next(
+                        (
+                            row
+                            for row in payment_predicted_balance_summary(
+                                user_id
+                            )
+                            if int(row["payment_method_id"])
+                            == int(selected_id)
+                        ),
+                        None,
+                    )
+                    if not selected_summary:
+                        return
+
+                    with ui.element("div").classes(
+                        "jf-finance-summary-grid"
+                    ):
+                        with ui.element("div").classes(
+                            "jf-finance-summary"
+                        ):
+                            ui.label(
+                                "Confirmé à concilier"
+                            ).classes("jf-finance-summary-label")
+                            ui.label(
+                                _balance_money(
+                                    selected_summary["current_balance"]
+                                )
+                            ).classes(
+                                "jf-finance-summary-value"
+                            )
+
+                        with ui.element("div").classes(
+                            "jf-finance-summary"
+                        ):
+                            ui.label("Solde prévu").classes(
+                                "jf-finance-summary-label"
+                            )
+                            ui.label(
+                                _balance_money(
+                                    selected_summary["predicted_balance"]
+                                )
+                            ).classes(
+                                "jf-finance-summary-value"
+                            )
+
+                        with ui.element("div").classes(
+                            "jf-finance-summary"
+                        ):
+                            ui.label("Transactions").classes(
+                                "jf-finance-summary-label"
+                            )
+                            ui.label(
+                                str(selected_summary["confirmed_count"])
+                            ).classes(
+                                "jf-finance-summary-value"
+                            )
+
+                    opening_pending = Decimal(
+                        selected_summary["opening_balance_pending"]
+                    )
+                    has_opening = opening_pending != 0
+                    include_opening_balance.visible = has_opening
+                    opening_balance_label.visible = has_opening
+                    opening_balance_label.set_text(
+                        (
+                            "Ajustement initial disponible : "
+                            + _balance_money(opening_pending)
+                        )
+                        if has_opening
+                        else ""
+                    )
+                    if not has_opening:
+                        include_opening_balance.value = False
+
+            def toggle_reconciliation_selection(
+                transaction_id,
+                value,
+            ):
+                transaction_id = int(transaction_id)
+                if value:
+                    reconciliation_selected.add(transaction_id)
+                else:
+                    reconciliation_selected.discard(transaction_id)
+                render_reconciliation_selection.refresh()
+
+            @ui.refreshable
+            def render_reconciliation_transactions():
+                reconciliation_transactions_box.clear()
+                reconciliation_rows_by_id.clear()
+                selected_id = reconciliation_payment.value
+
+                with reconciliation_transactions_box:
+                    if not selected_id:
+                        ui.label(
+                            "Aucun mode de paiement sélectionné."
+                        ).classes("text-sm jf-muted")
+                        return
+
+                    try:
+                        rows = list_unreconciled_transactions(
+                            user_id,
+                            selected_id,
+                            start_date=(
+                                reconciliation_start.value or None
+                            ),
+                            end_date=(
+                                reconciliation_end.value or None
+                            ),
+                            query=(
+                                reconciliation_query.value or None
+                            ),
+                        )
+                    except Exception as error:
+                        ui.label(str(error)).classes("text-negative")
+                        return
+
+                    valid_ids = {
+                        int(row["id"])
+                        for row in rows
+                    }
+                    reconciliation_selected.intersection_update(
+                        valid_ids
+                    )
+
+                    if not rows:
+                        ui.label(
+                            "Aucune transaction confirmée à concilier."
+                        ).classes("text-sm jf-muted p-3")
+                        return
+
+                    with ui.row().classes(
+                        "w-full items-center justify-between gap-2"
+                    ):
+                        ui.label(
+                            f"{len(rows)} transaction(s)"
+                        ).classes("text-xs jf-muted")
+
+                        def select_all_rows():
+                            reconciliation_selected.update(valid_ids)
+                            render_reconciliation_transactions.refresh()
+                            render_reconciliation_selection.refresh()
+
+                        def clear_all_rows():
+                            reconciliation_selected.clear()
+                            render_reconciliation_transactions.refresh()
+                            render_reconciliation_selection.refresh()
+
+                        with ui.row().classes("gap-1"):
+                            ui.button(
+                                "Tout",
+                                on_click=select_all_rows,
+                            ).props("flat dense color=primary")
+                            ui.button(
+                                "Aucun",
+                                on_click=clear_all_rows,
+                            ).props("flat dense color=primary")
+
+                    for row in rows:
+                        transaction_id = int(row["id"])
+                        reconciliation_rows_by_id[
+                            transaction_id
+                        ] = row
+
+                        with ui.element("div").classes(
+                            "jf-finance-reconcile-row"
+                        ):
+                            ui.checkbox(
+                                value=(
+                                    transaction_id
+                                    in reconciliation_selected
+                                ),
+                                on_change=(
+                                    lambda event,
+                                    selected=transaction_id:
+                                    toggle_reconciliation_selection(
+                                        selected,
+                                        event.value,
+                                    )
+                                ),
+                            ).props("dense")
+
+                            ui.label(
+                                row["transaction_date"].strftime(
+                                    "%d/%m/%Y"
+                                )
+                            ).classes(
+                                "jf-finance-reconcile-date"
+                            )
+
+                            with ui.column().classes(
+                                "gap-0 min-w-0"
+                            ):
+                                ui.label(
+                                    row["description"]
+                                ).classes(
+                                    "jf-finance-reconcile-description"
+                                )
+                                meta = (
+                                    row["category_full_name"]
+                                    or "Sans catégorie"
+                                )
+                                if row["tag_names"]:
+                                    meta += " — " + " • ".join(
+                                        row["tag_names"]
+                                    )
+                                ui.label(meta).classes(
+                                    "text-xs jf-muted truncate"
+                                )
+
+                            amount_class = (
+                                "jf-finance-expense"
+                                if row["transaction_type"] == "expense"
+                                else "jf-finance-income"
+                            )
+                            ui.label(
+                                _payment_effect(
+                                    row["amount"],
+                                    row["transaction_type"],
+                                )
+                            ).classes(
+                                "jf-finance-reconcile-amount "
+                                + amount_class
+                            )
+
+            @ui.refreshable
+            def render_reconciliation_selection():
+                reconciliation_selection_box.clear()
+                total = selected_reconciliation_total()
+                current_balance = Decimal("0.00")
+                selected_id = reconciliation_payment.value
+                selected_summary = next(
+                    (
+                        row
+                        for row in payment_predicted_balance_summary(
+                            user_id
+                        )
+                        if int(row["payment_method_id"])
+                        == int(selected_id or 0)
+                    ),
+                    None,
+                )
+                if selected_summary:
+                    current_balance = Decimal(
+                        selected_summary["current_balance"]
+                    )
+
+                remaining = current_balance - total
+                statement_value = (
+                    Decimal(str(statement_balance.value))
+                    if statement_balance.value not in (None, "")
+                    else None
+                )
+                difference = (
+                    statement_value - total
+                    if statement_value is not None
+                    else None
+                )
+
+                with reconciliation_selection_box:
+                    with ui.element("div").classes(
+                        "jf-finance-selection-summary"
+                    ):
+                        with ui.element("div").classes(
+                            "jf-finance-balance-line"
+                        ):
+                            ui.label("Total sélectionné")
+                            ui.label(_balance_money(total))
+
+                        with ui.element("div").classes(
+                            "jf-finance-balance-line"
+                        ):
+                            ui.label("Solde non concilié restant")
+                            ui.label(_balance_money(remaining))
+
+                        if difference is not None:
+                            with ui.element("div").classes(
+                                "jf-finance-balance-line"
+                            ):
+                                ui.label("Différence avec le relevé")
+                                ui.label(_balance_money(difference)).classes(
+                                    (
+                                        "text-positive"
+                                        if abs(difference) < Decimal(".01")
+                                        else "text-negative"
+                                    )
+                                )
+
+                        def finalize_now():
+                            try:
+                                result = create_reconciliation_session(
+                                    user_id=user_id,
+                                    payment_method_id=(
+                                        reconciliation_payment.value
+                                    ),
+                                    transaction_ids=list(
+                                        reconciliation_selected
+                                    ),
+                                    statement_date=statement_date.value,
+                                    statement_balance=(
+                                        statement_balance.value
+                                    ),
+                                    due_date=due_date.value or None,
+                                    reconciliation_date=(
+                                        reconciliation_date_input.value
+                                    ),
+                                    note=reconciliation_note.value,
+                                    include_opening_balance=(
+                                        include_opening_balance.value
+                                    ),
+                                )
+                            except Exception as error:
+                                ui.notify(
+                                    str(error),
+                                    type="warning",
+                                )
+                                return
+
+                            reconciliation_selected.clear()
+                            include_opening_balance.value = False
+                            reconciliation_note.value = ""
+                            ui.notify(
+                                (
+                                    "Conciliation enregistrée : "
+                                    f"{result['transaction_count']} "
+                                    "transaction(s)."
+                                ),
+                                type="positive",
+                            )
+                            refresh_reconciliation_screen()
+                            refresh_all()
+
+                        def request_finalize():
+                            if (
+                                not reconciliation_selected
+                                and not include_opening_balance.value
+                            ):
+                                ui.notify(
+                                    "Sélectionnez au moins une transaction.",
+                                    type="warning",
+                                )
+                                return
+
+                            if (
+                                difference is not None
+                                and abs(difference) >= Decimal(".01")
+                            ):
+                                with ui.dialog() as warning_dialog:
+                                    with ui.card().classes(
+                                        "w-full max-w-md p-4"
+                                    ):
+                                        ui.label(
+                                            "La conciliation ne balance pas"
+                                        ).classes("text-xl font-bold")
+                                        ui.label(
+                                            "Différence : "
+                                            + _balance_money(difference)
+                                        ).classes(
+                                            "text-lg font-bold text-negative"
+                                        )
+                                        ui.label(
+                                            "La différence sera conservée "
+                                            "dans l’historique."
+                                        ).classes("text-sm jf-muted")
+                                        with ui.row().classes(
+                                            "w-full justify-end gap-2"
+                                        ):
+                                            ui.button(
+                                                "Annuler",
+                                                on_click=(
+                                                    warning_dialog.close
+                                                ),
+                                            ).props("flat")
+                                            ui.button(
+                                                "Continuer",
+                                                icon="warning",
+                                                on_click=lambda: (
+                                                    warning_dialog.close(),
+                                                    finalize_now(),
+                                                ),
+                                            ).props("color=negative")
+                                warning_dialog.open()
+                                return
+
+                            finalize_now()
+
+                        ui.button(
+                            "Finaliser la conciliation",
+                            icon="fact_check",
+                            on_click=request_finalize,
+                        ).props(
+                            "color=primary"
+                        ).classes("w-full mt-2")
+
+            statement_balance.on_value_change(
+                lambda event: (
+                    render_reconciliation_selection.refresh()
+                )
+            )
+            include_opening_balance.on_value_change(
+                lambda event: (
+                    render_reconciliation_selection.refresh()
+                )
+            )
+
+            with ui.expansion(
+                "Transactions sans mode de paiement",
+                icon="playlist_add_check",
+            ).classes("w-full mt-2"):
+                with ui.card().classes("w-full p-3"):
+                    unassigned_target = ui.select(
+                        payment_options,
+                        value=first_payment_id,
+                        label="Attribuer au mode",
+                    ).props(
+                        "dense outlined options-dense"
+                    ).classes("w-full")
+                    unassigned_search = ui.input(
+                        label="Rechercher",
+                    ).props(
+                        "dense outlined clearable"
+                    ).classes("w-full")
+                    unassigned_box = ui.column().classes(
+                        "w-full gap-1 mt-2"
+                    )
+
+                    def toggle_unassigned(transaction_id, value):
+                        transaction_id = int(transaction_id)
+                        if value:
+                            unassigned_selected.add(transaction_id)
+                        else:
+                            unassigned_selected.discard(transaction_id)
+
+                    @ui.refreshable
+                    def render_unassigned():
+                        unassigned_box.clear()
+                        rows = list_unassigned_transactions(
+                            user_id,
+                            query=unassigned_search.value or None,
+                            limit=500,
+                        )
+                        valid_ids = {int(row["id"]) for row in rows}
+                        unassigned_selected.intersection_update(valid_ids)
+
+                        with unassigned_box:
+                            if not rows:
+                                ui.label(
+                                    "Aucune transaction confirmée sans mode."
+                                ).classes("text-sm jf-muted")
+                                return
+
+                            ui.label(
+                                f"{len(rows)} transaction(s) sans mode"
+                            ).classes("text-xs jf-muted")
+
+                            for row in rows:
+                                transaction_id = int(row["id"])
+                                with ui.element("div").classes(
+                                    "jf-finance-reconcile-row"
+                                ):
+                                    ui.checkbox(
+                                        value=(
+                                            transaction_id
+                                            in unassigned_selected
+                                        ),
+                                        on_change=(
+                                            lambda event,
+                                            selected=transaction_id:
+                                            toggle_unassigned(
+                                                selected,
+                                                event.value,
+                                            )
+                                        ),
+                                    ).props("dense")
+                                    ui.label(
+                                        row["transaction_date"].strftime(
+                                            "%d/%m/%Y"
+                                        )
+                                    ).classes(
+                                        "jf-finance-reconcile-date"
+                                    )
+                                    ui.label(
+                                        row["description"]
+                                    ).classes(
+                                        "jf-finance-reconcile-description"
+                                    )
+                                    ui.label(
+                                        _signed(
+                                            row["amount"],
+                                            row["transaction_type"],
+                                        )
+                                    ).classes(
+                                        "jf-finance-reconcile-amount"
+                                    )
+
+                            def assign_selected():
+                                try:
+                                    count = bulk_assign_payment_method(
+                                        user_id,
+                                        list(unassigned_selected),
+                                        unassigned_target.value,
+                                    )
+                                except Exception as error:
+                                    ui.notify(
+                                        str(error),
+                                        type="warning",
+                                    )
+                                    return
+
+                                unassigned_selected.clear()
+                                ui.notify(
+                                    f"{count} transaction(s) classée(s).",
+                                    type="positive",
+                                )
+                                refresh_reconciliation_screen()
+                                refresh_all()
+
+                            ui.button(
+                                "Attribuer la sélection",
+                                icon="playlist_add_check",
+                                on_click=assign_selected,
+                            ).props(
+                                "outline color=primary"
+                            ).classes("w-full mt-2")
+
+                    unassigned_search.on_value_change(
+                        lambda event: render_unassigned.refresh()
+                    )
+                    render_unassigned()
+
+            ui.label("Historique des conciliations").classes(
+                "text-lg font-bold mt-2"
+            )
+            sessions_box = ui.column().classes("w-full gap-2")
+
+            def session_detail_dialog(session_id):
+                try:
+                    details = get_reconciliation_session(
+                        user_id,
+                        session_id,
+                    )
+                except Exception as error:
+                    ui.notify(str(error), type="warning")
+                    return
+
+                session = details["session"]
+                transactions = details["transactions"]
+
+                with ui.dialog() as dialog:
+                    with ui.card().classes(
+                        "w-full max-w-3xl p-4"
+                    ):
+                        with ui.row().classes(
+                            "w-full items-start justify-between gap-2"
+                        ):
+                            with ui.column().classes("gap-0"):
+                                ui.label(
+                                    session["payment_method_name"]
+                                ).classes("text-xl font-bold")
+                                ui.label(
+                                    "Relevé du "
+                                    + session["statement_date"].strftime(
+                                        "%d/%m/%Y"
+                                    )
+                                ).classes("text-sm jf-muted")
+                            ui.label(
+                                RECONCILIATION_SESSION_STATUSES.get(
+                                    session["status"],
+                                    session["status"],
+                                )
+                            ).classes(
+                                "jf-finance-reconciliation-chip"
+                            )
+
+                        with ui.element("div").classes(
+                            "jf-finance-summary-grid mt-2"
+                        ):
+                            for label, value in (
+                                ("Total concilié", session["selected_total"]),
+                                ("Solde du relevé", session["statement_balance"]),
+                                ("Différence", session["difference"]),
+                            ):
+                                with ui.element("div").classes(
+                                    "jf-finance-summary"
+                                ):
+                                    ui.label(label).classes(
+                                        "jf-finance-summary-label"
+                                    )
+                                    ui.label(
+                                        _balance_money(value)
+                                        if value is not None
+                                        else "—"
+                                    ).classes(
+                                        "jf-finance-summary-value"
+                                    )
+
+                        if session["due_date"]:
+                            ui.label(
+                                "Paiement prévu : "
+                                + session["due_date"].strftime("%d/%m/%Y")
+                            ).classes("text-sm")
+                        if session["note"]:
+                            ui.label(session["note"]).classes(
+                                "text-sm jf-muted"
+                            )
+                        if session["included_opening_balance"]:
+                            ui.label(
+                                "Ajustement initial inclus : "
+                                + _balance_money(session["opening_balance_amount"])
+                            ).classes("text-sm")
+
+                        ui.label("Transactions").classes(
+                            "font-bold mt-2"
+                        )
+                        with ui.column().classes("w-full gap-1"):
+                            for transaction in transactions:
+                                row_class = (
+                                    "jf-finance-reconcile-row"
+                                    if transaction["is_active"]
+                                    else (
+                                        "jf-finance-reconcile-row "
+                                        "opacity-50"
+                                    )
+                                )
+                                with ui.element("div").classes(row_class):
+                                    ui.icon(
+                                        "check_circle"
+                                        if transaction["is_active"]
+                                        else "remove_circle_outline"
+                                    ).classes(
+                                        "text-positive"
+                                        if transaction["is_active"]
+                                        else "text-gray-400"
+                                    )
+                                    ui.label(
+                                        transaction[
+                                            "transaction_date"
+                                        ].strftime("%d/%m/%Y")
+                                    ).classes(
+                                        "jf-finance-reconcile-date"
+                                    )
+                                    ui.label(
+                                        transaction["description"]
+                                    ).classes(
+                                        "jf-finance-reconcile-description"
+                                    )
+                                    with ui.row().classes(
+                                        "items-center justify-end gap-1"
+                                    ):
+                                        ui.label(
+                                            _payment_effect(
+                                                transaction["amount"],
+                                                transaction[
+                                                    "transaction_type"
+                                                ],
+                                            )
+                                        ).classes(
+                                            "jf-finance-reconcile-amount"
+                                        )
+                                        if (
+                                            transaction["is_active"]
+                                            and session["status"] == "completed"
+                                        ):
+                                            def remove_one(
+                                                transaction_id=transaction["id"],
+                                            ):
+                                                try:
+                                                    remove_transaction_from_reconciliation_session(
+                                                        user_id,
+                                                        session_id,
+                                                        transaction_id,
+                                                    )
+                                                except Exception as error:
+                                                    ui.notify(
+                                                        str(error),
+                                                        type="warning",
+                                                    )
+                                                    return
+                                                dialog.close()
+                                                ui.notify(
+                                                    "Transaction retirée "
+                                                    "de la conciliation.",
+                                                    type="positive",
+                                                )
+                                                refresh_reconciliation_screen()
+                                                refresh_all()
+
+                                            ui.button(
+                                                icon="undo",
+                                                on_click=remove_one,
+                                            ).props(
+                                                "flat dense round "
+                                                "size=sm color=negative"
+                                            ).tooltip(
+                                                "Retirer de la conciliation"
+                                            )
+
+                        def cancel_session_now():
+                            try:
+                                cancel_reconciliation_session(
+                                    user_id,
+                                    session_id,
+                                )
+                            except Exception as error:
+                                ui.notify(
+                                    str(error),
+                                    type="warning",
+                                )
+                                return
+                            dialog.close()
+                            ui.notify(
+                                "Conciliation annulée.",
+                                type="positive",
+                            )
+                            refresh_reconciliation_screen()
+                            refresh_all()
+
+                        with ui.row().classes(
+                            "w-full justify-end gap-2 mt-2"
+                        ):
+                            if session["status"] == "completed":
+                                ui.button(
+                                    "Annuler la conciliation",
+                                    icon="undo",
+                                    on_click=cancel_session_now,
+                                ).props(
+                                    "outline color=negative"
+                                )
+                            ui.button(
+                                "Fermer",
+                                on_click=dialog.close,
+                            ).props("color=primary")
+                dialog.open()
+
+            @ui.refreshable
+            def render_sessions():
+                sessions_box.clear()
+                selected_id = reconciliation_payment.value
+                rows = list_reconciliation_sessions(
+                    user_id,
+                    payment_method_id=selected_id,
+                    include_cancelled=True,
+                    limit=100,
+                )
+                with sessions_box:
+                    if not rows:
+                        ui.label(
+                            "Aucune conciliation enregistrée."
+                        ).classes("text-sm jf-muted")
+                        return
+
+                    for row in rows:
+                        card_class = "jf-finance-session-card"
+                        if row["status"] == "cancelled":
+                            card_class += " jf-finance-session-cancelled"
+
+                        with ui.element("div").classes(card_class):
+                            with ui.row().classes(
+                                "w-full items-center justify-between gap-2"
+                            ):
+                                with ui.column().classes("gap-0 min-w-0"):
+                                    ui.label(
+                                        "Relevé du "
+                                        + row["statement_date"].strftime(
+                                            "%d/%m/%Y"
+                                        )
+                                    ).classes("text-sm font-bold")
+                                    ui.label(
+                                        f"{row['active_transaction_count']} "
+                                        "transaction(s) — "
+                                        + _money(row["selected_total"])
+                                    ).classes("text-xs jf-muted")
+                                    if row["difference"] is not None:
+                                        ui.label(
+                                            "Différence : "
+                                            + _balance_money(row["difference"])
+                                        ).classes(
+                                            (
+                                                "text-xs text-positive"
+                                                if abs(
+                                                    Decimal(row["difference"])
+                                                ) < Decimal(".01")
+                                                else "text-xs text-negative"
+                                            )
+                                        )
+
+                                with ui.row().classes("gap-1 shrink-0"):
+                                    ui.label(
+                                        RECONCILIATION_SESSION_STATUSES.get(
+                                            row["status"],
+                                            row["status"],
+                                        )
+                                    ).classes(
+                                        "jf-finance-reconciliation-chip"
+                                    )
+                                    ui.button(
+                                        "Voir",
+                                        icon="visibility",
+                                        on_click=(
+                                            lambda _event=None,
+                                            selected=row["id"]:
+                                            session_detail_dialog(selected)
+                                        ),
+                                    ).props(
+                                        "flat dense color=primary"
+                                    )
+
+            def refresh_reconciliation_screen():
+                reconciliation_selected.clear()
+                render_reconciliation_balance.refresh()
+                render_reconciliation_transactions.refresh()
+                render_reconciliation_selection.refresh()
+                render_sessions.refresh()
+                render_unassigned.refresh()
+
+            reconciliation_payment.on_value_change(
+                lambda event: refresh_reconciliation_screen()
+            )
+            reconciliation_start.on_value_change(
+                lambda event: render_reconciliation_transactions.refresh()
+            )
+            reconciliation_end.on_value_change(
+                lambda event: render_reconciliation_transactions.refresh()
+            )
+            reconciliation_query.on_value_change(
+                lambda event: render_reconciliation_transactions.refresh()
+            )
+
+            render_reconciliation_balance()
+            render_reconciliation_transactions()
+            render_reconciliation_selection()
+            render_sessions()
+
         # ORGANISATION
         with ui.tab_panel(organization_tab).classes("px-0"):
             with ui.tabs().classes("w-full") as organization_tabs:
@@ -2880,7 +4010,7 @@ def finances_panel(current_user, initial_section=None):
                     ):
                         with ui.dialog() as dialog:
                             with ui.card().classes(
-                                "w-full max-w-md p-4"
+                                "w-full max-w-2xl p-4"
                             ):
                                 ui.label(
                                     (
@@ -2888,22 +4018,101 @@ def finances_panel(current_user, initial_section=None):
                                         if row
                                         else "Nouveau mode de paiement"
                                     )
-                                ).classes(
-                                    "text-xl font-bold"
-                                )
+                                ).classes("text-xl font-bold")
 
                                 name = ui.input(
                                     label="Nom",
-                                    value=(
-                                        row["name"]
-                                        if row
-                                        else ""
-                                    ),
+                                    value=row["name"] if row else "",
                                 ).props(
                                     "dense outlined maxlength=100"
-                                ).classes(
-                                    "w-full"
-                                )
+                                ).classes("w-full")
+
+                                method_type = ui.select(
+                                    PAYMENT_METHOD_TYPES,
+                                    value=(
+                                        row["method_type"]
+                                        if row
+                                        else "credit_card"
+                                    ),
+                                    label="Type",
+                                ).props(
+                                    "dense outlined options-dense"
+                                ).classes("w-full")
+
+                                with ui.element("div").classes(
+                                    "jf-finance-form-grid"
+                                ):
+                                    statement_day = ui.number(
+                                        label="Fermeture habituelle — jour",
+                                        value=(
+                                            row["statement_day"]
+                                            if row
+                                            else None
+                                        ),
+                                        min=1,
+                                        max=31,
+                                        step=1,
+                                    ).props(
+                                        "dense outlined clearable"
+                                    ).classes("jf-finance-field")
+
+                                    payment_day = ui.number(
+                                        label="Paiement habituel — jour",
+                                        value=(
+                                            row["payment_day"]
+                                            if row
+                                            else None
+                                        ),
+                                        min=1,
+                                        max=31,
+                                        step=1,
+                                    ).props(
+                                        "dense outlined clearable"
+                                    ).classes("jf-finance-field")
+
+                                    opening_date = ui.input(
+                                        label="Date du solde initial",
+                                        value=(
+                                            row[
+                                                "opening_balance_date"
+                                            ].isoformat()
+                                            if row
+                                            and row[
+                                                "opening_balance_date"
+                                            ]
+                                            else ""
+                                        ),
+                                    ).props(
+                                        "type=date dense outlined"
+                                    ).classes(
+                                        "jf-finance-field "
+                                        "jf-finance-description"
+                                    )
+
+                                opening_balance = ui.number(
+                                    label="Solde initial ou ajustement",
+                                    value=(
+                                        row["opening_balance"]
+                                        if row
+                                        else 0
+                                    ),
+                                    step=.01,
+                                ).props(
+                                    "dense outlined"
+                                ).classes("w-full")
+
+                                ui.label(
+                                    "Le solde initial reste dans le solde "
+                                    "prévu jusqu’à son inclusion dans une "
+                                    "séance de conciliation."
+                                ).classes("text-xs jf-muted")
+
+                                note = ui.textarea(
+                                    label="Note facultative",
+                                    value=row["note"] if row else "",
+                                ).props(
+                                    "dense outlined autogrow maxlength=1000"
+                                ).classes("w-full")
 
                                 def save_payment_now():
                                     try:
@@ -2915,6 +4124,18 @@ def finances_panel(current_user, initial_section=None):
                                                 else None
                                             ),
                                             name=name.value,
+                                            method_type=method_type.value,
+                                            statement_day=(
+                                                statement_day.value
+                                            ),
+                                            payment_day=payment_day.value,
+                                            opening_balance=(
+                                                opening_balance.value
+                                            ),
+                                            opening_balance_date=(
+                                                opening_date.value or None
+                                            ),
+                                            note=note.value,
                                         )
                                     except Exception as error:
                                         ui.notify(
@@ -2936,16 +4157,12 @@ def finances_panel(current_user, initial_section=None):
                                     ui.button(
                                         "Annuler",
                                         on_click=dialog.close,
-                                    ).props(
-                                        "flat"
-                                    )
+                                    ).props("flat")
                                     ui.button(
                                         "Enregistrer",
                                         icon="save",
                                         on_click=save_payment_now,
-                                    ).props(
-                                        "color=primary"
-                                    )
+                                    ).props("color=primary")
 
                         dialog.open()
 
@@ -3086,12 +4303,56 @@ def finances_panel(current_user, initial_section=None):
                                             )
                                             ui.label(
                                                 (
-                                                    f"{row['transaction_count']} "
+                                                    PAYMENT_METHOD_TYPES.get(
+                                                        row["method_type"],
+                                                        "Autre",
+                                                    )
+                                                    + " — "
+                                                    + f"{row['transaction_count']} "
                                                     "transaction(s)"
                                                 )
                                             ).classes(
                                                 "text-xs jf-muted"
                                             )
+                                            schedule_parts = []
+                                            if row["statement_day"]:
+                                                schedule_parts.append(
+                                                    "relevé vers le "
+                                                    + str(row["statement_day"])
+                                                )
+                                            if row["payment_day"]:
+                                                schedule_parts.append(
+                                                    "paiement vers le "
+                                                    + str(row["payment_day"])
+                                                )
+                                            if schedule_parts:
+                                                ui.label(
+                                                    " — ".join(
+                                                        schedule_parts
+                                                    )
+                                                ).classes(
+                                                    "text-xs jf-muted"
+                                                )
+                                            if Decimal(
+                                                row["opening_balance"]
+                                            ) != 0:
+                                                ui.label(
+                                                    "Solde initial : "
+                                                    + _balance_money(
+                                                        row[
+                                                            "opening_balance"
+                                                        ]
+                                                    )
+                                                    + (
+                                                        " — concilié"
+                                                        if row[
+                                                            "opening_balance_reconciled"
+                                                        ]
+                                                        else " — à concilier"
+                                                    )
+                                                ).classes(
+                                                    "text-xs jf-muted"
+                                                )
 
                                         with ui.row().classes(
                                             "gap-1 shrink-0"
@@ -3403,3 +4664,32 @@ def finances_panel(current_user, initial_section=None):
         render_categories.refresh()
         render_tags.refresh()
         render_payment_methods.refresh()
+
+        reconciliation_payment.options = _payment_options(
+            user_id,
+            include_none=False,
+        )
+        if (
+            reconciliation_payment.value
+            not in reconciliation_payment.options
+        ):
+            reconciliation_payment.value = (
+                next(iter(reconciliation_payment.options))
+                if reconciliation_payment.options
+                else None
+            )
+        reconciliation_payment.update()
+
+        unassigned_target.options = _payment_options(
+            user_id,
+            include_none=False,
+        )
+        if unassigned_target.value not in unassigned_target.options:
+            unassigned_target.value = (
+                next(iter(unassigned_target.options))
+                if unassigned_target.options
+                else None
+            )
+        unassigned_target.update()
+
+        refresh_reconciliation_screen()

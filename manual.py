@@ -113,13 +113,14 @@ Sur téléphone, ces outils sont présentés sous forme d’icônes afin de cons
 """,
     },
     {
-        "title": "Finances — V1.2.0",
+        "title": "Finances — V1.3.0",
         "icon": "account_balance_wallet",
-        "caption": "Dépenses variables, revenus, objectifs et conciliation",
+        "caption": "Dépenses, soldes prévus et conciliation par relevé",
         "keywords": (
             "finances dépenses revenus récurrences catégories "
             "sous-catégories étiquettes objectifs report csv json "
-            "paiement conciliation carte crédit KPI"
+            "paiement conciliation carte crédit KPI relevé "
+            "solde prévu cumulatif séance historique ajustement"
         ),
         "content": """
 ### Objectif de la V1
@@ -168,28 +169,77 @@ Les valeurs initiales sont :
 
 L’utilisateur peut ajouter, renommer, désactiver et réordonner ses propres modes de paiement.
 
+Pour chaque mode, il peut aussi préciser :
+
+- le type : carte de crédit, compte bancaire, argent comptant ou autre;
+- le jour habituel de fermeture du relevé;
+- le jour habituel de paiement;
+- un solde initial ou ajustement;
+- la date de référence de cet ajustement;
+- une note.
+
+Le solde initial reste à concilier jusqu’à son inclusion dans une séance de conciliation.
+
 Une transaction utilise un seul mode de paiement. Une transaction récurrente peut mémoriser son mode de paiement par défaut.
 
-### Conciliation
+### Solde prévu cumulatif
 
-Chaque transaction possède un statut distinct :
+Le **Tableau** affiche un solde prévu pour chaque mode de paiement.
 
-- **À concilier**;
-- **Conciliée**.
+Ce calcul ne recommence jamais à zéro au début d’un mois. Il traverse les mois jusqu’à ce que les transactions soient conciliées.
 
-Une date de conciliation peut être inscrite, mais elle demeure facultative.
+Le solde confirmé non concilié est calculé ainsi :
 
-Dans l’historique, le bouton de conciliation permet de marquer rapidement une transaction comme conciliée ou de la remettre à concilier.
+- dépenses confirmées non conciliées;
+- moins les revenus, remboursements et crédits confirmés non conciliés;
+- plus l’ajustement initial non concilié.
 
-Les filtres permettent de sélectionner un mode de paiement et un statut de conciliation.
+Les transactions prévues sont présentées séparément et ajoutées au **solde prévu**.
 
-Le tableau de bord présente, pour chaque mode de paiement utilisé pendant le mois :
+### Conciliation par relevé
 
-- les dépenses;
-- les revenus;
-- les dépenses à concilier;
-- les revenus à concilier;
-- le nombre de transactions restant à concilier.
+L’onglet **Conciliation** permet de choisir un mode de paiement et d’afficher toutes ses transactions confirmées non conciliées, même lorsqu’elles proviennent de mois différents.
+
+L’utilisateur peut :
+
+- cocher une ou plusieurs transactions;
+- tout sélectionner ou tout désélectionner;
+- inscrire la date et le solde du relevé;
+- inscrire la date de paiement;
+- inscrire la date réelle de conciliation;
+- inclure l’ajustement initial;
+- voir le total sélectionné;
+- voir le solde non concilié restant;
+- voir la différence avec le solde du relevé;
+- finaliser la sélection en une seule opération.
+
+Une différence non nulle produit un avertissement, mais peut être conservée dans l’historique après confirmation.
+
+Dès qu’une transaction est conciliée, elle cesse immédiatement de faire partie du solde confirmé non concilié.
+
+### Historique des conciliations
+
+Chaque séance conserve :
+
+- le mode de paiement;
+- la date et le solde du relevé;
+- la date de paiement;
+- la date de conciliation;
+- les transactions sélectionnées;
+- le total concilié;
+- la différence;
+- la note;
+- l’ajustement initial, lorsqu’il a été inclus.
+
+Une séance complète peut être annulée. Il est aussi possible de retirer une seule transaction d’une séance. La transaction redevient alors **À concilier** et retourne immédiatement dans le solde prévu.
+
+Une transaction conciliée doit être retirée de sa conciliation avant de pouvoir être modifiée ou supprimée.
+
+### Attribution en lot
+
+L’écran **Conciliation** contient une section pour les transactions confirmées sans mode de paiement.
+
+Plusieurs transactions peuvent être cochées et recevoir le même mode de paiement en une seule opération.
 
 ### Transactions récurrentes
 
@@ -226,7 +276,9 @@ Le tableau de bord affiche :
 - la progression des objectifs;
 - des KPI mensuels par catégorie;
 - des KPI mensuels par étiquette;
-- un résumé de conciliation par mode de paiement.
+- les soldes prévus cumulatifs par mode de paiement;
+- la date de la plus ancienne transaction non conciliée;
+- la date de la dernière séance de conciliation.
 
 Les montants sont alignés à droite afin de faciliter la comparaison visuelle.
 

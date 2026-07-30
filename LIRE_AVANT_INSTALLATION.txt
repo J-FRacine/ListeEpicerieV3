@@ -1,145 +1,164 @@
-JF APPS — FINANCES V1.2.0
-PAIEMENTS, CONCILIATION ET KPI
+JF APPS — FINANCES V1.3.0
+SOLDES PRÉVUS ET CONCILIATION PAR RELEVÉ
 
-Fichiers complets à remplacer ENSEMBLE à la racine de GitHub :
+Fichiers complets à remplacer ensemble à la racine du dépôt GitHub :
 - finances.py
 - finances_data.py
 - app_versions.py
 - manual.py
 
-Aucun changement à app.py, app_access.py, release_notes.py
-ou requirements.txt n’est nécessaire.
+Aucun changement requis dans :
+- app.py
+- app_access.py
+- release_notes.py
+- requirements.txt
 
-NOUVEAUTÉS DE LA V1.2.0
+NOUVEAUTÉS DE LA V1.3.0
 
-1. MODES DE PAIEMENT
-Valeurs initiales :
-- MC Canadian Tire
-- MC PC
-- Visa Desjardins
-- Direct
+1. SOLDE PRÉVU CUMULATIF
+Le Tableau affiche maintenant un solde prévu pour chaque mode de paiement.
 
-Chaque utilisateur peut :
-- ajouter un mode de paiement;
-- le renommer;
-- l’activer ou le désactiver;
-- le déplacer vers le haut ou le bas;
-- l’attribuer à une transaction;
-- le mémoriser dans une transaction récurrente.
+Le calcul ne recommence jamais à zéro au changement de mois.
 
-La gestion se trouve dans :
-Finances > Organisation > Modes de paiement.
+Solde confirmé non concilié =
+- ajustement initial non concilié;
+- plus les dépenses confirmées non conciliées;
+- moins les revenus, remboursements et crédits confirmés non conciliés.
 
-2. CONCILIATION
-Chaque transaction possède maintenant un statut distinct :
-- À concilier;
-- Conciliée.
+Les transactions prévues sont présentées séparément, puis ajoutées au
+solde prévu.
 
-Une date de conciliation facultative peut être enregistrée.
+2. NOUVEL ÉCRAN CONCILIATION
+Un onglet « Conciliation » est ajouté dans Finances.
 
-Dans l’historique :
-- le bouton avec deux crochets permet de marquer une transaction conciliée;
-- le bouton Annuler permet de la remettre à concilier;
-- les filtres permettent de choisir un mode de paiement
-  et un statut de conciliation.
+Il permet :
+- de choisir un mode de paiement;
+- d’afficher toutes ses transactions confirmées non conciliées;
+- de filtrer par dates;
+- de rechercher une transaction;
+- de cocher plusieurs transactions;
+- de tout sélectionner ou tout désélectionner;
+- de voir le total sélectionné;
+- de voir le solde non concilié restant;
+- de finaliser la sélection en une seule opération.
 
-3. RÉSUMÉ MENSUEL DE CONCILIATION
-Dans Tableau, une section par mode de paiement affiche :
-- les dépenses;
-- les revenus;
-- les dépenses à concilier;
-- les revenus à concilier;
-- le nombre de transactions à concilier.
+3. CONCILIATION PAR RELEVÉ
+Chaque séance peut conserver :
+- la date du relevé;
+- le solde du relevé;
+- la date de paiement;
+- la date réelle de conciliation;
+- une note;
+- les transactions sélectionnées;
+- l’ajustement initial;
+- le total concilié;
+- la différence avec le relevé.
 
-Les transactions sans mode de paiement apparaissent sous :
-« Sans mode de paiement ».
+Une différence non nulle produit un avertissement, mais la conciliation
+peut tout de même être enregistrée après confirmation.
 
-4. HISTORIQUE PLUS LISIBLE
-Sur grand écran :
-- dépenses dans la colonne de gauche;
-- revenus dans la colonne de droite.
+4. HISTORIQUE DES CONCILIATIONS
+Chaque séance est conservée.
 
-Sur téléphone :
-- les deux sections sont empilées.
+Il est possible :
+- de consulter les transactions d’une séance;
+- de retirer une transaction d’une séance;
+- d’annuler toute une conciliation.
 
-Tous les montants sont justifiés à droite.
-Les descriptions et autres textes restent alignés à gauche.
+Une transaction retirée ou une séance annulée retourne immédiatement
+dans le solde non concilié.
 
-5. KPI MENSUELS
-Dans Tableau :
-- KPI des dépenses par catégorie;
-- KPI des dépenses par étiquette;
-- montant et part mensuelle pour les catégories.
+5. AJUSTEMENT INITIAL
+Dans Organisation > Modes de paiement, chaque mode peut maintenant
+contenir :
+- un type;
+- un jour habituel de fermeture du relevé;
+- un jour habituel de paiement;
+- un solde initial ou ajustement;
+- une date de référence;
+- une note.
 
-6. IMPORTATION ET EXPORTATION
-Les CSV et JSON JF Apps peuvent maintenant contenir :
-- Mode de paiement;
-- Conciliation;
-- Date de conciliation.
+L’ajustement initial reste dans le solde prévu jusqu’à son inclusion
+dans une séance de conciliation.
 
-Lors d’une importation, les modes de paiement manquants
-peuvent être créés automatiquement.
+6. ATTRIBUTION EN LOT
+L’écran Conciliation contient une section « Transactions sans mode de
+paiement ».
 
-Les fichiers Spendee demeurent compatibles.
-Comme Spendee ne fournit pas le mode de paiement dans le fichier
-utilisé, ces transactions sont importées sans mode de paiement
-et avec le statut « À concilier ».
+Plusieurs transactions peuvent être cochées et recevoir le même mode
+de paiement en une seule opération.
 
-MIGRATION AUTOMATIQUE DE LA BASE DE DONNÉES
-Au prochain démarrage, l’application :
-- crée la table finance_payment_methods;
-- ajoute payment_method_id aux transactions et récurrences;
-- ajoute reconciliation_status et reconciliation_date
-  aux transactions;
-- crée les index et contraintes nécessaires.
+7. PROTECTION DE L’HISTORIQUE
+Une transaction déjà conciliée ne peut plus être modifiée ou supprimée
+directement.
+
+Il faut d’abord :
+- ouvrir la séance de conciliation;
+- retirer la transaction;
+- puis la modifier ou la supprimer.
+
+8. EXPORTATION
+Le CSV indique maintenant l’identifiant de la séance de conciliation.
+
+Le JSON de sécurité comprend aussi :
+- les séances de conciliation;
+- les liens entre les séances et les transactions;
+- les renseignements détaillés des modes de paiement.
+
+MIGRATIONS POSTGRESQL AUTOMATIQUES
+Le démarrage de l’application ajoute automatiquement :
+- les nouveaux renseignements des modes de paiement;
+- la table finance_reconciliation_sessions;
+- la table finance_reconciliation_session_transactions;
+- la liaison entre une transaction et sa séance de conciliation.
 
 Aucun script SQL manuel n’est requis.
-
-DONNÉES EXISTANTES
-Les transactions déjà présentes sont conservées.
-Elles recevront automatiquement :
-- aucun mode de paiement;
-- le statut À concilier;
-- aucune date de conciliation.
+Les transactions, catégories, étiquettes, objectifs, récurrences,
+imports et conciliations existantes sont conservés.
 
 INSTALLATION
 1. Ouvrir le dépôt GitHub.
 2. Choisir Add file > Upload files.
-3. Déposer les quatre fichiers Python ensemble.
+3. Déposer ensemble :
+   - finances.py
+   - finances_data.py
+   - app_versions.py
+   - manual.py
 4. Faire Commit changes.
 5. Attendre le déploiement Canner.
-6. Faire Ctrl+F5 ou fermer et rouvrir la PWA.
-7. Vérifier que Finances affiche V1.2.0.
+6. Recharger avec Ctrl+F5 ou fermer et rouvrir la PWA.
+7. Vérifier que Finances affiche V1.3.0.
 
-TESTS RECOMMANDÉS
-1. Organisation > Modes de paiement :
-   vérifier les quatre valeurs initiales.
-2. Ajouter une dépense avec MC PC.
-3. Ajouter un revenu avec Direct.
-4. Ouvrir Historique :
-   vérifier les deux colonnes et l’alignement des montants.
-5. Marquer une transaction Conciliée.
-6. Filtrer par MC PC et par À concilier.
-7. Ouvrir Tableau :
-   vérifier les KPI et le résumé de conciliation.
-8. Créer une récurrence avec un mode de paiement.
-9. Exporter en CSV et JSON.
-10. Réimporter un petit fichier de test et vérifier
-    la prévisualisation.
+TEST RECOMMANDÉ
+1. Ouvrir Organisation > Modes de paiement.
+2. Modifier un mode et inscrire un solde initial facultatif.
+3. Attribuer un mode à quelques transactions.
+4. Ouvrir Tableau et vérifier le solde prévu.
+5. Ouvrir Conciliation.
+6. Choisir le mode.
+7. Cocher quelques transactions.
+8. Inscrire une date et un solde de relevé.
+9. Finaliser.
+10. Vérifier que les transactions ne sont plus dans le solde confirmé.
+11. Ouvrir l’historique de la séance.
+12. Retirer une transaction et vérifier qu’elle revient dans le solde.
+13. Tester l’annulation complète d’une séance.
 
 VERSION
-Cette évolution est nommée V1.2.0 parce qu’elle ajoute
-plusieurs fonctions compatibles sans changer la base fonctionnelle
-de l’application.
+Cette évolution est nommée V1.3.0 parce qu’elle ajoute un nouveau
+processus complet de conciliation et modifie de façon importante le
+Tableau et les modes de paiement.
 
 VÉRIFICATIONS EFFECTUÉES
-- syntaxe Python des quatre fichiers;
-- correspondance des imports internes;
-- construction de l’interface avec un environnement simulé;
-- cohérence du nombre de paramètres des requêtes SQL littérales;
-- lecture des CSV JF Apps enrichis;
-- compatibilité du CSV Spendee de 102 transactions;
-- mise à jour du Manuel et des notes de version.
+- syntaxe Python;
+- imports internes;
+- correspondance des paramètres SQL statiques;
+- présence des migrations automatiques;
+- présence de l’écran Conciliation;
+- historique et annulation;
+- solde prévu cumulatif;
+- exportation V1.3;
+- Manuel mis à jour.
 
-Le fonctionnement réel avec NiceGUI et PostgreSQL doit être confirmé
-après le premier déploiement Canner.
+Le rendu et les opérations réelles avec NiceGUI et PostgreSQL devront
+être confirmés après le premier déploiement sur Canner.

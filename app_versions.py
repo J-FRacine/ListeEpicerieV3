@@ -3,10 +3,30 @@ from __future__ import annotations
 PORTAL_VERSION = "1.0.0"
 
 APP_VERSIONS = {
-    "finances": "1.2.0",
+    "finances": "1.3.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "version": "1.3.0",
+        "date": "2026-07-30",
+        "title": "Finances — soldes prévus et conciliation par relevé",
+        "summary": (
+            "Ajout des soldes cumulatifs par mode de paiement, "
+            "des séances de conciliation et de leur historique."
+        ),
+        "changes": [
+            "Solde prévu cumulatif par mode de paiement, sans remise à zéro mensuelle.",
+            "Sélection multiple des transactions à concilier par relevé.",
+            "Solde du relevé, date de relevé, date de paiement et différence conservés.",
+            "Historique des séances avec annulation complète ou retrait d’une transaction.",
+            "Ajustement initial configurable par mode de paiement.",
+            "Remboursements et revenus réduisant le solde prévu.",
+            "Attribution en lot d’un mode aux transactions non classées.",
+            "Type de mode, jours habituels de relevé et de paiement et notes.",
+            "Export JSON enrichi de l’historique des conciliations.",
+        ],
+    },
     {
         "version": "1.2.0",
         "date": "2026-07-30",

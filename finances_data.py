@@ -43,6 +43,25 @@ DEFAULT_PAYMENT_METHODS = (
     "Direct",
 )
 
+DEFAULT_PAYMENT_METHOD_TYPES = {
+    "MC Canadian Tire": "credit_card",
+    "MC PC": "credit_card",
+    "Visa Desjardins": "credit_card",
+    "Direct": "bank",
+}
+
+PAYMENT_METHOD_TYPES = {
+    "credit_card": "Carte de crédit",
+    "bank": "Compte bancaire",
+    "cash": "Argent comptant",
+    "other": "Autre",
+}
+
+RECONCILIATION_SESSION_STATUSES = {
+    "completed": "Complétée",
+    "cancelled": "Annulée",
+}
+
 
 def _money(value, allow_zero=False):
     try:
@@ -55,6 +74,17 @@ def _money(value, allow_zero=False):
     elif amount <= 0:
         raise ValueError("Le montant doit être supérieur à zéro.")
     return amount
+
+
+def _decimal_value(value, label, allow_blank=False):
+    if value in (None, ""):
+        if allow_blank:
+            return None
+        return Decimal("0.00")
+    try:
+        return Decimal(str(value)).quantize(Decimal("0.01"))
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValueError(f"{label} est invalide.")
 
 
 def _text(value, label, maximum, required=False):
@@ -158,6 +188,80 @@ def init_finances_schema():
                 ON finance_payment_methods (
                     user_id, is_active DESC, sort_order, name
                 );
+            """)
+            cur.execute("""
+                ALTER TABLE finance_payment_methods
+                ADD COLUMN IF NOT EXISTS method_type TEXT
+                NOT NULL DEFAULT 'credit_card';
+            """)
+            cur.execute("""
+                ALTER TABLE finance_payment_methods
+                ADD COLUMN IF NOT EXISTS statement_day SMALLINT;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_payment_methods
+                ADD COLUMN IF NOT EXISTS payment_day SMALLINT;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_payment_methods
+                ADD COLUMN IF NOT EXISTS opening_balance NUMERIC(14,2)
+                NOT NULL DEFAULT 0;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_payment_methods
+                ADD COLUMN IF NOT EXISTS opening_balance_date DATE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_payment_methods
+                ADD COLUMN IF NOT EXISTS opening_balance_reconciled BOOLEAN
+                NOT NULL DEFAULT FALSE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_payment_methods
+                ADD COLUMN IF NOT EXISTS note TEXT;
+            """)
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname = 'finance_payment_methods_type_ck'
+                    ) THEN
+                        ALTER TABLE finance_payment_methods
+                        ADD CONSTRAINT finance_payment_methods_type_ck
+                        CHECK (
+                            method_type IN (
+                                'credit_card',
+                                'bank',
+                                'cash',
+                                'other'
+                            )
+                        );
+                    END IF;
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname = 'finance_payment_methods_statement_day_ck'
+                    ) THEN
+                        ALTER TABLE finance_payment_methods
+                        ADD CONSTRAINT finance_payment_methods_statement_day_ck
+                        CHECK (
+                            statement_day IS NULL
+                            OR statement_day BETWEEN 1 AND 31
+                        );
+                    END IF;
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname = 'finance_payment_methods_payment_day_ck'
+                    ) THEN
+                        ALTER TABLE finance_payment_methods
+                        ADD CONSTRAINT finance_payment_methods_payment_day_ck
+                        CHECK (
+                            payment_day IS NULL
+                            OR payment_day BETWEEN 1 AND 31
+                        );
+                    END IF;
+                END
+                $$;
             """)
 
             cur.execute("""
@@ -335,6 +439,90 @@ def init_finances_schema():
                     PRIMARY KEY (transaction_id, tag_id)
                 );
             """)
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS finance_reconciliation_sessions (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL
+                        REFERENCES users(id) ON DELETE CASCADE,
+                    payment_method_id BIGINT NOT NULL
+                        REFERENCES finance_payment_methods(id)
+                        ON DELETE RESTRICT,
+                    statement_date DATE NOT NULL,
+                    statement_balance NUMERIC(14,2),
+                    due_date DATE,
+                    reconciliation_date DATE NOT NULL,
+                    note TEXT,
+                    selected_total NUMERIC(14,2) NOT NULL DEFAULT 0,
+                    difference NUMERIC(14,2),
+                    included_opening_balance BOOLEAN
+                        NOT NULL DEFAULT FALSE,
+                    opening_balance_amount NUMERIC(14,2)
+                        NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'completed'
+                        CHECK (status IN ('completed', 'cancelled')),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    cancelled_at TIMESTAMPTZ,
+                    CHECK (note IS NULL OR CHAR_LENGTH(note) <= 1000)
+                );
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS
+                finance_reconciliation_sessions_user_idx
+                ON finance_reconciliation_sessions (
+                    user_id,
+                    payment_method_id,
+                    statement_date DESC,
+                    id DESC
+                );
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS reconciliation_session_id BIGINT;
+            """)
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname =
+                            'finance_transactions_reconciliation_session_fk'
+                    ) THEN
+                        ALTER TABLE finance_transactions
+                        ADD CONSTRAINT
+                            finance_transactions_reconciliation_session_fk
+                        FOREIGN KEY (reconciliation_session_id)
+                        REFERENCES finance_reconciliation_sessions(id)
+                        ON DELETE SET NULL;
+                    END IF;
+                END
+                $$;
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS
+                finance_reconciliation_session_transactions (
+                    session_id BIGINT NOT NULL
+                        REFERENCES finance_reconciliation_sessions(id)
+                        ON DELETE CASCADE,
+                    transaction_id BIGINT NOT NULL
+                        REFERENCES finance_transactions(id)
+                        ON DELETE CASCADE,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    removed_at TIMESTAMPTZ,
+                    PRIMARY KEY (session_id, transaction_id)
+                );
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS
+                finance_reconciliation_session_transactions_active_idx
+                ON finance_reconciliation_session_transactions (
+                    transaction_id,
+                    is_active
+                );
+            """)
+
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS finance_goals (
                     id BIGSERIAL PRIMARY KEY,
@@ -524,19 +712,33 @@ def ensure_default_finance_payment_methods(user_id):
                     INSERT INTO finance_payment_methods (
                         user_id,
                         name,
-                        sort_order
+                        sort_order,
+                        method_type
                     )
-                    VALUES (%s, %s, %s)
+                    VALUES (%s, %s, %s, %s)
                     ON CONFLICT DO NOTHING;
                     """,
                     (
                         user_id,
                         name,
                         sort_order,
+                        DEFAULT_PAYMENT_METHOD_TYPES.get(
+                            name,
+                            "other",
+                        ),
                     ),
                 )
 
             conn.commit()
+
+
+def _optional_day(value, label):
+    if value in (None, ""):
+        return None
+    day = int(value)
+    if day < 1 or day > 31:
+        raise ValueError(f"{label} doit être entre 1 et 31.")
+    return day
 
 
 def list_payment_methods(
@@ -552,6 +754,13 @@ def list_payment_methods(
                     method.name,
                     method.sort_order,
                     method.is_active,
+                    method.method_type,
+                    method.statement_day,
+                    method.payment_day,
+                    method.opening_balance,
+                    method.opening_balance_date,
+                    method.opening_balance_reconciled,
+                    method.note,
                     COUNT(transaction.id) AS transaction_count
                 FROM finance_payment_methods AS method
                 LEFT JOIN finance_transactions AS transaction
@@ -566,10 +775,7 @@ def list_payment_methods(
                     LOWER(method.name),
                     method.id;
                 """,
-                (
-                    user_id,
-                    include_inactive,
-                ),
+                (user_id, include_inactive),
             )
             return cur.fetchall()
 
@@ -578,6 +784,12 @@ def save_payment_method(
     user_id,
     name,
     payment_method_id=None,
+    method_type="credit_card",
+    statement_day=None,
+    payment_day=None,
+    opening_balance=0,
+    opening_balance_date=None,
+    note=None,
 ):
     cleaned_name = _text(
         name,
@@ -585,40 +797,50 @@ def save_payment_method(
         100,
         True,
     )
+    if method_type not in PAYMENT_METHOD_TYPES:
+        raise ValueError("Le type de mode de paiement est invalide.")
+
+    parsed_statement_day = _optional_day(
+        statement_day,
+        "Le jour de fermeture",
+    )
+    parsed_payment_day = _optional_day(
+        payment_day,
+        "Le jour de paiement",
+    )
+    parsed_opening_balance = _decimal_value(
+        opening_balance,
+        "Le solde initial",
+    )
+    parsed_opening_date = (
+        opening_balance_date
+        if isinstance(opening_balance_date, date)
+        else (
+            date.fromisoformat(str(opening_balance_date))
+            if opening_balance_date
+            else None
+        )
+    )
+    cleaned_note = _text(
+        note,
+        "La note",
+        1000,
+    )
 
     with get_connection() as conn:
         with conn.cursor() as cur:
+            params = [user_id, cleaned_name]
+            duplicate_sql = """
+                SELECT id
+                FROM finance_payment_methods
+                WHERE user_id = %s
+                  AND LOWER(name) = LOWER(%s)
+            """
             if payment_method_id:
-                cur.execute(
-                    """
-                    SELECT id
-                    FROM finance_payment_methods
-                    WHERE user_id = %s
-                      AND LOWER(name) = LOWER(%s)
-                      AND id <> %s
-                    LIMIT 1;
-                    """,
-                    (
-                        user_id,
-                        cleaned_name,
-                        payment_method_id,
-                    ),
-                )
-            else:
-                cur.execute(
-                    """
-                    SELECT id
-                    FROM finance_payment_methods
-                    WHERE user_id = %s
-                      AND LOWER(name) = LOWER(%s)
-                    LIMIT 1;
-                    """,
-                    (
-                        user_id,
-                        cleaned_name,
-                    ),
-                )
-
+                duplicate_sql += " AND id <> %s"
+                params.append(payment_method_id)
+            duplicate_sql += " LIMIT 1;"
+            cur.execute(duplicate_sql, params)
             if cur.fetchone():
                 raise ValueError(
                     "Un mode de paiement porte déjà ce nom."
@@ -630,12 +852,32 @@ def save_payment_method(
                     UPDATE finance_payment_methods
                     SET
                         name = %s,
+                        method_type = %s,
+                        statement_day = %s,
+                        payment_day = %s,
+                        opening_balance_reconciled = CASE
+                            WHEN opening_balance IS DISTINCT FROM %s
+                              OR opening_balance_date IS DISTINCT FROM %s
+                            THEN FALSE
+                            ELSE opening_balance_reconciled
+                        END,
+                        opening_balance = %s,
+                        opening_balance_date = %s,
+                        note = %s,
                         updated_at = NOW()
                     WHERE id = %s
                       AND user_id = %s;
                     """,
                     (
                         cleaned_name,
+                        method_type,
+                        parsed_statement_day,
+                        parsed_payment_day,
+                        parsed_opening_balance,
+                        parsed_opening_date,
+                        parsed_opening_balance,
+                        parsed_opening_date,
+                        cleaned_note,
                         payment_method_id,
                         user_id,
                     ),
@@ -647,35 +889,40 @@ def save_payment_method(
             else:
                 cur.execute(
                     """
-                    SELECT COALESCE(
-                        MAX(sort_order),
-                        0
-                    ) + 1 AS next_order
+                    SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order
                     FROM finance_payment_methods
                     WHERE user_id = %s;
                     """,
                     (user_id,),
                 )
-                next_order = int(
-                    cur.fetchone()["next_order"]
-                )
-
+                next_order = int(cur.fetchone()["next_order"])
                 cur.execute(
                     """
                     INSERT INTO finance_payment_methods (
                         user_id,
                         name,
-                        sort_order
+                        sort_order,
+                        method_type,
+                        statement_day,
+                        payment_day,
+                        opening_balance,
+                        opening_balance_date,
+                        note
                     )
-                    VALUES (%s, %s, %s);
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
                     """,
                     (
                         user_id,
                         cleaned_name,
                         next_order,
+                        method_type,
+                        parsed_statement_day,
+                        parsed_payment_day,
+                        parsed_opening_balance,
+                        parsed_opening_date,
+                        cleaned_note,
                     ),
                 )
-
             conn.commit()
 
 
@@ -939,6 +1186,27 @@ def save_transaction(
             )
 
             if transaction_id:
+                cur.execute(
+                    """
+                    SELECT reconciliation_status
+                    FROM finance_transactions
+                    WHERE id = %s AND user_id = %s
+                    FOR UPDATE;
+                    """,
+                    (transaction_id, user_id),
+                )
+                current_transaction = cur.fetchone()
+                if not current_transaction:
+                    raise ValueError("Transaction introuvable.")
+                if (
+                    current_transaction["reconciliation_status"]
+                    == "reconciled"
+                ):
+                    raise ValueError(
+                        "Retirez d’abord la conciliation avant de "
+                        "modifier cette transaction."
+                    )
+
                 cur.execute(
                     """
                     UPDATE finance_transactions
@@ -1238,7 +1506,28 @@ def delete_transaction(user_id, transaction_id):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "DELETE FROM finance_transactions WHERE id=%s AND user_id=%s;",
+                """
+                SELECT reconciliation_status
+                FROM finance_transactions
+                WHERE id = %s AND user_id = %s
+                FOR UPDATE;
+                """,
+                (transaction_id, user_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise ValueError("Transaction introuvable.")
+            if row["reconciliation_status"] == "reconciled":
+                raise ValueError(
+                    "Retirez d’abord la conciliation avant de "
+                    "supprimer cette transaction."
+                )
+
+            cur.execute(
+                """
+                DELETE FROM finance_transactions
+                WHERE id = %s AND user_id = %s;
+                """,
                 (transaction_id, user_id),
             )
             conn.commit()
@@ -1255,6 +1544,60 @@ def set_transaction_status(user_id, transaction_id, status):
             """, (status, transaction_id, user_id))
             conn.commit()
 
+def _refresh_reconciliation_session_totals(
+    cur,
+    session_id,
+):
+    cur.execute(
+        """
+        SELECT
+            session.statement_balance,
+            session.opening_balance_amount,
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN transaction.transaction_type = 'expense'
+                        THEN transaction.amount
+                        ELSE -transaction.amount
+                    END
+                ) FILTER (WHERE link.is_active = TRUE),
+                0
+            ) AS transaction_total
+        FROM finance_reconciliation_sessions AS session
+        LEFT JOIN finance_reconciliation_session_transactions AS link
+            ON link.session_id = session.id
+        LEFT JOIN finance_transactions AS transaction
+            ON transaction.id = link.transaction_id
+        WHERE session.id = %s
+        GROUP BY session.id;
+        """,
+        (session_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return
+
+    selected_total = (
+        Decimal(row["transaction_total"])
+        + Decimal(row["opening_balance_amount"])
+    )
+    statement_balance = row["statement_balance"]
+    difference = (
+        Decimal(statement_balance) - selected_total
+        if statement_balance is not None
+        else None
+    )
+    cur.execute(
+        """
+        UPDATE finance_reconciliation_sessions
+        SET selected_total = %s,
+            difference = %s
+        WHERE id = %s;
+        """,
+        (selected_total, difference, session_id),
+    )
+
+
 def set_transaction_reconciliation(
     user_id,
     transaction_id,
@@ -1262,22 +1605,17 @@ def set_transaction_reconciliation(
     reconciliation_date=None,
 ):
     if reconciliation_status not in RECONCILIATION_STATUSES:
-        raise ValueError(
-            "Statut de conciliation invalide."
-        )
+        raise ValueError("Statut de conciliation invalide.")
 
     parsed_date = (
         reconciliation_date
         if isinstance(reconciliation_date, date)
         else (
-            date.fromisoformat(
-                str(reconciliation_date)
-            )
+            date.fromisoformat(str(reconciliation_date))
             if reconciliation_date
             else None
         )
     )
-
     if reconciliation_status == "unreconciled":
         parsed_date = None
 
@@ -1285,27 +1623,61 @@ def set_transaction_reconciliation(
         with conn.cursor() as cur:
             cur.execute(
                 """
+                SELECT reconciliation_session_id
+                FROM finance_transactions
+                WHERE id = %s AND user_id = %s
+                FOR UPDATE;
+                """,
+                (transaction_id, user_id),
+            )
+            current = cur.fetchone()
+            if not current:
+                raise ValueError("Transaction introuvable.")
+
+            session_id = current["reconciliation_session_id"]
+
+            if reconciliation_status == "unreconciled" and session_id:
+                cur.execute(
+                    """
+                    UPDATE finance_reconciliation_session_transactions
+                    SET is_active = FALSE,
+                        removed_at = NOW()
+                    WHERE session_id = %s
+                      AND transaction_id = %s
+                      AND is_active = TRUE;
+                    """,
+                    (session_id, transaction_id),
+                )
+
+            cur.execute(
+                """
                 UPDATE finance_transactions
-                SET
-                    reconciliation_status = %s,
+                SET reconciliation_status = %s,
                     reconciliation_date = %s,
+                    reconciliation_session_id = %s,
                     updated_at = NOW()
-                WHERE id = %s
-                  AND user_id = %s;
+                WHERE id = %s AND user_id = %s;
                 """,
                 (
                     reconciliation_status,
                     parsed_date,
+                    (
+                        None
+                        if reconciliation_status == "unreconciled"
+                        else session_id
+                    ),
                     transaction_id,
                     user_id,
                 ),
             )
-            if cur.rowcount == 0:
-                raise ValueError(
-                    "Transaction introuvable."
-                )
-            conn.commit()
 
+            if session_id:
+                _refresh_reconciliation_session_totals(
+                    cur,
+                    session_id,
+                )
+
+            conn.commit()
 
 
 def dashboard_summary(user_id, month_value):
@@ -3148,6 +3520,657 @@ def import_finance_rows(
     }
 
 
+
+def payment_predicted_balance_summary(user_id):
+    """Soldes cumulatifs sans remise à zéro mensuelle."""
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    method.id AS payment_method_id,
+                    method.name AS payment_method_name,
+                    method.method_type,
+                    method.statement_day,
+                    method.payment_day,
+                    method.opening_balance,
+                    method.opening_balance_date,
+                    method.opening_balance_reconciled,
+                    method.is_active,
+                    method.sort_order,
+                    CASE
+                        WHEN method.opening_balance_reconciled = FALSE
+                        THEN method.opening_balance
+                        ELSE 0
+                    END AS opening_balance_pending,
+                    COALESCE(
+                        SUM(transaction.amount) FILTER (
+                            WHERE transaction.reconciliation_status = 'unreconciled'
+                              AND transaction.status = 'confirmed'
+                              AND transaction.transaction_type = 'expense'
+                        ),
+                        0
+                    ) AS confirmed_expenses,
+                    COALESCE(
+                        SUM(transaction.amount) FILTER (
+                            WHERE transaction.reconciliation_status = 'unreconciled'
+                              AND transaction.status = 'confirmed'
+                              AND transaction.transaction_type = 'income'
+                        ),
+                        0
+                    ) AS confirmed_incomes,
+                    COALESCE(
+                        SUM(transaction.amount) FILTER (
+                            WHERE transaction.reconciliation_status = 'unreconciled'
+                              AND transaction.status = 'planned'
+                              AND transaction.transaction_type = 'expense'
+                        ),
+                        0
+                    ) AS planned_expenses,
+                    COALESCE(
+                        SUM(transaction.amount) FILTER (
+                            WHERE transaction.reconciliation_status = 'unreconciled'
+                              AND transaction.status = 'planned'
+                              AND transaction.transaction_type = 'income'
+                        ),
+                        0
+                    ) AS planned_incomes,
+                    COUNT(transaction.id) FILTER (
+                        WHERE transaction.reconciliation_status = 'unreconciled'
+                          AND transaction.status = 'confirmed'
+                    ) AS confirmed_count,
+                    COUNT(transaction.id) FILTER (
+                        WHERE transaction.reconciliation_status = 'unreconciled'
+                          AND transaction.status = 'planned'
+                    ) AS planned_count,
+                    MIN(transaction.transaction_date) FILTER (
+                        WHERE transaction.reconciliation_status = 'unreconciled'
+                          AND transaction.status = 'confirmed'
+                    ) AS oldest_unreconciled_date,
+                    (
+                        SELECT MAX(session.reconciliation_date)
+                        FROM finance_reconciliation_sessions AS session
+                        WHERE session.user_id = method.user_id
+                          AND session.payment_method_id = method.id
+                          AND session.status = 'completed'
+                    ) AS last_reconciliation_date
+                FROM finance_payment_methods AS method
+                LEFT JOIN finance_transactions AS transaction
+                    ON transaction.user_id = method.user_id
+                   AND transaction.payment_method_id = method.id
+                WHERE method.user_id = %s
+                GROUP BY method.id
+                ORDER BY
+                    method.is_active DESC,
+                    method.sort_order,
+                    LOWER(method.name),
+                    method.id;
+                """,
+                (user_id,),
+            )
+            rows = cur.fetchall()
+
+    result = []
+    for row in rows:
+        current_balance = (
+            Decimal(row["opening_balance_pending"])
+            + Decimal(row["confirmed_expenses"])
+            - Decimal(row["confirmed_incomes"])
+        )
+        planned_impact = (
+            Decimal(row["planned_expenses"])
+            - Decimal(row["planned_incomes"])
+        )
+        result.append(
+            {
+                **dict(row),
+                "current_balance": current_balance,
+                "planned_impact": planned_impact,
+                "predicted_balance": current_balance + planned_impact,
+            }
+        )
+    return result
+
+
+def count_unassigned_confirmed_transactions(user_id):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) AS total
+                FROM finance_transactions
+                WHERE user_id = %s
+                  AND status = 'confirmed'
+                  AND payment_method_id IS NULL;
+                """,
+                (user_id,),
+            )
+            return int(cur.fetchone()["total"])
+
+
+def list_unreconciled_transactions(
+    user_id,
+    payment_method_id,
+    start_date=None,
+    end_date=None,
+    query=None,
+):
+    return list_transactions(
+        user_id,
+        start_date=start_date,
+        end_date=end_date,
+        status="confirmed",
+        payment_method_id=payment_method_id,
+        reconciliation_status="unreconciled",
+        query=query,
+        limit=10000,
+    )
+
+
+def bulk_assign_payment_method(
+    user_id,
+    transaction_ids,
+    payment_method_id,
+):
+    ids = sorted({int(value) for value in (transaction_ids or [])})
+    if not ids:
+        raise ValueError("Sélectionnez au moins une transaction.")
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            validated_method = _validate_payment_method(
+                cur,
+                user_id,
+                payment_method_id,
+            )
+            cur.execute(
+                """
+                UPDATE finance_transactions
+                SET payment_method_id = %s,
+                    updated_at = NOW()
+                WHERE user_id = %s
+                  AND id = ANY(%s);
+                """,
+                (validated_method, user_id, ids),
+            )
+            if cur.rowcount != len(ids):
+                raise ValueError(
+                    "Certaines transactions sélectionnées sont introuvables."
+                )
+            conn.commit()
+    return len(ids)
+
+
+def list_unassigned_transactions(
+    user_id,
+    query=None,
+    limit=500,
+):
+    rows = list_transactions(
+        user_id,
+        status="confirmed",
+        query=query,
+        limit=max(int(limit) * 5, 1000),
+    )
+    return [
+        row
+        for row in rows
+        if row["payment_method_id"] is None
+    ][: int(limit)]
+
+
+def create_reconciliation_session(
+    user_id,
+    payment_method_id,
+    transaction_ids,
+    statement_date,
+    statement_balance=None,
+    due_date=None,
+    reconciliation_date=None,
+    note=None,
+    include_opening_balance=False,
+):
+    ids = sorted({int(value) for value in (transaction_ids or [])})
+    parsed_statement_date = (
+        statement_date
+        if isinstance(statement_date, date)
+        else date.fromisoformat(str(statement_date))
+    )
+    parsed_due_date = (
+        due_date
+        if isinstance(due_date, date)
+        else (
+            date.fromisoformat(str(due_date))
+            if due_date
+            else None
+        )
+    )
+    parsed_reconciliation_date = (
+        reconciliation_date
+        if isinstance(reconciliation_date, date)
+        else (
+            date.fromisoformat(str(reconciliation_date))
+            if reconciliation_date
+            else date.today()
+        )
+    )
+    parsed_statement_balance = _decimal_value(
+        statement_balance,
+        "Le solde du relevé",
+        allow_blank=True,
+    )
+    cleaned_note = _text(note, "La note", 1000)
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            payment_method_id = _validate_payment_method(
+                cur,
+                user_id,
+                payment_method_id,
+            )
+            cur.execute(
+                """
+                SELECT *
+                FROM finance_payment_methods
+                WHERE id = %s AND user_id = %s
+                FOR UPDATE;
+                """,
+                (payment_method_id, user_id),
+            )
+            method = cur.fetchone()
+            if not method:
+                raise ValueError("Mode de paiement introuvable.")
+
+            opening_amount = Decimal("0.00")
+            if include_opening_balance:
+                if method["opening_balance_reconciled"]:
+                    raise ValueError(
+                        "Le solde initial est déjà concilié."
+                    )
+                opening_amount = Decimal(method["opening_balance"])
+                if opening_amount == 0:
+                    include_opening_balance = False
+
+            transaction_total = Decimal("0.00")
+            if ids:
+                cur.execute(
+                    """
+                    SELECT id, transaction_type, amount
+                    FROM finance_transactions
+                    WHERE user_id = %s
+                      AND payment_method_id = %s
+                      AND id = ANY(%s)
+                      AND status = 'confirmed'
+                      AND reconciliation_status = 'unreconciled'
+                    FOR UPDATE;
+                    """,
+                    (user_id, payment_method_id, ids),
+                )
+                selected = cur.fetchall()
+                if len(selected) != len(ids):
+                    raise ValueError(
+                        "Une transaction sélectionnée n’est plus disponible "
+                        "pour cette conciliation."
+                    )
+                for row in selected:
+                    transaction_total += (
+                        Decimal(row["amount"])
+                        if row["transaction_type"] == "expense"
+                        else -Decimal(row["amount"])
+                    )
+
+            if not ids and not include_opening_balance:
+                raise ValueError(
+                    "Sélectionnez au moins une transaction "
+                    "ou le solde initial."
+                )
+
+            selected_total = transaction_total + opening_amount
+            difference = (
+                parsed_statement_balance - selected_total
+                if parsed_statement_balance is not None
+                else None
+            )
+
+            cur.execute(
+                """
+                INSERT INTO finance_reconciliation_sessions (
+                    user_id,
+                    payment_method_id,
+                    statement_date,
+                    statement_balance,
+                    due_date,
+                    reconciliation_date,
+                    note,
+                    selected_total,
+                    difference,
+                    included_opening_balance,
+                    opening_balance_amount
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s
+                )
+                RETURNING id;
+                """,
+                (
+                    user_id,
+                    payment_method_id,
+                    parsed_statement_date,
+                    parsed_statement_balance,
+                    parsed_due_date,
+                    parsed_reconciliation_date,
+                    cleaned_note,
+                    selected_total,
+                    difference,
+                    bool(include_opening_balance),
+                    opening_amount,
+                ),
+            )
+            session_id = int(cur.fetchone()["id"])
+
+            for transaction_id in ids:
+                cur.execute(
+                    """
+                    INSERT INTO finance_reconciliation_session_transactions (
+                        session_id,
+                        transaction_id
+                    )
+                    VALUES (%s, %s);
+                    """,
+                    (session_id, transaction_id),
+                )
+
+            if ids:
+                cur.execute(
+                    """
+                    UPDATE finance_transactions
+                    SET reconciliation_status = 'reconciled',
+                        reconciliation_date = %s,
+                        reconciliation_session_id = %s,
+                        updated_at = NOW()
+                    WHERE user_id = %s
+                      AND id = ANY(%s);
+                    """,
+                    (
+                        parsed_reconciliation_date,
+                        session_id,
+                        user_id,
+                        ids,
+                    ),
+                )
+
+            if include_opening_balance:
+                cur.execute(
+                    """
+                    UPDATE finance_payment_methods
+                    SET opening_balance_reconciled = TRUE,
+                        updated_at = NOW()
+                    WHERE id = %s AND user_id = %s;
+                    """,
+                    (payment_method_id, user_id),
+                )
+
+            conn.commit()
+
+    return {
+        "session_id": session_id,
+        "selected_total": selected_total,
+        "difference": difference,
+        "transaction_count": len(ids),
+    }
+
+
+def list_reconciliation_sessions(
+    user_id,
+    payment_method_id=None,
+    include_cancelled=True,
+    limit=100,
+):
+    conditions = ["session.user_id = %s"]
+    params = [user_id]
+    if payment_method_id:
+        conditions.append("session.payment_method_id = %s")
+        params.append(payment_method_id)
+    if not include_cancelled:
+        conditions.append("session.status = 'completed'")
+    params.append(int(limit))
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT
+                    session.*,
+                    method.name AS payment_method_name,
+                    COUNT(link.transaction_id)
+                        FILTER (WHERE link.is_active = TRUE)
+                        AS active_transaction_count,
+                    COUNT(link.transaction_id)
+                        FILTER (WHERE link.is_active = FALSE)
+                        AS removed_transaction_count
+                FROM finance_reconciliation_sessions AS session
+                JOIN finance_payment_methods AS method
+                    ON method.id = session.payment_method_id
+                LEFT JOIN finance_reconciliation_session_transactions AS link
+                    ON link.session_id = session.id
+                WHERE {" AND ".join(conditions)}
+                GROUP BY session.id, method.id
+                ORDER BY
+                    session.statement_date DESC,
+                    session.id DESC
+                LIMIT %s;
+                """,
+                params,
+            )
+            return cur.fetchall()
+
+
+def get_reconciliation_session(
+    user_id,
+    session_id,
+):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    session.*,
+                    method.name AS payment_method_name
+                FROM finance_reconciliation_sessions AS session
+                JOIN finance_payment_methods AS method
+                    ON method.id = session.payment_method_id
+                WHERE session.id = %s
+                  AND session.user_id = %s;
+                """,
+                (session_id, user_id),
+            )
+            session = cur.fetchone()
+            if not session:
+                raise ValueError("Séance de conciliation introuvable.")
+
+            cur.execute(
+                """
+                SELECT
+                    transaction.id,
+                    transaction.transaction_date,
+                    transaction.transaction_type,
+                    transaction.amount,
+                    transaction.description,
+                    transaction.reconciliation_date,
+                    link.is_active,
+                    link.removed_at
+                FROM finance_reconciliation_session_transactions AS link
+                JOIN finance_transactions AS transaction
+                    ON transaction.id = link.transaction_id
+                WHERE link.session_id = %s
+                ORDER BY
+                    transaction.transaction_date,
+                    transaction.id;
+                """,
+                (session_id,),
+            )
+            transactions = cur.fetchall()
+
+    return {
+        "session": session,
+        "transactions": transactions,
+    }
+
+
+def remove_transaction_from_reconciliation_session(
+    user_id,
+    session_id,
+    transaction_id,
+):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT status
+                FROM finance_reconciliation_sessions
+                WHERE id = %s AND user_id = %s
+                FOR UPDATE;
+                """,
+                (session_id, user_id),
+            )
+            session = cur.fetchone()
+            if not session:
+                raise ValueError("Séance de conciliation introuvable.")
+            if session["status"] != "completed":
+                raise ValueError("Cette séance est déjà annulée.")
+
+            cur.execute(
+                """
+                UPDATE finance_reconciliation_session_transactions
+                SET is_active = FALSE,
+                    removed_at = NOW()
+                WHERE session_id = %s
+                  AND transaction_id = %s
+                  AND is_active = TRUE;
+                """,
+                (session_id, transaction_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError(
+                    "Cette transaction ne fait plus partie de la séance."
+                )
+
+            cur.execute(
+                """
+                UPDATE finance_transactions
+                SET reconciliation_status = 'unreconciled',
+                    reconciliation_date = NULL,
+                    reconciliation_session_id = NULL,
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND user_id = %s;
+                """,
+                (transaction_id, user_id),
+            )
+            _refresh_reconciliation_session_totals(cur, session_id)
+            conn.commit()
+
+
+def cancel_reconciliation_session(
+    user_id,
+    session_id,
+):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM finance_reconciliation_sessions
+                WHERE id = %s AND user_id = %s
+                FOR UPDATE;
+                """,
+                (session_id, user_id),
+            )
+            session = cur.fetchone()
+            if not session:
+                raise ValueError("Séance de conciliation introuvable.")
+            if session["status"] == "cancelled":
+                raise ValueError("Cette séance est déjà annulée.")
+
+            cur.execute(
+                """
+                SELECT transaction_id
+                FROM finance_reconciliation_session_transactions
+                WHERE session_id = %s
+                  AND is_active = TRUE;
+                """,
+                (session_id,),
+            )
+            ids = [int(row["transaction_id"]) for row in cur.fetchall()]
+
+            if ids:
+                cur.execute(
+                    """
+                    UPDATE finance_transactions
+                    SET reconciliation_status = 'unreconciled',
+                        reconciliation_date = NULL,
+                        reconciliation_session_id = NULL,
+                        updated_at = NOW()
+                    WHERE user_id = %s
+                      AND id = ANY(%s);
+                    """,
+                    (user_id, ids),
+                )
+                cur.execute(
+                    """
+                    UPDATE finance_reconciliation_session_transactions
+                    SET is_active = FALSE,
+                        removed_at = NOW()
+                    WHERE session_id = %s
+                      AND is_active = TRUE;
+                    """,
+                    (session_id,),
+                )
+
+            if session["included_opening_balance"]:
+                cur.execute(
+                    """
+                    UPDATE finance_payment_methods
+                    SET opening_balance_reconciled = FALSE,
+                        updated_at = NOW()
+                    WHERE id = %s AND user_id = %s;
+                    """,
+                    (session["payment_method_id"], user_id),
+                )
+
+            cur.execute(
+                """
+                UPDATE finance_reconciliation_sessions
+                SET status = 'cancelled',
+                    cancelled_at = NOW()
+                WHERE id = %s;
+                """,
+                (session_id,),
+            )
+            conn.commit()
+
+
+def list_reconciliation_session_links(user_id):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    link.*,
+                    session.user_id
+                FROM finance_reconciliation_session_transactions AS link
+                JOIN finance_reconciliation_sessions AS session
+                    ON session.id = link.session_id
+                WHERE session.user_id = %s
+                ORDER BY link.session_id, link.transaction_id;
+                """,
+                (user_id,),
+            )
+            return cur.fetchall()
+
+
 def export_finances(user_id):
     transactions = list_transactions(
         user_id,
@@ -3171,6 +4194,14 @@ def export_finances(user_id):
     goals = list_goals(
         user_id
     )
+    reconciliation_sessions = list_reconciliation_sessions(
+        user_id,
+        include_cancelled=True,
+        limit=100000,
+    )
+    reconciliation_session_links = list_reconciliation_session_links(
+        user_id
+    )
 
     csv_buffer = io.StringIO()
     writer = csv.writer(
@@ -3192,6 +4223,7 @@ def export_finances(user_id):
             "Récurrence",
             "Source importation",
             "Clé importation",
+            "Séance de conciliation",
         ]
     )
 
@@ -3260,6 +4292,10 @@ def export_finances(user_id):
                     "import_key"
                 )
                 or "",
+                row.get(
+                    "reconciliation_session_id"
+                )
+                or "",
             ]
         )
 
@@ -3296,7 +4332,7 @@ def export_finances(user_id):
 
     payload = {
         "format": "JF Apps Finances",
-        "version": "1.2.0",
+        "version": "1.3.0",
         "categories": [
             serial(
                 dict(row)
@@ -3332,6 +4368,14 @@ def export_finances(user_id):
                 dict(row)
             )
             for row in goals
+        ],
+        "reconciliation_sessions": [
+            serial(dict(row))
+            for row in reconciliation_sessions
+        ],
+        "reconciliation_session_transactions": [
+            serial(dict(row))
+            for row in reconciliation_session_links
         ],
     }
 

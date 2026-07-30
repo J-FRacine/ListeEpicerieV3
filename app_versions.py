@@ -3,10 +3,30 @@ from __future__ import annotations
 PORTAL_VERSION = "1.0.0"
 
 APP_VERSIONS = {
-    "finances": "1.1.0",
+    "finances": "1.2.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "version": "1.2.0",
+        "date": "2026-07-30",
+        "title": "Finances — paiements et conciliation",
+        "summary": (
+            "Ajout des modes de paiement, de la conciliation mensuelle, "
+            "des KPI par catégorie et étiquette et d’un historique "
+            "plus structuré."
+        ),
+        "changes": [
+            "Modes de paiement configurables et réordonnables.",
+            "Mode de paiement par transaction et par récurrence.",
+            "Statut À concilier ou Conciliée avec date facultative.",
+            "Filtres et résumé mensuel de conciliation.",
+            "Revenus placés dans une colonne distincte sur grand écran.",
+            "Montants alignés à droite dans l’historique et les KPI.",
+            "KPI mensuels par catégorie et par étiquette.",
+            "Importations et exportations enrichies des données de paiement.",
+        ],
+    },
     {
         "version": "1.1.0",
         "date": "2026-07-29",

@@ -113,19 +113,20 @@ Sur téléphone, ces outils sont présentés sous forme d’icônes afin de cons
 """,
     },
     {
-        "title": "Finances — V1.1.0",
+        "title": "Finances — V1.2.0",
         "icon": "account_balance_wallet",
-        "caption": "Dépenses variables, revenus et objectifs mensuels",
+        "caption": "Dépenses variables, revenus, objectifs et conciliation",
         "keywords": (
             "finances dépenses revenus récurrences catégories "
-            "sous-catégories étiquettes objectifs report csv json"
+            "sous-catégories étiquettes objectifs report csv json "
+            "paiement conciliation carte crédit KPI"
         ),
         "content": """
 ### Objectif de la V1
 
 La V1 de **Finances** sert au suivi manuel des dépenses variables et des revenus. Elle ne constitue pas encore une comptabilité complète.
 
-Les comptes bancaires, rapprochements, transferts et écritures comptables sont prévus seulement pour une version future, probablement V3 ou V4.
+Les comptes bancaires, rapprochements comptables, transferts et écritures comptables sont prévus seulement pour une version future, probablement V3 ou V4. Les modes de paiement et la conciliation de la V1 préparent cette évolution sans imposer une comptabilité complète.
 
 ### Confidentialité
 
@@ -133,7 +134,18 @@ Toutes les données financières sont strictement privées à l’utilisateur co
 
 ### Saisie rapide
 
-La saisie permet d’enregistrer une dépense ou un revenu, la date, le montant, une description, une catégorie ou sous-catégorie, plusieurs étiquettes, une note facultative et un statut confirmé ou prévu.
+La saisie permet d’enregistrer :
+
+- une dépense ou un revenu;
+- la date;
+- le montant;
+- une description;
+- une catégorie ou sous-catégorie;
+- plusieurs étiquettes;
+- un mode de paiement;
+- une note facultative;
+- un statut confirmé ou prévu;
+- un statut de conciliation.
 
 Les champs principaux sont compacts pour faciliter l’utilisation sur téléphone.
 
@@ -143,6 +155,42 @@ Une transaction peut avoir une catégorie ou une sous-catégorie, ainsi que plus
 
 Une même dépense peut compter dans plusieurs objectifs par étiquette. Les objectifs par étiquette ne doivent donc pas être additionnés pour calculer le total général.
 
+### Modes de paiement
+
+L’onglet **Organisation** contient une section **Modes de paiement**.
+
+Les valeurs initiales sont :
+
+- **MC Canadian Tire**;
+- **MC PC**;
+- **Visa Desjardins**;
+- **Direct**.
+
+L’utilisateur peut ajouter, renommer, désactiver et réordonner ses propres modes de paiement.
+
+Une transaction utilise un seul mode de paiement. Une transaction récurrente peut mémoriser son mode de paiement par défaut.
+
+### Conciliation
+
+Chaque transaction possède un statut distinct :
+
+- **À concilier**;
+- **Conciliée**.
+
+Une date de conciliation peut être inscrite, mais elle demeure facultative.
+
+Dans l’historique, le bouton de conciliation permet de marquer rapidement une transaction comme conciliée ou de la remettre à concilier.
+
+Les filtres permettent de sélectionner un mode de paiement et un statut de conciliation.
+
+Le tableau de bord présente, pour chaque mode de paiement utilisé pendant le mois :
+
+- les dépenses;
+- les revenus;
+- les dépenses à concilier;
+- les revenus à concilier;
+- le nombre de transactions restant à concilier.
+
 ### Transactions récurrentes
 
 Une dépense ou un revenu récurrent peut être configuré en jours, semaines, mois ou années.
@@ -151,6 +199,8 @@ Deux modes sont disponibles :
 
 - **À confirmer** : l’occurrence devient une transaction prévue;
 - **Création automatique** : l’occurrence est immédiatement confirmée.
+
+La récurrence peut aussi mémoriser une catégorie, des étiquettes et un mode de paiement par défaut.
 
 ### Objectifs mensuels
 
@@ -165,11 +215,39 @@ Chaque objectif possède une politique de report :
 
 Un plafond de report facultatif peut être défini. Les mois déjà créés conservent leur montant de base et leur politique même si l’objectif est modifié plus tard.
 
-### Tableau de bord et historique
+### Tableau de bord
 
-Le tableau de bord affiche les dépenses, revenus, différence, transactions prévues et progression des objectifs.
+Le tableau de bord affiche :
 
-L’historique compact regroupe les transactions par date et permet de filtrer par dates, type, statut, catégorie, étiquette et texte.
+- les dépenses;
+- les revenus;
+- la différence;
+- les transactions prévues;
+- la progression des objectifs;
+- des KPI mensuels par catégorie;
+- des KPI mensuels par étiquette;
+- un résumé de conciliation par mode de paiement.
+
+Les montants sont alignés à droite afin de faciliter la comparaison visuelle.
+
+### Historique compact
+
+L’historique regroupe les transactions par date.
+
+Sur grand écran, les dépenses apparaissent dans la colonne de gauche et les revenus dans la colonne de droite. Sur téléphone, les deux sections sont empilées afin de préserver la lisibilité.
+
+Tous les montants sont alignés à droite. Les descriptions, catégories, étiquettes et modes de paiement restent alignés à gauche.
+
+Les filtres permettent de chercher par :
+
+- dates;
+- type;
+- statut de transaction;
+- catégorie;
+- étiquette;
+- mode de paiement;
+- statut de conciliation;
+- texte.
 
 ### Importer
 
@@ -179,15 +257,22 @@ L’onglet **Exporter** contient aussi la zone d’importation. Les formats reco
 - le CSV exporté par JF Apps;
 - le JSON exporté par JF Apps.
 
-Avant l’importation, l’application présente le nombre de transactions valides, les transactions déjà importées, les doublons possibles, les catégories et les étiquettes détectées.
+Avant l’importation, l’application présente le nombre de transactions valides, les transactions déjà importées, les doublons possibles, les catégories, les étiquettes et les modes de paiement détectés.
 
-Les catégories et étiquettes absentes sont créées automatiquement. Par défaut, les transactions identiques déjà présentes sont ignorées. Cette protection peut être désactivée dans la prévisualisation lorsqu’il s’agit réellement de deux dépenses distinctes.
+Les catégories, étiquettes et modes de paiement absents sont créés automatiquement.
 
 Pour les exports Spendee contenant un horodatage UTC, la date est convertie selon le fuseau **America/Toronto**, adapté au Québec.
 
 ### Exporter
 
-L’onglet **Exporter** produit un fichier CSV pour Excel et un fichier JSON complet de sécurité. Les futures exportations contiennent aussi une source et une clé d’importation afin d’éviter de réimporter deux fois les mêmes transactions.
+L’onglet **Exporter** produit un fichier CSV pour Excel et un fichier JSON complet de sécurité.
+
+Les exportations contiennent maintenant :
+
+- le mode de paiement;
+- le statut de conciliation;
+- la date de conciliation;
+- la source et la clé d’importation.
 
 ### Versions
 

@@ -13,30 +13,39 @@ from finances_data import (
     CARRY_POLICIES,
     CONFIRMATION_MODES,
     FREQUENCY_UNITS,
+    RECONCILIATION_STATUSES,
     TRANSACTION_STATUSES,
     TRANSACTION_TYPES,
+    dashboard_expense_kpis,
     dashboard_summary,
     delete_transaction,
     ensure_default_finance_categories,
+    ensure_default_finance_payment_methods,
     export_finances,
     generate_due_recurrences,
     get_transaction,
     goal_progress,
+    import_finance_rows,
     list_categories,
     list_goals,
+    list_payment_methods,
     list_recurrences,
     list_tags,
     list_transactions,
+    move_payment_method,
+    payment_reconciliation_summary,
     prepare_finance_import,
-    import_finance_rows,
     save_category,
     save_goal,
+    save_payment_method,
     save_recurrence,
     save_tag,
     save_transaction,
+    set_transaction_reconciliation,
     set_transaction_status,
     toggle_category,
     toggle_goal,
+    toggle_payment_method,
     toggle_recurrence,
     toggle_tag,
 )
@@ -44,111 +53,309 @@ from finances_data import (
 
 FINANCE_CSS = r"""
 .jf-finance-summary-grid {
-    display:grid;
-    grid-template-columns:repeat(3,minmax(0,1fr));
-    gap:.4rem;
-    width:100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .45rem;
+    width: 100%;
 }
 .jf-finance-summary {
-    padding:.55rem .5rem;
-    border:1px solid var(--jf-border);
-    border-radius:11px;
-    background:var(--jf-surface);
+    min-width: 0;
+    padding: .58rem .58rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 11px;
+    background: var(--jf-surface);
 }
-.jf-finance-summary-label {color:var(--jf-muted);font-size:.66rem;}
+.jf-finance-summary-label {
+    color: var(--jf-muted);
+    font-size: .66rem;
+}
 .jf-finance-summary-value {
-    color:var(--jf-navy);
-    font-size:1rem;
-    font-weight:850;
-    white-space:nowrap;
+    width: 100%;
+    color: var(--jf-navy);
+    font-size: 1rem;
+    font-weight: 850;
+    text-align: right;
+    white-space: nowrap;
 }
-.body--dark .jf-finance-summary-value {color:#dceaf6;}
+.body--dark .jf-finance-summary-value {
+    color: #dceaf6;
+}
 .jf-finance-form-grid {
-    display:grid;
-    grid-template-columns:minmax(7rem,.7fr) minmax(8rem,.8fr) minmax(12rem,1.5fr);
-    gap:.5rem;
-    width:100%;
+    display: grid;
+    grid-template-columns:
+        minmax(7rem, .7fr)
+        minmax(8rem, .8fr)
+        minmax(12rem, 1.5fr);
+    gap: .5rem;
+    width: 100%;
 }
-.jf-finance-field .q-field__control {min-height:40px;height:40px;}
-.jf-finance-list {display:flex;flex-direction:column;gap:.3rem;width:100%;}
-.jf-finance-day {
-    padding:.25rem .5rem;
-    border-left:4px solid var(--jf-blue);
-    border-radius:8px;
-    background:var(--jf-blue-soft);
-    font-size:.76rem;
-    font-weight:800;
+.jf-finance-field .q-field__control {
+    min-height: 40px;
+    height: 40px;
 }
-.jf-finance-row {
-    display:grid;
-    grid-template-columns:minmax(0,1fr) auto auto;
-    grid-template-areas:"main amount actions" "meta amount actions";
-    align-items:center;
-    gap:.05rem .4rem;
-    min-height:44px;
-    padding:.3rem .4rem;
-    border:1px solid var(--jf-border);
-    border-radius:9px;
-    background:var(--jf-surface);
-}
-.jf-finance-main {
-    grid-area:main;
-    min-width:0;
-    overflow:hidden;
-    text-overflow:ellipsis;
-    white-space:nowrap;
-    font-size:.84rem;
-    font-weight:800;
-}
-.jf-finance-meta {
-    grid-area:meta;
-    min-width:0;
-    overflow:hidden;
-    text-overflow:ellipsis;
-    white-space:nowrap;
-    color:var(--jf-muted);
-    font-size:.67rem;
-}
-.jf-finance-amount {
-    grid-area:amount;
-    justify-self:end;
-    font-size:.9rem;
-    font-weight:850;
-    white-space:nowrap;
-}
-.jf-finance-actions {grid-area:actions;display:flex;gap:0;}
-.jf-finance-expense {color:#a33b46;}
-.jf-finance-income {color:#187148;}
 .jf-finance-card {
-    width:100%;
-    padding:.55rem .65rem;
-    border:1px solid var(--jf-border);
-    border-radius:10px;
-    background:var(--jf-surface);
+    width: 100%;
+    padding: .55rem .65rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 10px;
+    background: var(--jf-surface);
+}
+.jf-finance-expense {
+    color: #a33b46;
+}
+.jf-finance-income {
+    color: #187148;
 }
 .jf-finance-progress {
-    width:100%;
-    height:7px;
-    overflow:hidden;
-    border-radius:99px;
-    background:rgba(120,130,145,.18);
+    width: 100%;
+    height: 7px;
+    overflow: hidden;
+    border-radius: 99px;
+    background: rgba(120, 130, 145, .18);
 }
 .jf-finance-progress > div {
-    height:100%;
-    border-radius:99px;
-    background:var(--jf-blue);
+    height: 100%;
+    border-radius: 99px;
+    background: var(--jf-blue);
 }
-@media(max-width:680px){
-    .jf-finance-form-grid {grid-template-columns:1fr 1fr;}
-    .jf-finance-description {grid-column:1/-1;}
-    .jf-finance-summary-value {font-size:.86rem;}
+.jf-finance-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .55rem;
+    width: 100%;
 }
-@media(max-width:430px){
-    .jf-finance-summary-label {font-size:.59rem;}
-    .jf-finance-summary-value {font-size:.76rem;}
+.jf-finance-kpi-list {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    width: 100%;
+}
+.jf-finance-kpi-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .5rem;
+    width: 100%;
+    padding: .28rem 0;
+    border-bottom: 1px solid var(--jf-border);
+}
+.jf-finance-kpi-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .78rem;
+}
+.jf-finance-kpi-value {
+    justify-self: end;
+    min-width: 6.5rem;
+    font-size: .78rem;
+    font-weight: 800;
+    text-align: right;
+    white-space: nowrap;
+}
+.jf-finance-reconciliation-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .5rem;
+    width: 100%;
+}
+.jf-finance-reconciliation-card {
+    width: 100%;
+    padding: .5rem .6rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 10px;
+    background: var(--jf-surface);
+}
+.jf-finance-reconciliation-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: .45rem;
+    width: 100%;
+    font-size: .72rem;
+}
+.jf-finance-reconciliation-value {
+    justify-self: end;
+    min-width: 6.4rem;
+    font-weight: 800;
+    text-align: right;
+    white-space: nowrap;
+}
+.jf-finance-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+    width: 100%;
+}
+.jf-finance-history-day {
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid var(--jf-border);
+    border-radius: 12px;
+    background: var(--jf-surface);
+}
+.jf-finance-day {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    width: 100%;
+    padding: .3rem .55rem;
+    border-left: 4px solid var(--jf-blue);
+    background: var(--jf-blue-soft);
+    font-size: .76rem;
+    font-weight: 800;
+}
+.jf-finance-history-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    width: 100%;
+}
+.jf-finance-history-column {
+    min-width: 0;
+    padding: .4rem;
+}
+.jf-finance-history-column + .jf-finance-history-column {
+    border-left: 1px solid var(--jf-border);
+}
+.jf-finance-history-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .4rem;
+    padding: 0 .15rem .3rem;
+    color: var(--jf-muted);
+    font-size: .66rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+.jf-finance-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+        "main amount actions"
+        "meta amount actions";
+    align-items: center;
+    gap: .05rem .38rem;
+    width: 100%;
+    min-height: 43px;
+    padding: .28rem .35rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 9px;
+    background: var(--jf-surface);
+}
+.jf-finance-row + .jf-finance-row {
+    margin-top: .28rem;
+}
+.jf-finance-main {
+    grid-area: main;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .82rem;
+    font-weight: 800;
+}
+.jf-finance-meta {
+    grid-area: meta;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--jf-muted);
+    font-size: .65rem;
+}
+.jf-finance-amount {
+    grid-area: amount;
+    justify-self: end;
+    min-width: 6.6rem;
+    font-size: .86rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 850;
+    text-align: right;
+    white-space: nowrap;
+}
+.jf-finance-actions {
+    grid-area: actions;
+    display: flex;
+    gap: 0;
+    justify-self: end;
+}
+.jf-finance-payment-chip,
+.jf-finance-reconciliation-chip {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: .08rem .32rem;
+    border-radius: 999px;
+    font-size: .58rem;
+    font-weight: 800;
+}
+.jf-finance-payment-chip {
+    color: var(--jf-blue);
+    background: var(--jf-blue-soft);
+}
+.jf-finance-reconciliation-chip {
+    color: #73500f;
+    background: rgba(199, 151, 65, .17);
+}
+.jf-finance-reconciled-chip {
+    color: #176848;
+    background: rgba(33, 145, 92, .15);
+}
+.jf-finance-empty-column {
+    padding: .55rem .25rem;
+    color: var(--jf-muted);
+    font-size: .7rem;
+    text-align: center;
+}
+.jf-finance-payment-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .35rem;
+    width: 100%;
+}
+.jf-finance-payment-order {
+    display: flex;
+    gap: 0;
+}
+@media (max-width: 760px) {
+    .jf-finance-form-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    .jf-finance-description {
+        grid-column: 1 / -1;
+    }
+    .jf-finance-summary-value {
+        font-size: .86rem;
+    }
+    .jf-finance-kpi-grid,
+    .jf-finance-reconciliation-grid,
+    .jf-finance-history-columns {
+        grid-template-columns: 1fr;
+    }
+    .jf-finance-history-column + .jf-finance-history-column {
+        border-left: 0;
+        border-top: 1px solid var(--jf-border);
+    }
+}
+@media (max-width: 430px) {
+    .jf-finance-summary-label {
+        font-size: .59rem;
+    }
+    .jf-finance-summary-value {
+        font-size: .76rem;
+    }
     .jf-finance-row {
-        grid-template-columns:minmax(0,1fr) auto;
-        grid-template-areas:"main amount" "meta actions";
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "main amount"
+            "meta actions";
+    }
+    .jf-finance-amount {
+        min-width: 5.8rem;
     }
 }
 """
@@ -192,98 +399,327 @@ def _tag_options(user_id):
         for row in list_tags(user_id)
     }
 
+def _payment_options(
+    user_id,
+    include_none=True,
+):
+    options = {}
 
-def _transaction_dialog(user_id, on_saved, transaction=None):
+    if include_none:
+        options[
+            None
+        ] = "Aucun"
+
+    for row in list_payment_methods(
+        user_id
+    ):
+        options[
+            int(row["id"])
+        ] = row["name"]
+
+    return options
+
+
+
+def _transaction_dialog(
+    user_id,
+    on_saved,
+    transaction=None,
+):
+    payment_options = _payment_options(
+        user_id
+    )
+
     with ui.dialog() as dialog:
-        with ui.card().classes("w-full max-w-2xl p-4"):
+        with ui.card().classes(
+            "w-full max-w-2xl p-4"
+        ):
             ui.label(
-                "Modifier la transaction" if transaction else "Nouvelle transaction"
-            ).classes("text-xl font-bold")
+                (
+                    "Modifier la transaction"
+                    if transaction
+                    else "Nouvelle transaction"
+                )
+            ).classes(
+                "text-xl font-bold"
+            )
 
             kind = ui.toggle(
                 TRANSACTION_TYPES,
-                value=transaction["transaction_type"] if transaction else "expense",
-            ).props("dense spread no-caps").classes("w-full")
-
-            with ui.element("div").classes("jf-finance-form-grid"):
-                amount = ui.number(
-                    label="Montant",
-                    value=transaction["amount"] if transaction else None,
-                    min=.01,
-                    step=.01,
-                ).props("dense outlined").classes("jf-finance-field")
-                when = ui.input(
-                    label="Date",
-                    value=(
-                        transaction["transaction_date"].isoformat()
-                        if transaction else date.today().isoformat()
-                    ),
-                ).props("type=date dense outlined").classes("jf-finance-field")
-                description = ui.input(
-                    label="Description",
-                    value=transaction["description"] if transaction else "",
-                ).props("dense outlined maxlength=160").classes(
-                    "jf-finance-field jf-finance-description"
-                )
-
-            category = ui.select(
-                {None: "Aucune", **_category_options(user_id)},
-                value=transaction["category_id"] if transaction else None,
-                label="Catégorie ou sous-catégorie",
-            ).props("dense outlined clearable options-dense").classes("w-full")
-
-            tags = ui.select(
-                _tag_options(user_id),
-                value=list(transaction["tag_ids"]) if transaction else [],
-                label="Étiquettes",
-                multiple=True,
-            ).props("dense outlined use-chips clearable options-dense").classes(
+                value=(
+                    transaction[
+                        "transaction_type"
+                    ]
+                    if transaction
+                    else "expense"
+                ),
+            ).props(
+                "dense spread no-caps"
+            ).classes(
                 "w-full"
             )
 
-            with ui.expansion("Plus d’options", icon="tune").classes("w-full"):
+            with ui.element(
+                "div"
+            ).classes(
+                "jf-finance-form-grid"
+            ):
+                amount = ui.number(
+                    label="Montant",
+                    value=(
+                        transaction["amount"]
+                        if transaction
+                        else None
+                    ),
+                    min=.01,
+                    step=.01,
+                ).props(
+                    "dense outlined"
+                ).classes(
+                    "jf-finance-field"
+                )
+
+                when = ui.input(
+                    label="Date",
+                    value=(
+                        transaction[
+                            "transaction_date"
+                        ].isoformat()
+                        if transaction
+                        else date.today().isoformat()
+                    ),
+                ).props(
+                    "type=date dense outlined"
+                ).classes(
+                    "jf-finance-field"
+                )
+
+                description = ui.input(
+                    label="Description",
+                    value=(
+                        transaction[
+                            "description"
+                        ]
+                        if transaction
+                        else ""
+                    ),
+                ).props(
+                    "dense outlined maxlength=160"
+                ).classes(
+                    "jf-finance-field "
+                    "jf-finance-description"
+                )
+
+            with ui.row().classes(
+                "w-full gap-2 flex-wrap"
+            ):
+                category = ui.select(
+                    {
+                        None: "Aucune",
+                        **_category_options(
+                            user_id
+                        ),
+                    },
+                    value=(
+                        transaction[
+                            "category_id"
+                        ]
+                        if transaction
+                        else None
+                    ),
+                    label=(
+                        "Catégorie ou "
+                        "sous-catégorie"
+                    ),
+                ).props(
+                    "dense outlined clearable "
+                    "options-dense"
+                ).classes(
+                    "min-w-56 grow"
+                )
+
+                payment_method = ui.select(
+                    payment_options,
+                    value=(
+                        transaction.get(
+                            "payment_method_id"
+                        )
+                        if transaction
+                        else None
+                    ),
+                    label="Mode de paiement",
+                ).props(
+                    "dense outlined clearable "
+                    "options-dense"
+                ).classes(
+                    "min-w-48 grow"
+                )
+
+            tags = ui.select(
+                _tag_options(
+                    user_id
+                ),
+                value=(
+                    list(
+                        transaction[
+                            "tag_ids"
+                        ]
+                    )
+                    if transaction
+                    else []
+                ),
+                label="Étiquettes",
+                multiple=True,
+            ).props(
+                "dense outlined use-chips "
+                "clearable options-dense"
+            ).classes(
+                "w-full"
+            )
+
+            with ui.expansion(
+                "Plus d’options",
+                icon="tune",
+            ).classes(
+                "w-full"
+            ):
                 status = ui.select(
                     TRANSACTION_STATUSES,
-                    value=transaction["status"] if transaction else "confirmed",
-                    label="Statut",
-                ).props("dense outlined options-dense").classes("w-full")
+                    value=(
+                        transaction["status"]
+                        if transaction
+                        else "confirmed"
+                    ),
+                    label="Statut de transaction",
+                ).props(
+                    "dense outlined options-dense"
+                ).classes(
+                    "w-full"
+                )
+
+                reconciled = ui.checkbox(
+                    "Transaction conciliée",
+                    value=(
+                        (
+                            transaction.get(
+                                "reconciliation_status"
+                            )
+                            == "reconciled"
+                        )
+                        if transaction
+                        else False
+                    ),
+                )
+
+                reconciliation_date = ui.input(
+                    label=(
+                        "Date de conciliation "
+                        "(facultative)"
+                    ),
+                    value=(
+                        transaction[
+                            "reconciliation_date"
+                        ].isoformat()
+                        if (
+                            transaction
+                            and transaction.get(
+                                "reconciliation_date"
+                            )
+                        )
+                        else ""
+                    ),
+                ).props(
+                    "type=date dense outlined"
+                ).classes(
+                    "w-full"
+                )
+
                 note = ui.textarea(
                     label="Note facultative",
-                    value=transaction["note"] if transaction else "",
-                ).props("dense outlined autogrow maxlength=1000").classes("w-full")
+                    value=(
+                        transaction["note"]
+                        if transaction
+                        else ""
+                    ),
+                ).props(
+                    "dense outlined autogrow "
+                    "maxlength=1000"
+                ).classes(
+                    "w-full"
+                )
 
             def save():
                 try:
                     save_transaction(
                         user_id=user_id,
-                        transaction_id=transaction["id"] if transaction else None,
+                        transaction_id=(
+                            transaction["id"]
+                            if transaction
+                            else None
+                        ),
                         transaction_date=when.value,
                         transaction_type=kind.value,
                         amount=amount.value,
                         description=description.value,
                         category_id=category.value,
                         tag_ids=tags.value or [],
+                        payment_method_id=(
+                            payment_method.value
+                        ),
                         note=note.value,
                         status=status.value,
+                        reconciliation_status=(
+                            "reconciled"
+                            if reconciled.value
+                            else "unreconciled"
+                        ),
+                        reconciliation_date=(
+                            reconciliation_date.value
+                            or None
+                        ),
                     )
                 except Exception as error:
-                    ui.notify(str(error), type="warning")
+                    ui.notify(
+                        str(error),
+                        type="warning",
+                    )
                     return
+
                 dialog.close()
-                ui.notify("Transaction enregistrée.", type="positive")
+                ui.notify(
+                    "Transaction enregistrée.",
+                    type="positive",
+                )
                 on_saved()
 
-            with ui.row().classes("w-full justify-end gap-2"):
-                ui.button("Annuler", on_click=dialog.close).props("flat dense")
-                ui.button("Enregistrer", icon="save", on_click=save).props(
+            with ui.row().classes(
+                "w-full justify-end gap-2"
+            ):
+                ui.button(
+                    "Annuler",
+                    on_click=dialog.close,
+                ).props(
+                    "flat dense"
+                )
+                ui.button(
+                    "Enregistrer",
+                    icon="save",
+                    on_click=save,
+                ).props(
                     "color=primary"
                 )
+
     dialog.open()
 
 
 def finances_panel(current_user, initial_section=None):
     user_id = current_user["id"]
-    ensure_default_finance_categories(user_id)
+    ensure_default_finance_categories(
+        user_id
+    )
+    ensure_default_finance_payment_methods(
+        user_id
+    )
 
     try:
         generate_due_recurrences(user_id)
@@ -331,6 +767,9 @@ def finances_panel(current_user, initial_section=None):
         "organisation": organization_tab,
         "categories": organization_tab,
         "etiquettes": organization_tab,
+        "étiquettes": organization_tab,
+        "paiements": organization_tab,
+        "conciliation": history_tab,
         "exporter": export_tab,
     }
 
@@ -340,136 +779,681 @@ def finances_panel(current_user, initial_section=None):
     ).classes("w-full bg-transparent"):
 
         # TABLEAU
-        with ui.tab_panel(dashboard_tab).classes("px-0"):
-            dashboard_box = ui.column().classes("w-full gap-2")
+        with ui.tab_panel(
+            dashboard_tab
+        ).classes(
+            "px-0"
+        ):
+            dashboard_box = ui.column().classes(
+                "w-full gap-2"
+            )
 
             @ui.refreshable
             def render_dashboard():
                 dashboard_box.clear()
-                summary = dashboard_summary(user_id, month_state["value"])
-                goals = goal_progress(user_id, month_state["value"])
+
+                summary = dashboard_summary(
+                    user_id,
+                    month_state["value"],
+                )
+                goals = goal_progress(
+                    user_id,
+                    month_state["value"],
+                )
+                kpis = dashboard_expense_kpis(
+                    user_id,
+                    month_state["value"],
+                )
+                reconciliation_rows = (
+                    payment_reconciliation_summary(
+                        user_id,
+                        month_state["value"],
+                    )
+                )
+
                 with dashboard_box:
                     with ui.row().classes(
-                        "w-full items-center justify-center gap-1"
+                        "w-full items-center "
+                        "justify-center gap-1"
                     ):
                         ui.button(
                             icon="chevron_left",
-                            on_click=lambda: change_month(-1),
-                        ).props("flat dense round")
-                        ui.label(_month_label(month_state["value"])).classes(
-                            "font-bold min-w-40 text-center"
+                            on_click=lambda: (
+                                change_month(-1)
+                            ),
+                        ).props(
+                            "flat dense round"
+                        )
+                        ui.label(
+                            _month_label(
+                                month_state[
+                                    "value"
+                                ]
+                            )
+                        ).classes(
+                            "font-bold min-w-40 "
+                            "text-center"
                         )
                         ui.button(
                             icon="chevron_right",
-                            on_click=lambda: change_month(1),
-                        ).props("flat dense round")
+                            on_click=lambda: (
+                                change_month(1)
+                            ),
+                        ).props(
+                            "flat dense round"
+                        )
 
-                    with ui.element("div").classes("jf-finance-summary-grid"):
+                    with ui.element(
+                        "div"
+                    ).classes(
+                        "jf-finance-summary-grid"
+                    ):
                         values = (
-                            ("Dépenses", summary["expenses"], "jf-finance-expense"),
-                            ("Revenus", summary["incomes"], "jf-finance-income"),
+                            (
+                                "Dépenses",
+                                summary[
+                                    "expenses"
+                                ],
+                                "jf-finance-expense",
+                            ),
+                            (
+                                "Revenus",
+                                summary[
+                                    "incomes"
+                                ],
+                                "jf-finance-income",
+                            ),
                             (
                                 "Différence",
-                                summary["difference"],
-                                "jf-finance-income"
-                                if summary["difference"] >= 0
-                                else "jf-finance-expense",
+                                summary[
+                                    "difference"
+                                ],
+                                (
+                                    "jf-finance-income"
+                                    if summary[
+                                        "difference"
+                                    ] >= 0
+                                    else (
+                                        "jf-finance-expense"
+                                    )
+                                ),
                             ),
                         )
-                        for label, value, css in values:
-                            with ui.element("div").classes("jf-finance-summary"):
-                                ui.label(label).classes("jf-finance-summary-label")
-                                ui.label(_money(value)).classes(
-                                    f"jf-finance-summary-value {css}"
+
+                        for (
+                            label,
+                            value,
+                            css,
+                        ) in values:
+                            with ui.element(
+                                "div"
+                            ).classes(
+                                "jf-finance-summary"
+                            ):
+                                ui.label(
+                                    label
+                                ).classes(
+                                    "jf-finance-summary-label"
+                                )
+                                ui.label(
+                                    _money(value)
+                                ).classes(
+                                    (
+                                        "jf-finance-summary-value "
+                                        f"{css}"
+                                    )
                                 )
 
-                    if summary["planned_count"]:
-                        with ui.element("div").classes("jf-finance-card"):
-                            ui.label(
-                                f"{summary['planned_count']} transaction(s) à confirmer"
-                            ).classes("text-sm font-bold")
+                    if summary[
+                        "planned_count"
+                    ]:
+                        with ui.element(
+                            "div"
+                        ).classes(
+                            "jf-finance-card"
+                        ):
+                            with ui.row().classes(
+                                "w-full items-center "
+                                "justify-between gap-2"
+                            ):
+                                ui.label(
+                                    (
+                                        f"{summary['planned_count']} "
+                                        "transaction(s) à confirmer"
+                                    )
+                                ).classes(
+                                    "text-sm font-bold"
+                                )
+                                ui.button(
+                                    "Voir",
+                                    on_click=lambda: ui.navigate.to(
+                                        "/?tab=finances&section=historique"
+                                    ),
+                                ).props(
+                                    "flat dense color=primary"
+                                )
 
                     if goals:
-                        ui.label("Objectifs du mois").classes(
+                        ui.label(
+                            "Objectifs du mois"
+                        ).classes(
                             "text-lg font-bold mt-1"
                         )
+
                         for goal in goals:
-                            percent = max(0, min(100, goal["percentage"]))
-                            with ui.element("div").classes("jf-finance-card"):
+                            percent = max(
+                                0,
+                                min(
+                                    100,
+                                    goal[
+                                        "percentage"
+                                    ],
+                                ),
+                            )
+
+                            with ui.element(
+                                "div"
+                            ).classes(
+                                "jf-finance-card"
+                            ):
                                 with ui.row().classes(
                                     "w-full justify-between gap-2"
                                 ):
-                                    ui.label(goal["target_name"]).classes(
+                                    ui.label(
+                                        goal[
+                                            "target_name"
+                                        ]
+                                    ).classes(
                                         "text-sm font-bold"
                                     )
                                     ui.label(
-                                        f"{_money(goal['spent'])} / "
-                                        f"{_money(goal['available'])}"
-                                    ).classes("text-xs font-bold")
-                                with ui.element("div").classes(
+                                        (
+                                            f"{_money(goal['spent'])} / "
+                                            f"{_money(goal['available'])}"
+                                        )
+                                    ).classes(
+                                        "text-xs font-bold "
+                                        "text-right"
+                                    )
+
+                                with ui.element(
+                                    "div"
+                                ).classes(
                                     "jf-finance-progress mt-1"
                                 ):
-                                    ui.element("div").style(
+                                    ui.element(
+                                        "div"
+                                    ).style(
                                         f"width:{percent:.1f}%"
                                     )
+
                                 with ui.row().classes(
                                     "w-full justify-between gap-2"
                                 ):
                                     ui.label(
-                                        f"Reste : {_money(goal['remaining'])}"
-                                    ).classes("text-xs jf-muted")
-                                    if goal["carry_in"]:
+                                        (
+                                            "Reste : "
+                                            f"{_money(goal['remaining'])}"
+                                        )
+                                    ).classes(
+                                        "text-xs jf-muted"
+                                    )
+                                    if goal[
+                                        "carry_in"
+                                    ]:
                                         ui.label(
-                                            f"Report : {_money(goal['carry_in'])}"
-                                        ).classes("text-xs jf-muted")
+                                            (
+                                                "Report : "
+                                                f"{_money(goal['carry_in'])}"
+                                            )
+                                        ).classes(
+                                            "text-xs jf-muted "
+                                            "text-right"
+                                        )
 
-            def change_month(offset):
-                month_state["value"] = _shift_month(
-                    month_state["value"], offset
+                    if (
+                        kpis["categories"]
+                        or kpis["tags"]
+                    ):
+                        ui.label(
+                            "KPI des dépenses"
+                        ).classes(
+                            "text-lg font-bold mt-1"
+                        )
+
+                        with ui.element(
+                            "div"
+                        ).classes(
+                            "jf-finance-kpi-grid"
+                        ):
+                            with ui.element(
+                                "section"
+                            ).classes(
+                                "jf-finance-card"
+                            ):
+                                ui.label(
+                                    "Par catégorie"
+                                ).classes(
+                                    "text-sm font-bold"
+                                )
+
+                                with ui.element(
+                                    "div"
+                                ).classes(
+                                    "jf-finance-kpi-list"
+                                ):
+                                    if not kpis[
+                                        "categories"
+                                    ]:
+                                        ui.label(
+                                            "Aucune dépense catégorisée."
+                                        ).classes(
+                                            "text-xs jf-muted"
+                                        )
+
+                                    for row in kpis[
+                                        "categories"
+                                    ]:
+                                        total = Decimal(
+                                            row[
+                                                "total"
+                                            ]
+                                        )
+                                        share = (
+                                            (
+                                                total
+                                                / summary[
+                                                    "expenses"
+                                                ]
+                                                * 100
+                                            )
+                                            if summary[
+                                                "expenses"
+                                            ] > 0
+                                            else Decimal(
+                                                "0"
+                                            )
+                                        )
+
+                                        with ui.element(
+                                            "div"
+                                        ).classes(
+                                            "jf-finance-kpi-row"
+                                        ):
+                                            ui.label(
+                                                (
+                                                    f"{row['name']} "
+                                                    f"({share:.0f} %)"
+                                                )
+                                            ).classes(
+                                                "jf-finance-kpi-name"
+                                            )
+                                            ui.label(
+                                                _money(total)
+                                            ).classes(
+                                                (
+                                                    "jf-finance-kpi-value "
+                                                    "jf-finance-expense"
+                                                )
+                                            )
+
+                            with ui.element(
+                                "section"
+                            ).classes(
+                                "jf-finance-card"
+                            ):
+                                ui.label(
+                                    "Par étiquette"
+                                ).classes(
+                                    "text-sm font-bold"
+                                )
+
+                                with ui.element(
+                                    "div"
+                                ).classes(
+                                    "jf-finance-kpi-list"
+                                ):
+                                    if not kpis[
+                                        "tags"
+                                    ]:
+                                        ui.label(
+                                            "Aucune dépense étiquetée."
+                                        ).classes(
+                                            "text-xs jf-muted"
+                                        )
+
+                                    for row in kpis[
+                                        "tags"
+                                    ]:
+                                        with ui.element(
+                                            "div"
+                                        ).classes(
+                                            "jf-finance-kpi-row"
+                                        ):
+                                            ui.label(
+                                                row["name"]
+                                            ).classes(
+                                                "jf-finance-kpi-name"
+                                            )
+                                            ui.label(
+                                                _money(
+                                                    row[
+                                                        "total"
+                                                    ]
+                                                )
+                                            ).classes(
+                                                (
+                                                    "jf-finance-kpi-value "
+                                                    "jf-finance-expense"
+                                                )
+                                            )
+
+                    if reconciliation_rows:
+                        ui.label(
+                            "Conciliation du mois"
+                        ).classes(
+                            "text-lg font-bold mt-1"
+                        )
+
+                        with ui.element(
+                            "div"
+                        ).classes(
+                            "jf-finance-reconciliation-grid"
+                        ):
+                            for row in reconciliation_rows:
+                                with ui.element(
+                                    "section"
+                                ).classes(
+                                    "jf-finance-reconciliation-card"
+                                ):
+                                    with ui.row().classes(
+                                        "w-full items-center "
+                                        "justify-between gap-2"
+                                    ):
+                                        ui.label(
+                                            row[
+                                                "payment_method_name"
+                                            ]
+                                        ).classes(
+                                            "text-sm font-bold"
+                                        )
+                                        ui.label(
+                                            (
+                                                f"{row['unreconciled_count']} "
+                                                "à concilier"
+                                            )
+                                        ).classes(
+                                            (
+                                                "jf-finance-"
+                                                "reconciliation-chip"
+                                            )
+                                        )
+
+                                    if Decimal(
+                                        row[
+                                            "expense_total"
+                                        ]
+                                    ) > 0:
+                                        with ui.element(
+                                            "div"
+                                        ).classes(
+                                            "jf-finance-"
+                                            "reconciliation-row"
+                                        ):
+                                            ui.label(
+                                                "Dépenses"
+                                            )
+                                            ui.label(
+                                                _money(
+                                                    row[
+                                                        "expense_total"
+                                                    ]
+                                                )
+                                            ).classes(
+                                                (
+                                                    "jf-finance-"
+                                                    "reconciliation-value "
+                                                    "jf-finance-expense"
+                                                )
+                                            )
+
+                                    if Decimal(
+                                        row[
+                                            "income_total"
+                                        ]
+                                    ) > 0:
+                                        with ui.element(
+                                            "div"
+                                        ).classes(
+                                            "jf-finance-"
+                                            "reconciliation-row"
+                                        ):
+                                            ui.label(
+                                                "Revenus"
+                                            )
+                                            ui.label(
+                                                _money(
+                                                    row[
+                                                        "income_total"
+                                                    ]
+                                                )
+                                            ).classes(
+                                                (
+                                                    "jf-finance-"
+                                                    "reconciliation-value "
+                                                    "jf-finance-income"
+                                                )
+                                            )
+
+                                    if Decimal(
+                                        row[
+                                            "unreconciled_expense_total"
+                                        ]
+                                    ) > 0:
+                                        with ui.element(
+                                            "div"
+                                        ).classes(
+                                            "jf-finance-"
+                                            "reconciliation-row"
+                                        ):
+                                            ui.label(
+                                                "Dépenses à concilier"
+                                            )
+                                            ui.label(
+                                                _money(
+                                                    row[
+                                                        "unreconciled_expense_total"
+                                                    ]
+                                                )
+                                            ).classes(
+                                                (
+                                                    "jf-finance-"
+                                                    "reconciliation-value "
+                                                    "jf-finance-expense"
+                                                )
+                                            )
+
+                                    if Decimal(
+                                        row[
+                                            "unreconciled_income_total"
+                                        ]
+                                    ) > 0:
+                                        with ui.element(
+                                            "div"
+                                        ).classes(
+                                            "jf-finance-"
+                                            "reconciliation-row"
+                                        ):
+                                            ui.label(
+                                                "Revenus à concilier"
+                                            )
+                                            ui.label(
+                                                _money(
+                                                    row[
+                                                        "unreconciled_income_total"
+                                                    ]
+                                                )
+                                            ).classes(
+                                                (
+                                                    "jf-finance-"
+                                                    "reconciliation-value "
+                                                    "jf-finance-income"
+                                                )
+                                            )
+
+            def change_month(
+                offset,
+            ):
+                month_state[
+                    "value"
+                ] = _shift_month(
+                    month_state[
+                        "value"
+                    ],
+                    offset,
                 )
                 render_dashboard.refresh()
 
             render_dashboard()
 
+
         # SAISIE
-        with ui.tab_panel(entry_tab).classes("px-0"):
-            with ui.card().classes("w-full max-w-2xl p-4"):
-                ui.label("Saisie rapide").classes("text-xl font-bold")
+        with ui.tab_panel(
+            entry_tab
+        ).classes(
+            "px-0"
+        ):
+            with ui.card().classes(
+                "w-full max-w-2xl p-4"
+            ):
+                ui.label(
+                    "Saisie rapide"
+                ).classes(
+                    "text-xl font-bold"
+                )
+
                 kind = ui.toggle(
-                    TRANSACTION_TYPES, value="expense"
-                ).props("dense spread no-caps").classes("w-full")
-                with ui.element("div").classes("jf-finance-form-grid"):
-                    amount = ui.number(
-                        label="Montant", min=.01, step=.01, format="%.2f"
-                    ).props("dense outlined").classes("jf-finance-field")
-                    when = ui.input(
-                        label="Date", value=date.today().isoformat()
-                    ).props("type=date dense outlined").classes("jf-finance-field")
-                    description = ui.input(
-                        label="Description"
-                    ).props("dense outlined maxlength=160").classes(
-                        "jf-finance-field jf-finance-description"
-                    )
-                category = ui.select(
-                    {None: "Aucune", **_category_options(user_id)},
-                    label="Catégorie ou sous-catégorie",
-                ).props("dense outlined clearable options-dense").classes("w-full")
-                tags = ui.select(
-                    _tag_options(user_id),
-                    label="Étiquettes",
-                    multiple=True,
-                ).props("dense outlined use-chips clearable options-dense").classes(
+                    TRANSACTION_TYPES,
+                    value="expense",
+                ).props(
+                    "dense spread no-caps"
+                ).classes(
                     "w-full"
                 )
-                with ui.expansion("Note et statut", icon="tune").classes("w-full"):
+
+                with ui.element(
+                    "div"
+                ).classes(
+                    "jf-finance-form-grid"
+                ):
+                    amount = ui.number(
+                        label="Montant",
+                        min=.01,
+                        step=.01,
+                    ).props(
+                        "dense outlined"
+                    ).classes(
+                        "jf-finance-field"
+                    )
+                    when = ui.input(
+                        label="Date",
+                        value=(
+                            date.today().isoformat()
+                        ),
+                    ).props(
+                        "type=date dense outlined"
+                    ).classes(
+                        "jf-finance-field"
+                    )
+                    description = ui.input(
+                        label="Description"
+                    ).props(
+                        "dense outlined maxlength=160"
+                    ).classes(
+                        "jf-finance-field "
+                        "jf-finance-description"
+                    )
+
+                with ui.row().classes(
+                    "w-full gap-2 flex-wrap"
+                ):
+                    category = ui.select(
+                        {
+                            None: "Aucune",
+                            **_category_options(
+                                user_id
+                            ),
+                        },
+                        label=(
+                            "Catégorie ou "
+                            "sous-catégorie"
+                        ),
+                    ).props(
+                        "dense outlined clearable "
+                        "options-dense"
+                    ).classes(
+                        "min-w-56 grow"
+                    )
+                    payment_method = ui.select(
+                        _payment_options(
+                            user_id
+                        ),
+                        label="Mode de paiement",
+                    ).props(
+                        "dense outlined clearable "
+                        "options-dense"
+                    ).classes(
+                        "min-w-48 grow"
+                    )
+
+                tags = ui.select(
+                    _tag_options(
+                        user_id
+                    ),
+                    label="Étiquettes",
+                    multiple=True,
+                ).props(
+                    "dense outlined use-chips "
+                    "clearable options-dense"
+                ).classes(
+                    "w-full"
+                )
+
+                with ui.expansion(
+                    "Note, statut et conciliation",
+                    icon="tune",
+                ).classes(
+                    "w-full"
+                ):
                     status = ui.select(
                         TRANSACTION_STATUSES,
                         value="confirmed",
-                        label="Statut",
-                    ).props("dense outlined options-dense").classes("w-full")
+                        label="Statut de transaction",
+                    ).props(
+                        "dense outlined options-dense"
+                    ).classes(
+                        "w-full"
+                    )
+                    reconciled = ui.checkbox(
+                        "Transaction conciliée",
+                        value=False,
+                    )
+                    reconciliation_date = ui.input(
+                        label=(
+                            "Date de conciliation "
+                            "(facultative)"
+                        ),
+                    ).props(
+                        "type=date dense outlined"
+                    ).classes(
+                        "w-full"
+                    )
                     note = ui.textarea(
                         label="Note facultative"
-                    ).props("dense outlined autogrow maxlength=1000").classes(
+                    ).props(
+                        "dense outlined autogrow "
+                        "maxlength=1000"
+                    ).classes(
                         "w-full"
                     )
 
@@ -477,204 +1461,761 @@ def finances_panel(current_user, initial_section=None):
                     try:
                         save_transaction(
                             user_id=user_id,
-                            transaction_date=when.value,
-                            transaction_type=kind.value,
+                            transaction_date=(
+                                when.value
+                            ),
+                            transaction_type=(
+                                kind.value
+                            ),
                             amount=amount.value,
-                            description=description.value,
-                            category_id=category.value,
-                            tag_ids=tags.value or [],
+                            description=(
+                                description.value
+                            ),
+                            category_id=(
+                                category.value
+                            ),
+                            tag_ids=(
+                                tags.value
+                                or []
+                            ),
+                            payment_method_id=(
+                                payment_method.value
+                            ),
                             note=note.value,
                             status=status.value,
+                            reconciliation_status=(
+                                "reconciled"
+                                if reconciled.value
+                                else "unreconciled"
+                            ),
+                            reconciliation_date=(
+                                reconciliation_date.value
+                                or None
+                            ),
                         )
                     except Exception as error:
-                        ui.notify(str(error), type="warning")
+                        ui.notify(
+                            str(error),
+                            type="warning",
+                        )
                         return
+
                     amount.value = None
                     description.value = ""
                     note.value = ""
                     tags.value = []
-                    ui.notify("Transaction enregistrée.", type="positive")
+                    reconciled.value = False
+                    reconciliation_date.value = ""
+
+                    ui.notify(
+                        "Transaction enregistrée.",
+                        type="positive",
+                    )
                     refresh_all()
 
                 ui.button(
-                    "Enregistrer", icon="save", on_click=save_quick
-                ).props("color=primary").classes("mt-2")
+                    "Enregistrer",
+                    icon="save",
+                    on_click=save_quick,
+                ).props(
+                    "color=primary"
+                ).classes(
+                    "mt-2"
+                )
+
 
         # HISTORIQUE
-        with ui.tab_panel(history_tab).classes("px-0"):
-            with ui.card().classes("w-full p-3"):
-                ui.label("Historique compact").classes("text-lg font-bold")
-                with ui.expansion("Filtres", icon="filter_alt").classes("w-full"):
-                    with ui.element("div").classes("jf-finance-form-grid"):
+        with ui.tab_panel(
+            history_tab
+        ).classes(
+            "px-0"
+        ):
+            with ui.card().classes(
+                "w-full p-3"
+            ):
+                ui.label(
+                    "Historique compact"
+                ).classes(
+                    "text-lg font-bold"
+                )
+
+                with ui.expansion(
+                    "Filtres",
+                    icon="filter_alt",
+                ).classes(
+                    "w-full"
+                ):
+                    with ui.element(
+                        "div"
+                    ).classes(
+                        "jf-finance-form-grid"
+                    ):
                         start = ui.input(
                             label="Du",
-                            value=month_state["value"].isoformat(),
-                        ).props("type=date dense outlined").classes(
+                            value=(
+                                month_state[
+                                    "value"
+                                ].isoformat()
+                            ),
+                        ).props(
+                            "type=date dense outlined"
+                        ).classes(
                             "jf-finance-field"
                         )
                         end = ui.input(
-                            label="Au", value=date.today().isoformat()
-                        ).props("type=date dense outlined").classes(
+                            label="Au",
+                            value=(
+                                date.today().isoformat()
+                            ),
+                        ).props(
+                            "type=date dense outlined"
+                        ).classes(
                             "jf-finance-field"
                         )
                         query = ui.input(
                             label="Recherche"
-                        ).props("dense outlined clearable").classes(
-                            "jf-finance-field jf-finance-description"
+                        ).props(
+                            "dense outlined clearable"
+                        ).classes(
+                            "jf-finance-field "
+                            "jf-finance-description"
                         )
-                    history_type = ui.select(
-                        {"": "Tous", **TRANSACTION_TYPES},
-                        value="",
-                        label="Type",
-                    ).props("dense outlined options-dense").classes("w-full")
-                    history_status = ui.select(
-                        {"": "Tous", **TRANSACTION_STATUSES},
-                        value="",
-                        label="Statut",
-                    ).props("dense outlined options-dense").classes("w-full")
-                    history_category = ui.select(
-                        {None: "Toutes", **_category_options(user_id)},
-                        value=None,
-                        label="Catégorie",
-                    ).props("dense outlined clearable options-dense").classes(
-                        "w-full"
-                    )
-                    history_tag = ui.select(
-                        {None: "Toutes", **_tag_options(user_id)},
-                        value=None,
-                        label="Étiquette",
-                    ).props("dense outlined clearable options-dense").classes(
-                        "w-full"
-                    )
+
+                    with ui.row().classes(
+                        "w-full gap-2 flex-wrap"
+                    ):
+                        history_type = ui.select(
+                            {
+                                "": "Tous les types",
+                                **TRANSACTION_TYPES,
+                            },
+                            value="",
+                            label="Type",
+                        ).props(
+                            "dense outlined options-dense"
+                        ).classes(
+                            "min-w-40 grow"
+                        )
+                        history_status = ui.select(
+                            {
+                                "": "Tous les statuts",
+                                **TRANSACTION_STATUSES,
+                            },
+                            value="",
+                            label="Transaction",
+                        ).props(
+                            "dense outlined options-dense"
+                        ).classes(
+                            "min-w-40 grow"
+                        )
+                        history_reconciliation = ui.select(
+                            {
+                                "": "Toutes",
+                                **RECONCILIATION_STATUSES,
+                            },
+                            value="",
+                            label="Conciliation",
+                        ).props(
+                            "dense outlined options-dense"
+                        ).classes(
+                            "min-w-40 grow"
+                        )
+
+                    with ui.row().classes(
+                        "w-full gap-2 flex-wrap"
+                    ):
+                        history_category = ui.select(
+                            {
+                                None: "Toutes",
+                                **_category_options(
+                                    user_id
+                                ),
+                            },
+                            value=None,
+                            label="Catégorie",
+                        ).props(
+                            "dense outlined clearable "
+                            "options-dense"
+                        ).classes(
+                            "min-w-52 grow"
+                        )
+                        history_tag = ui.select(
+                            {
+                                None: "Toutes",
+                                **_tag_options(
+                                    user_id
+                                ),
+                            },
+                            value=None,
+                            label="Étiquette",
+                        ).props(
+                            "dense outlined clearable "
+                            "options-dense"
+                        ).classes(
+                            "min-w-44 grow"
+                        )
+                        history_payment = ui.select(
+                            {
+                                None: "Tous",
+                                **_payment_options(
+                                    user_id,
+                                    include_none=False,
+                                ),
+                            },
+                            value=None,
+                            label="Mode de paiement",
+                        ).props(
+                            "dense outlined clearable "
+                            "options-dense"
+                        ).classes(
+                            "min-w-48 grow"
+                        )
+
                     ui.button(
                         "Appliquer",
                         icon="filter_alt",
-                        on_click=lambda: render_history.refresh(),
-                    ).props("outline dense color=primary")
+                        on_click=lambda: (
+                            render_history.refresh()
+                        ),
+                    ).props(
+                        "outline dense color=primary"
+                    )
 
-            history_box = ui.column().classes("jf-finance-list mt-2")
+            history_box = ui.column().classes(
+                "jf-finance-history-list mt-2"
+            )
 
-            def remove_dialog(row):
+            def remove_dialog(
+                row,
+            ):
                 with ui.dialog() as dialog:
-                    with ui.card().classes("w-full max-w-md p-4"):
-                        ui.label("Supprimer cette transaction?").classes(
+                    with ui.card().classes(
+                        "w-full max-w-md p-4"
+                    ):
+                        ui.label(
+                            "Supprimer cette transaction?"
+                        ).classes(
                             "text-lg font-bold"
                         )
                         ui.label(
-                            f"{row['description']} — "
-                            f"{_signed(row['amount'], row['transaction_type'])}"
+                            (
+                                f"{row['description']} — "
+                                f"{_signed(row['amount'], row['transaction_type'])}"
+                            )
                         )
+
                         def remove():
-                            delete_transaction(user_id, row["id"])
+                            try:
+                                delete_transaction(
+                                    user_id,
+                                    row["id"],
+                                )
+                            except Exception as error:
+                                ui.notify(
+                                    str(error),
+                                    type="warning",
+                                )
+                                return
+
                             dialog.close()
-                            ui.notify("Transaction supprimée.", type="positive")
+                            ui.notify(
+                                "Transaction supprimée.",
+                                type="positive",
+                            )
                             refresh_all()
-                        with ui.row().classes("w-full justify-end gap-2"):
+
+                        with ui.row().classes(
+                            "w-full justify-end gap-2"
+                        ):
                             ui.button(
-                                "Annuler", on_click=dialog.close
-                            ).props("flat")
+                                "Annuler",
+                                on_click=dialog.close,
+                            ).props(
+                                "flat"
+                            )
                             ui.button(
-                                "Supprimer", icon="delete", on_click=remove
-                            ).props("color=negative")
+                                "Supprimer",
+                                icon="delete",
+                                on_click=remove,
+                            ).props(
+                                "color=negative"
+                            )
+
                 dialog.open()
+
+            def confirm_transaction(
+                transaction_id,
+            ):
+                try:
+                    set_transaction_status(
+                        user_id,
+                        transaction_id,
+                        "confirmed",
+                    )
+                except Exception as error:
+                    ui.notify(
+                        str(error),
+                        type="warning",
+                    )
+                    return
+
+                ui.notify(
+                    "Transaction confirmée.",
+                    type="positive",
+                )
+                refresh_all()
+
+            def change_reconciliation(
+                transaction_id,
+                current_status,
+            ):
+                new_status = (
+                    "unreconciled"
+                    if current_status
+                    == "reconciled"
+                    else "reconciled"
+                )
+                reconciliation_date = (
+                    date.today()
+                    if new_status
+                    == "reconciled"
+                    else None
+                )
+
+                try:
+                    set_transaction_reconciliation(
+                        user_id,
+                        transaction_id,
+                        new_status,
+                        reconciliation_date,
+                    )
+                except Exception as error:
+                    ui.notify(
+                        str(error),
+                        type="warning",
+                    )
+                    return
+
+                ui.notify(
+                    (
+                        "Transaction conciliée."
+                        if new_status
+                        == "reconciled"
+                        else (
+                            "Transaction remise "
+                            "à concilier."
+                        )
+                    ),
+                    type="positive",
+                )
+                refresh_all()
+
+            def render_transaction_row(
+                row,
+            ):
+                with ui.element(
+                    "article"
+                ).classes(
+                    "jf-finance-row"
+                ):
+                    ui.label(
+                        row["description"]
+                    ).classes(
+                        "jf-finance-main"
+                    )
+
+                    meta = []
+                    if row[
+                        "category_full_name"
+                    ]:
+                        meta.append(
+                            row[
+                                "category_full_name"
+                            ]
+                        )
+                    if row[
+                        "tag_names"
+                    ]:
+                        meta.append(
+                            " • ".join(
+                                row[
+                                    "tag_names"
+                                ]
+                            )
+                        )
+                    if row.get(
+                        "payment_method_name"
+                    ):
+                        meta.append(
+                            row[
+                                "payment_method_name"
+                            ]
+                        )
+                    if row[
+                        "status"
+                    ] == "planned":
+                        meta.append(
+                            "À confirmer"
+                        )
+                    meta.append(
+                        RECONCILIATION_STATUSES.get(
+                            row.get(
+                                "reconciliation_status"
+                            )
+                            or "unreconciled",
+                            "À concilier",
+                        )
+                    )
+
+                    ui.label(
+                        " — ".join(
+                            meta
+                        )
+                        or "Sans catégorie"
+                    ).classes(
+                        "jf-finance-meta"
+                    )
+
+                    amount_css = (
+                        "jf-finance-expense"
+                        if row[
+                            "transaction_type"
+                        ]
+                        == "expense"
+                        else "jf-finance-income"
+                    )
+                    ui.label(
+                        _signed(
+                            row[
+                                "amount"
+                            ],
+                            row[
+                                "transaction_type"
+                            ],
+                        )
+                    ).classes(
+                        (
+                            "jf-finance-amount "
+                            f"{amount_css}"
+                        )
+                    )
+
+                    with ui.element(
+                        "div"
+                    ).classes(
+                        "jf-finance-actions"
+                    ):
+                        if row[
+                            "status"
+                        ] == "planned":
+                            ui.button(
+                                icon="check",
+                                on_click=(
+                                    lambda _event=None,
+                                    selected_id=row[
+                                        "id"
+                                    ]:
+                                    confirm_transaction(
+                                        selected_id
+                                    )
+                                ),
+                            ).props(
+                                "flat dense round "
+                                "size=sm color=positive"
+                            ).tooltip(
+                                "Confirmer la transaction"
+                            )
+
+                        reconciliation_icon = (
+                            "undo"
+                            if row.get(
+                                "reconciliation_status"
+                            )
+                            == "reconciled"
+                            else "done_all"
+                        )
+                        reconciliation_tooltip = (
+                            "Remettre à concilier"
+                            if row.get(
+                                "reconciliation_status"
+                            )
+                            == "reconciled"
+                            else "Marquer conciliée"
+                        )
+
+                        ui.button(
+                            icon=reconciliation_icon,
+                            on_click=(
+                                lambda _event=None,
+                                selected_id=row[
+                                    "id"
+                                ],
+                                current=row.get(
+                                    "reconciliation_status"
+                                )
+                                or "unreconciled":
+                                change_reconciliation(
+                                    selected_id,
+                                    current,
+                                )
+                            ),
+                        ).props(
+                            "flat dense round "
+                            "size=sm color=secondary"
+                        ).tooltip(
+                            reconciliation_tooltip
+                        )
+
+                        ui.button(
+                            icon="edit",
+                            on_click=(
+                                lambda _event=None,
+                                selected_id=row[
+                                    "id"
+                                ]:
+                                _transaction_dialog(
+                                    user_id,
+                                    refresh_all,
+                                    get_transaction(
+                                        user_id,
+                                        selected_id,
+                                    ),
+                                )
+                            ),
+                        ).props(
+                            "flat dense round "
+                            "size=sm color=primary"
+                        ).tooltip(
+                            "Modifier"
+                        )
+
+                        ui.button(
+                            icon="delete",
+                            on_click=(
+                                lambda _event=None,
+                                selected=row:
+                                remove_dialog(
+                                    selected
+                                )
+                            ),
+                        ).props(
+                            "flat dense round "
+                            "size=sm color=negative"
+                        ).tooltip(
+                            "Supprimer"
+                        )
 
             @ui.refreshable
             def render_history():
                 history_box.clear()
-                rows = list_transactions(
-                    user_id,
-                    start_date=start.value or None,
-                    end_date=end.value or None,
-                    transaction_type=history_type.value or None,
-                    category_id=history_category.value or None,
-                    tag_id=history_tag.value or None,
-                    status=history_status.value or None,
-                    query=query.value or None,
+
+                try:
+                    rows = list_transactions(
+                        user_id,
+                        start_date=(
+                            start.value
+                            or None
+                        ),
+                        end_date=(
+                            end.value
+                            or None
+                        ),
+                        transaction_type=(
+                            history_type.value
+                            or None
+                        ),
+                        category_id=(
+                            history_category.value
+                            or None
+                        ),
+                        tag_id=(
+                            history_tag.value
+                            or None
+                        ),
+                        status=(
+                            history_status.value
+                            or None
+                        ),
+                        payment_method_id=(
+                            history_payment.value
+                            or None
+                        ),
+                        reconciliation_status=(
+                            history_reconciliation.value
+                            or None
+                        ),
+                        query=(
+                            query.value
+                            or None
+                        ),
+                    )
+                except Exception as error:
+                    with history_box:
+                        ui.label(
+                            str(error)
+                        ).classes(
+                            "text-negative"
+                        )
+                    return
+
+                grouped = defaultdict(
+                    list
                 )
-                grouped = defaultdict(list)
                 for row in rows:
-                    grouped[row["transaction_date"]].append(row)
+                    grouped[
+                        row[
+                            "transaction_date"
+                        ]
+                    ].append(
+                        row
+                    )
+
                 with history_box:
                     if not rows:
-                        ui.label("Aucune transaction.").classes(
+                        ui.label(
+                            "Aucune transaction."
+                        ).classes(
                             "text-sm jf-muted p-3"
                         )
-                    for day in sorted(grouped, reverse=True):
-                        ui.label(day.strftime("%d/%m/%Y")).classes(
-                            "jf-finance-day"
-                        )
-                        for row in grouped[day]:
-                            with ui.element("div").classes("jf-finance-row"):
-                                ui.label(row["description"]).classes(
-                                    "jf-finance-main"
-                                )
-                                meta = []
-                                if row["category_full_name"]:
-                                    meta.append(row["category_full_name"])
-                                if row["tag_names"]:
-                                    meta.append(" • ".join(row["tag_names"]))
-                                if row["status"] == "planned":
-                                    meta.append("À confirmer")
-                                ui.label(" — ".join(meta) or "Sans catégorie").classes(
-                                    "jf-finance-meta"
-                                )
-                                amount_css = (
-                                    "jf-finance-expense"
-                                    if row["transaction_type"] == "expense"
-                                    else "jf-finance-income"
+                        return
+
+                    for day in sorted(
+                        grouped,
+                        reverse=True,
+                    ):
+                        day_rows = grouped[
+                            day
+                        ]
+                        expenses = [
+                            row
+                            for row in day_rows
+                            if row[
+                                "transaction_type"
+                            ]
+                            == "expense"
+                        ]
+                        incomes = [
+                            row
+                            for row in day_rows
+                            if row[
+                                "transaction_type"
+                            ]
+                            == "income"
+                        ]
+
+                        with ui.element(
+                            "section"
+                        ).classes(
+                            "jf-finance-history-day"
+                        ):
+                            with ui.element(
+                                "div"
+                            ).classes(
+                                "jf-finance-day"
+                            ):
+                                ui.label(
+                                    day.strftime(
+                                        "%d/%m/%Y"
+                                    )
                                 )
                                 ui.label(
-                                    _signed(row["amount"], row["transaction_type"])
+                                    (
+                                        f"{len(day_rows)} "
+                                        "transaction(s)"
+                                    )
                                 ).classes(
-                                    f"jf-finance-amount {amount_css}"
+                                    "text-xs jf-muted"
                                 )
-                                with ui.element("div").classes(
-                                    "jf-finance-actions"
-                                ):
-                                    if row["status"] == "planned":
-                                        ui.button(
-                                            icon="check",
-                                            on_click=(
-                                                lambda _event=None,
-                                                selected=row["id"]:
-                                                confirm_transaction(selected)
-                                            ),
-                                        ).props(
-                                            "flat dense round size=sm color=positive"
-                                        )
-                                    ui.button(
-                                        icon="edit",
-                                        on_click=(
-                                            lambda _event=None,
-                                            selected=row["id"]:
-                                            _transaction_dialog(
-                                                user_id,
-                                                refresh_all,
-                                                get_transaction(user_id, selected),
-                                            )
-                                        ),
-                                    ).props(
-                                        "flat dense round size=sm color=primary"
-                                    )
-                                    ui.button(
-                                        icon="delete",
-                                        on_click=(
-                                            lambda _event=None,
-                                            selected=row:
-                                            remove_dialog(selected)
-                                        ),
-                                    ).props(
-                                        "flat dense round size=sm color=negative"
-                                    )
 
-            def confirm_transaction(transaction_id):
-                set_transaction_status(
-                    user_id, transaction_id, "confirmed"
-                )
-                ui.notify("Transaction confirmée.", type="positive")
-                refresh_all()
+                            with ui.element(
+                                "div"
+                            ).classes(
+                                "jf-finance-history-columns"
+                            ):
+                                with ui.element(
+                                    "div"
+                                ).classes(
+                                    "jf-finance-history-column"
+                                ):
+                                    with ui.element(
+                                        "div"
+                                    ).classes(
+                                        "jf-finance-history-heading"
+                                    ):
+                                        ui.label(
+                                            "Dépenses"
+                                        )
+                                        ui.label(
+                                            _money(
+                                                sum(
+                                                    Decimal(
+                                                        row[
+                                                            "amount"
+                                                        ]
+                                                    )
+                                                    for row
+                                                    in expenses
+                                                )
+                                            )
+                                        ).classes(
+                                            "text-right"
+                                        )
+
+                                    if expenses:
+                                        for row in expenses:
+                                            render_transaction_row(
+                                                row
+                                            )
+                                    else:
+                                        ui.label(
+                                            "Aucune dépense"
+                                        ).classes(
+                                            "jf-finance-empty-column"
+                                        )
+
+                                with ui.element(
+                                    "div"
+                                ).classes(
+                                    "jf-finance-history-column"
+                                ):
+                                    with ui.element(
+                                        "div"
+                                    ).classes(
+                                        "jf-finance-history-heading"
+                                    ):
+                                        ui.label(
+                                            "Revenus"
+                                        )
+                                        ui.label(
+                                            _money(
+                                                sum(
+                                                    Decimal(
+                                                        row[
+                                                            "amount"
+                                                        ]
+                                                    )
+                                                    for row
+                                                    in incomes
+                                                )
+                                            )
+                                        ).classes(
+                                            "text-right"
+                                        )
+
+                                    if incomes:
+                                        for row in incomes:
+                                            render_transaction_row(
+                                                row
+                                            )
+                                    else:
+                                        ui.label(
+                                            "Aucun revenu"
+                                        ).classes(
+                                            "jf-finance-empty-column"
+                                        )
 
             render_history()
+
 
         # RÉCURRENCES
         with ui.tab_panel(recurring_tab).classes("px-0"):
@@ -736,13 +2277,51 @@ def finances_panel(current_user, initial_section=None):
                             ).props("type=date dense outlined").classes(
                                 "grow min-w-40"
                             )
-                        category = ui.select(
-                            {None: "Aucune", **_category_options(user_id)},
-                            value=row["category_id"] if row else None,
-                            label="Catégorie",
-                        ).props("dense outlined clearable options-dense").classes(
-                            "w-full"
-                        )
+                        with ui.row().classes(
+                            "w-full gap-2 flex-wrap"
+                        ):
+                            category = ui.select(
+                                {
+                                    None: "Aucune",
+                                    **_category_options(
+                                        user_id
+                                    ),
+                                },
+                                value=(
+                                    row[
+                                        "category_id"
+                                    ]
+                                    if row
+                                    else None
+                                ),
+                                label="Catégorie",
+                            ).props(
+                                "dense outlined clearable "
+                                "options-dense"
+                            ).classes(
+                                "min-w-52 grow"
+                            )
+                            payment_method = ui.select(
+                                _payment_options(
+                                    user_id
+                                ),
+                                value=(
+                                    row.get(
+                                        "payment_method_id"
+                                    )
+                                    if row
+                                    else None
+                                ),
+                                label=(
+                                    "Mode de paiement "
+                                    "par défaut"
+                                ),
+                            ).props(
+                                "dense outlined clearable "
+                                "options-dense"
+                            ).classes(
+                                "min-w-48 grow"
+                            )
                         tags = ui.select(
                             _tag_options(user_id),
                             value=list(row["tag_ids"]) if row else [],
@@ -773,6 +2352,9 @@ def finances_panel(current_user, initial_section=None):
                                     amount=amount.value,
                                     category_id=category.value,
                                     tag_ids=tags.value or [],
+                                    payment_method_id=(
+                                        payment_method.value
+                                    ),
                                     note=note.value,
                                     frequency_unit=unit.value,
                                     frequency_interval=interval.value,
@@ -831,10 +2413,32 @@ def finances_panel(current_user, initial_section=None):
                                         f"— tous les {row['frequency_interval']} "
                                         f"{FREQUENCY_UNITS[row['frequency_unit']].lower()}(s)"
                                     ).classes("text-xs jf-muted")
+                                    details = [
+                                        (
+                                            "Prochaine : "
+                                            f"{row['next_date'].strftime('%d/%m/%Y')}"
+                                        ),
+                                        CONFIRMATION_MODES[
+                                            row[
+                                                "confirmation_mode"
+                                            ]
+                                        ],
+                                    ]
+                                    if row.get(
+                                        "payment_method_name"
+                                    ):
+                                        details.append(
+                                            row[
+                                                "payment_method_name"
+                                            ]
+                                        )
                                     ui.label(
-                                        f"Prochaine : {row['next_date'].strftime('%d/%m/%Y')} "
-                                        f"— {CONFIRMATION_MODES[row['confirmation_mode']]}"
-                                    ).classes("text-xs jf-muted")
+                                        " — ".join(
+                                            details
+                                        )
+                                    ).classes(
+                                        "text-xs jf-muted"
+                                    )
                                 with ui.row().classes("gap-1 shrink-0"):
                                     ui.switch(
                                         value=row["is_active"],
@@ -1033,6 +2637,9 @@ def finances_panel(current_user, initial_section=None):
             with ui.tabs().classes("w-full") as organization_tabs:
                 categories_tab = ui.tab("Catégories")
                 tags_tab = ui.tab("Étiquettes")
+                payment_methods_tab = ui.tab(
+                    "Modes de paiement"
+                )
 
             with ui.tab_panels(
                 organization_tabs,
@@ -1259,6 +2866,269 @@ def finances_panel(current_user, initial_section=None):
 
                     render_tags()
 
+                with ui.tab_panel(
+                    payment_methods_tab
+                ).classes(
+                    "px-0"
+                ):
+                    payment_box = ui.column().classes(
+                        "w-full gap-2"
+                    )
+
+                    def payment_method_dialog(
+                        row=None,
+                    ):
+                        with ui.dialog() as dialog:
+                            with ui.card().classes(
+                                "w-full max-w-md p-4"
+                            ):
+                                ui.label(
+                                    (
+                                        "Modifier le mode de paiement"
+                                        if row
+                                        else "Nouveau mode de paiement"
+                                    )
+                                ).classes(
+                                    "text-xl font-bold"
+                                )
+
+                                name = ui.input(
+                                    label="Nom",
+                                    value=(
+                                        row["name"]
+                                        if row
+                                        else ""
+                                    ),
+                                ).props(
+                                    "dense outlined maxlength=100"
+                                ).classes(
+                                    "w-full"
+                                )
+
+                                def save_payment_now():
+                                    try:
+                                        save_payment_method(
+                                            user_id=user_id,
+                                            payment_method_id=(
+                                                row["id"]
+                                                if row
+                                                else None
+                                            ),
+                                            name=name.value,
+                                        )
+                                    except Exception as error:
+                                        ui.notify(
+                                            str(error),
+                                            type="warning",
+                                        )
+                                        return
+
+                                    dialog.close()
+                                    ui.notify(
+                                        "Mode de paiement enregistré.",
+                                        type="positive",
+                                    )
+                                    refresh_all()
+
+                                with ui.row().classes(
+                                    "w-full justify-end gap-2"
+                                ):
+                                    ui.button(
+                                        "Annuler",
+                                        on_click=dialog.close,
+                                    ).props(
+                                        "flat"
+                                    )
+                                    ui.button(
+                                        "Enregistrer",
+                                        icon="save",
+                                        on_click=save_payment_now,
+                                    ).props(
+                                        "color=primary"
+                                    )
+
+                        dialog.open()
+
+                    def change_payment_state(
+                        payment_method_id,
+                        value,
+                    ):
+                        try:
+                            toggle_payment_method(
+                                user_id,
+                                payment_method_id,
+                                value,
+                            )
+                        except Exception as error:
+                            ui.notify(
+                                str(error),
+                                type="warning",
+                            )
+                            return
+
+                        refresh_all()
+
+                    def change_payment_order(
+                        payment_method_id,
+                        direction,
+                    ):
+                        try:
+                            move_payment_method(
+                                user_id,
+                                payment_method_id,
+                                direction,
+                            )
+                        except Exception as error:
+                            ui.notify(
+                                str(error),
+                                type="warning",
+                            )
+                            return
+
+                        render_payment_methods.refresh()
+
+                    @ui.refreshable
+                    def render_payment_methods():
+                        payment_box.clear()
+                        rows = list_payment_methods(
+                            user_id,
+                            include_inactive=True,
+                        )
+
+                        with payment_box:
+                            with ui.row().classes(
+                                "w-full items-center "
+                                "justify-between gap-2"
+                            ):
+                                with ui.column().classes(
+                                    "gap-0"
+                                ):
+                                    ui.label(
+                                        "Modes de paiement"
+                                    ).classes(
+                                        "text-xl font-bold"
+                                    )
+                                    ui.label(
+                                        (
+                                            "Une transaction utilise "
+                                            "un seul mode de paiement."
+                                        )
+                                    ).classes(
+                                        "text-xs jf-muted"
+                                    )
+
+                                ui.button(
+                                    "Ajouter",
+                                    icon="add",
+                                    on_click=lambda: (
+                                        payment_method_dialog()
+                                    ),
+                                ).props(
+                                    "color=primary dense"
+                                )
+
+                            for row in rows:
+                                with ui.element(
+                                    "div"
+                                ).classes(
+                                    "jf-finance-card"
+                                ):
+                                    with ui.element(
+                                        "div"
+                                    ).classes(
+                                        "jf-finance-payment-row"
+                                    ):
+                                        with ui.element(
+                                            "div"
+                                        ).classes(
+                                            "jf-finance-payment-order"
+                                        ):
+                                            ui.button(
+                                                icon="keyboard_arrow_up",
+                                                on_click=(
+                                                    lambda _event=None,
+                                                    selected=row["id"]:
+                                                    change_payment_order(
+                                                        selected,
+                                                        "up",
+                                                    )
+                                                ),
+                                            ).props(
+                                                "flat dense round "
+                                                "size=sm color=primary"
+                                            ).tooltip(
+                                                "Monter"
+                                            )
+                                            ui.button(
+                                                icon="keyboard_arrow_down",
+                                                on_click=(
+                                                    lambda _event=None,
+                                                    selected=row["id"]:
+                                                    change_payment_order(
+                                                        selected,
+                                                        "down",
+                                                    )
+                                                ),
+                                            ).props(
+                                                "flat dense round "
+                                                "size=sm color=primary"
+                                            ).tooltip(
+                                                "Descendre"
+                                            )
+
+                                        with ui.column().classes(
+                                            "gap-0 min-w-0"
+                                        ):
+                                            ui.label(
+                                                row["name"]
+                                            ).classes(
+                                                "text-sm font-bold"
+                                            )
+                                            ui.label(
+                                                (
+                                                    f"{row['transaction_count']} "
+                                                    "transaction(s)"
+                                                )
+                                            ).classes(
+                                                "text-xs jf-muted"
+                                            )
+
+                                        with ui.row().classes(
+                                            "gap-1 shrink-0"
+                                        ):
+                                            ui.switch(
+                                                value=row[
+                                                    "is_active"
+                                                ],
+                                                on_change=(
+                                                    lambda event,
+                                                    selected=row["id"]:
+                                                    change_payment_state(
+                                                        selected,
+                                                        event.value,
+                                                    )
+                                                ),
+                                            ).props(
+                                                "dense"
+                                            )
+                                            ui.button(
+                                                icon="edit",
+                                                on_click=(
+                                                    lambda _event=None,
+                                                    selected=row:
+                                                    payment_method_dialog(
+                                                        selected
+                                                    )
+                                                ),
+                                            ).props(
+                                                "flat dense round "
+                                                "size=sm color=primary"
+                                            ).tooltip(
+                                                "Modifier"
+                                            )
+
+                    render_payment_methods()
+
         # IMPORTER ET EXPORTER
         with ui.tab_panel(export_tab).classes("px-0"):
             with ui.card().classes("w-full max-w-3xl p-4"):
@@ -1312,9 +3182,17 @@ def finances_panel(current_user, initial_section=None):
                                         )
 
                             ui.label(
-                                f"Catégories détectées : {len(preview['categories'])} — "
-                                f"Étiquettes détectées : {len(preview['tags'])}"
-                            ).classes("text-xs jf-muted")
+                                (
+                                    "Catégories détectées : "
+                                    f"{len(preview['categories'])} — "
+                                    "Étiquettes détectées : "
+                                    f"{len(preview['tags'])} — "
+                                    "Modes de paiement détectés : "
+                                    f"{len(preview['payment_methods'])}"
+                                )
+                            ).classes(
+                                "text-xs jf-muted"
+                            )
 
                             skip_possible = ui.checkbox(
                                 "Ignorer les transactions identiques déjà présentes",
@@ -1358,6 +3236,14 @@ def finances_panel(current_user, initial_section=None):
                                                     details.append(
                                                         " • ".join(row["tag_names"])
                                                     )
+                                                if row.get(
+                                                    "payment_method_name"
+                                                ):
+                                                    details.append(
+                                                        row[
+                                                            "payment_method_name"
+                                                        ]
+                                                    )
                                                 ui.label(" — ".join(details)).classes(
                                                     "text-xs jf-muted"
                                                 )
@@ -1391,7 +3277,9 @@ def finances_panel(current_user, initial_section=None):
                                     f"Importation terminée : {result['imported']} ajoutée(s), "
                                     f"{result['skipped']} ignorée(s), "
                                     f"{result['categories_created']} catégorie(s) créée(s), "
-                                    f"{result['tags_created']} étiquette(s) créée(s)."
+                                    f"{result['tags_created']} étiquette(s) créée(s), "
+                                    f"{result['payment_methods_created']} "
+                                    "mode(s) de paiement créé(s)."
                                 )
                                 ui.notify(message, type="positive", timeout=10000)
                                 if result["failures"]:
@@ -1429,8 +3317,9 @@ def finances_panel(current_user, initial_section=None):
                 ui.label("Exporter les données").classes("text-xl font-bold")
                 ui.label(
                     "Le CSV convient à Excel. Le JSON constitue "
-                    "une sauvegarde complète de sécurité. Les clés "
-                    "d’importation sont conservées pour éviter les doublons."
+                    "une sauvegarde complète de sécurité. Les modes "
+                    "de paiement, les statuts de conciliation et les clés "
+                    "d’importation sont conservés."
                 ).classes("text-sm jf-muted")
 
                 def do_export(kind):
@@ -1459,9 +3348,58 @@ def finances_panel(current_user, initial_section=None):
                     ).props("outline color=primary")
 
     def refresh_all():
+        # Actualiser les listes déjà visibles après l’ajout ou
+        # la modification d’une catégorie, d’une étiquette ou
+        # d’un mode de paiement.
+        category.options = {
+            None: "Aucune",
+            **_category_options(
+                user_id
+            ),
+        }
+        category.update()
+
+        tags.options = _tag_options(
+            user_id
+        )
+        tags.update()
+
+        payment_method.options = (
+            _payment_options(
+                user_id
+            )
+        )
+        payment_method.update()
+
+        history_category.options = {
+            None: "Toutes",
+            **_category_options(
+                user_id
+            ),
+        }
+        history_category.update()
+
+        history_tag.options = {
+            None: "Toutes",
+            **_tag_options(
+                user_id
+            ),
+        }
+        history_tag.update()
+
+        history_payment.options = {
+            None: "Tous",
+            **_payment_options(
+                user_id,
+                include_none=False,
+            ),
+        }
+        history_payment.update()
+
         render_dashboard.refresh()
         render_history.refresh()
         render_recurrences.refresh()
         render_goals.refresh()
         render_categories.refresh()
         render_tags.refresh()
+        render_payment_methods.refresh()

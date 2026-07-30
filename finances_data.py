@@ -32,6 +32,16 @@ CARRY_POLICIES = {
     "overspend": "Reporter le dépassement",
     "both": "Reporter les deux",
 }
+RECONCILIATION_STATUSES = {
+    "unreconciled": "À concilier",
+    "reconciled": "Conciliée",
+}
+DEFAULT_PAYMENT_METHODS = (
+    "MC Canadian Tire",
+    "MC PC",
+    "Visa Desjardins",
+    "Direct",
+)
 
 
 def _money(value, allow_zero=False):
@@ -125,6 +135,32 @@ def init_finances_schema():
                 );
             """)
             cur.execute("""
+                CREATE TABLE IF NOT EXISTS finance_payment_methods (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL
+                        REFERENCES users(id) ON DELETE CASCADE,
+                    name TEXT NOT NULL,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CHECK (CHAR_LENGTH(name) BETWEEN 1 AND 100)
+                );
+            """)
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                finance_payment_methods_name_uq
+                ON finance_payment_methods (user_id, LOWER(name));
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS
+                finance_payment_methods_order_idx
+                ON finance_payment_methods (
+                    user_id, is_active DESC, sort_order, name
+                );
+            """)
+
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS finance_recurrences (
                     id BIGSERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -149,6 +185,30 @@ def init_finances_schema():
                     CHECK (end_date IS NULL OR end_date >= start_date)
                 );
             """)
+            cur.execute("""
+                ALTER TABLE finance_recurrences
+                ADD COLUMN IF NOT EXISTS payment_method_id BIGINT;
+            """)
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname =
+                            'finance_recurrences_payment_method_fk'
+                    ) THEN
+                        ALTER TABLE finance_recurrences
+                        ADD CONSTRAINT
+                            finance_recurrences_payment_method_fk
+                        FOREIGN KEY (payment_method_id)
+                        REFERENCES finance_payment_methods(id)
+                        ON DELETE SET NULL;
+                    END IF;
+                END
+                $$;
+            """)
+
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS finance_recurrence_tags (
                     recurrence_id BIGINT NOT NULL
@@ -194,6 +254,71 @@ def init_finances_schema():
                 ALTER TABLE finance_transactions
                 ADD COLUMN IF NOT EXISTS imported_at TIMESTAMPTZ;
             """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS payment_method_id BIGINT;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS reconciliation_status TEXT
+                NOT NULL DEFAULT 'unreconciled';
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS reconciliation_date DATE;
+            """)
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname =
+                            'finance_transactions_payment_method_fk'
+                    ) THEN
+                        ALTER TABLE finance_transactions
+                        ADD CONSTRAINT
+                            finance_transactions_payment_method_fk
+                        FOREIGN KEY (payment_method_id)
+                        REFERENCES finance_payment_methods(id)
+                        ON DELETE SET NULL;
+                    END IF;
+                END
+                $$;
+            """)
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname =
+                            'finance_transactions_reconciliation_status_ck'
+                    ) THEN
+                        ALTER TABLE finance_transactions
+                        ADD CONSTRAINT
+                            finance_transactions_reconciliation_status_ck
+                        CHECK (
+                            reconciliation_status IN (
+                                'unreconciled',
+                                'reconciled'
+                            )
+                        );
+                    END IF;
+                END
+                $$;
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS
+                finance_transactions_reconciliation_idx
+                ON finance_transactions (
+                    user_id,
+                    payment_method_id,
+                    reconciliation_status,
+                    transaction_date DESC
+                );
+            """)
+
             cur.execute("""
                 CREATE UNIQUE INDEX IF NOT EXISTS
                 finance_transactions_import_key_uq
@@ -374,6 +499,353 @@ def toggle_tag(user_id, tag_id, is_active):
             """, (bool(is_active), tag_id, user_id))
             conn.commit()
 
+def ensure_default_finance_payment_methods(user_id):
+    """Crée les modes de paiement initiaux pour un nouvel utilisateur."""
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) AS total
+                FROM finance_payment_methods
+                WHERE user_id = %s;
+                """,
+                (user_id,),
+            )
+            if int(cur.fetchone()["total"]) > 0:
+                return
+
+            for sort_order, name in enumerate(
+                DEFAULT_PAYMENT_METHODS,
+                start=1,
+            ):
+                cur.execute(
+                    """
+                    INSERT INTO finance_payment_methods (
+                        user_id,
+                        name,
+                        sort_order
+                    )
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT DO NOTHING;
+                    """,
+                    (
+                        user_id,
+                        name,
+                        sort_order,
+                    ),
+                )
+
+            conn.commit()
+
+
+def list_payment_methods(
+    user_id,
+    include_inactive=False,
+):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    method.id,
+                    method.name,
+                    method.sort_order,
+                    method.is_active,
+                    COUNT(transaction.id) AS transaction_count
+                FROM finance_payment_methods AS method
+                LEFT JOIN finance_transactions AS transaction
+                    ON transaction.payment_method_id = method.id
+                   AND transaction.user_id = method.user_id
+                WHERE method.user_id = %s
+                  AND (%s OR method.is_active = TRUE)
+                GROUP BY method.id
+                ORDER BY
+                    method.is_active DESC,
+                    method.sort_order,
+                    LOWER(method.name),
+                    method.id;
+                """,
+                (
+                    user_id,
+                    include_inactive,
+                ),
+            )
+            return cur.fetchall()
+
+
+def save_payment_method(
+    user_id,
+    name,
+    payment_method_id=None,
+):
+    cleaned_name = _text(
+        name,
+        "Le nom du mode de paiement",
+        100,
+        True,
+    )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            if payment_method_id:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM finance_payment_methods
+                    WHERE user_id = %s
+                      AND LOWER(name) = LOWER(%s)
+                      AND id <> %s
+                    LIMIT 1;
+                    """,
+                    (
+                        user_id,
+                        cleaned_name,
+                        payment_method_id,
+                    ),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM finance_payment_methods
+                    WHERE user_id = %s
+                      AND LOWER(name) = LOWER(%s)
+                    LIMIT 1;
+                    """,
+                    (
+                        user_id,
+                        cleaned_name,
+                    ),
+                )
+
+            if cur.fetchone():
+                raise ValueError(
+                    "Un mode de paiement porte déjà ce nom."
+                )
+
+            if payment_method_id:
+                cur.execute(
+                    """
+                    UPDATE finance_payment_methods
+                    SET
+                        name = %s,
+                        updated_at = NOW()
+                    WHERE id = %s
+                      AND user_id = %s;
+                    """,
+                    (
+                        cleaned_name,
+                        payment_method_id,
+                        user_id,
+                    ),
+                )
+                if cur.rowcount == 0:
+                    raise ValueError(
+                        "Mode de paiement introuvable."
+                    )
+            else:
+                cur.execute(
+                    """
+                    SELECT COALESCE(
+                        MAX(sort_order),
+                        0
+                    ) + 1 AS next_order
+                    FROM finance_payment_methods
+                    WHERE user_id = %s;
+                    """,
+                    (user_id,),
+                )
+                next_order = int(
+                    cur.fetchone()["next_order"]
+                )
+
+                cur.execute(
+                    """
+                    INSERT INTO finance_payment_methods (
+                        user_id,
+                        name,
+                        sort_order
+                    )
+                    VALUES (%s, %s, %s);
+                    """,
+                    (
+                        user_id,
+                        cleaned_name,
+                        next_order,
+                    ),
+                )
+
+            conn.commit()
+
+
+def toggle_payment_method(
+    user_id,
+    payment_method_id,
+    is_active,
+):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE finance_payment_methods
+                SET
+                    is_active = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND user_id = %s;
+                """,
+                (
+                    bool(is_active),
+                    payment_method_id,
+                    user_id,
+                ),
+            )
+            if cur.rowcount == 0:
+                raise ValueError(
+                    "Mode de paiement introuvable."
+                )
+            conn.commit()
+
+
+def move_payment_method(
+    user_id,
+    payment_method_id,
+    direction,
+):
+    if direction not in {
+        "up",
+        "down",
+    }:
+        raise ValueError(
+            "Direction de déplacement invalide."
+        )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    id,
+                    sort_order
+                FROM finance_payment_methods
+                WHERE user_id = %s
+                ORDER BY
+                    sort_order,
+                    LOWER(name),
+                    id
+                FOR UPDATE;
+                """,
+                (user_id,),
+            )
+            rows = cur.fetchall()
+            ids = [
+                int(row["id"])
+                for row in rows
+            ]
+
+            try:
+                index = ids.index(
+                    int(payment_method_id)
+                )
+            except ValueError:
+                raise ValueError(
+                    "Mode de paiement introuvable."
+                )
+
+            target_index = (
+                index - 1
+                if direction == "up"
+                else index + 1
+            )
+
+            if (
+                target_index < 0
+                or target_index >= len(rows)
+            ):
+                return
+
+            current = rows[index]
+            target = rows[target_index]
+
+            current_order = int(
+                current["sort_order"]
+            )
+            target_order = int(
+                target["sort_order"]
+            )
+
+            if current_order == target_order:
+                current_order = index + 1
+                target_order = target_index + 1
+
+            cur.execute(
+                """
+                UPDATE finance_payment_methods
+                SET sort_order = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND user_id = %s;
+                """,
+                (
+                    target_order,
+                    current["id"],
+                    user_id,
+                ),
+            )
+            cur.execute(
+                """
+                UPDATE finance_payment_methods
+                SET sort_order = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND user_id = %s;
+                """,
+                (
+                    current_order,
+                    target["id"],
+                    user_id,
+                ),
+            )
+
+            conn.commit()
+
+
+def _validate_payment_method(
+    cur,
+    user_id,
+    payment_method_id,
+):
+    if payment_method_id in (
+        None,
+        "",
+    ):
+        return None
+
+    normalized_id = int(
+        payment_method_id
+    )
+
+    cur.execute(
+        """
+        SELECT id
+        FROM finance_payment_methods
+        WHERE id = %s
+          AND user_id = %s;
+        """,
+        (
+            normalized_id,
+            user_id,
+        ),
+    )
+    if not cur.fetchone():
+        raise ValueError(
+            "Le mode de paiement sélectionné est invalide."
+        )
+
+    return normalized_id
+
+
 
 def _validate_links(cur, user_id, category_id, tag_ids):
     if category_id:
@@ -405,57 +877,172 @@ def save_transaction(
     tag_ids=None,
     note=None,
     status="confirmed",
+    payment_method_id=None,
+    reconciliation_status="unreconciled",
+    reconciliation_date=None,
     transaction_id=None,
 ):
     if transaction_type not in TRANSACTION_TYPES:
         raise ValueError("Type invalide.")
     if status not in TRANSACTION_STATUSES:
         raise ValueError("Statut invalide.")
+    if reconciliation_status not in RECONCILIATION_STATUSES:
+        raise ValueError("Statut de conciliation invalide.")
+
     parsed_date = (
         transaction_date
         if isinstance(transaction_date, date)
         else date.fromisoformat(str(transaction_date))
     )
+    parsed_reconciliation_date = (
+        reconciliation_date
+        if isinstance(reconciliation_date, date)
+        else (
+            date.fromisoformat(str(reconciliation_date))
+            if reconciliation_date
+            else None
+        )
+    )
+    if status == "planned":
+        reconciliation_status = "unreconciled"
+        parsed_reconciliation_date = None
+    elif reconciliation_status == "unreconciled":
+        parsed_reconciliation_date = None
+
     amount = _money(amount)
-    description = _text(description, "La description", 160, True)
-    note = _text(note, "La note", 1000)
+    description = _text(
+        description,
+        "La description",
+        160,
+        True,
+    )
+    note = _text(
+        note,
+        "La note",
+        1000,
+    )
 
     with get_connection() as conn:
         with conn.cursor() as cur:
-            tags = _validate_links(cur, user_id, category_id, tag_ids)
+            tags = _validate_links(
+                cur,
+                user_id,
+                category_id,
+                tag_ids,
+            )
+            validated_payment_method = (
+                _validate_payment_method(
+                    cur,
+                    user_id,
+                    payment_method_id,
+                )
+            )
+
             if transaction_id:
-                cur.execute("""
-                    UPDATE finance_transactions
-                    SET transaction_date=%s,transaction_type=%s,amount=%s,
-                        description=%s,category_id=%s,note=%s,status=%s,
-                        updated_at=NOW()
-                    WHERE id=%s AND user_id=%s;
-                """, (
-                    parsed_date, transaction_type, amount, description,
-                    category_id, note, status, transaction_id, user_id,
-                ))
-                saved_id = int(transaction_id)
                 cur.execute(
-                    "DELETE FROM finance_transaction_tags WHERE transaction_id=%s;",
+                    """
+                    UPDATE finance_transactions
+                    SET
+                        transaction_date = %s,
+                        transaction_type = %s,
+                        amount = %s,
+                        description = %s,
+                        category_id = %s,
+                        note = %s,
+                        status = %s,
+                        payment_method_id = %s,
+                        reconciliation_status = %s,
+                        reconciliation_date = %s,
+                        updated_at = NOW()
+                    WHERE id = %s
+                      AND user_id = %s;
+                    """,
+                    (
+                        parsed_date,
+                        transaction_type,
+                        amount,
+                        description,
+                        category_id,
+                        note,
+                        status,
+                        validated_payment_method,
+                        reconciliation_status,
+                        parsed_reconciliation_date,
+                        transaction_id,
+                        user_id,
+                    ),
+                )
+                if cur.rowcount == 0:
+                    raise ValueError(
+                        "Transaction introuvable."
+                    )
+
+                saved_id = int(
+                    transaction_id
+                )
+                cur.execute(
+                    """
+                    DELETE FROM finance_transaction_tags
+                    WHERE transaction_id = %s;
+                    """,
                     (saved_id,),
                 )
             else:
-                cur.execute("""
-                    INSERT INTO finance_transactions
-                        (user_id,transaction_date,transaction_type,amount,
-                         description,category_id,note,status)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                cur.execute(
+                    """
+                    INSERT INTO finance_transactions (
+                        user_id,
+                        transaction_date,
+                        transaction_type,
+                        amount,
+                        description,
+                        category_id,
+                        note,
+                        status,
+                        payment_method_id,
+                        reconciliation_status,
+                        reconciliation_date
+                    )
+                    VALUES (
+                        %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s
+                    )
                     RETURNING id;
-                """, (
-                    user_id, parsed_date, transaction_type, amount,
-                    description, category_id, note, status,
-                ))
-                saved_id = int(cur.fetchone()["id"])
+                    """,
+                    (
+                        user_id,
+                        parsed_date,
+                        transaction_type,
+                        amount,
+                        description,
+                        category_id,
+                        note,
+                        status,
+                        validated_payment_method,
+                        reconciliation_status,
+                        parsed_reconciliation_date,
+                    ),
+                )
+                saved_id = int(
+                    cur.fetchone()["id"]
+                )
+
             for tag_id in tags:
-                cur.execute("""
-                    INSERT INTO finance_transaction_tags (transaction_id,tag_id)
-                    VALUES (%s,%s) ON CONFLICT DO NOTHING;
-                """, (saved_id, tag_id))
+                cur.execute(
+                    """
+                    INSERT INTO finance_transaction_tags (
+                        transaction_id,
+                        tag_id
+                    )
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING;
+                    """,
+                    (
+                        saved_id,
+                        tag_id,
+                    ),
+                )
+
             conn.commit()
             return saved_id
 
@@ -468,68 +1055,175 @@ def list_transactions(
     category_id=None,
     tag_id=None,
     status=None,
+    payment_method_id=None,
+    reconciliation_status=None,
     query=None,
     transaction_id=None,
     limit=1000,
 ):
-    conditions = ["t.user_id=%s"]
-    params = [user_id]
+    conditions = [
+        "t.user_id = %s",
+    ]
+    params = [
+        user_id,
+    ]
+
     for sql, value in (
-        ("t.id=%s", transaction_id),
-        ("t.transaction_date>=%s", start_date),
-        ("t.transaction_date<=%s", end_date),
-        ("t.transaction_type=%s", transaction_type),
-        ("t.category_id=%s", category_id),
-        ("t.status=%s", status),
+        (
+            "t.id = %s",
+            transaction_id,
+        ),
+        (
+            "t.transaction_date >= %s",
+            start_date,
+        ),
+        (
+            "t.transaction_date <= %s",
+            end_date,
+        ),
+        (
+            "t.transaction_type = %s",
+            transaction_type,
+        ),
+        (
+            "t.category_id = %s",
+            category_id,
+        ),
+        (
+            "t.status = %s",
+            status,
+        ),
+        (
+            "t.payment_method_id = %s",
+            payment_method_id,
+        ),
+        (
+            "t.reconciliation_status = %s",
+            reconciliation_status,
+        ),
     ):
-        if value not in (None, ""):
-            conditions.append(sql)
-            params.append(value)
-    if tag_id:
-        conditions.append("""
-            EXISTS (
-                SELECT 1 FROM finance_transaction_tags x
-                WHERE x.transaction_id=t.id AND x.tag_id=%s
+        if value not in (
+            None,
+            "",
+        ):
+            conditions.append(
+                sql
             )
-        """)
-        params.append(tag_id)
+            params.append(
+                value
+            )
+
+    if tag_id:
+        conditions.append(
+            """
+            EXISTS (
+                SELECT 1
+                FROM finance_transaction_tags AS selected_tag
+                WHERE selected_tag.transaction_id = t.id
+                  AND selected_tag.tag_id = %s
+            )
+            """
+        )
+        params.append(
+            tag_id
+        )
+
     if query:
-        conditions.append("""
-            (LOWER(t.description) LIKE LOWER(%s)
-             OR LOWER(COALESCE(t.note,'')) LIKE LOWER(%s))
-        """)
-        pattern = f"%{str(query).strip()}%"
-        params.extend([pattern, pattern])
-    params.append(int(limit))
+        conditions.append(
+            """
+            (
+                LOWER(t.description) LIKE LOWER(%s)
+                OR LOWER(
+                    COALESCE(
+                        t.note,
+                        ''
+                    )
+                ) LIKE LOWER(%s)
+                OR LOWER(
+                    COALESCE(
+                        payment_method.name,
+                        ''
+                    )
+                ) LIKE LOWER(%s)
+            )
+            """
+        )
+        pattern = (
+            f"%{str(query).strip()}%"
+        )
+        params.extend(
+            [
+                pattern,
+                pattern,
+                pattern,
+            ]
+        )
+
+    params.append(
+        int(limit)
+    )
 
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(f"""
+            cur.execute(
+                f"""
                 SELECT
                     t.*,
-                    CASE WHEN parent.id IS NULL THEN category.name
-                         ELSE parent.name || ' › ' || category.name
+                    payment_method.name
+                        AS payment_method_name,
+                    CASE
+                        WHEN parent.id IS NULL
+                        THEN category.name
+                        ELSE parent.name
+                             || ' › '
+                             || category.name
                     END AS category_full_name,
                     COALESCE(
-                        ARRAY_AGG(tag.id ORDER BY tag.name)
-                            FILTER (WHERE tag.id IS NOT NULL),
+                        ARRAY_AGG(
+                            tag.id
+                            ORDER BY tag.name
+                        )
+                        FILTER (
+                            WHERE tag.id IS NOT NULL
+                        ),
                         ARRAY[]::BIGINT[]
                     ) AS tag_ids,
                     COALESCE(
-                        ARRAY_AGG(tag.name ORDER BY tag.name)
-                            FILTER (WHERE tag.id IS NOT NULL),
+                        ARRAY_AGG(
+                            tag.name
+                            ORDER BY tag.name
+                        )
+                        FILTER (
+                            WHERE tag.id IS NOT NULL
+                        ),
                         ARRAY[]::TEXT[]
                     ) AS tag_names
-                FROM finance_transactions t
-                LEFT JOIN finance_categories category ON category.id=t.category_id
-                LEFT JOIN finance_categories parent ON parent.id=category.parent_id
-                LEFT JOIN finance_transaction_tags tt ON tt.transaction_id=t.id
-                LEFT JOIN finance_tags tag ON tag.id=tt.tag_id
+                FROM finance_transactions AS t
+                LEFT JOIN finance_categories AS category
+                    ON category.id = t.category_id
+                LEFT JOIN finance_categories AS parent
+                    ON parent.id = category.parent_id
+                LEFT JOIN finance_payment_methods AS payment_method
+                    ON payment_method.id = t.payment_method_id
+                LEFT JOIN finance_transaction_tags AS transaction_tag
+                    ON transaction_tag.transaction_id = t.id
+                LEFT JOIN finance_tags AS tag
+                    ON tag.id = transaction_tag.tag_id
                 WHERE {" AND ".join(conditions)}
-                GROUP BY t.id,category.id,parent.id,parent.name
-                ORDER BY t.transaction_date DESC,t.id DESC
+                GROUP BY
+                    t.id,
+                    category.id,
+                    parent.id,
+                    parent.name,
+                    payment_method.id,
+                    payment_method.name
+                ORDER BY
+                    t.transaction_date DESC,
+                    t.id DESC
                 LIMIT %s;
-            """, params)
+                """,
+                params,
+            )
             return cur.fetchall()
 
 
@@ -561,6 +1255,58 @@ def set_transaction_status(user_id, transaction_id, status):
             """, (status, transaction_id, user_id))
             conn.commit()
 
+def set_transaction_reconciliation(
+    user_id,
+    transaction_id,
+    reconciliation_status,
+    reconciliation_date=None,
+):
+    if reconciliation_status not in RECONCILIATION_STATUSES:
+        raise ValueError(
+            "Statut de conciliation invalide."
+        )
+
+    parsed_date = (
+        reconciliation_date
+        if isinstance(reconciliation_date, date)
+        else (
+            date.fromisoformat(
+                str(reconciliation_date)
+            )
+            if reconciliation_date
+            else None
+        )
+    )
+
+    if reconciliation_status == "unreconciled":
+        parsed_date = None
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE finance_transactions
+                SET
+                    reconciliation_status = %s,
+                    reconciliation_date = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND user_id = %s;
+                """,
+                (
+                    reconciliation_status,
+                    parsed_date,
+                    transaction_id,
+                    user_id,
+                ),
+            )
+            if cur.rowcount == 0:
+                raise ValueError(
+                    "Transaction introuvable."
+                )
+            conn.commit()
+
+
 
 def dashboard_summary(user_id, month_value):
     month = _month_start(month_value)
@@ -590,6 +1336,208 @@ def dashboard_summary(user_id, month_value):
         "planned_count": int(row["planned_count"]),
     }
 
+def dashboard_expense_kpis(
+    user_id,
+    month_value,
+    limit=8,
+):
+    month = _month_start(
+        month_value
+    )
+    next_month = _add_months(
+        month,
+        1,
+    )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    CASE
+                        WHEN parent.id IS NULL
+                        THEN category.name
+                        ELSE parent.name
+                             || ' › '
+                             || category.name
+                    END AS name,
+                    SUM(transaction.amount) AS total,
+                    COUNT(*) AS transaction_count
+                FROM finance_transactions AS transaction
+                JOIN finance_categories AS category
+                    ON category.id =
+                        transaction.category_id
+                LEFT JOIN finance_categories AS parent
+                    ON parent.id =
+                        category.parent_id
+                WHERE transaction.user_id = %s
+                  AND transaction.transaction_type = 'expense'
+                  AND transaction.status = 'confirmed'
+                  AND transaction.transaction_date >= %s
+                  AND transaction.transaction_date < %s
+                GROUP BY
+                    category.id,
+                    parent.id,
+                    parent.name
+                ORDER BY
+                    total DESC,
+                    name
+                LIMIT %s;
+                """,
+                (
+                    user_id,
+                    month,
+                    next_month,
+                    int(limit),
+                ),
+            )
+            categories = cur.fetchall()
+
+            cur.execute(
+                """
+                SELECT
+                    tag.name,
+                    SUM(transaction.amount) AS total,
+                    COUNT(
+                        DISTINCT transaction.id
+                    ) AS transaction_count
+                FROM finance_transactions AS transaction
+                JOIN finance_transaction_tags AS transaction_tag
+                    ON transaction_tag.transaction_id =
+                        transaction.id
+                JOIN finance_tags AS tag
+                    ON tag.id =
+                        transaction_tag.tag_id
+                WHERE transaction.user_id = %s
+                  AND transaction.transaction_type = 'expense'
+                  AND transaction.status = 'confirmed'
+                  AND transaction.transaction_date >= %s
+                  AND transaction.transaction_date < %s
+                GROUP BY
+                    tag.id,
+                    tag.name
+                ORDER BY
+                    total DESC,
+                    tag.name
+                LIMIT %s;
+                """,
+                (
+                    user_id,
+                    month,
+                    next_month,
+                    int(limit),
+                ),
+            )
+            tags = cur.fetchall()
+
+    return {
+        "month": month,
+        "categories": categories,
+        "tags": tags,
+    }
+
+
+def payment_reconciliation_summary(
+    user_id,
+    month_value,
+):
+    month = _month_start(
+        month_value
+    )
+    next_month = _add_months(
+        month,
+        1,
+    )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    payment_method.id
+                        AS payment_method_id,
+                    COALESCE(
+                        payment_method.name,
+                        'Sans mode de paiement'
+                    ) AS payment_method_name,
+                    payment_method.sort_order,
+                    COALESCE(
+                        SUM(transaction.amount)
+                        FILTER (
+                            WHERE transaction.transaction_type = 'expense'
+                              AND transaction.status = 'confirmed'
+                        ),
+                        0
+                    ) AS expense_total,
+                    COALESCE(
+                        SUM(transaction.amount)
+                        FILTER (
+                            WHERE transaction.transaction_type = 'income'
+                              AND transaction.status = 'confirmed'
+                        ),
+                        0
+                    ) AS income_total,
+                    COALESCE(
+                        SUM(transaction.amount)
+                        FILTER (
+                            WHERE transaction.reconciliation_status =
+                                'unreconciled'
+                              AND transaction.transaction_type =
+                                'expense'
+                              AND transaction.status = 'confirmed'
+                        ),
+                        0
+                    ) AS unreconciled_expense_total,
+                    COALESCE(
+                        SUM(transaction.amount)
+                        FILTER (
+                            WHERE transaction.reconciliation_status =
+                                'unreconciled'
+                              AND transaction.transaction_type =
+                                'income'
+                              AND transaction.status = 'confirmed'
+                        ),
+                        0
+                    ) AS unreconciled_income_total,
+                    COUNT(*)
+                    FILTER (
+                        WHERE transaction.reconciliation_status =
+                            'unreconciled'
+                          AND transaction.status = 'confirmed'
+                    ) AS unreconciled_count,
+                    COUNT(*)
+                    FILTER (
+                        WHERE transaction.reconciliation_status =
+                            'reconciled'
+                          AND transaction.status = 'confirmed'
+                    ) AS reconciled_count
+                FROM finance_transactions AS transaction
+                LEFT JOIN finance_payment_methods AS payment_method
+                    ON payment_method.id =
+                        transaction.payment_method_id
+                WHERE transaction.user_id = %s
+                  AND transaction.status = 'confirmed'
+                  AND transaction.transaction_date >= %s
+                  AND transaction.transaction_date < %s
+                GROUP BY
+                    payment_method.id,
+                    payment_method.name,
+                    payment_method.sort_order
+                ORDER BY
+                    payment_method.sort_order NULLS LAST,
+                    payment_method.name NULLS LAST;
+                """,
+                (
+                    user_id,
+                    month,
+                    next_month,
+                ),
+            )
+            rows = cur.fetchall()
+
+    return rows
+
+
 
 def save_recurrence(
     user_id,
@@ -601,6 +1549,7 @@ def save_recurrence(
     start_date,
     category_id=None,
     tag_ids=None,
+    payment_method_id=None,
     note=None,
     end_date=None,
     confirmation_mode="confirm",
@@ -612,84 +1561,247 @@ def save_recurrence(
         raise ValueError("Fréquence invalide.")
     if confirmation_mode not in CONFIRMATION_MODES:
         raise ValueError("Mode invalide.")
-    interval = int(frequency_interval or 1)
-    parsed_start = date.fromisoformat(str(start_date))
-    parsed_end = date.fromisoformat(str(end_date)) if end_date else None
-    amount = _money(amount)
-    description = _text(description, "La description", 160, True)
-    note = _text(note, "La note", 1000)
+
+    interval = int(
+        frequency_interval
+        or 1
+    )
+    if interval < 1 or interval > 365:
+        raise ValueError(
+            "L’intervalle doit être compris entre 1 et 365."
+        )
+
+    parsed_start = date.fromisoformat(
+        str(start_date)
+    )
+    parsed_end = (
+        date.fromisoformat(
+            str(end_date)
+        )
+        if end_date
+        else None
+    )
+    if (
+        parsed_end
+        and parsed_end < parsed_start
+    ):
+        raise ValueError(
+            "La date de fin précède la date de début."
+        )
+
+    amount = _money(
+        amount
+    )
+    description = _text(
+        description,
+        "La description",
+        160,
+        True,
+    )
+    note = _text(
+        note,
+        "La note",
+        1000,
+    )
 
     with get_connection() as conn:
         with conn.cursor() as cur:
-            tags = _validate_links(cur, user_id, category_id, tag_ids)
+            tags = _validate_links(
+                cur,
+                user_id,
+                category_id,
+                tag_ids,
+            )
+            validated_payment_method = (
+                _validate_payment_method(
+                    cur,
+                    user_id,
+                    payment_method_id,
+                )
+            )
+
             if recurrence_id:
-                cur.execute("""
-                    UPDATE finance_recurrences
-                    SET transaction_type=%s,description=%s,amount=%s,
-                        category_id=%s,note=%s,frequency_unit=%s,
-                        frequency_interval=%s,start_date=%s,end_date=%s,
-                        confirmation_mode=%s,is_active=TRUE,updated_at=NOW()
-                    WHERE id=%s AND user_id=%s;
-                """, (
-                    transaction_type, description, amount, category_id, note,
-                    frequency_unit, interval, parsed_start, parsed_end,
-                    confirmation_mode, recurrence_id, user_id,
-                ))
-                saved_id = int(recurrence_id)
                 cur.execute(
-                    "DELETE FROM finance_recurrence_tags WHERE recurrence_id=%s;",
+                    """
+                    UPDATE finance_recurrences
+                    SET
+                        transaction_type = %s,
+                        description = %s,
+                        amount = %s,
+                        category_id = %s,
+                        payment_method_id = %s,
+                        note = %s,
+                        frequency_unit = %s,
+                        frequency_interval = %s,
+                        start_date = %s,
+                        end_date = %s,
+                        confirmation_mode = %s,
+                        is_active = TRUE,
+                        updated_at = NOW()
+                    WHERE id = %s
+                      AND user_id = %s;
+                    """,
+                    (
+                        transaction_type,
+                        description,
+                        amount,
+                        category_id,
+                        validated_payment_method,
+                        note,
+                        frequency_unit,
+                        interval,
+                        parsed_start,
+                        parsed_end,
+                        confirmation_mode,
+                        recurrence_id,
+                        user_id,
+                    ),
+                )
+                if cur.rowcount == 0:
+                    raise ValueError(
+                        "Récurrence introuvable."
+                    )
+
+                saved_id = int(
+                    recurrence_id
+                )
+                cur.execute(
+                    """
+                    DELETE FROM finance_recurrence_tags
+                    WHERE recurrence_id = %s;
+                    """,
                     (saved_id,),
                 )
             else:
-                cur.execute("""
-                    INSERT INTO finance_recurrences
-                        (user_id,transaction_type,description,amount,category_id,
-                         note,frequency_unit,frequency_interval,start_date,end_date,
-                         next_date,confirmation_mode)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                cur.execute(
+                    """
+                    INSERT INTO finance_recurrences (
+                        user_id,
+                        transaction_type,
+                        description,
+                        amount,
+                        category_id,
+                        payment_method_id,
+                        note,
+                        frequency_unit,
+                        frequency_interval,
+                        start_date,
+                        end_date,
+                        next_date,
+                        confirmation_mode
+                    )
+                    VALUES (
+                        %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s
+                    )
                     RETURNING id;
-                """, (
-                    user_id, transaction_type, description, amount, category_id,
-                    note, frequency_unit, interval, parsed_start, parsed_end,
-                    parsed_start, confirmation_mode,
-                ))
-                saved_id = int(cur.fetchone()["id"])
+                    """,
+                    (
+                        user_id,
+                        transaction_type,
+                        description,
+                        amount,
+                        category_id,
+                        validated_payment_method,
+                        note,
+                        frequency_unit,
+                        interval,
+                        parsed_start,
+                        parsed_end,
+                        parsed_start,
+                        confirmation_mode,
+                    ),
+                )
+                saved_id = int(
+                    cur.fetchone()["id"]
+                )
+
             for tag_id in tags:
-                cur.execute("""
-                    INSERT INTO finance_recurrence_tags (recurrence_id,tag_id)
-                    VALUES (%s,%s) ON CONFLICT DO NOTHING;
-                """, (saved_id, tag_id))
+                cur.execute(
+                    """
+                    INSERT INTO finance_recurrence_tags (
+                        recurrence_id,
+                        tag_id
+                    )
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING;
+                    """,
+                    (
+                        saved_id,
+                        tag_id,
+                    ),
+                )
+
             conn.commit()
 
 
 def list_recurrences(user_id):
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT
-                    r.*,
-                    CASE WHEN parent.id IS NULL THEN category.name
-                         ELSE parent.name || ' › ' || category.name
+                    recurrence.*,
+                    payment_method.name
+                        AS payment_method_name,
+                    CASE
+                        WHEN parent.id IS NULL
+                        THEN category.name
+                        ELSE parent.name
+                             || ' › '
+                             || category.name
                     END AS category_full_name,
                     COALESCE(
-                        ARRAY_AGG(tag.id ORDER BY tag.name)
-                            FILTER (WHERE tag.id IS NOT NULL),
+                        ARRAY_AGG(
+                            tag.id
+                            ORDER BY tag.name
+                        )
+                        FILTER (
+                            WHERE tag.id IS NOT NULL
+                        ),
                         ARRAY[]::BIGINT[]
                     ) AS tag_ids,
                     COALESCE(
-                        ARRAY_AGG(tag.name ORDER BY tag.name)
-                            FILTER (WHERE tag.id IS NOT NULL),
+                        ARRAY_AGG(
+                            tag.name
+                            ORDER BY tag.name
+                        )
+                        FILTER (
+                            WHERE tag.id IS NOT NULL
+                        ),
                         ARRAY[]::TEXT[]
                     ) AS tag_names
-                FROM finance_recurrences r
-                LEFT JOIN finance_categories category ON category.id=r.category_id
-                LEFT JOIN finance_categories parent ON parent.id=category.parent_id
-                LEFT JOIN finance_recurrence_tags rt ON rt.recurrence_id=r.id
-                LEFT JOIN finance_tags tag ON tag.id=rt.tag_id
-                WHERE r.user_id=%s
-                GROUP BY r.id,category.id,parent.id,parent.name
-                ORDER BY r.is_active DESC,r.next_date,r.description;
-            """, (user_id,))
+                FROM finance_recurrences AS recurrence
+                LEFT JOIN finance_categories AS category
+                    ON category.id =
+                        recurrence.category_id
+                LEFT JOIN finance_categories AS parent
+                    ON parent.id =
+                        category.parent_id
+                LEFT JOIN finance_payment_methods AS payment_method
+                    ON payment_method.id =
+                        recurrence.payment_method_id
+                LEFT JOIN finance_recurrence_tags AS recurrence_tag
+                    ON recurrence_tag.recurrence_id =
+                        recurrence.id
+                LEFT JOIN finance_tags AS tag
+                    ON tag.id =
+                        recurrence_tag.tag_id
+                WHERE recurrence.user_id = %s
+                GROUP BY
+                    recurrence.id,
+                    category.id,
+                    parent.id,
+                    parent.name,
+                    payment_method.id,
+                    payment_method.name
+                ORDER BY
+                    recurrence.is_active DESC,
+                    recurrence.next_date,
+                    recurrence.description;
+                """,
+                (user_id,),
+            )
             return cur.fetchall()
 
 
@@ -703,70 +1815,172 @@ def toggle_recurrence(user_id, recurrence_id, is_active):
             conn.commit()
 
 
-def generate_due_recurrences(user_id, through_date=None):
-    through = through_date or date.today()
+def generate_due_recurrences(
+    user_id,
+    through_date=None,
+):
+    through = (
+        through_date
+        or date.today()
+    )
     created = 0
+
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("""
-                SELECT * FROM finance_recurrences
-                WHERE user_id=%s AND is_active=TRUE AND next_date<=%s
+            cur.execute(
+                """
+                SELECT *
+                FROM finance_recurrences
+                WHERE user_id = %s
+                  AND is_active = TRUE
+                  AND next_date <= %s
                 FOR UPDATE;
-            """, (user_id, through))
+                """,
+                (
+                    user_id,
+                    through,
+                ),
+            )
             rows = cur.fetchall()
+
             for recurrence in rows:
                 cur.execute(
-                    "SELECT tag_id FROM finance_recurrence_tags WHERE recurrence_id=%s;",
+                    """
+                    SELECT tag_id
+                    FROM finance_recurrence_tags
+                    WHERE recurrence_id = %s;
+                    """,
                     (recurrence["id"],),
                 )
-                tags = [row["tag_id"] for row in cur.fetchall()]
-                occurrence = recurrence["next_date"]
+                tags = [
+                    row["tag_id"]
+                    for row in cur.fetchall()
+                ]
+                occurrence = recurrence[
+                    "next_date"
+                ]
+
                 while occurrence <= through:
-                    if recurrence["end_date"] and occurrence > recurrence["end_date"]:
+                    if (
+                        recurrence["end_date"]
+                        and occurrence
+                        > recurrence["end_date"]
+                    ):
                         break
+
                     status = (
                         "confirmed"
-                        if recurrence["confirmation_mode"] == "automatic"
+                        if recurrence[
+                            "confirmation_mode"
+                        ]
+                        == "automatic"
                         else "planned"
                     )
-                    cur.execute("""
-                        INSERT INTO finance_transactions
-                            (user_id,transaction_date,transaction_type,amount,
-                             description,category_id,note,status,recurrence_id,
-                             occurrence_date)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                        ON CONFLICT (recurrence_id,occurrence_date) DO NOTHING
+
+                    cur.execute(
+                        """
+                        INSERT INTO finance_transactions (
+                            user_id,
+                            transaction_date,
+                            transaction_type,
+                            amount,
+                            description,
+                            category_id,
+                            payment_method_id,
+                            note,
+                            status,
+                            reconciliation_status,
+                            recurrence_id,
+                            occurrence_date
+                        )
+                        VALUES (
+                            %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s, 'unreconciled',
+                            %s, %s
+                        )
+                        ON CONFLICT (
+                            recurrence_id,
+                            occurrence_date
+                        )
+                        DO NOTHING
                         RETURNING id;
-                    """, (
-                        user_id, occurrence, recurrence["transaction_type"],
-                        recurrence["amount"], recurrence["description"],
-                        recurrence["category_id"], recurrence["note"], status,
-                        recurrence["id"], occurrence,
-                    ))
+                        """,
+                        (
+                            user_id,
+                            occurrence,
+                            recurrence[
+                                "transaction_type"
+                            ],
+                            recurrence["amount"],
+                            recurrence[
+                                "description"
+                            ],
+                            recurrence[
+                                "category_id"
+                            ],
+                            recurrence.get(
+                                "payment_method_id"
+                            ),
+                            recurrence["note"],
+                            status,
+                            recurrence["id"],
+                            occurrence,
+                        ),
+                    )
                     inserted = cur.fetchone()
+
                     if inserted:
                         created += 1
                         for tag_id in tags:
-                            cur.execute("""
-                                INSERT INTO finance_transaction_tags
-                                    (transaction_id,tag_id)
-                                VALUES (%s,%s) ON CONFLICT DO NOTHING;
-                            """, (inserted["id"], tag_id))
+                            cur.execute(
+                                """
+                                INSERT INTO finance_transaction_tags (
+                                    transaction_id,
+                                    tag_id
+                                )
+                                VALUES (%s, %s)
+                                ON CONFLICT DO NOTHING;
+                                """,
+                                (
+                                    inserted["id"],
+                                    tag_id,
+                                ),
+                            )
+
                     occurrence = _next_date(
                         occurrence,
-                        recurrence["frequency_unit"],
-                        recurrence["frequency_interval"],
+                        recurrence[
+                            "frequency_unit"
+                        ],
+                        recurrence[
+                            "frequency_interval"
+                        ],
                     )
+
                 still_active = not (
                     recurrence["end_date"]
-                    and occurrence > recurrence["end_date"]
+                    and occurrence
+                    > recurrence["end_date"]
                 )
-                cur.execute("""
+
+                cur.execute(
+                    """
                     UPDATE finance_recurrences
-                    SET next_date=%s,is_active=%s,updated_at=NOW()
-                    WHERE id=%s;
-                """, (occurrence, still_active, recurrence["id"]))
+                    SET
+                        next_date = %s,
+                        is_active = %s,
+                        updated_at = NOW()
+                    WHERE id = %s;
+                    """,
+                    (
+                        occurrence,
+                        still_active,
+                        recurrence["id"],
+                    ),
+                )
+
             conn.commit()
+
     return created
 
 
@@ -1028,6 +2242,26 @@ def _parse_import_status(value):
         return "planned"
     raise ValueError(f"Statut inconnu : {value}")
 
+def _parse_reconciliation_status(value):
+    normalized = _normalized_header(value)
+    if not normalized or normalized in {
+        "unreconciled",
+        "a concilier",
+        "non conciliee",
+        "non concilie",
+    }:
+        return "unreconciled"
+    if normalized in {
+        "reconciled",
+        "conciliee",
+        "concilie",
+    }:
+        return "reconciled"
+    raise ValueError(
+        f"Statut de conciliation inconnu : {value}"
+    )
+
+
 
 def _split_import_tags(value):
     if isinstance(value, list):
@@ -1109,6 +2343,9 @@ def _parse_spendee_rows(rows):
                     "tag_names": tag_names,
                     "note": None,
                     "status": "confirmed",
+                    "payment_method_name": None,
+                    "reconciliation_status": "unreconciled",
+                    "reconciliation_date": None,
                     "import_source": "spendee",
                     "import_key": _stable_import_key(
                         "spendee", payload, occurrence_counts[base]
@@ -1127,39 +2364,155 @@ def _parse_jf_csv_rows(rows):
     errors = []
     occurrence_counts = {}
 
-    for row_number, row in enumerate(rows, start=2):
+    for row_number, row in enumerate(
+        rows,
+        start=2,
+    ):
         try:
-            raw_date = str(_pick(row, "Date", "transaction_date") or "").strip()
-            if "T" in raw_date:
-                transaction_date = datetime.fromisoformat(
-                    raw_date.replace("Z", "+00:00")
-                ).date()
-            else:
-                transaction_date = date.fromisoformat(raw_date)
+            raw_date = str(
+                _pick(
+                    row,
+                    "Date",
+                    "transaction_date",
+                )
+                or ""
+            ).strip()
 
-            transaction_type = _parse_import_type(
-                _pick(row, "Type", "transaction_type")
+            if "T" in raw_date:
+                transaction_date = (
+                    datetime.fromisoformat(
+                        raw_date.replace(
+                            "Z",
+                            "+00:00",
+                        )
+                    ).date()
+                )
+            else:
+                transaction_date = (
+                    date.fromisoformat(
+                        raw_date
+                    )
+                )
+
+            transaction_type = (
+                _parse_import_type(
+                    _pick(
+                        row,
+                        "Type",
+                        "transaction_type",
+                    )
+                )
             )
-            amount = _parse_import_amount(_pick(row, "Montant", "Amount", "amount"))
+            amount = _parse_import_amount(
+                _pick(
+                    row,
+                    "Montant",
+                    "Amount",
+                    "amount",
+                )
+            )
             category_name = str(
-                _pick(row, "Catégorie", "Category", "category_full_name") or ""
+                _pick(
+                    row,
+                    "Catégorie",
+                    "Categorie",
+                    "Category",
+                    "category_full_name",
+                )
+                or ""
             ).strip()
             tag_names = _split_import_tags(
-                _pick(row, "Étiquettes", "Tags", "tag_names")
+                _pick(
+                    row,
+                    "Étiquettes",
+                    "Etiquettes",
+                    "Tags",
+                    "tag_names",
+                )
             )
             description = str(
-                _pick(row, "Description", "description")
+                _pick(
+                    row,
+                    "Description",
+                    "description",
+                )
                 or category_name
                 or "Transaction importée"
             ).strip()
-            note = str(_pick(row, "Note", "note") or "").strip() or None
-            status = _parse_import_status(_pick(row, "Statut", "status"))
+            note = (
+                str(
+                    _pick(
+                        row,
+                        "Note",
+                        "note",
+                    )
+                    or ""
+                ).strip()
+                or None
+            )
+            status = _parse_import_status(
+                _pick(
+                    row,
+                    "Statut",
+                    "status",
+                )
+            )
+            payment_method_name = (
+                str(
+                    _pick(
+                        row,
+                        "Mode de paiement",
+                        "Mode paiement",
+                        "Payment method",
+                        "payment_method_name",
+                    )
+                    or ""
+                ).strip()
+                or None
+            )
+            reconciliation_status = (
+                _parse_reconciliation_status(
+                    _pick(
+                        row,
+                        "Conciliation",
+                        "Statut de conciliation",
+                        "reconciliation_status",
+                    )
+                )
+            )
+            raw_reconciliation_date = str(
+                _pick(
+                    row,
+                    "Date de conciliation",
+                    "reconciliation_date",
+                )
+                or ""
+            ).strip()
+            reconciliation_date = (
+                date.fromisoformat(
+                    raw_reconciliation_date
+                )
+                if raw_reconciliation_date
+                else None
+            )
+            if reconciliation_status == "unreconciled":
+                reconciliation_date = None
+
             source = str(
-                _pick(row, "Source importation", "import_source")
+                _pick(
+                    row,
+                    "Source importation",
+                    "import_source",
+                )
                 or "jf_apps_csv"
             ).strip()[:80]
             supplied_key = str(
-                _pick(row, "Clé importation", "Cle importation", "import_key")
+                _pick(
+                    row,
+                    "Clé importation",
+                    "Cle importation",
+                    "import_key",
+                )
                 or ""
             ).strip()
 
@@ -1172,11 +2525,34 @@ def _parse_jf_csv_rows(rows):
                 "tags": tag_names,
                 "note": note,
                 "status": status,
+                "payment_method": payment_method_name,
+                "reconciliation_status": reconciliation_status,
+                "reconciliation_date": (
+                    reconciliation_date.isoformat()
+                    if reconciliation_date
+                    else None
+                ),
             }
-            base = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
-            occurrence_counts[base] = occurrence_counts.get(base, 0) + 1
-            import_key = supplied_key or _stable_import_key(
-                source, payload, occurrence_counts[base]
+            base = json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                default=str,
+            )
+            occurrence_counts[base] = (
+                occurrence_counts.get(
+                    base,
+                    0,
+                )
+                + 1
+            )
+            import_key = (
+                supplied_key
+                or _stable_import_key(
+                    source,
+                    payload,
+                    occurrence_counts[base],
+                )
             )
 
             normalized_rows.append(
@@ -1185,19 +2561,35 @@ def _parse_jf_csv_rows(rows):
                     "transaction_type": transaction_type,
                     "amount": amount,
                     "description": description[:160],
-                    "category_name": category_name[:100] or None,
+                    "category_name": (
+                        category_name[:100]
+                        or None
+                    ),
                     "tag_names": tag_names,
                     "note": note,
                     "status": status,
+                    "payment_method_name": (
+                        payment_method_name[:100]
+                        if payment_method_name
+                        else None
+                    ),
+                    "reconciliation_status": reconciliation_status,
+                    "reconciliation_date": reconciliation_date,
                     "import_source": source,
                     "import_key": import_key[:180],
                     "original_row": row_number,
                 }
             )
         except Exception as error:
-            errors.append(f"Ligne {row_number} : {error}")
+            errors.append(
+                f"Ligne {row_number} : {error}"
+            )
 
-    return normalized_rows, errors, "JF Apps CSV"
+    return (
+        normalized_rows,
+        errors,
+        "JF Apps CSV",
+    )
 
 
 def _parse_jf_json(document):
@@ -1338,7 +2730,24 @@ def prepare_finance_import(user_id, filename, text):
             key=str.casefold,
         ),
         "tags": sorted(
-            {tag for row in rows for tag in row.get("tag_names", [])},
+            {
+                tag
+                for row in rows
+                for tag in row.get(
+                    "tag_names",
+                    [],
+                )
+            },
+            key=str.casefold,
+        ),
+        "payment_methods": sorted(
+            {
+                row["payment_method_name"]
+                for row in rows
+                if row.get(
+                    "payment_method_name"
+                )
+            },
             key=str.casefold,
         ),
     }
@@ -1429,40 +2838,178 @@ def _get_or_create_tag_for_import(cur, user_id, name):
     )
     return int(cur.fetchone()["id"]), 1
 
+def _get_or_create_payment_method_for_import(
+    cur,
+    user_id,
+    name,
+):
+    if not name:
+        return None, 0
 
-def import_finance_rows(user_id, rows, skip_possible_duplicates=True):
+    cur.execute(
+        """
+        SELECT id
+        FROM finance_payment_methods
+        WHERE user_id = %s
+          AND LOWER(name) = LOWER(%s)
+        LIMIT 1;
+        """,
+        (
+            user_id,
+            name,
+        ),
+    )
+    row = cur.fetchone()
+
+    if row:
+        payment_method_id = int(
+            row["id"]
+        )
+        cur.execute(
+            """
+            UPDATE finance_payment_methods
+            SET
+                is_active = TRUE,
+                updated_at = NOW()
+            WHERE id = %s;
+            """,
+            (payment_method_id,),
+        )
+        return payment_method_id, 0
+
+    cur.execute(
+        """
+        SELECT COALESCE(
+            MAX(sort_order),
+            0
+        ) + 1 AS next_order
+        FROM finance_payment_methods
+        WHERE user_id = %s;
+        """,
+        (user_id,),
+    )
+    next_order = int(
+        cur.fetchone()["next_order"]
+    )
+
+    cur.execute(
+        """
+        INSERT INTO finance_payment_methods (
+            user_id,
+            name,
+            sort_order
+        )
+        VALUES (%s, %s, %s)
+        RETURNING id;
+        """,
+        (
+            user_id,
+            name[:100],
+            next_order,
+        ),
+    )
+    return (
+        int(
+            cur.fetchone()["id"]
+        ),
+        1,
+    )
+
+
+
+def import_finance_rows(
+    user_id,
+    rows,
+    skip_possible_duplicates=True,
+):
     imported_count = 0
     skipped_count = 0
     categories_created = 0
     tags_created = 0
+    payment_methods_created = 0
     failures = []
 
     with get_connection() as conn:
         with conn.cursor() as cur:
             for row in rows:
-                cur.execute("SAVEPOINT finance_import_row;")
+                cur.execute(
+                    "SAVEPOINT finance_import_row;"
+                )
                 row_categories_created = 0
                 row_tags_created = 0
+                row_payment_methods_created = 0
+
                 try:
-                    if row.get("duplicate_reason") == "already_imported":
-                        skipped_count += 1
-                        cur.execute("RELEASE SAVEPOINT finance_import_row;")
-                        continue
                     if (
-                        skip_possible_duplicates
-                        and row.get("duplicate_reason") == "possible_duplicate"
+                        row.get(
+                            "duplicate_reason"
+                        )
+                        == "already_imported"
                     ):
                         skipped_count += 1
-                        cur.execute("RELEASE SAVEPOINT finance_import_row;")
+                        cur.execute(
+                            "RELEASE SAVEPOINT finance_import_row;"
+                        )
                         continue
 
-                    category_id, created = _get_or_create_category_for_import(
-                        cur,
-                        user_id,
-                        row.get("category_name"),
-                        row["transaction_type"],
+                    if (
+                        skip_possible_duplicates
+                        and row.get(
+                            "duplicate_reason"
+                        )
+                        == "possible_duplicate"
+                    ):
+                        skipped_count += 1
+                        cur.execute(
+                            "RELEASE SAVEPOINT finance_import_row;"
+                        )
+                        continue
+
+                    category_id, created = (
+                        _get_or_create_category_for_import(
+                            cur,
+                            user_id,
+                            row.get(
+                                "category_name"
+                            ),
+                            row[
+                                "transaction_type"
+                            ],
+                        )
                     )
                     row_categories_created += created
+
+                    payment_method_id, created = (
+                        _get_or_create_payment_method_for_import(
+                            cur,
+                            user_id,
+                            row.get(
+                                "payment_method_name"
+                            ),
+                        )
+                    )
+                    row_payment_methods_created += created
+
+                    reconciliation_status = row.get(
+                        "reconciliation_status"
+                    ) or "unreconciled"
+                    if (
+                        reconciliation_status
+                        not in RECONCILIATION_STATUSES
+                    ):
+                        reconciliation_status = "unreconciled"
+
+                    reconciliation_date = row.get(
+                        "reconciliation_date"
+                    )
+                    if row["status"] == "planned":
+                        reconciliation_status = "unreconciled"
+                        reconciliation_date = None
+                    elif (
+                        reconciliation_status
+                        == "unreconciled"
+                    ):
+                        reconciliation_date = None
 
                     cur.execute(
                         """
@@ -1473,63 +3020,122 @@ def import_finance_rows(user_id, rows, skip_possible_duplicates=True):
                             amount,
                             description,
                             category_id,
+                            payment_method_id,
                             note,
                             status,
+                            reconciliation_status,
+                            reconciliation_date,
                             import_source,
                             import_key,
                             imported_at
                         )
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+                        VALUES (
+                            %s, %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s, %s, %s, NOW()
+                        )
                         ON CONFLICT DO NOTHING
                         RETURNING id;
                         """,
                         (
                             user_id,
-                            row["transaction_date"],
-                            row["transaction_type"],
+                            row[
+                                "transaction_date"
+                            ],
+                            row[
+                                "transaction_type"
+                            ],
                             row["amount"],
-                            row["description"],
+                            row[
+                                "description"
+                            ],
                             category_id,
+                            payment_method_id,
                             row.get("note"),
                             row["status"],
-                            row["import_source"],
-                            row["import_key"],
+                            reconciliation_status,
+                            reconciliation_date,
+                            row[
+                                "import_source"
+                            ],
+                            row[
+                                "import_key"
+                            ],
                         ),
                     )
                     inserted = cur.fetchone()
+
                     if not inserted:
                         skipped_count += 1
-                        cur.execute("ROLLBACK TO SAVEPOINT finance_import_row;")
-                        cur.execute("RELEASE SAVEPOINT finance_import_row;")
+                        cur.execute(
+                            "ROLLBACK TO SAVEPOINT finance_import_row;"
+                        )
+                        cur.execute(
+                            "RELEASE SAVEPOINT finance_import_row;"
+                        )
                         continue
 
-                    transaction_id = int(inserted["id"])
-                    for tag_name in row.get("tag_names", []):
-                        tag_id, created = _get_or_create_tag_for_import(
-                            cur, user_id, tag_name
+                    transaction_id = int(
+                        inserted["id"]
+                    )
+
+                    for tag_name in row.get(
+                        "tag_names",
+                        [],
+                    ):
+                        tag_id, created = (
+                            _get_or_create_tag_for_import(
+                                cur,
+                                user_id,
+                                tag_name,
+                            )
                         )
                         row_tags_created += created
+
                         cur.execute(
                             """
                             INSERT INTO finance_transaction_tags (
-                                transaction_id, tag_id
+                                transaction_id,
+                                tag_id
                             )
                             VALUES (%s, %s)
                             ON CONFLICT DO NOTHING;
                             """,
-                            (transaction_id, tag_id),
+                            (
+                                transaction_id,
+                                tag_id,
+                            ),
                         )
+
                     imported_count += 1
-                    categories_created += row_categories_created
-                    tags_created += row_tags_created
-                    cur.execute("RELEASE SAVEPOINT finance_import_row;")
+                    categories_created += (
+                        row_categories_created
+                    )
+                    tags_created += (
+                        row_tags_created
+                    )
+                    payment_methods_created += (
+                        row_payment_methods_created
+                    )
+
+                    cur.execute(
+                        "RELEASE SAVEPOINT finance_import_row;"
+                    )
                 except Exception as error:
-                    cur.execute("ROLLBACK TO SAVEPOINT finance_import_row;")
-                    cur.execute("RELEASE SAVEPOINT finance_import_row;")
+                    cur.execute(
+                        "ROLLBACK TO SAVEPOINT finance_import_row;"
+                    )
+                    cur.execute(
+                        "RELEASE SAVEPOINT finance_import_row;"
+                    )
                     failures.append(
-                        f"Ligne {row.get('original_row', '?')} : {error}"
+                        (
+                            "Ligne "
+                            f"{row.get('original_row', '?')} "
+                            f": {error}"
+                        )
                     )
                     continue
+
             conn.commit()
 
     return {
@@ -1537,58 +3143,207 @@ def import_finance_rows(user_id, rows, skip_possible_duplicates=True):
         "skipped": skipped_count,
         "categories_created": categories_created,
         "tags_created": tags_created,
+        "payment_methods_created": payment_methods_created,
         "failures": failures,
     }
 
 
 def export_finances(user_id):
-    transactions = list_transactions(user_id, limit=100000)
-    categories = list_categories(user_id, include_inactive=True)
-    tags = list_tags(user_id, include_inactive=True)
-    recurrences = list_recurrences(user_id)
-    goals = list_goals(user_id)
+    transactions = list_transactions(
+        user_id,
+        limit=100000,
+    )
+    categories = list_categories(
+        user_id,
+        include_inactive=True,
+    )
+    tags = list_tags(
+        user_id,
+        include_inactive=True,
+    )
+    payment_methods = list_payment_methods(
+        user_id,
+        include_inactive=True,
+    )
+    recurrences = list_recurrences(
+        user_id
+    )
+    goals = list_goals(
+        user_id
+    )
 
     csv_buffer = io.StringIO()
-    writer = csv.writer(csv_buffer)
-    writer.writerow([
-        "Date", "Type", "Description", "Montant", "Catégorie",
-        "Étiquettes", "Note", "Statut", "Récurrence",
-        "Source importation", "Clé importation",
-    ])
-    for row in reversed(transactions):
-        writer.writerow([
-            row["transaction_date"].isoformat(),
-            TRANSACTION_TYPES[row["transaction_type"]],
-            row["description"],
-            str(row["amount"]),
-            row["category_full_name"] or "",
-            " | ".join(row["tag_names"] or []),
-            row["note"] or "",
-            TRANSACTION_STATUSES[row["status"]],
-            "Oui" if row["recurrence_id"] else "Non",
-            row.get("import_source") or "jf_apps",
-            row.get("import_key") or "",
-        ])
+    writer = csv.writer(
+        csv_buffer
+    )
+    writer.writerow(
+        [
+            "Date",
+            "Type",
+            "Description",
+            "Montant",
+            "Catégorie",
+            "Étiquettes",
+            "Mode de paiement",
+            "Note",
+            "Statut",
+            "Conciliation",
+            "Date de conciliation",
+            "Récurrence",
+            "Source importation",
+            "Clé importation",
+        ]
+    )
+
+    for row in reversed(
+        transactions
+    ):
+        writer.writerow(
+            [
+                row[
+                    "transaction_date"
+                ].isoformat(),
+                TRANSACTION_TYPES[
+                    row[
+                        "transaction_type"
+                    ]
+                ],
+                row["description"],
+                str(row["amount"]),
+                row[
+                    "category_full_name"
+                ]
+                or "",
+                " | ".join(
+                    row[
+                        "tag_names"
+                    ]
+                    or []
+                ),
+                row.get(
+                    "payment_method_name"
+                )
+                or "",
+                row["note"]
+                or "",
+                TRANSACTION_STATUSES[
+                    row["status"]
+                ],
+                RECONCILIATION_STATUSES.get(
+                    row.get(
+                        "reconciliation_status"
+                    )
+                    or "unreconciled",
+                    "À concilier",
+                ),
+                (
+                    row[
+                        "reconciliation_date"
+                    ].isoformat()
+                    if row.get(
+                        "reconciliation_date"
+                    )
+                    else ""
+                ),
+                (
+                    "Oui"
+                    if row[
+                        "recurrence_id"
+                    ]
+                    else "Non"
+                ),
+                row.get(
+                    "import_source"
+                )
+                or "jf_apps",
+                row.get(
+                    "import_key"
+                )
+                or "",
+            ]
+        )
 
     def serial(value):
-        if isinstance(value, (date, Decimal)):
-            return str(value)
-        if isinstance(value, list):
-            return [serial(item) for item in value]
-        if isinstance(value, dict):
-            return {key: serial(item) for key, item in value.items()}
+        if isinstance(
+            value,
+            (
+                date,
+                datetime,
+                Decimal,
+            ),
+        ):
+            return str(
+                value
+            )
+        if isinstance(
+            value,
+            list,
+        ):
+            return [
+                serial(item)
+                for item in value
+            ]
+        if isinstance(
+            value,
+            dict,
+        ):
+            return {
+                key: serial(item)
+                for key, item
+                in value.items()
+            }
         return value
 
     payload = {
         "format": "JF Apps Finances",
-        "version": "1.1.0",
-        "categories": [serial(dict(row)) for row in categories],
-        "tags": [serial(dict(row)) for row in tags],
-        "transactions": [serial(dict(row)) for row in transactions],
-        "recurrences": [serial(dict(row)) for row in recurrences],
-        "goals": [serial(dict(row)) for row in goals],
+        "version": "1.2.0",
+        "categories": [
+            serial(
+                dict(row)
+            )
+            for row in categories
+        ],
+        "tags": [
+            serial(
+                dict(row)
+            )
+            for row in tags
+        ],
+        "payment_methods": [
+            serial(
+                dict(row)
+            )
+            for row in payment_methods
+        ],
+        "transactions": [
+            serial(
+                dict(row)
+            )
+            for row in transactions
+        ],
+        "recurrences": [
+            serial(
+                dict(row)
+            )
+            for row in recurrences
+        ],
+        "goals": [
+            serial(
+                dict(row)
+            )
+            for row in goals
+        ],
     }
+
     return (
-        csv_buffer.getvalue().encode("utf-8-sig"),
-        json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
+        csv_buffer.getvalue().encode(
+            "utf-8-sig"
+        ),
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            indent=2,
+        ).encode(
+            "utf-8"
+        ),
     )

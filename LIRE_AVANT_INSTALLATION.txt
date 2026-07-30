@@ -1,48 +1,145 @@
-JF APPS — FINANCES V1.1.0 — IMPORTATION
+JF APPS — FINANCES V1.2.0
+PAIEMENTS, CONCILIATION ET KPI
 
-Fichiers complets à remplacer à la racine de GitHub :
+Fichiers complets à remplacer ENSEMBLE à la racine de GitHub :
 - finances.py
 - finances_data.py
 - app_versions.py
 - manual.py
 
-Fichier de données prêt à importer :
-- spendee_90_jours_pret_pour_jf_apps.csv
+Aucun changement à app.py, app_access.py, release_notes.py
+ou requirements.txt n’est nécessaire.
 
-INSTALLATION DU CODE
-1. GitHub > Add file > Upload files.
-2. Déposer les quatre fichiers Python ensemble.
-3. Faire Commit changes.
-4. Attendre le déploiement Canner.
-5. Actualiser complètement avec Ctrl+F5 ou rouvrir la PWA.
-6. La carte Finances doit afficher V1.1.0.
+NOUVEAUTÉS DE LA V1.2.0
 
-IMPORTATION DES DONNÉES
-1. Ouvrir Finances.
-2. Ouvrir l’onglet Exporter.
-3. Dans Importer des transactions, choisir :
-   spendee_90_jours_pret_pour_jf_apps.csv
-4. Vérifier la prévisualisation.
-5. Laisser cochée l’option qui ignore les transactions identiques.
-6. Cliquer sur Importer.
+1. MODES DE PAIEMENT
+Valeurs initiales :
+- MC Canadian Tire
+- MC PC
+- Visa Desjardins
+- Direct
 
-Le fichier Spendee original peut aussi être sélectionné directement.
-Le fichier transformé est fourni pour rendre les données faciles à lire
-et pour figer la conversion des dates au fuseau America/Toronto.
+Chaque utilisateur peut :
+- ajouter un mode de paiement;
+- le renommer;
+- l’activer ou le désactiver;
+- le déplacer vers le haut ou le bas;
+- l’attribuer à une transaction;
+- le mémoriser dans une transaction récurrente.
 
-PROTECTIONS
-- prévisualisation obligatoire;
-- détection des clés déjà importées;
-- détection des transactions identiques déjà présentes;
-- création automatique des catégories et étiquettes;
-- erreurs de lignes affichées sans bloquer les autres lignes;
-- aucune suppression des données existantes.
+La gestion se trouve dans :
+Finances > Organisation > Modes de paiement.
 
-BASE DE DONNÉES
-Trois colonnes sont ajoutées automatiquement à finance_transactions :
-- import_source;
-- import_key;
-- imported_at.
+2. CONCILIATION
+Chaque transaction possède maintenant un statut distinct :
+- À concilier;
+- Conciliée.
 
-Aucun script SQL manuel.
-Aucune nouvelle dépendance Python.
+Une date de conciliation facultative peut être enregistrée.
+
+Dans l’historique :
+- le bouton avec deux crochets permet de marquer une transaction conciliée;
+- le bouton Annuler permet de la remettre à concilier;
+- les filtres permettent de choisir un mode de paiement
+  et un statut de conciliation.
+
+3. RÉSUMÉ MENSUEL DE CONCILIATION
+Dans Tableau, une section par mode de paiement affiche :
+- les dépenses;
+- les revenus;
+- les dépenses à concilier;
+- les revenus à concilier;
+- le nombre de transactions à concilier.
+
+Les transactions sans mode de paiement apparaissent sous :
+« Sans mode de paiement ».
+
+4. HISTORIQUE PLUS LISIBLE
+Sur grand écran :
+- dépenses dans la colonne de gauche;
+- revenus dans la colonne de droite.
+
+Sur téléphone :
+- les deux sections sont empilées.
+
+Tous les montants sont justifiés à droite.
+Les descriptions et autres textes restent alignés à gauche.
+
+5. KPI MENSUELS
+Dans Tableau :
+- KPI des dépenses par catégorie;
+- KPI des dépenses par étiquette;
+- montant et part mensuelle pour les catégories.
+
+6. IMPORTATION ET EXPORTATION
+Les CSV et JSON JF Apps peuvent maintenant contenir :
+- Mode de paiement;
+- Conciliation;
+- Date de conciliation.
+
+Lors d’une importation, les modes de paiement manquants
+peuvent être créés automatiquement.
+
+Les fichiers Spendee demeurent compatibles.
+Comme Spendee ne fournit pas le mode de paiement dans le fichier
+utilisé, ces transactions sont importées sans mode de paiement
+et avec le statut « À concilier ».
+
+MIGRATION AUTOMATIQUE DE LA BASE DE DONNÉES
+Au prochain démarrage, l’application :
+- crée la table finance_payment_methods;
+- ajoute payment_method_id aux transactions et récurrences;
+- ajoute reconciliation_status et reconciliation_date
+  aux transactions;
+- crée les index et contraintes nécessaires.
+
+Aucun script SQL manuel n’est requis.
+
+DONNÉES EXISTANTES
+Les transactions déjà présentes sont conservées.
+Elles recevront automatiquement :
+- aucun mode de paiement;
+- le statut À concilier;
+- aucune date de conciliation.
+
+INSTALLATION
+1. Ouvrir le dépôt GitHub.
+2. Choisir Add file > Upload files.
+3. Déposer les quatre fichiers Python ensemble.
+4. Faire Commit changes.
+5. Attendre le déploiement Canner.
+6. Faire Ctrl+F5 ou fermer et rouvrir la PWA.
+7. Vérifier que Finances affiche V1.2.0.
+
+TESTS RECOMMANDÉS
+1. Organisation > Modes de paiement :
+   vérifier les quatre valeurs initiales.
+2. Ajouter une dépense avec MC PC.
+3. Ajouter un revenu avec Direct.
+4. Ouvrir Historique :
+   vérifier les deux colonnes et l’alignement des montants.
+5. Marquer une transaction Conciliée.
+6. Filtrer par MC PC et par À concilier.
+7. Ouvrir Tableau :
+   vérifier les KPI et le résumé de conciliation.
+8. Créer une récurrence avec un mode de paiement.
+9. Exporter en CSV et JSON.
+10. Réimporter un petit fichier de test et vérifier
+    la prévisualisation.
+
+VERSION
+Cette évolution est nommée V1.2.0 parce qu’elle ajoute
+plusieurs fonctions compatibles sans changer la base fonctionnelle
+de l’application.
+
+VÉRIFICATIONS EFFECTUÉES
+- syntaxe Python des quatre fichiers;
+- correspondance des imports internes;
+- construction de l’interface avec un environnement simulé;
+- cohérence du nombre de paramètres des requêtes SQL littérales;
+- lecture des CSV JF Apps enrichis;
+- compatibilité du CSV Spendee de 102 transactions;
+- mise à jour du Manuel et des notes de version.
+
+Le fonctionnement réel avec NiceGUI et PostgreSQL doit être confirmé
+après le premier déploiement Canner.

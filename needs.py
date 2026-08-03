@@ -17,6 +17,10 @@ from shopping import (
     has_active_shopping_session,
     start_shopping_session,
 )
+from grocery_preferences import (
+    categories_are_enabled,
+    normalized_text,
+)
 from utils import ensure_family_selected
 
 
@@ -61,6 +65,11 @@ def needs_panel():
             ui.navigate.to("/?tab=besoins"),
         ),
     ).classes("w-full")
+
+    categories_enabled = categories_are_enabled(
+        user_id,
+        family_id,
+    )
 
     ui.separator()
 
@@ -176,20 +185,25 @@ def needs_panel():
     for item in items:
         store = item["store"] or "Sans magasin"
         category = (
-            item["category"]
-            or "Sans catégorie"
+            item["category"] or "Sans catégorie"
+            if categories_enabled
+            else ""
         )
         grouped[store][category].append(item)
         store_order[store] = item["store_order"]
         category_order[
             (store, category)
-        ] = item["category_order"]
+        ] = (
+            item["category_order"]
+            if categories_enabled
+            else 0
+        )
 
     stores = sorted(
         grouped,
         key=lambda name: (
             store_order[name],
-            name.casefold(),
+            normalized_text(name),
         ),
     )
 
@@ -200,10 +214,11 @@ def needs_panel():
         all_group_keys.append(
             f"store::{store}"
         )
-        for category in grouped[store]:
-            all_group_keys.append(
-                f"category::{store}::{category}"
-            )
+        if categories_enabled:
+            for category in grouped[store]:
+                all_group_keys.append(
+                    f"category::{store}::{category}"
+                )
 
     stored_open = app.storage.user.get(open_key)
     open_groups = set(
@@ -325,6 +340,83 @@ def needs_panel():
     # GROUPES REPLIABLES
     # ---------------------------------------------------------
 
+    def render_need_item(item):
+        def remove_need(selected=item):
+            try:
+                set_item_needed(
+                    user_id,
+                    selected["id"],
+                    False,
+                )
+            except (
+                ValueError,
+                PermissionError,
+            ) as error:
+                ui.notify(
+                    str(error),
+                    type="warning",
+                )
+                return
+
+            app.storage.user[
+                undo_key
+            ] = {
+                "item_id": selected["id"],
+                "name": selected["name"],
+                "expires_at": (
+                    time.time()
+                    + UNDO_SECONDS
+                ),
+            }
+            ui.navigate.to(
+                "/?tab=besoins"
+            )
+
+        row = ui.row().classes(
+            "w-full items-center "
+            "flex-nowrap bg-white "
+            "rounded-lg px-3 py-3 "
+            "gap-2 cursor-pointer "
+            "hover:bg-blue-50"
+        )
+        row.on(
+            "click",
+            remove_need,
+        )
+
+        with row:
+            with ui.column().classes(
+                "gap-0 grow min-w-0"
+            ):
+                title = item["name"]
+                if item["quantity"] != 1:
+                    title += (
+                        f" ({item['quantity']})"
+                    )
+
+                ui.label(title).classes(
+                    "font-bold leading-snug "
+                    "whitespace-normal "
+                    "break-words"
+                ).style(
+                    "overflow-wrap:anywhere;"
+                )
+
+                if item.get("note"):
+                    ui.label(
+                        item["note"]
+                    ).classes(
+                        "text-sm text-gray-500 "
+                        "whitespace-normal"
+                    ).style(
+                        "overflow-wrap:anywhere;"
+                    )
+
+            ui.icon("check").classes(
+                "text-3xl text-green-600 "
+                "shrink-0 ml-auto"
+            )
+
     for store in stores:
         store_key = f"store::{store}"
         store_count = sum(
@@ -358,13 +450,32 @@ def needs_panel():
             "shadow-sm border border-gray-200 "
             "overflow-hidden mt-2"
         ):
+            if not categories_enabled:
+                store_items = sorted(
+                    (
+                        item
+                        for category_items
+                        in grouped[store].values()
+                        for item in category_items
+                    ),
+                    key=lambda row: normalized_text(
+                        row["name"]
+                    ),
+                )
+                with ui.column().classes(
+                    "w-full gap-1 px-1 pb-2"
+                ):
+                    for item in store_items:
+                        render_need_item(item)
+                continue
+
             categories = sorted(
                 grouped[store],
                 key=lambda name: (
                     category_order[
                         (store, name)
                     ],
-                    name.casefold(),
+                    normalized_text(name),
                 ),
             )
 
@@ -374,8 +485,8 @@ def needs_panel():
                 )
                 category_items = sorted(
                     grouped[store][category],
-                    key=lambda row: (
-                        row["name"].casefold()
+                    key=lambda row: normalized_text(
+                        row["name"]
                     ),
                 )
 
@@ -414,90 +525,16 @@ def needs_panel():
                         "w-full gap-1 px-1 pb-2"
                     ):
                         for item in category_items:
-
-                            def remove_need(
-                                selected=item,
-                            ):
-                                try:
-                                    set_item_needed(
-                                        user_id,
-                                        selected["id"],
-                                        False,
-                                    )
-                                except (
-                                    ValueError,
-                                    PermissionError,
-                                ) as error:
-                                    ui.notify(
-                                        str(error),
-                                        type="warning",
-                                    )
-                                    return
-
-                                app.storage.user[
-                                    undo_key
-                                ] = {
-                                    "item_id": selected[
-                                        "id"
-                                    ],
-                                    "name": selected[
-                                        "name"
-                                    ],
-                                    "expires_at": (
-                                        time.time()
-                                        + UNDO_SECONDS
-                                    ),
-                                }
-                                ui.navigate.to(
-                                    "/?tab=besoins"
-                                )
-
-                            row = ui.row().classes(
-                                "w-full items-center "
-                                "flex-nowrap bg-white "
-                                "rounded-lg px-3 py-3 "
-                                "gap-2 cursor-pointer "
-                                "hover:bg-blue-50"
-                            )
-                            row.on(
-                                "click",
-                                remove_need,
-                            )
-
-                            with row:
-                                with ui.column().classes(
-                                    "gap-0 grow min-w-0"
-                                ):
-                                    title = item["name"]
-                                    if item["quantity"] != 1:
-                                        title += (
-                                            f" ({item['quantity']})"
-                                        )
-
-                                    ui.label(title).classes(
-                                        "font-bold leading-snug "
-                                        "whitespace-normal "
-                                        "break-words"
-                                    ).style(
-                                        "overflow-wrap:anywhere;"
-                                    )
-
-                                    if item.get("note"):
-                                        ui.label(
-                                            item["note"]
-                                        ).classes(
-                                            "text-sm text-gray-500 "
-                                            "whitespace-normal"
-                                        ).style(
-                                            "overflow-wrap:anywhere;"
-                                        )
-
-                                ui.icon("check").classes(
-                                    "text-3xl text-green-600 "
-                                    "shrink-0 ml-auto"
-                                )
+                            render_need_item(item)
 
     ui.label(
-        "Les magasins et les catégories suivent "
-        "l’ordre défini dans Catégories."
+        (
+            "Les magasins et les catégories suivent "
+            "l’ordre défini dans Organisation."
+            if categories_enabled
+            else (
+                "Les items sont regroupés uniquement par magasin. "
+                "Les catégories peuvent être réactivées dans Organisation."
+            )
+        )
     ).classes("text-xs text-gray-500 mt-2")

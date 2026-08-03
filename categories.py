@@ -19,6 +19,11 @@ from state import (
     get_current_family_id,
     set_current_family_id,
 )
+from grocery_preferences import (
+    categories_are_enabled,
+    get_or_create_default_category_id,
+    set_categories_enabled,
+)
 from utils import ensure_family_selected
 
 
@@ -107,6 +112,13 @@ def categories_panel():
         ),
     ).classes("w-full")
 
+    categories_enabled = categories_are_enabled(
+        user_id,
+        family_id,
+    )
+    if not categories_enabled:
+        active_section = "stores"
+
     categories = get_categories_with_counts(
         user_id,
         family_id,
@@ -119,9 +131,86 @@ def categories_panel():
     ui.label("Organisation").classes(
         "text-2xl font-bold"
     )
+
+    with ui.card().classes(
+        "w-full p-4 border-l-4 border-primary"
+    ):
+        with ui.row().classes(
+            "w-full items-center justify-between gap-3 flex-wrap"
+        ):
+            with ui.column().classes("gap-0 grow min-w-0"):
+                ui.label(
+                    "Utiliser les catégories"
+                ).classes("text-lg font-bold")
+                ui.label(
+                    "Ce choix s’applique à toute la famille. "
+                    "Les catégories existantes sont conservées "
+                    "lorsqu’elles sont masquées."
+                ).classes("text-sm text-gray-500")
+
+            category_switch = ui.switch(
+                value=categories_enabled,
+            ).props("color=primary")
+
+        def category_preference_changed(event):
+            enabled = bool(event.value)
+            try:
+                set_categories_enabled(
+                    user_id,
+                    family_id,
+                    enabled,
+                )
+                if not enabled:
+                    get_or_create_default_category_id(
+                        user_id,
+                        family_id,
+                    )
+            except (
+                ValueError,
+                PermissionError,
+            ) as error:
+                ui.notify(
+                    str(error),
+                    type="warning",
+                )
+                category_switch.value = not enabled
+                category_switch.update()
+                return
+
+            ui.notify(
+                (
+                    "Les catégories sont maintenant utilisées."
+                    if enabled
+                    else (
+                        "Les catégories sont maintenant masquées. "
+                        "Les données existantes sont conservées."
+                    )
+                ),
+                type="positive",
+            )
+            _reload_categories(
+                family_id,
+                (
+                    "categories"
+                    if enabled
+                    else "stores"
+                ),
+            )
+
+        category_switch.on_value_change(
+            category_preference_changed
+        )
+
     ui.label(
-        "Les flèches déterminent l’ordre utilisé "
-        "dans Besoins et Mode courses."
+        (
+            "Les flèches déterminent l’ordre utilisé "
+            "dans Besoins et Mode courses."
+            if categories_enabled
+            else (
+                "Les items sont maintenant organisés uniquement "
+                "par magasin. Réactivez les catégories ici au besoin."
+            )
+        )
     ).classes("text-sm text-gray-500")
 
     def section_changed(event):
@@ -134,11 +223,12 @@ def categories_panel():
         value=active_section,
         on_change=section_changed,
     ).classes("w-full") as tabs:
-        ui.tab(
-            "categories",
-            label="Catégories",
-            icon="category",
-        )
+        if categories_enabled:
+            ui.tab(
+                "categories",
+                label="Catégories",
+                icon="category",
+            )
         ui.tab(
             "stores",
             label="Magasins",
@@ -151,14 +241,15 @@ def categories_panel():
     ).classes(
         "w-full bg-transparent p-0"
     ):
-        with ui.tab_panel(
-            "categories"
-        ).classes("p-0 gap-3"):
-            _category_section(
-                user_id,
-                family_id,
-                categories,
-            )
+        if categories_enabled:
+            with ui.tab_panel(
+                "categories"
+            ).classes("p-0 gap-3"):
+                _category_section(
+                    user_id,
+                    family_id,
+                    categories,
+                )
 
         with ui.tab_panel(
             "stores"

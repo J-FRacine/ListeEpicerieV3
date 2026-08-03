@@ -22,7 +22,7 @@ from finances_data import (
     cancel_reconciliation_session,
     count_unassigned_confirmed_transactions,
     create_reconciliation_session,
-    dashboard_expense_kpis,
+    dashboard_month_projection,
     dashboard_summary,
     delete_transaction,
     ensure_default_finance_categories,
@@ -138,16 +138,30 @@ FINANCE_CSS = r"""
 .jf-finance-kpi-list {
     display: flex;
     flex-direction: column;
-    gap: .15rem;
+    gap: 0;
     width: 100%;
 }
+.jf-finance-kpi-header,
 .jf-finance-kpi-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns:
+        minmax(0, 1.35fr)
+        minmax(5.4rem, .72fr)
+        minmax(5.4rem, .72fr)
+        minmax(5.8rem, .78fr);
     align-items: center;
-    gap: .5rem;
+    gap: .42rem;
     width: 100%;
-    padding: .28rem 0;
+}
+.jf-finance-kpi-header {
+    padding: .25rem 0 .35rem;
+    color: var(--jf-muted);
+    font-size: .62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+.jf-finance-kpi-row {
+    padding: .34rem 0;
     border-bottom: 1px solid var(--jf-border);
 }
 .jf-finance-kpi-name {
@@ -155,13 +169,59 @@ FINANCE_CSS = r"""
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: .78rem;
+    font-size: .75rem;
 }
 .jf-finance-kpi-value {
     justify-self: end;
-    min-width: 6.5rem;
-    font-size: .78rem;
-    font-weight: 800;
+    min-width: 0;
+    font-size: .74rem;
+    font-weight: 760;
+    text-align: right;
+    white-space: nowrap;
+}
+.jf-finance-kpi-total {
+    font-weight: 900;
+}
+.jf-finance-upcoming-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .55rem;
+    width: 100%;
+}
+.jf-finance-upcoming-row {
+    display: grid;
+    grid-template-columns: 4.6rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .45rem;
+    width: 100%;
+    padding: .35rem 0;
+    border-bottom: 1px solid var(--jf-border);
+}
+.jf-finance-upcoming-date {
+    color: var(--jf-muted);
+    font-size: .68rem;
+    white-space: nowrap;
+}
+.jf-finance-upcoming-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .76rem;
+    font-weight: 760;
+}
+.jf-finance-upcoming-meta {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--jf-muted);
+    font-size: .62rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.jf-finance-upcoming-amount {
+    min-width: 6rem;
+    font-size: .76rem;
+    font-weight: 850;
     text-align: right;
     white-space: nowrap;
 }
@@ -343,6 +403,7 @@ FINANCE_CSS = r"""
         font-size: .86rem;
     }
     .jf-finance-kpi-grid,
+    .jf-finance-upcoming-grid,
     .jf-finance-reconciliation-grid,
     .jf-finance-history-columns {
         grid-template-columns: 1fr;
@@ -367,6 +428,22 @@ FINANCE_CSS = r"""
     }
     .jf-finance-amount {
         min-width: 5.8rem;
+    }
+    .jf-finance-kpi-header,
+    .jf-finance-kpi-row {
+        grid-template-columns:
+            minmax(0, 1fr)
+            4.45rem
+            4.45rem
+            4.75rem;
+        gap: .25rem;
+    }
+    .jf-finance-kpi-header {
+        font-size: .52rem;
+    }
+    .jf-finance-kpi-name,
+    .jf-finance-kpi-value {
+        font-size: .65rem;
     }
 }
 """
@@ -948,18 +1025,21 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
             def render_dashboard():
                 dashboard_box.clear()
 
-                summary = dashboard_summary(
+                projection = dashboard_month_projection(
                     user_id,
                     month_state["value"],
                 )
+                summary = {
+                    "expenses": projection["realized"]["expenses"],
+                    "incomes": projection["realized"]["incomes"],
+                    "difference": projection["realized"]["difference"],
+                    "planned_count": projection["upcoming"]["count"],
+                }
                 goals = goal_progress(
                     user_id,
                     month_state["value"],
                 )
-                kpis = dashboard_expense_kpis(
-                    user_id,
-                    month_state["value"],
-                )
+                kpis = projection["kpis"]
                 predicted_rows = payment_predicted_balance_summary(
                     user_id
                 )
@@ -1006,21 +1086,21 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                     ):
                         values = (
                             (
-                                "Dépenses",
+                                "Dépenses réalisées",
                                 summary[
                                     "expenses"
                                 ],
                                 "jf-finance-expense",
                             ),
                             (
-                                "Revenus",
+                                "Revenus réalisés",
                                 summary[
                                     "incomes"
                                 ],
                                 "jf-finance-income",
                             ),
                             (
-                                "Différence",
+                                "Différence réalisée",
                                 summary[
                                     "difference"
                                 ],
@@ -1060,34 +1140,137 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     )
                                 )
 
-                    if summary[
-                        "planned_count"
-                    ]:
-                        with ui.element(
-                            "div"
+                    upcoming_rows = projection[
+                        "upcoming_transactions"
+                    ]
+                    if upcoming_rows:
+                        ui.label(
+                            "Transactions à venir"
                         ).classes(
-                            "jf-finance-card"
+                            "text-lg font-bold mt-1"
+                        )
+
+                        with ui.element("div").classes(
+                            "jf-finance-summary-grid"
                         ):
-                            with ui.row().classes(
-                                "w-full items-center "
-                                "justify-between gap-2"
-                            ):
-                                ui.label(
+                            for label, value, css in (
+                                (
+                                    "Dépenses à venir",
+                                    projection["upcoming"]["expenses"],
+                                    "jf-finance-expense",
+                                ),
+                                (
+                                    "Revenus à venir",
+                                    projection["upcoming"]["incomes"],
+                                    "jf-finance-income",
+                                ),
+                                (
+                                    "Effet net prévu",
+                                    projection["upcoming"]["difference"],
                                     (
-                                        f"{summary['planned_count']} "
-                                        "transaction(s) à confirmer"
-                                    )
-                                ).classes(
-                                    "text-sm font-bold"
-                                )
-                                ui.button(
-                                    "Voir",
-                                    on_click=lambda: ui.navigate.to(
-                                        "/?tab=finances&section=historique"
+                                        "jf-finance-income"
+                                        if projection["upcoming"]["difference"] >= 0
+                                        else "jf-finance-expense"
                                     ),
-                                ).props(
-                                    "flat dense color=primary"
-                                )
+                                ),
+                            ):
+                                with ui.element("div").classes(
+                                    "jf-finance-summary"
+                                ):
+                                    ui.label(label).classes(
+                                        "jf-finance-summary-label"
+                                    )
+                                    ui.label(
+                                        _balance_money(value)
+                                    ).classes(
+                                        "jf-finance-summary-value "
+                                        + css
+                                    )
+
+                        with ui.element("div").classes(
+                            "jf-finance-upcoming-grid"
+                        ):
+                            for transaction_type, title, css in (
+                                (
+                                    "expense",
+                                    "Dépenses prévues",
+                                    "jf-finance-expense",
+                                ),
+                                (
+                                    "income",
+                                    "Revenus prévus",
+                                    "jf-finance-income",
+                                ),
+                            ):
+                                rows = [
+                                    row
+                                    for row in upcoming_rows
+                                    if row["transaction_type"]
+                                    == transaction_type
+                                ]
+                                with ui.element("section").classes(
+                                    "jf-finance-card"
+                                ):
+                                    ui.label(title).classes(
+                                        "text-sm font-bold"
+                                    )
+                                    if not rows:
+                                        ui.label(
+                                            "Aucune transaction."
+                                        ).classes(
+                                            "text-xs jf-muted"
+                                        )
+
+                                    for row in rows:
+                                        with ui.element("div").classes(
+                                            "jf-finance-upcoming-row"
+                                        ):
+                                            ui.label(
+                                                row[
+                                                    "transaction_date"
+                                                ].strftime("%d/%m")
+                                            ).classes(
+                                                "jf-finance-upcoming-date"
+                                            )
+                                            with ui.column().classes(
+                                                "gap-0 min-w-0"
+                                            ):
+                                                ui.label(
+                                                    row["description"]
+                                                ).classes(
+                                                    "jf-finance-upcoming-name"
+                                                ).tooltip(
+                                                    row["description"]
+                                                )
+                                                meta = []
+                                                if row.get(
+                                                    "payment_method_name"
+                                                ):
+                                                    meta.append(
+                                                        row[
+                                                            "payment_method_name"
+                                                        ]
+                                                    )
+                                                if row.get("projected"):
+                                                    meta.append(
+                                                        "Récurrence projetée"
+                                                    )
+                                                elif row.get("status") == "planned":
+                                                    meta.append(
+                                                        "À confirmer"
+                                                    )
+                                                ui.label(
+                                                    " — ".join(meta)
+                                                    or "Transaction postdatée"
+                                                ).classes(
+                                                    "jf-finance-upcoming-meta"
+                                                )
+                                            ui.label(
+                                                _money(row["amount"])
+                                            ).classes(
+                                                "jf-finance-upcoming-amount "
+                                                + css
+                                            )
 
                     if goals:
                         ui.label(
@@ -1167,142 +1350,125 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                             "text-right"
                                         )
 
-                    if (
-                        kpis["categories"]
-                        or kpis["tags"]
+                    def render_kpi_table(
+                        title,
+                        rows,
+                        *,
+                        empty_message,
+                        color_class,
                     ):
-                        ui.label(
-                            "KPI des dépenses"
-                        ).classes(
+                        with ui.element("section").classes(
+                            "jf-finance-card"
+                        ):
+                            ui.label(title).classes(
+                                "text-sm font-bold"
+                            )
+                            if not rows:
+                                ui.label(
+                                    empty_message
+                                ).classes(
+                                    "text-xs jf-muted"
+                                )
+                                return
+
+                            with ui.element("div").classes(
+                                "jf-finance-kpi-list"
+                            ):
+                                with ui.element("div").classes(
+                                    "jf-finance-kpi-header"
+                                ):
+                                    ui.label("Nom")
+                                    ui.label("Réalisé").classes(
+                                        "text-right"
+                                    )
+                                    ui.label("À venir").classes(
+                                        "text-right"
+                                    )
+                                    ui.label("Total prévu").classes(
+                                        "text-right"
+                                    )
+
+                                for row in rows:
+                                    with ui.element("div").classes(
+                                        "jf-finance-kpi-row"
+                                    ):
+                                        ui.label(
+                                            row["name"]
+                                        ).classes(
+                                            "jf-finance-kpi-name"
+                                        ).tooltip(
+                                            row["name"]
+                                        )
+                                        ui.label(
+                                            _money(row["realized"])
+                                        ).classes(
+                                            "jf-finance-kpi-value "
+                                            + color_class
+                                        )
+                                        ui.label(
+                                            _money(row["upcoming"])
+                                        ).classes(
+                                            "jf-finance-kpi-value jf-muted"
+                                        )
+                                        ui.label(
+                                            _money(row["total"])
+                                        ).classes(
+                                            "jf-finance-kpi-value "
+                                            "jf-finance-kpi-total "
+                                            + color_class
+                                        )
+
+                    for transaction_type, heading, color_class in (
+                        (
+                            "expense",
+                            "KPI des dépenses",
+                            "jf-finance-expense",
+                        ),
+                        (
+                            "income",
+                            "KPI des revenus",
+                            "jf-finance-income",
+                        ),
+                    ):
+                        type_kpis = kpis[transaction_type]
+                        if not (
+                            type_kpis["categories"]
+                            or type_kpis["tags"]
+                        ):
+                            continue
+
+                        ui.label(heading).classes(
                             "text-lg font-bold mt-1"
                         )
-
-                        with ui.element(
-                            "div"
-                        ).classes(
+                        with ui.element("div").classes(
                             "jf-finance-kpi-grid"
                         ):
-                            with ui.element(
-                                "section"
+                            render_kpi_table(
+                                "Par catégorie",
+                                type_kpis["categories"],
+                                empty_message=(
+                                    "Aucune transaction catégorisée."
+                                ),
+                                color_class=color_class,
+                            )
+                            render_kpi_table(
+                                "Par étiquette",
+                                type_kpis["tags"],
+                                empty_message=(
+                                    "Aucune transaction étiquetée."
+                                ),
+                                color_class=color_class,
+                            )
+
+                        if transaction_type == "expense":
+                            ui.label(
+                                "Une transaction portant plusieurs étiquettes "
+                                "peut apparaître dans plusieurs lignes. "
+                                "Les totaux par étiquette ne doivent pas être "
+                                "additionnés pour obtenir le total général."
                             ).classes(
-                                "jf-finance-card"
-                            ):
-                                ui.label(
-                                    "Par catégorie"
-                                ).classes(
-                                    "text-sm font-bold"
-                                )
-
-                                with ui.element(
-                                    "div"
-                                ).classes(
-                                    "jf-finance-kpi-list"
-                                ):
-                                    if not kpis[
-                                        "categories"
-                                    ]:
-                                        ui.label(
-                                            "Aucune dépense catégorisée."
-                                        ).classes(
-                                            "text-xs jf-muted"
-                                        )
-
-                                    for row in kpis[
-                                        "categories"
-                                    ]:
-                                        total = Decimal(
-                                            row[
-                                                "total"
-                                            ]
-                                        )
-                                        share = (
-                                            (
-                                                total
-                                                / summary[
-                                                    "expenses"
-                                                ]
-                                                * 100
-                                            )
-                                            if summary[
-                                                "expenses"
-                                            ] > 0
-                                            else Decimal(
-                                                "0"
-                                            )
-                                        )
-
-                                        with ui.element(
-                                            "div"
-                                        ).classes(
-                                            "jf-finance-kpi-row"
-                                        ):
-                                            ui.label(
-                                                (
-                                                    f"{row['name']} "
-                                                    f"({share:.0f} %)"
-                                                )
-                                            ).classes(
-                                                "jf-finance-kpi-name"
-                                            )
-                                            ui.label(
-                                                _balance_money(total)
-                                            ).classes(
-                                                (
-                                                    "jf-finance-kpi-value "
-                                                    "jf-finance-expense"
-                                                )
-                                            )
-
-                            with ui.element(
-                                "section"
-                            ).classes(
-                                "jf-finance-card"
-                            ):
-                                ui.label(
-                                    "Par étiquette"
-                                ).classes(
-                                    "text-sm font-bold"
-                                )
-
-                                with ui.element(
-                                    "div"
-                                ).classes(
-                                    "jf-finance-kpi-list"
-                                ):
-                                    if not kpis[
-                                        "tags"
-                                    ]:
-                                        ui.label(
-                                            "Aucune dépense étiquetée."
-                                        ).classes(
-                                            "text-xs jf-muted"
-                                        )
-
-                                    for row in kpis[
-                                        "tags"
-                                    ]:
-                                        with ui.element(
-                                            "div"
-                                        ).classes(
-                                            "jf-finance-kpi-row"
-                                        ):
-                                            ui.label(
-                                                row["name"]
-                                            ).classes(
-                                                "jf-finance-kpi-name"
-                                            )
-                                            ui.label(
-                                                _money(
-                                                    row[
-                                                        "total"
-                                                    ]
-                                                )
-                                            ).classes(
-                                                (
-                                                    "jf-finance-kpi-value "
-                                                    "jf-finance-expense"
-                                                )
-                                            )
+                                "text-xs jf-muted"
+                            )
 
                     if unassigned_count:
                         with ui.element("div").classes(

@@ -86,7 +86,15 @@ Il présente toujours :
 
 Le logo et le bouton **Portail** ramènent tous deux au Portail principal.
 
-Sur téléphone, les libellés des actions sont masqués pour conserver de l’espace, mais les mêmes icônes restent disponibles.
+Sur téléphone, l’en-tête est volontairement réduit à :
+
+- le logo;
+- le nom de l’application;
+- sa version;
+- le bouton **Portail**;
+- un menu **Plus**.
+
+Le menu Plus contient Commentaires, Aide, Mon compte, Nouveautés, Installer JF Apps et Déconnexion. Un indicateur peut signaler les commentaires non lus.
 
 ### Applications
 
@@ -111,12 +119,13 @@ Dans **Personnages JDR**, ils donnent accès aux différentes sections de la feu
 
 ### Liste d’épicerie
 
-La liste d’épicerie conserve sa barre inférieure pour les actions quotidiennes :
+La liste d’épicerie conserve une barre inférieure sur une seule ligne pour les actions quotidiennes :
 
 - **Items**;
 - **Besoins**;
-- **Catégories**;
-- **Portail**.
+- **Catégories** lorsque cette fonction est active, ou **Magasins** lorsqu’elle est désactivée.
+
+Le bouton Portail a été retiré de cette barre parce qu’il est déjà disponible dans l’en-tête commun.
 
 Sous l’en-tête commun, une petite barre d’outils donne accès à :
 
@@ -139,14 +148,15 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.3.0",
+        "title": "Finances — V1.4.0",
         "icon": "account_balance_wallet",
-        "caption": "Dépenses, soldes prévus et conciliation par relevé",
+        "caption": "Dépenses, prévisions mensuelles et conciliation",
         "keywords": (
             "finances dépenses revenus récurrences catégories "
             "sous-catégories étiquettes objectifs report csv json "
             "paiement conciliation carte crédit KPI relevé "
-            "solde prévu cumulatif séance historique ajustement"
+            "solde prévu cumulatif séance historique ajustement "
+            "postdaté à venir total prévu projection"
         ),
         "content": """
 ### Objectif de la V1
@@ -207,6 +217,36 @@ Pour chaque mode, il peut aussi préciser :
 Le solde initial reste à concilier jusqu’à son inclusion dans une séance de conciliation.
 
 Une transaction utilise un seul mode de paiement. Une transaction récurrente peut mémoriser son mode de paiement par défaut.
+
+### Tableau mensuel : réalisé et à venir
+
+Le Tableau distingue maintenant trois niveaux pour le mois affiché :
+
+- **Réalisé** : transactions confirmées dont la date est atteinte;
+- **À venir** : transactions prévues, postdatées ou issues d’une récurrence future;
+- **Total prévu** : Réalisé + À venir.
+
+Les récurrences actives sont projetées jusqu’à la fin du mois affiché sans créer immédiatement de transactions confirmées. Un revenu récurrent futur apparaît donc dans les prévisions dès qu’il appartient au mois consulté.
+
+La section **Transactions à venir** affiche séparément :
+
+- les dépenses prévues;
+- les revenus prévus;
+- leur effet net;
+- la date;
+- la description;
+- le mode de paiement;
+- l’indication **Récurrence projetée** ou **À confirmer**.
+
+Les KPI par catégorie et par étiquette utilisent les colonnes :
+
+- Réalisé;
+- À venir;
+- Total prévu.
+
+Les dépenses et les revenus sont présentés dans des blocs distincts. Les noms trop longs sont tronqués, mais le nom complet demeure disponible au survol.
+
+Une transaction portant plusieurs étiquettes peut apparaître dans plusieurs lignes. Les montants par étiquette ne doivent pas être additionnés pour obtenir le total général.
 
 ### Solde prévu cumulatif
 
@@ -698,6 +738,13 @@ Les items supprimés peuvent être restaurés depuis **Activité et corbeille** 
 ### Items fréquents
 
 Les produits souvent ajoutés peuvent être proposés comme raccourcis. Un toucher les replace dans les besoins sans créer de doublon.
+
+
+### Tri alphabétique
+
+Le tri **Alphabétique** est insensible aux majuscules et aux accents.
+
+Par exemple, Café, Céréales et Concombre sont classés selon leurs lettres normales, sans repousser les mots accentués à la fin. L’orthographe originale reste affichée.
 """,
     },
     {
@@ -747,9 +794,11 @@ Depuis **Besoins**, utilisez **Commencer les courses**. Une session interrompue 
 - Un groupe terminé disparaît automatiquement.
 - La liste s'actualise régulièrement pour afficher les changements faits par un autre membre.
 - Lorsqu’un nouvel item est ajouté aux besoins pendant que vous êtes en **Mode courses**, un avis apparaît avec son nom.
-- Le magasin et la catégorie du nouvel item sont ouverts automatiquement afin qu’il soit facile à repérer.
+- Le magasin et, lorsque cette fonction est active, la catégorie du nouvel item sont ouverts automatiquement afin qu’il soit facile à repérer.
 
 L’avis est affiché seulement pour un véritable ajout détecté pendant la session. Restaurer vous-même un article avec **Annuler** ne produit pas un faux avis.
+
+Lorsque les catégories sont désactivées pour la famille, le Mode courses regroupe les articles directement par magasin.
 
 ### Terminer
 
@@ -770,9 +819,24 @@ L’avis est affiché seulement pour un véritable ajout détecté pendant la se
 - **Magasin** : lieu où le produit est normalement acheté, par exemple IGA ou Costco;
 - **Catégorie** : type ou rayon du produit, par exemple Produits laitiers ou Fruits et légumes.
 
+### Catégories facultatives par famille
+
+Dans **Organisation**, l’interrupteur **Utiliser les catégories** s’applique à toute la famille.
+
+Lorsqu’il est désactivé :
+
+- les champs et filtres de catégorie sont masqués;
+- Items, Besoins et Mode courses utilisent seulement les magasins;
+- les catégories existantes et leurs associations sont conservées;
+- les nouveaux items sont liés à une catégorie technique invisible;
+- la fonction peut être réactivée plus tard sans perdre les anciennes données;
+- les autres familles peuvent continuer à utiliser les catégories.
+
 ### Gestion
 
-La page **Catégories** permet de créer, renommer, réordonner, fusionner ou supprimer les éléments permis. L'onglet des magasins offre des fonctions comparables.
+Lorsque les catégories sont actives, la page **Organisation** permet de les créer, renommer, réordonner, fusionner ou supprimer. L’onglet des magasins offre des fonctions comparables.
+
+Lorsque les catégories sont désactivées, la page affiche uniquement les magasins et le réglage permettant de les réactiver.
 
 ### Ordre personnalisé
 

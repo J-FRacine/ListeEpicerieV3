@@ -45,6 +45,10 @@ from feedback_data import (
 )
 from finances import finances_panel
 from finances_data import init_finances_schema
+from grocery_preferences import (
+    categories_are_enabled,
+    init_grocery_preferences_schema,
+)
 from items import items_panel
 from maintenance import maintenance_panel
 from manual import manual_panel
@@ -729,6 +733,13 @@ SHELL_CSS = r"""
     flex-wrap: nowrap;
 }
 
+.jf-suite-actions-mobile {
+    display: none;
+    align-items: center;
+    gap: .05rem;
+    flex-wrap: nowrap;
+}
+
 .jf-suite-action {
     min-height: 2.35rem;
     padding-inline: .58rem;
@@ -813,21 +824,32 @@ SHELL_CSS = r"""
 @media (max-width: 820px) {
     .jf-suite-header {
         top: .25rem;
-        padding: .5rem;
+        padding: .46rem .5rem;
+        border-radius: 14px;
     }
 
-    .jf-suite-action {
-        min-width: 2.35rem;
-        width: 2.35rem;
-        padding: 0;
-    }
-
-    .jf-suite-action .q-btn__content .block {
+    .jf-suite-actions {
         display: none;
     }
 
+    .jf-suite-actions-mobile {
+        display: flex;
+    }
+
+    .jf-suite-action {
+        min-width: 2.3rem;
+        width: 2.3rem;
+        min-height: 2.3rem;
+        padding: 0;
+    }
+
+    .jf-suite-title {
+        max-width: 16rem;
+        font-size: .96rem;
+    }
+
     .jf-suite-subtitle {
-        max-width: 18rem;
+        display: none;
     }
 
     .q-tabs .q-tabs__content {
@@ -846,39 +868,44 @@ SHELL_CSS = r"""
         gap: .7rem;
     }
 
+    .jf-suite-header > .q-row {
+        gap: .35rem;
+    }
+
     .jf-suite-brand-button {
-        min-width: 2.45rem;
-        width: 2.45rem;
-        height: 2.45rem;
+        min-width: 2.35rem;
+        width: 2.35rem;
+        height: 2.35rem;
     }
 
     .jf-suite-title {
-        max-width: 11rem;
-        font-size: .94rem;
+        max-width: 9.8rem;
+        font-size: .9rem;
     }
 
-    .jf-suite-subtitle {
+    .jf-suite-title-icon {
         display: none;
     }
 
     .jf-suite-version {
-        font-size: .58rem;
-        padding: .1rem .35rem;
-    }
-
-    .jf-suite-actions {
-        gap: 0;
+        font-size: .55rem;
+        padding: .08rem .3rem;
     }
 
     .jf-suite-action {
-        min-width: 2.15rem;
-        width: 2.15rem;
-        min-height: 2.15rem;
+        min-width: 2.08rem;
+        width: 2.08rem;
+        min-height: 2.08rem;
     }
 
     .jf-local-tools {
         overflow-x: auto;
         flex-wrap: nowrap;
+        justify-content: flex-start;
+    }
+
+    .jf-local-tool {
+        min-width: 2.6rem;
     }
 
     .jf-local-tool .q-btn__content .block {
@@ -888,6 +915,11 @@ SHELL_CSS = r"""
     .q-tabs .q-tab {
         min-width: 4.7rem;
         font-size: .72rem;
+    }
+
+    .jf-footer .q-btn {
+        min-width: 0;
+        flex: 1 1 0;
     }
 }
 """
@@ -1973,6 +2005,7 @@ def portal_header(
                         ui.icon(
                             meta["icon"]
                         ).classes(
+                            "jf-suite-title-icon "
                             "text-primary text-lg shrink-0"
                         )
                         ui.label(
@@ -2056,6 +2089,101 @@ def portal_header(
                             "Déconnexion",
                             logout,
                         )
+
+            with ui.element("nav").classes(
+                "jf-suite-actions-mobile shrink-0"
+            ):
+                ui.button(
+                    icon="apps",
+                    on_click=lambda: ui.navigate.to(
+                        "/?tab=portail"
+                    ),
+                ).props(
+                    "flat dense round"
+                ).classes(
+                    (
+                        "jf-suite-action jf-suite-action-active"
+                        if app_key == "portal"
+                        else "jf-suite-action"
+                    )
+                ).tooltip(
+                    "Portail"
+                )
+
+                with ui.element("div").classes(
+                    "jf-suite-action-wrap"
+                ):
+                    mobile_more = ui.button(
+                        icon="more_vert",
+                    ).props(
+                        "flat dense round"
+                    ).classes(
+                        "jf-suite-action"
+                    ).tooltip(
+                        "Menu"
+                    )
+
+                    if feedback_count:
+                        ui.label(
+                            str(feedback_count)
+                            if feedback_count < 100
+                            else "99+"
+                        ).classes(
+                            "jf-suite-count"
+                        )
+
+                    with mobile_more:
+                        with ui.menu().props(
+                            "auto-close"
+                        ):
+                            ui.menu_item(
+                                (
+                                    "Commentaires"
+                                    + (
+                                        f" ({feedback_count})"
+                                        if feedback_count
+                                        else ""
+                                    )
+                                ),
+                                lambda: ui.navigate.to(
+                                    (
+                                        "/?tab=commentaires&section=mes"
+                                        if feedback_count
+                                        else (
+                                            "/?tab=commentaires"
+                                            "&section=nouveau"
+                                        )
+                                    )
+                                ),
+                            )
+                            ui.menu_item(
+                                "Aide",
+                                lambda: ui.navigate.to(
+                                    "/?tab=manuel"
+                                ),
+                            )
+                            ui.menu_item(
+                                "Mon compte",
+                                lambda: ui.navigate.to(
+                                    "/?tab=compte"
+                                ),
+                            )
+                            ui.menu_item(
+                                "Nouveautés et versions",
+                                lambda: ui.navigate.to(
+                                    "/?tab=nouveautes"
+                                ),
+                            )
+                            ui.separator()
+                            ui.menu_item(
+                                "Installer JF Apps",
+                                request_pwa_install,
+                            )
+                            ui.menu_item(
+                                "Déconnexion",
+                                logout,
+                            )
+
 
 
 def application_header(
@@ -2144,16 +2272,28 @@ def application_header(
 def bottom_navigation(
     active_tab,
     needs_count=0,
+    *,
+    categories_enabled=True,
 ):
     needs_label = (
         f"Besoins {needs_count}"
         if needs_count > 0
         else "Besoins"
     )
+    organization_label = (
+        "Catégories"
+        if categories_enabled
+        else "Magasins"
+    )
+    organization_icon = (
+        "category"
+        if categories_enabled
+        else "storefront"
+    )
 
     with ui.footer().classes("jf-footer"):
         with ui.row().classes(
-            "w-full justify-around gap-1"
+            "w-full justify-around gap-1 flex-nowrap"
         ):
             items_button = ui.button(
                 "Items",
@@ -2175,21 +2315,11 @@ def bottom_navigation(
                 "jf-nav-button"
             )
 
-            categories_button = ui.button(
-                "Catégories",
-                icon="category",
+            organization_button = ui.button(
+                organization_label,
+                icon=organization_icon,
                 on_click=lambda: ui.navigate.to(
                     "/?tab=categories"
-                ),
-            ).props("flat").classes(
-                "jf-nav-button"
-            )
-
-            portal_button = ui.button(
-                "Portail",
-                icon="apps",
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=portail"
                 ),
             ).props("flat").classes(
                 "jf-nav-button"
@@ -2198,24 +2328,19 @@ def bottom_navigation(
             active_buttons = {
                 "items": items_button,
                 "besoins": needs_button,
-                "categories": categories_button,
+                "categories": organization_button,
             }
 
             active_button = active_buttons.get(
                 active_tab
             )
-
-            if active_button is not None:
+            if active_button:
                 active_button.classes(
                     add="jf-nav-active"
                 )
 
 
-@ui.page(
-    "/",
-    title="JF Apps",
-    language="fr",
-)
+
 def index(
     tab="portail",
     section=None,
@@ -2518,6 +2643,7 @@ def index(
         return
 
     needs_count = 0
+    grocery_categories_enabled = True
 
     with page_container():
         application_header(normalized_tab)
@@ -2526,6 +2652,10 @@ def index(
             show_no_family_message()
         else:
             current_family_id = get_current_family_id()
+            grocery_categories_enabled = categories_are_enabled(
+                user["id"],
+                current_family_id,
+            )
 
             try:
                 family_items = get_items(
@@ -2560,10 +2690,14 @@ def index(
     bottom_navigation(
         normalized_tab,
         needs_count,
+        categories_enabled=(
+            grocery_categories_enabled
+        ),
     )
 
 
 init_db()
+init_grocery_preferences_schema()
 init_app_access_schema()
 init_blood_pressure_schema()
 init_rpg_character_schema()

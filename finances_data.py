@@ -1809,6 +1809,338 @@ def dashboard_expense_kpis(
     }
 
 
+
+def _projection_row(
+    *,
+    transaction_date,
+    transaction_type,
+    amount,
+    description,
+    category_id=None,
+    category_full_name=None,
+    tag_ids=None,
+    tag_names=None,
+    payment_method_id=None,
+    payment_method_name=None,
+    recurrence_id=None,
+    occurrence_date=None,
+    status="planned",
+    projected=False,
+):
+    return {
+        "id": None,
+        "transaction_date": transaction_date,
+        "transaction_type": transaction_type,
+        "amount": Decimal(amount),
+        "description": description,
+        "category_id": category_id,
+        "category_full_name": category_full_name,
+        "tag_ids": list(tag_ids or []),
+        "tag_names": list(tag_names or []),
+        "payment_method_id": payment_method_id,
+        "payment_method_name": payment_method_name,
+        "recurrence_id": recurrence_id,
+        "occurrence_date": occurrence_date,
+        "status": status,
+        "projected": bool(projected),
+    }
+
+
+def _projection_kpis(rows, transaction_type, limit=12):
+    category_values = {}
+    tag_values = {}
+
+    for row in rows:
+        if row["transaction_type"] != transaction_type:
+            continue
+
+        amount = Decimal(row["amount"])
+        bucket = (
+            "upcoming"
+            if row.get("projection_bucket") == "upcoming"
+            else "realized"
+        )
+
+        category_name = (
+            row.get("category_full_name")
+            or "Sans catégorie"
+        )
+        category = category_values.setdefault(
+            category_name,
+            {
+                "name": category_name,
+                "realized": Decimal("0.00"),
+                "upcoming": Decimal("0.00"),
+                "transaction_count": 0,
+            },
+        )
+        category[bucket] += amount
+        category["transaction_count"] += 1
+
+        for tag_name in row.get("tag_names") or []:
+            tag = tag_values.setdefault(
+                tag_name,
+                {
+                    "name": tag_name,
+                    "realized": Decimal("0.00"),
+                    "upcoming": Decimal("0.00"),
+                    "transaction_count": 0,
+                },
+            )
+            tag[bucket] += amount
+            tag["transaction_count"] += 1
+
+    def finalize(values):
+        rows_out = []
+        for row in values.values():
+            row = dict(row)
+            row["total"] = (
+                Decimal(row["realized"])
+                + Decimal(row["upcoming"])
+            )
+            rows_out.append(row)
+
+        rows_out.sort(
+            key=lambda row: (
+                -row["total"],
+                str(row["name"]).casefold(),
+            )
+        )
+        return rows_out[: int(limit)]
+
+    return {
+        "categories": finalize(category_values),
+        "tags": finalize(tag_values),
+    }
+
+
+def dashboard_month_projection(
+    user_id,
+    month_value,
+    *,
+    today_value=None,
+    kpi_limit=12,
+):
+    """Prépare le réalisé, l'à venir et les récurrences projetées du mois."""
+
+    month = _month_start(month_value)
+    next_month = _add_months(month, 1)
+    month_end = next_month - timedelta(days=1)
+    today = (
+        today_value
+        if isinstance(today_value, date)
+        else (
+            date.fromisoformat(str(today_value))
+            if today_value
+            else date.today()
+        )
+    )
+
+    existing = [
+        dict(row)
+        for row in list_transactions(
+            user_id,
+            start_date=month,
+            end_date=month_end,
+            limit=100000,
+        )
+    ]
+
+    existing_occurrences = {
+        (
+            int(row["recurrence_id"]),
+            row.get("occurrence_date")
+            or row["transaction_date"],
+        )
+        for row in existing
+        if row.get("recurrence_id")
+    }
+
+    projected = []
+    if month_end >= today:
+        for recurrence in list_recurrences(user_id):
+            if not recurrence["is_active"]:
+                continue
+
+            occurrence = recurrence["next_date"]
+            if not occurrence:
+                occurrence = recurrence["start_date"]
+
+            if recurrence["end_date"] and recurrence["end_date"] < month:
+                continue
+
+            while occurrence < month:
+                occurrence = _next_date(
+                    occurrence,
+                    recurrence["frequency_unit"],
+                    recurrence["frequency_interval"],
+                )
+
+            while occurrence <= month_end:
+                if (
+                    recurrence["end_date"]
+                    and occurrence > recurrence["end_date"]
+                ):
+                    break
+
+                occurrence_key = (
+                    int(recurrence["id"]),
+                    occurrence,
+                )
+                if occurrence_key not in existing_occurrences:
+                    projected.append(
+                        _projection_row(
+                            transaction_date=occurrence,
+                            transaction_type=recurrence[
+                                "transaction_type"
+                            ],
+                            amount=recurrence["amount"],
+                            description=recurrence["description"],
+                            category_id=recurrence["category_id"],
+                            category_full_name=recurrence[
+                                "category_full_name"
+                            ],
+                            tag_ids=recurrence["tag_ids"],
+                            tag_names=recurrence["tag_names"],
+                            payment_method_id=recurrence[
+                                "payment_method_id"
+                            ],
+                            payment_method_name=recurrence[
+                                "payment_method_name"
+                            ],
+                            recurrence_id=recurrence["id"],
+                            occurrence_date=occurrence,
+                            status="planned",
+                            projected=True,
+                        )
+                    )
+
+                occurrence = _next_date(
+                    occurrence,
+                    recurrence["frequency_unit"],
+                    recurrence["frequency_interval"],
+                )
+
+    combined = []
+    for row in existing:
+        row["projected"] = False
+        is_upcoming = (
+            row["status"] == "planned"
+            or row["transaction_date"] > today
+        )
+        row["projection_bucket"] = (
+            "upcoming"
+            if is_upcoming
+            else "realized"
+        )
+        combined.append(row)
+
+    for row in projected:
+        row["projection_bucket"] = "upcoming"
+        combined.append(row)
+
+    realized_expenses = sum(
+        (
+            Decimal(row["amount"])
+            for row in combined
+            if row["projection_bucket"] == "realized"
+            and row["transaction_type"] == "expense"
+        ),
+        Decimal("0.00"),
+    )
+    realized_incomes = sum(
+        (
+            Decimal(row["amount"])
+            for row in combined
+            if row["projection_bucket"] == "realized"
+            and row["transaction_type"] == "income"
+        ),
+        Decimal("0.00"),
+    )
+    upcoming_expenses = sum(
+        (
+            Decimal(row["amount"])
+            for row in combined
+            if row["projection_bucket"] == "upcoming"
+            and row["transaction_type"] == "expense"
+        ),
+        Decimal("0.00"),
+    )
+    upcoming_incomes = sum(
+        (
+            Decimal(row["amount"])
+            for row in combined
+            if row["projection_bucket"] == "upcoming"
+            and row["transaction_type"] == "income"
+        ),
+        Decimal("0.00"),
+    )
+
+    upcoming_rows = sorted(
+        (
+            row
+            for row in combined
+            if row["projection_bucket"] == "upcoming"
+        ),
+        key=lambda row: (
+            row["transaction_date"],
+            0 if row["transaction_type"] == "income" else 1,
+            str(row["description"]).casefold(),
+        ),
+    )
+
+    return {
+        "month": month,
+        "month_end": month_end,
+        "realized": {
+            "expenses": realized_expenses,
+            "incomes": realized_incomes,
+            "difference": (
+                realized_incomes
+                - realized_expenses
+            ),
+        },
+        "upcoming": {
+            "expenses": upcoming_expenses,
+            "incomes": upcoming_incomes,
+            "difference": (
+                upcoming_incomes
+                - upcoming_expenses
+            ),
+            "count": len(upcoming_rows),
+        },
+        "total": {
+            "expenses": (
+                realized_expenses
+                + upcoming_expenses
+            ),
+            "incomes": (
+                realized_incomes
+                + upcoming_incomes
+            ),
+            "difference": (
+                realized_incomes
+                + upcoming_incomes
+                - realized_expenses
+                - upcoming_expenses
+            ),
+        },
+        "upcoming_transactions": upcoming_rows,
+        "kpis": {
+            "expense": _projection_kpis(
+                combined,
+                "expense",
+                limit=kpi_limit,
+            ),
+            "income": _projection_kpis(
+                combined,
+                "income",
+                limit=kpi_limit,
+            ),
+        },
+    }
+
+
 def payment_reconciliation_summary(
     user_id,
     month_value,
@@ -2446,6 +2778,14 @@ def toggle_goal(user_id, goal_id, is_active):
 
 def _goal_spent(cur, goal, month):
     next_month = _add_months(month, 1)
+    realized_end = min(
+        next_month,
+        date.today() + timedelta(days=1),
+    )
+
+    if realized_end <= month:
+        return Decimal("0.00")
+
     if goal["goal_type"] == "tag":
         cur.execute("""
             SELECT COALESCE(SUM(t.amount),0) AS total
@@ -2455,7 +2795,12 @@ def _goal_spent(cur, goal, month):
               AND t.status='confirmed'
               AND t.transaction_date>=%s AND t.transaction_date<%s
               AND tt.tag_id=%s;
-        """, (goal["user_id"], month, next_month, goal["tag_id"]))
+        """, (
+            goal["user_id"],
+            month,
+            realized_end,
+            goal["tag_id"],
+        ))
     else:
         cur.execute("""
             SELECT COALESCE(SUM(t.amount),0) AS total
@@ -2466,8 +2811,11 @@ def _goal_spent(cur, goal, month):
               AND t.transaction_date>=%s AND t.transaction_date<%s
               AND (t.category_id=%s OR c.parent_id=%s);
         """, (
-            goal["user_id"], month, next_month,
-            goal["category_id"], goal["category_id"],
+            goal["user_id"],
+            month,
+            realized_end,
+            goal["category_id"],
+            goal["category_id"],
         ))
     return Decimal(cur.fetchone()["total"])
 
@@ -4332,7 +4680,7 @@ def export_finances(user_id):
 
     payload = {
         "format": "JF Apps Finances",
-        "version": "1.3.0",
+        "version": "1.4.0",
         "categories": [
             serial(
                 dict(row)

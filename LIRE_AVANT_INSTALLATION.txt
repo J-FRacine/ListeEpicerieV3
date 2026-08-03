@@ -1,127 +1,212 @@
-JF APPS — PORTAIL V1.1.0
-UNIFORMISATION VISUELLE ET DE NAVIGATION
+JF APPS — DÉVELOPPEMENT GROUPÉ
 
-FICHIERS COMPLETS À REMPLACER
-Déposer ensemble à la racine du dépôt GitHub :
+VERSIONS
+- Portail JF Apps V1.2.0
+- Liste d’épicerie V1.1.0
+- Finances V1.4.0
+
+FICHIERS COMPLETS À REMPLACER ENSEMBLE
+Déposer à la racine du dépôt GitHub :
 
 - app.py
 - app_versions.py
 - release_notes.py
 - manual.py
+- grocery_preferences.py
+- items.py
+- needs.py
+- shopping.py
+- categories.py
 - finances.py
-- blood_pressure.py
-- rpg_character.py
-- feedback.py
-- pwa.py
-- manifest.webmanifest
-- service-worker.js
-- offline.html
-- logo_jf.png
-- favicon-32.png
-- favicon-64.png
-- apple-touch-icon.png
-- pwa-icon-192.png
-- pwa-icon-512.png
-- pwa-icon-maskable-512.png
-
-AUCUNE MODIFICATION REQUISE
-Ne pas remplacer les autres fichiers, notamment :
-
 - finances_data.py
-- feedback_data.py
-- blood_pressure_data.py
-- rpg_character_data.py
-- requirements.txt
-- db.py
 
-NOUVEAUTÉS
+AUCUNE NOUVELLE DÉPENDANCE
+Aucune modification n’est requise dans requirements.txt.
 
-1. EN-TÊTE COMMUN
-Le Portail, Liste d’épicerie, Journal de pression, Finances,
-Personnages JDR et Commentaires utilisent le même en-tête.
+Aucun script SQL manuel n’est requis. La table
+grocery_family_preferences est créée automatiquement au démarrage.
 
-Il contient :
-- le logo JF Apps;
+============================================================
+PORTAIL JF APPS V1.2.0
+============================================================
+
+CORRECTION DE L’EN-TÊTE MOBILE
+
+Sur téléphone, l’en-tête contient maintenant seulement :
+- le logo;
 - le nom de l’application;
-- sa version;
-- Portail;
+- la version;
+- le bouton Portail;
+- le menu Plus.
+
+Le menu Plus contient :
 - Commentaires;
 - Aide;
 - Mon compte;
-- un menu pour Nouveautés, Installer JF Apps et Déconnexion.
+- Nouveautés et versions;
+- Installer JF Apps;
+- Déconnexion.
 
-2. BOUTON PORTAIL TOUJOURS VISIBLE
-Le bouton Portail reste présent dans toutes les applications.
-Le logo ramène aussi au Portail.
+Le compteur de commentaires non lus apparaît sur le menu Plus.
 
-Le mode Courses conserve son affichage simplifié, mais reçoit maintenant
-l’en-tête commun.
+Sur ordinateur, l’en-tête complet demeure disponible.
 
-3. MENUS HARMONISÉS
-Les onglets des applications utilisent les mêmes espacements,
-tailles, couleurs et règles d’affichage mobile.
+NAVIGATION INFÉRIEURE DE L’ÉPICERIE
 
-La liste d’épicerie conserve :
-- sa barre inférieure Items / Besoins / Catégories / Portail;
-- une barre locale Planification / Activité / Données.
+Le bouton Portail est retiré de la barre inférieure, puisqu’il est déjà
+disponible dans l’en-tête.
 
-4. VERSIONS
-Versions affichées :
-- Portail JF Apps V1.1.0
-- Liste d’épicerie V1.0.0
-- Journal de pression V1.0.0
-- Finances V1.3.0
-- Personnages JDR V1.0.0
-- Commentaires et suggestions V1.0.0
+La barre contient maintenant une seule ligne :
+- Items;
+- Besoins;
+- Catégories, ou Magasins lorsque les catégories sont désactivées.
 
-La page Nouveautés présente maintenant une matrice des versions actuelles.
+VERSIONS ET NOUVEAUTÉS
 
-5. LOGO, FAVICON ET PWA
-Le monogramme JF Apps est utilisé comme :
-- favicon 32 et 64 pixels;
-- icône Apple;
-- icônes PWA 192 et 512 pixels;
-- icône maskable;
-- logo dans l’en-tête commun.
+La matrice centrale affiche maintenant :
+- Portail V1.2.0;
+- Liste d’épicerie V1.1.0;
+- Finances V1.4.0;
+- les versions actuelles des autres applications.
 
-Le cache PWA est changé de version afin que les nouvelles icônes
-puissent remplacer les anciennes.
+============================================================
+LISTE D’ÉPICERIE V1.1.0
+============================================================
 
+TRI SANS ACCENTS
+
+Le tri alphabétique utilise une clé insensible à la casse et aux accents.
+
+Exemple attendu :
+- Café;
+- Cafe;
+- Céréales;
+- Concombre.
+
+L’orthographe originale reste affichée.
+
+CATÉGORIES FACULTATIVES PAR FAMILLE
+
+Dans Organisation, un interrupteur « Utiliser les catégories » permet
+d’activer ou désactiver cette fonction pour toute la famille.
+
+Lorsqu’elles sont désactivées :
+- les champs de catégorie sont masqués dans Items;
+- le tri et la recherche par catégorie sont masqués;
+- Besoins est regroupé directement par magasin;
+- Mode courses est regroupé directement par magasin;
+- la navigation du bas affiche Magasins;
+- les catégories et associations existantes sont conservées;
+- les autres familles ne sont pas touchées;
+- une réactivation restaure les anciennes catégories.
+
+Les nouveaux items utilisent une catégorie technique « Sans catégorie »
+qui demeure invisible tant que la fonction est désactivée.
+
+============================================================
+FINANCES V1.4.0
+============================================================
+
+RÉCURRENCES FUTURES
+
+Les dépenses et revenus récurrents sont projetés jusqu’à la fin du mois
+affiché dans le Tableau, même si leur date n’est pas encore atteinte.
+
+La projection n’insère pas immédiatement une transaction confirmée et ne
+modifie pas le calendrier réel de la récurrence.
+
+RÉALISÉ / À VENIR / TOTAL PRÉVU
+
+Le Tableau distingue maintenant :
+- Réalisé : transactions confirmées dont la date est atteinte;
+- À venir : transactions prévues, postdatées ou récurrentes futures;
+- Total prévu : Réalisé + À venir.
+
+TRANSACTIONS À VENIR
+
+Une section présente :
+- les dépenses à venir;
+- les revenus à venir;
+- l’effet net prévu;
+- la date;
+- la description;
+- le mode de paiement;
+- Récurrence projetée ou À confirmer.
+
+KPI
+
+Les KPI des dépenses et des revenus présentent :
+- le nom de la catégorie ou de l’étiquette;
+- Réalisé;
+- À venir;
+- Total prévu.
+
+Les montants sont alignés à droite.
+Le Total prévu est visuellement plus marqué.
+Les noms trop longs sont tronqués et leur texte complet est accessible
+au survol.
+
+Une transaction portant plusieurs étiquettes peut apparaître dans
+plusieurs lignes. Les totaux d’étiquettes ne doivent pas être additionnés
+pour obtenir le total général.
+
+OBJECTIFS
+
+Une transaction postdatée n’est plus incluse dans le montant réalisé
+d’un objectif avant que sa date soit atteinte.
+
+============================================================
 INSTALLATION
+============================================================
 
 1. Ouvrir le dépôt GitHub.
 2. Choisir Add file > Upload files.
-3. Déposer tous les fichiers énumérés dans « Fichiers complets à remplacer ».
+3. Déposer les onze fichiers ensemble.
 4. Faire Commit changes.
 5. Attendre la fin du déploiement Canner.
-6. Sur ordinateur, faire Ctrl+F5.
+6. Sur ordinateur, recharger avec Ctrl+F5.
 7. Sur téléphone, fermer complètement la PWA puis la rouvrir.
-8. Si l’ancienne icône reste visible, retirer le raccourci PWA puis
-   réinstaller JF Apps depuis le menu de l’en-tête.
 
+============================================================
 TESTS RECOMMANDÉS
+============================================================
 
-- ouvrir le Portail;
-- ouvrir chacune des quatre applications;
-- vérifier que Portail ramène au Portail;
-- vérifier Commentaires, Aide et Mon compte;
-- vérifier le menu Nouveautés / Installer / Déconnexion;
-- tester le mode Courses;
-- vérifier les onglets sur téléphone;
-- vérifier les versions dans les cartes du Portail;
-- vérifier le favicon dans l’onglet du navigateur.
+PORTAIL MOBILE
+1. Ouvrir chaque application sur téléphone.
+2. Vérifier qu’aucun libellé ne se chevauche.
+3. Tester Portail et le menu Plus.
+4. Vérifier le compteur de commentaires.
 
+ÉPICERIE
+1. Trier Café, Céréales et Concombre par ordre alphabétique.
+2. Ouvrir Organisation.
+3. Désactiver Utiliser les catégories.
+4. Vérifier Items, Besoins et Mode courses.
+5. Ajouter un item sans catégorie visible.
+6. Réactiver les catégories et vérifier que les anciennes associations
+   sont toujours présentes.
+
+FINANCES
+1. Créer une récurrence future dans le mois affiché.
+2. Vérifier son apparition dans Transactions à venir.
+3. Vérifier Réalisé, À venir et Total prévu.
+4. Vérifier les KPI par catégorie et étiquette.
+5. Vérifier séparément les revenus et les dépenses.
+6. Changer de mois et vérifier la projection des récurrences.
+
+============================================================
 VÉRIFICATIONS EFFECTUÉES
+============================================================
 
-- syntaxe Python de tous les fichiers modifiés;
-- imports internes entre les fichiers du paquet;
-- signatures des quatre panneaux d’application;
-- présence de l’en-tête commun dans les routes;
-- présence du bouton Portail dans le mode Courses;
-- manifeste PWA valide;
-- dimensions des six icônes;
-- cache PWA V2;
+- syntaxe Python de tous les fichiers;
+- imports internes du paquet;
+- paramètres SQL littéraux;
+- test du tri sans accents;
+- test de projection d’un revenu de 725 $ toutes les deux semaines;
+- exclusion des transactions postdatées du réalisé;
+- présence du nouvel en-tête mobile;
+- retrait du bouton Portail de la barre inférieure;
 - Manuel et notes de version mis à jour.
 
-Le rendu réel avec NiceGUI et le comportement du cache PWA devront être
+Le rendu réel avec NiceGUI et les opérations PostgreSQL doivent être
 confirmés après le déploiement sur Canner.

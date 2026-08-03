@@ -19,6 +19,11 @@ from state import (
     set_current_family_id,
     set_tri_mode_items,
 )
+from grocery_preferences import (
+    categories_are_enabled,
+    get_or_create_default_category_id,
+    normalized_text,
+)
 from utils import ensure_categories_exist, ensure_family_selected
 
 
@@ -59,8 +64,19 @@ def items_panel():
         ),
     ).classes("w-full")
 
-    if not ensure_categories_exist(user_id, family_id):
-        return
+    categories_enabled = categories_are_enabled(
+        user_id,
+        family_id,
+    )
+
+    if categories_enabled:
+        if not ensure_categories_exist(user_id, family_id):
+            return
+    else:
+        get_or_create_default_category_id(
+            user_id,
+            family_id,
+        )
 
     categories = get_categories(user_id, family_id)
     stores = get_stores(user_id, family_id)
@@ -75,6 +91,18 @@ def items_panel():
         row["name"]: row["id"]
         for row in categories
     }
+    category_id_by_normalized_name = {
+        normalized_text(row["name"]): row["id"]
+        for row in categories
+    }
+    default_category_id = (
+        get_or_create_default_category_id(
+            user_id,
+            family_id,
+        )
+        if not categories_enabled
+        else None
+    )
     store_by_name = {
         row["name"]: row["id"]
         for row in stores
@@ -104,11 +132,13 @@ def items_panel():
                 step=1,
             ).classes("w-28")
 
-            category_input = ui.select(
-                list(category_by_name),
-                value=list(category_by_name)[0],
-                label="Catégorie",
-            ).classes("grow min-w-[170px]")
+            category_input = None
+            if categories_enabled:
+                category_input = ui.select(
+                    list(category_by_name),
+                    value=list(category_by_name)[0],
+                    label="Catégorie",
+                ).classes("grow min-w-[170px]")
 
             store_input = ui.select(
                 list(store_by_name),
@@ -138,9 +168,13 @@ def items_panel():
                 add_item(
                     user_id,
                     family_id,
-                    category_by_name[
-                        category_input.value
-                    ],
+                    (
+                        category_by_name[
+                            category_input.value
+                        ]
+                        if categories_enabled
+                        else default_category_id
+                    ),
                     item_name,
                     int(quantity_input.value or 1),
                     bool(needed_input.value),
@@ -261,14 +295,22 @@ def items_panel():
             "text-xl font-bold"
         )
 
+        sort_options = [
+            "Alphabétique",
+            "Ordre d’ajout",
+            "Magasin",
+        ]
+        if categories_enabled:
+            sort_options.insert(2, "Catégorie")
+
+        current_sort = get_tri_mode_items()
+        if current_sort not in sort_options:
+            current_sort = "Alphabétique"
+            set_tri_mode_items(current_sort)
+
         sort_input = ui.select(
-            [
-                "Alphabétique",
-                "Ordre d’ajout",
-                "Catégorie",
-                "Magasin",
-            ],
-            value=get_tri_mode_items(),
+            sort_options,
+            value=current_sort,
             label="Trier",
         ).props(
             "dense options-dense"
@@ -279,6 +321,8 @@ def items_panel():
         value=search_state["value"],
         placeholder=(
             "Nom, note, catégorie ou magasin"
+            if categories_enabled
+            else "Nom, note ou magasin"
         ),
     ).props(
         "clearable debounce=150 autocomplete=off"
@@ -319,11 +363,13 @@ def items_panel():
                     step=1,
                 ).classes("w-full")
 
-                edit_category = ui.select(
-                    list(category_by_name),
-                    value=item["category"],
-                    label="Catégorie",
-                ).classes("w-full")
+                edit_category = None
+                if categories_enabled:
+                    edit_category = ui.select(
+                        list(category_by_name),
+                        value=item["category"],
+                        label="Catégorie",
+                    ).classes("w-full")
 
                 edit_store = ui.select(
                     list(store_by_name),
@@ -341,9 +387,21 @@ def items_panel():
                         update_item(
                             user_id,
                             item["id"],
-                            category_by_name[
-                                edit_category.value
-                            ],
+                            (
+                                category_by_name[
+                                    edit_category.value
+                                ]
+                                if categories_enabled
+                                else (
+                                    item.get("category_id")
+                                    or category_id_by_normalized_name.get(
+                                        normalized_text(
+                                            item.get("category")
+                                        )
+                                    )
+                                    or default_category_id
+                                )
+                            ),
                             (
                                 edit_name.value or ""
                             ).strip(),
@@ -405,29 +463,35 @@ def items_panel():
 
         if tri_mode == "Alphabétique":
             all_items.sort(
-                key=lambda item: item["name"]
-                .strip()
-                .casefold()
+                key=lambda item: normalized_text(
+                    item["name"]
+                )
             )
         elif tri_mode == "Catégorie":
             all_items.sort(
                 key=lambda item: (
                     item["category_order"],
-                    item["category"].casefold(),
-                    item["name"].casefold(),
+                    normalized_text(item["category"]),
+                    normalized_text(item["name"]),
                 )
             )
         elif tri_mode == "Magasin":
             all_items.sort(
                 key=lambda item: (
                     item["store_order"],
-                    item["store"].casefold(),
-                    item["category_order"],
-                    item["name"].casefold(),
+                    normalized_text(item["store"]),
+                    (
+                        item["category_order"]
+                        if categories_enabled
+                        else 0
+                    ),
+                    normalized_text(item["name"]),
                 )
             )
 
-        query = search_state["value"].strip().casefold()
+        query = normalized_text(
+            search_state["value"]
+        )
         visible = all_items
 
         if query:
@@ -435,12 +499,15 @@ def items_panel():
                 item
                 for item in all_items
                 if any(
-                    query
-                    in str(value or "").casefold()
+                    query in normalized_text(value)
                     for value in (
                         item["name"],
                         item.get("note"),
-                        item["category"],
+                        (
+                            item["category"]
+                            if categories_enabled
+                            else ""
+                        ),
                         item["store"],
                     )
                 )
@@ -547,8 +614,12 @@ def items_panel():
                             )
 
                             ui.label(
-                                f"{item['store']} · "
-                                f"{item['category']}"
+                                (
+                                    f"{item['store']} · "
+                                    f"{item['category']}"
+                                    if categories_enabled
+                                    else item["store"]
+                                )
                             ).classes(
                                 "text-sm text-primary"
                             )

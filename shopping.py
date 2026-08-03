@@ -11,6 +11,10 @@ from db import (
     set_item_needed,
 )
 from state import get_current_family_id
+from grocery_preferences import (
+    categories_are_enabled,
+    normalized_text,
+)
 from utils import ensure_family_selected
 
 
@@ -209,6 +213,11 @@ def shopping_panel():
             "Cette famille n’est plus accessible."
         ).classes("text-negative")
         return
+
+    categories_enabled = categories_are_enabled(
+        user_id,
+        family_id,
+    )
 
     with ui.card().classes(
         "w-full p-4 sticky top-2 z-20 "
@@ -456,24 +465,30 @@ def shopping_panel():
         category_order = {}
 
         for item in current:
-            grouped[
-                item["store"]
-            ][item["category"]].append(item)
-            store_order[
-                item["store"]
-            ] = item["store_order"]
+            store = item["store"] or "Sans magasin"
+            category = (
+                (item["category"] or "Sans catégorie")
+                if categories_enabled
+                else ""
+            )
+            grouped[store][category].append(item)
+            store_order[store] = item["store_order"]
             category_order[
                 (
-                    item["store"],
-                    item["category"],
+                    store,
+                    category,
                 )
-            ] = item["category_order"]
+            ] = (
+                item["category_order"]
+                if categories_enabled
+                else 0
+            )
 
         stores = sorted(
             grouped,
             key=lambda name: (
                 store_order[name],
-                name.casefold(),
+                normalized_text(name),
             ),
         )
 
@@ -482,10 +497,11 @@ def shopping_panel():
 
         for store in stores:
             all_keys.append(f"store::{store}")
-            for category in grouped[store]:
-                all_keys.append(
-                    f"category::{store}::{category}"
-                )
+            if categories_enabled:
+                for category in grouped[store]:
+                    all_keys.append(
+                        f"category::{store}::{category}"
+                    )
 
         open_groups = set(
             app.storage.user.get(
@@ -504,11 +520,12 @@ def shopping_panel():
                 open_groups.add(
                     f"store::{added_store}"
                 )
-                open_groups.add(
-                    "category::"
-                    f"{added_store}::"
-                    f"{added_category}"
-                )
+                if categories_enabled:
+                    open_groups.add(
+                        "category::"
+                        f"{added_store}::"
+                        f"{added_category}"
+                    )
 
             app.storage.user[
                 open_storage_key
@@ -535,6 +552,81 @@ def shopping_panel():
         ui.label(
             "Touchez un article lorsqu’il est dans le panier."
         ).classes("text-sm text-gray-500")
+
+        def render_shopping_item(item):
+            def purchase(selected=item):
+                try:
+                    set_item_needed(
+                        user_id,
+                        selected["id"],
+                        False,
+                    )
+                except (
+                    ValueError,
+                    PermissionError,
+                ) as error:
+                    ui.notify(
+                        str(error),
+                        type="warning",
+                    )
+                    return
+
+                app.storage.user[
+                    undo_key
+                ] = {
+                    "item_id": selected["id"],
+                    "name": selected["name"],
+                    "expires_at": (
+                        time.time()
+                        + UNDO_SECONDS
+                    ),
+                }
+                render_shopping.refresh()
+
+            item_row = ui.row().classes(
+                "w-full items-center flex-nowrap "
+                "bg-white rounded-xl px-4 py-4 "
+                "gap-3 cursor-pointer hover:bg-blue-50"
+            )
+            item_row.on(
+                "click",
+                purchase,
+            )
+
+            with item_row:
+                with ui.column().classes(
+                    "gap-0 grow min-w-0"
+                ):
+                    title = item["name"]
+                    if item["quantity"] != 1:
+                        title += (
+                            f" ({item['quantity']})"
+                        )
+
+                    ui.label(title).classes(
+                        "font-bold text-lg "
+                        "leading-snug whitespace-normal "
+                        "break-words"
+                    ).style(
+                        "overflow-wrap:anywhere;"
+                    )
+
+                    if item.get("note"):
+                        ui.label(
+                            item["note"]
+                        ).classes(
+                            "text-sm text-gray-500 "
+                            "whitespace-normal"
+                        ).style(
+                            "overflow-wrap:anywhere;"
+                        )
+
+                ui.icon(
+                    "shopping_cart_checkout"
+                ).classes(
+                    "text-3xl text-primary "
+                    "shrink-0 ml-auto"
+                )
 
         for store in stores:
             store_key = f"store::{store}"
@@ -568,13 +660,32 @@ def shopping_panel():
                 "w-full bg-white rounded-xl shadow-sm "
                 "border border-gray-200 overflow-hidden mt-2"
             ):
+                if not categories_enabled:
+                    rows = sorted(
+                        (
+                            item
+                            for category_items
+                            in grouped[store].values()
+                            for item in category_items
+                        ),
+                        key=lambda item: normalized_text(
+                            item["name"]
+                        ),
+                    )
+                    with ui.column().classes(
+                        "w-full gap-2 px-1 pb-2"
+                    ):
+                        for item in rows:
+                            render_shopping_item(item)
+                    continue
+
                 categories = sorted(
                     grouped[store],
                     key=lambda name: (
                         category_order[
                             (store, name)
                         ],
-                        name.casefold(),
+                        normalized_text(name),
                     ),
                 )
 
@@ -584,8 +695,8 @@ def shopping_panel():
                     )
                     rows = sorted(
                         grouped[store][category],
-                        key=lambda item: (
-                            item["name"].casefold()
+                        key=lambda item: normalized_text(
+                            item["name"]
                         ),
                     )
 
@@ -622,86 +733,7 @@ def shopping_panel():
                             "w-full gap-2 px-1 pb-2"
                         ):
                             for item in rows:
-
-                                def purchase(
-                                    selected=item,
-                                ):
-                                    try:
-                                        set_item_needed(
-                                            user_id,
-                                            selected["id"],
-                                            False,
-                                        )
-                                    except (
-                                        ValueError,
-                                        PermissionError,
-                                    ) as error:
-                                        ui.notify(
-                                            str(error),
-                                            type="warning",
-                                        )
-                                        return
-
-                                    app.storage.user[
-                                        undo_key
-                                    ] = {
-                                        "item_id": selected[
-                                            "id"
-                                        ],
-                                        "name": selected[
-                                            "name"
-                                        ],
-                                        "expires_at": (
-                                            time.time()
-                                            + UNDO_SECONDS
-                                        ),
-                                    }
-                                    render_shopping.refresh()
-
-                                item_row = ui.row().classes(
-                                    "w-full items-center flex-nowrap "
-                                    "bg-white rounded-xl px-4 py-4 "
-                                    "gap-3 cursor-pointer hover:bg-blue-50"
-                                )
-                                item_row.on(
-                                    "click",
-                                    purchase,
-                                )
-
-                                with item_row:
-                                    with ui.column().classes(
-                                        "gap-0 grow min-w-0"
-                                    ):
-                                        title = item["name"]
-                                        if item["quantity"] != 1:
-                                            title += (
-                                                f" ({item['quantity']})"
-                                            )
-
-                                        ui.label(title).classes(
-                                            "font-bold text-lg "
-                                            "leading-snug whitespace-normal "
-                                            "break-words"
-                                        ).style(
-                                            "overflow-wrap:anywhere;"
-                                        )
-
-                                        if item.get("note"):
-                                            ui.label(
-                                                item["note"]
-                                            ).classes(
-                                                "text-sm text-gray-500 "
-                                                "whitespace-normal"
-                                            ).style(
-                                                "overflow-wrap:anywhere;"
-                                            )
-
-                                    ui.icon(
-                                        "shopping_cart_checkout"
-                                    ).classes(
-                                        "text-3xl text-primary "
-                                        "shrink-0 ml-auto"
-                                    )
+                                render_shopping_item(item)
 
         def confirm_finish():
             with ui.dialog() as dialog:

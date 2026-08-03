@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-PORTAL_VERSION = "1.1.0"
+PORTAL_VERSION = "1.2.0"
 
 APP_LABELS = {
     "portal": "Portail JF Apps",
@@ -13,14 +13,70 @@ APP_LABELS = {
 
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
-    "grocery": "1.0.0",
+    "grocery": "1.1.0",
     "blood_pressure": "1.0.0",
-    "finances": "1.3.0",
+    "finances": "1.4.0",
     "rpg": "1.0.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "portal",
+        "version": "1.2.0",
+        "date": "2026-08-03",
+        "title": "JF Apps — correction mobile et navigation simplifiée",
+        "summary": (
+            "Refonte de l’en-tête sur téléphone et simplification "
+            "de la navigation inférieure de la liste d’épicerie."
+        ),
+        "changes": [
+            "En-tête mobile compact avec logo, nom de l’application, version, Portail et menu Plus.",
+            "Commentaires, Aide, Compte, Nouveautés, Installer et Déconnexion regroupés dans le menu mobile.",
+            "Indicateur de commentaires non lus conservé sur le menu Plus.",
+            "Suppression du bouton Portail redondant dans la navigation inférieure de l’épicerie.",
+            "Navigation inférieure de l’épicerie ramenée à une seule ligne.",
+            "Versions et nouveautés des applications centralisées.",
+        ],
+    },
+    {
+        "app_key": "grocery",
+        "version": "1.1.0",
+        "date": "2026-08-03",
+        "title": "Liste d’épicerie — tri naturel et catégories facultatives",
+        "summary": (
+            "Le tri ignore maintenant les accents et chaque famille "
+            "peut choisir d’utiliser ou non les catégories."
+        ),
+        "changes": [
+            "Tri alphabétique insensible aux accents et à la casse.",
+            "Café, Céréales et leurs équivalents sans accents sont classés naturellement.",
+            "Option Utiliser les catégories configurable par famille.",
+            "Les catégories et associations existantes sont conservées lorsqu’elles sont masquées.",
+            "Items, Besoins et Mode courses se regroupent uniquement par magasin lorsque les catégories sont désactivées.",
+            "Le bouton Organisation devient Magasins dans la navigation lorsque les catégories sont désactivées.",
+        ],
+    },
+    {
+        "app_key": "finances",
+        "version": "1.4.0",
+        "date": "2026-08-03",
+        "title": "Finances — réalisé, à venir et total prévu",
+        "summary": (
+            "Le Tableau projette les récurrences et présente les "
+            "transactions postdatées du mois affiché."
+        ),
+        "changes": [
+            "Projection des dépenses et revenus récurrents jusqu’à la fin du mois affiché.",
+            "Transactions postdatées séparées des montants réalisés.",
+            "Totaux Dépenses à venir, Revenus à venir et Effet net prévu.",
+            "Liste des transactions à venir avec date, description et mode de paiement.",
+            "KPI par catégorie et étiquette avec Réalisé, À venir et Total prévu.",
+            "KPI distincts pour les dépenses et les revenus.",
+            "Noms longs tronqués avec consultation du nom complet.",
+            "Les objectifs mensuels excluent désormais les transactions postdatées du réalisé.",
+        ],
+    },
     {
         "app_key": "portal",
         "version": "1.1.0",

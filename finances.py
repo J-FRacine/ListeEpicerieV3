@@ -63,6 +63,54 @@ from finances_data import (
 
 
 FINANCE_CSS = r"""
+.jf-finance-main-tabs {
+    width: 100%;
+    overflow: hidden;
+    border-bottom: 1px solid var(--jf-border);
+}
+.jf-finance-main-tabs .q-tabs__content {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color:
+        color-mix(in srgb, var(--jf-blue) 36%, transparent)
+        transparent;
+}
+.jf-finance-main-tabs .q-tabs__content::-webkit-scrollbar {
+    height: 4px;
+}
+.jf-finance-main-tabs .q-tabs__content::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: color-mix(
+        in srgb,
+        var(--jf-blue) 36%,
+        transparent
+    );
+}
+.jf-finance-main-tabs .q-tab {
+    flex: 0 0 auto;
+    min-width: max-content;
+    padding-inline: .72rem;
+}
+.jf-finance-main-tabs .q-tab__content {
+    min-width: max-content;
+}
+.jf-finance-main-tabs .q-tab__label {
+    overflow: visible;
+    white-space: nowrap;
+    text-overflow: clip;
+}
+.jf-finance-main-tabs .q-tabs__arrow {
+    color: var(--jf-navy);
+}
+.body--dark .jf-finance-main-tabs .q-tabs__arrow {
+    color: #dceaf6;
+}
+
 .jf-finance-summary-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -393,6 +441,29 @@ FINANCE_CSS = r"""
     gap: 0;
 }
 @media (max-width: 760px) {
+    .jf-finance-main-tabs {
+        margin-top: .15rem;
+    }
+    .jf-finance-main-tabs .q-tabs__content {
+        padding-bottom: .12rem;
+    }
+    .jf-finance-main-tabs .q-tab {
+        min-height: 3rem;
+        padding-inline: .65rem;
+    }
+    .jf-finance-main-tabs .q-tab__content {
+        flex-direction: row;
+        gap: .35rem;
+    }
+    .jf-finance-main-tabs .q-tab__icon {
+        margin-bottom: 0;
+        font-size: 1.2rem;
+    }
+    .jf-finance-main-tabs .q-tab__label {
+        font-size: .72rem;
+        line-height: 1;
+    }
+
     .jf-finance-form-grid {
         grid-template-columns: 1fr 1fr;
     }
@@ -414,6 +485,14 @@ FINANCE_CSS = r"""
     }
 }
 @media (max-width: 430px) {
+    .jf-finance-main-tabs .q-tab {
+        min-height: 2.85rem;
+        padding-inline: .58rem;
+    }
+    .jf-finance-main-tabs .q-tab__label {
+        font-size: .68rem;
+    }
+
     .jf-finance-summary-label {
         font-size: .59rem;
     }
@@ -978,7 +1057,12 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                 on_click=lambda: _transaction_dialog(user_id, refresh_all),
             ).props("color=primary dense")
 
-    with ui.tabs().classes("w-full") as tabs:
+    with ui.tabs().props(
+        "dense no-caps inline-label "
+        "mobile-arrows outside-arrows align=left"
+    ).classes(
+        "jf-finance-main-tabs"
+    ) as tabs:
         dashboard_tab = ui.tab("Tableau", icon="dashboard")
         entry_tab = ui.tab("Saisie", icon="add_circle")
         history_tab = ui.tab("Historique", icon="history")

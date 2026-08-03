@@ -154,7 +154,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.4.0",
+        "title": "Finances — V1.4.1",
         "icon": "account_balance_wallet",
         "caption": "Dépenses, prévisions mensuelles et conciliation",
         "keywords": (
@@ -223,6 +223,23 @@ Pour chaque mode, il peut aussi préciser :
 Le solde initial reste à concilier jusqu’à son inclusion dans une séance de conciliation.
 
 Une transaction utilise un seul mode de paiement. Une transaction récurrente peut mémoriser son mode de paiement par défaut.
+
+### Navigation dans Finances sur téléphone
+
+Le sous-menu de Finances contient plusieurs sections. Sur téléphone, il se présente comme une barre horizontale déroulante.
+
+Les onglets ne sont pas réduits les uns sur les autres. Il est possible de glisser la barre vers la gauche ou la droite pour atteindre :
+
+- Tableau;
+- Saisie;
+- Historique;
+- Récurrences;
+- Objectifs;
+- Conciliation;
+- Organisation;
+- Exporter.
+
+Des flèches peuvent aussi apparaître lorsque tous les onglets ne tiennent pas à l’écran.
 
 ### Tableau mensuel : réalisé et à venir
 

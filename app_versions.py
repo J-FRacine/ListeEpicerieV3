@@ -15,12 +15,29 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.1",
     "blood_pressure": "1.0.0",
-    "finances": "1.4.0",
+    "finances": "1.4.1",
     "rpg": "1.0.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.4.1",
+        "date": "2026-08-03",
+        "title": "Finances — correction du menu sur téléphone",
+        "summary": (
+            "Les onglets du sous-menu Finances ne se chevauchent "
+            "plus sur les écrans étroits."
+        ),
+        "changes": [
+            "Onglets non compressibles avec largeur adaptée à leur libellé.",
+            "Défilement horizontal tactile du sous-menu sur téléphone.",
+            "Icône et texte placés sur une même ligne pour réduire la hauteur.",
+            "Flèches de navigation affichées lorsque tous les onglets ne tiennent pas.",
+            "Aucun changement aux transactions, récurrences ou conciliations.",
+        ],
+    },
     {
         "app_key": "portal",
         "version": "1.2.1",

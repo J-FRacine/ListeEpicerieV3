@@ -1,32 +1,25 @@
-JF APPS — CORRECTIF PORTAIL V1.2.1
+JF APPS — CORRECTIF FINANCES V1.4.1
 
 PROBLÈME
 
-Après le développement groupé, la fonction principale index était encore
-présente dans app.py, mais son décorateur NiceGUI @ui.page("/") avait été
-retiré accidentellement.
-
-Conséquence :
-- NiceGUI démarrait correctement;
-- aucune page n’était enregistrée à l’adresse /;
-- Canner recevait / et /?tab=items, mais NiceGUI répondait 404 Not Found.
+Sur téléphone, les huit onglets du sous-menu Finances étaient comprimés
+dans la largeur disponible. Les libellés se superposaient et devenaient
+illisibles.
 
 CORRECTION
 
-La route suivante est restaurée dans app.py :
+Le sous-menu est maintenant une barre horizontale déroulante :
 
-@ui.page(
-    "/",
-    title="JF Apps",
-    language="fr",
-)
-
-La page principale et tous les onglets utilisant les paramètres ?tab=
-fonctionnent de nouveau.
+- chaque onglet conserve une largeur suffisante;
+- les libellés ne se chevauchent plus;
+- l’icône et le texte sont placés sur une même ligne;
+- la barre se déplace au toucher;
+- des flèches apparaissent lorsque tous les onglets ne tiennent pas;
+- la hauteur du menu est réduite.
 
 FICHIERS COMPLETS À REMPLACER
 
-- app.py
+- finances.py
 - app_versions.py
 - manual.py
 
@@ -34,17 +27,17 @@ INSTALLATION
 
 1. Déposer les trois fichiers ensemble à la racine de GitHub.
 2. Faire Commit changes.
-3. Attendre le redémarrage complet de Canner.
-4. Ouvrir l’adresse principale du site.
-5. Faire Ctrl+F5 si le navigateur affiche encore l’ancienne page.
+3. Attendre le redémarrage Canner.
+4. Fermer puis rouvrir la PWA sur téléphone.
+5. Ouvrir Finances et glisser le sous-menu horizontalement.
 
 TESTS
 
-- ouvrir /;
-- ouvrir /?tab=portail;
-- ouvrir /?tab=items;
-- ouvrir /?tab=finances;
-- vérifier que le Portail affiche V1.2.1.
+- vérifier Tableau, Saisie et Historique;
+- glisser jusqu’à Récurrences, Objectifs et Conciliation;
+- glisser jusqu’à Organisation et Exporter;
+- confirmer qu’aucun texte ne se superpose;
+- vérifier que le panneau sélectionné correspond toujours à l’onglet.
 
 Aucune donnée PostgreSQL n’est modifiée.
 Aucune nouvelle dépendance n’est requise.

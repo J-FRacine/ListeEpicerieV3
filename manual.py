@@ -71,6 +71,12 @@ Utilisez l'icône de déconnexion située dans l'en-tête du Portail ou de certa
         "content": """
 ### Une navigation commune dans tout JF Apps
 
+### Dépannage — page 404 après un déploiement
+
+Le Portail doit répondre à l’adresse principale `/` ainsi qu’aux adresses contenant un onglet, par exemple `/?tab=items`.
+
+La correction Portail V1.2.1 restaure explicitement cette route principale. Une page 404 immédiatement après le déploiement indique généralement que cette route n’a pas été chargée ou que le déploiement n’est pas encore terminé.
+
 Le Portail et toutes les applications utilisent maintenant le même en-tête.
 
 Il présente toujours :

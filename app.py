@@ -2341,6 +2341,11 @@ def bottom_navigation(
 
 
 
+@ui.page(
+    "/",
+    title="JF Apps",
+    language="fr",
+)
 def index(
     tab="portail",
     section=None,

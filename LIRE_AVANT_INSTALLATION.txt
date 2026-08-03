@@ -1,82 +1,50 @@
-JF APPS — CORRECTIF LISTE D’ÉPICERIE V1.1.1
+JF APPS — CORRECTIF PORTAIL V1.2.1
 
-PROBLÈME CORRIGÉ
+PROBLÈME
 
-Le service pouvait s’arrêter avec le message :
+Après le développement groupé, la fonction principale index était encore
+présente dans app.py, mais son décorateur NiceGUI @ui.page("/") avait été
+retiré accidentellement.
 
-The parent slot of Timer(...) has been deleted.
-
-Deux minuteries NiceGUI pouvaient encore tenter d’agir après la fermeture
-ou le remplacement de leur page :
-
-- l’actualisation automatique du Mode courses;
-- la disparition automatique de la carte Annuler dans Besoins.
+Conséquence :
+- NiceGUI démarrait correctement;
+- aucune page n’était enregistrée à l’adresse /;
+- Canner recevait / et /?tab=items, mais NiceGUI répondait 404 Not Found.
 
 CORRECTION
 
-Les deux ui.timer ont été retirés.
+La route suivante est restaurée dans app.py :
 
-Le Mode courses utilise maintenant une tâche contrôlée qui :
-- vérifie que la page existe encore avant chaque actualisation;
-- s’arrête dès que la page est quittée;
-- intercepte toute erreur de contexte sans arrêter le service;
-- conserve l’actualisation automatique toutes les cinq secondes;
-- conserve le bouton Actualiser manuel.
+@ui.page(
+    "/",
+    title="JF Apps",
+    language="fr",
+)
 
-La carte Annuler dans Besoins utilise aussi une tâche contrôlée :
-- elle cesse sans erreur lorsque la page est quittée;
-- le bouton Annuler vérifie maintenant que le délai est encore valide;
-- une ancienne carte ne peut plus restaurer un item après expiration.
+La page principale et tous les onglets utilisant les paramètres ?tab=
+fonctionnent de nouveau.
 
 FICHIERS COMPLETS À REMPLACER
 
-Déposer ensemble à la racine du dépôt GitHub :
-
-- shopping.py
-- needs.py
+- app.py
 - app_versions.py
 - manual.py
 
-AUCUN AUTRE FICHIER À MODIFIER
-
-Conserver notamment les fichiers déjà installés de :
-- Portail V1.2.0;
-- Liste d’épicerie V1.1.0;
-- Finances V1.4.0.
-
-La version de Liste d’épicerie passera à V1.1.1.
-
 INSTALLATION
 
-1. Ouvrir le dépôt GitHub.
-2. Choisir Add file > Upload files.
-3. Déposer les quatre fichiers ensemble.
-4. Faire Commit changes.
-5. Attendre le redémarrage Canner.
-6. Recharger le site avec Ctrl+F5.
-7. Sur téléphone, fermer puis rouvrir la PWA.
+1. Déposer les trois fichiers ensemble à la racine de GitHub.
+2. Faire Commit changes.
+3. Attendre le redémarrage complet de Canner.
+4. Ouvrir l’adresse principale du site.
+5. Faire Ctrl+F5 si le navigateur affiche encore l’ancienne page.
 
-TESTS RECOMMANDÉS
+TESTS
 
-1. Ouvrir Besoins.
-2. Retirer un item puis naviguer immédiatement vers une autre page.
-3. Attendre au moins 10 secondes.
-4. Vérifier que le service reste actif.
-5. Ouvrir Mode courses.
-6. Le laisser ouvert pendant au moins 20 secondes.
-7. Revenir au Portail ou à Items.
-8. Attendre encore au moins 10 secondes.
-9. Vérifier les journaux Canner.
-10. Confirmer qu’aucun message « parent slot of Timer » ne réapparaît.
+- ouvrir /;
+- ouvrir /?tab=portail;
+- ouvrir /?tab=items;
+- ouvrir /?tab=finances;
+- vérifier que le Portail affiche V1.2.1.
 
-VÉRIFICATIONS EFFECTUÉES
-
-- syntaxe Python;
-- absence complète de ui.timer dans shopping.py et needs.py;
-- tâches conservées par une référence jusqu’à leur terminaison;
-- exceptions des tâches récupérées;
-- arrêt lorsque le garde de page est supprimé;
-- version et Manuel mis à jour.
-
-Le test réel du cycle de navigation NiceGUI doit être confirmé après le
-déploiement sur Canner.
+Aucune donnée PostgreSQL n’est modifiée.
+Aucune nouvelle dépendance n’est requise.

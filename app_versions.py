@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-PORTAL_VERSION = "1.2.0"
+PORTAL_VERSION = "1.2.1"
 
 APP_LABELS = {
     "portal": "Portail JF Apps",
@@ -21,6 +21,21 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "portal",
+        "version": "1.2.1",
+        "date": "2026-08-03",
+        "title": "Portail JF Apps — restauration de la page principale",
+        "summary": (
+            "Correction d’une route NiceGUI manquante qui provoquait "
+            "une page 404 après le déploiement."
+        ),
+        "changes": [
+            "Restauration de la route principale / du Portail.",
+            "Les adresses / et /?tab=items sont de nouveau reconnues.",
+            "Aucune donnée ni fonction d’application n’est modifiée.",
+        ],
+    },
     {
         "app_key": "grocery",
         "version": "1.1.1",

@@ -339,6 +339,7 @@ def feedback_panel(
     current_user,
     *,
     initial_section=None,
+    show_heading=True,
 ):
     user_id = current_user[
         "id"
@@ -349,44 +350,45 @@ def feedback_panel(
         )
     )
 
-    with ui.row().classes(
-        "w-full items-center "
-        "justify-between gap-3 flex-wrap"
-    ):
-        with ui.column().classes(
-            "gap-0"
+    if show_heading:
+        with ui.row().classes(
+            "w-full items-center "
+            "justify-between gap-3 flex-wrap"
         ):
-            ui.label(
-                "Commentaires et suggestions"
-            ).classes(
-                "text-2xl font-bold"
-            )
-            ui.label(
-                "Signalez un problème, proposez une amélioration "
-                "ou consultez les réponses reçues."
-            ).classes(
-                "text-sm jf-muted"
-            )
-
-        if current_user[
-            "is_admin"
-        ]:
-            try:
-                attention_count = (
-                    count_feedback_attention()
-                )
-            except Exception:
-                attention_count = 0
-
-            if attention_count:
+            with ui.column().classes(
+                "gap-0"
+            ):
                 ui.label(
-                    (
-                        f"{attention_count} "
-                        "à examiner"
-                    )
+                    "Commentaires et suggestions"
                 ).classes(
-                    "jf-feedback-unread"
+                    "text-2xl font-bold"
                 )
+                ui.label(
+                    "Signalez un problème, proposez une amélioration "
+                    "ou consultez les réponses reçues."
+                ).classes(
+                    "text-sm jf-muted"
+                )
+
+            if current_user[
+                "is_admin"
+            ]:
+                try:
+                    attention_count = (
+                        count_feedback_attention()
+                    )
+                except Exception:
+                    attention_count = 0
+
+                if attention_count:
+                    ui.label(
+                        (
+                            f"{attention_count} "
+                            "à examiner"
+                        )
+                    ).classes(
+                        "jf-feedback-unread"
+                    )
 
     with ui.element("div").classes(
         "jf-feedback-private"

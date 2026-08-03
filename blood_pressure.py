@@ -648,6 +648,7 @@ def blood_pressure_panel(
     *,
     initial_section="saisie",
     quick_entry=False,
+    show_heading=True,
 ):
     user_id = current_user["id"]
     today_server = date.today()
@@ -676,30 +677,31 @@ def blood_pressure_panel(
         )
     )
 
-    with ui.row().classes(
-        "w-full items-start justify-between "
-        "gap-3 flex-wrap"
-    ):
-        with ui.column().classes(
-            "gap-0"
+    if show_heading:
+        with ui.row().classes(
+            "w-full items-start justify-between "
+            "gap-3 flex-wrap"
         ):
-            ui.label(
-                "Journal de pression"
-            ).classes(
-                "text-2xl font-bold"
-            )
-            ui.label(
-                "Saisie privée de la pression "
-                "artérielle et du pouls."
-            ).classes(
-                "text-sm jf-muted"
-            )
+            with ui.column().classes(
+                "gap-0"
+            ):
+                ui.label(
+                    "Journal de pression"
+                ).classes(
+                    "text-2xl font-bold"
+                )
+                ui.label(
+                    "Saisie privée de la pression "
+                    "artérielle et du pouls."
+                ).classes(
+                    "text-sm jf-muted"
+                )
 
-        ui.icon(
-            "monitor_heart"
-        ).classes(
-            "text-4xl text-primary"
-        )
+            ui.icon(
+                "monitor_heart"
+            ).classes(
+                "text-4xl text-primary"
+            )
 
     with ui.element("div").classes(
         "jf-pressure-private"

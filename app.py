@@ -57,7 +57,7 @@ from rpg_character_data import (
 )
 from shared_library import shared_library_panel
 from release_notes import release_notes_panel
-from app_versions import version_label
+from app_versions import PORTAL_VERSION, get_app_version, version_label
 from pwa import (
     configure_pwa,
     request_pwa_install,
@@ -183,6 +183,39 @@ RELEASE_TABS = {
     "nouveautés",
     "versions",
     "releases",
+}
+
+APP_SHELL_META = {
+    "portal": {
+        "title": "Portail JF Apps",
+        "subtitle": "Vos applications au même endroit",
+        "icon": "apps",
+    },
+    "grocery": {
+        "title": "Liste d’épicerie",
+        "subtitle": "Items, besoins, magasins et planification",
+        "icon": "shopping_cart",
+    },
+    "blood_pressure": {
+        "title": "Journal de pression",
+        "subtitle": "Mesures privées et rapports",
+        "icon": "monitor_heart",
+    },
+    "finances": {
+        "title": "Finances",
+        "subtitle": "Dépenses, revenus et conciliation",
+        "icon": "account_balance_wallet",
+    },
+    "rpg": {
+        "title": "Personnages JDR",
+        "subtitle": "Feuilles Pathfinder dans Ravenloft",
+        "icon": "casino",
+    },
+    "feedback": {
+        "title": "Commentaires et suggestions",
+        "subtitle": "Problèmes, idées et réponses",
+        "icon": "rate_review",
+    },
 }
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -608,14 +641,269 @@ body.body--dark {
 
 ui.add_css(APP_CSS, shared=True)
 
+SHELL_CSS = r"""
+.jf-page {
+    max-width: 92rem;
+    padding-top: .85rem;
+}
+
+.jf-suite-header {
+    position: sticky;
+    top: .45rem;
+    z-index: 1500;
+    width: 100%;
+    padding: .62rem .7rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 16px;
+    background: var(--jf-surface);
+    background: color-mix(in srgb, var(--jf-surface) 94%, transparent);
+    box-shadow:
+        0 10px 28px rgba(23, 53, 83, .10),
+        0 2px 7px rgba(23, 53, 83, .06);
+    backdrop-filter: blur(16px);
+}
+
+.jf-suite-brand-button {
+    min-width: 2.7rem;
+    width: 2.7rem;
+    height: 2.7rem;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 13px;
+    border: 1px solid var(--jf-border);
+    background: #f1f2ed;
+}
+
+.jf-suite-brand-button .q-btn__content {
+    width: 100%;
+    height: 100%;
+}
+
+.jf-suite-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.jf-suite-title {
+    color: var(--jf-navy);
+    font-size: 1.08rem;
+    line-height: 1.08;
+    font-weight: 850;
+}
+
+.body--dark .jf-suite-title {
+    color: #e2edf6;
+}
+
+.jf-suite-subtitle {
+    max-width: 31rem;
+    overflow: hidden;
+    color: var(--jf-muted);
+    font-size: .7rem;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.jf-suite-version {
+    display: inline-flex;
+    align-items: center;
+    padding: .14rem .45rem;
+    border-radius: 999px;
+    color: var(--jf-navy);
+    background: var(--jf-blue-soft);
+    font-size: .66rem;
+    font-weight: 850;
+    white-space: nowrap;
+}
+
+.body--dark .jf-suite-version {
+    color: #dceaf5;
+}
+
+.jf-suite-actions {
+    display: flex;
+    align-items: center;
+    gap: .15rem;
+    flex-wrap: nowrap;
+}
+
+.jf-suite-action {
+    min-height: 2.35rem;
+    padding-inline: .58rem;
+    border-radius: 10px;
+    color: var(--jf-navy);
+}
+
+.body--dark .jf-suite-action {
+    color: #dceaf5;
+}
+
+.jf-suite-action-active {
+    color: white !important;
+    background: var(--jf-navy) !important;
+}
+
+.jf-suite-action-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+.jf-suite-count {
+    position: absolute;
+    top: -.2rem;
+    right: -.16rem;
+    min-width: 1.05rem;
+    height: 1.05rem;
+    display: grid;
+    place-items: center;
+    padding: 0 .22rem;
+    border: 2px solid var(--jf-surface);
+    border-radius: 999px;
+    color: white;
+    background: #b43b46;
+    font-size: .58rem;
+    font-weight: 850;
+    pointer-events: none;
+}
+
+.jf-local-tools {
+    width: 100%;
+    padding: .35rem .45rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 13px;
+    background: var(--jf-surface);
+    background: color-mix(in srgb, var(--jf-surface) 90%, transparent);
+}
+
+.jf-local-tool {
+    min-height: 2.2rem;
+    border-radius: 9px;
+}
+
+.q-tabs {
+    width: 100%;
+    border-bottom: 1px solid var(--jf-border);
+}
+
+.q-tabs .q-tab {
+    min-height: 3.35rem;
+    padding-inline: .75rem;
+    color: var(--jf-muted);
+    font-weight: 720;
+}
+
+.q-tabs .q-tab--active {
+    color: var(--jf-navy);
+}
+
+.body--dark .q-tabs .q-tab--active {
+    color: #e2edf6;
+}
+
+.q-tab-panels {
+    border-radius: 14px;
+}
+
+.jf-hero-card {
+    margin-top: .1rem;
+}
+
+@media (max-width: 820px) {
+    .jf-suite-header {
+        top: .25rem;
+        padding: .5rem;
+    }
+
+    .jf-suite-action {
+        min-width: 2.35rem;
+        width: 2.35rem;
+        padding: 0;
+    }
+
+    .jf-suite-action .q-btn__content .block {
+        display: none;
+    }
+
+    .jf-suite-subtitle {
+        max-width: 18rem;
+    }
+
+    .q-tabs .q-tabs__content {
+        justify-content: flex-start;
+    }
+
+    .q-tabs .q-tab {
+        min-width: 5.1rem;
+        padding-inline: .55rem;
+    }
+}
+
+@media (max-width: 520px) {
+    .jf-page {
+        padding-inline: .55rem;
+        gap: .7rem;
+    }
+
+    .jf-suite-brand-button {
+        min-width: 2.45rem;
+        width: 2.45rem;
+        height: 2.45rem;
+    }
+
+    .jf-suite-title {
+        max-width: 11rem;
+        font-size: .94rem;
+    }
+
+    .jf-suite-subtitle {
+        display: none;
+    }
+
+    .jf-suite-version {
+        font-size: .58rem;
+        padding: .1rem .35rem;
+    }
+
+    .jf-suite-actions {
+        gap: 0;
+    }
+
+    .jf-suite-action {
+        min-width: 2.15rem;
+        width: 2.15rem;
+        min-height: 2.15rem;
+    }
+
+    .jf-local-tools {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+    }
+
+    .jf-local-tool .q-btn__content .block {
+        display: none;
+    }
+
+    .q-tabs .q-tab {
+        min-width: 4.7rem;
+        font-size: .72rem;
+    }
+}
+"""
+
+ui.add_css(SHELL_CSS, shared=True)
+
 
 def page_container():
     return ui.column().classes("jf-page gap-4")
 
 
 def brand_mark():
-    with ui.element("div").classes("jf-brand-mark"):
-        ui.label("JF")
+    with ui.element("div").classes("jf-suite-brand-button"):
+        ui.image("/assets/pwa-icon-192.png").props(
+            'fit="cover" alt="Logo JF Apps"'
+        ).classes("jf-suite-logo")
 
 
 def brand_logo(classes=""):
@@ -1078,6 +1366,10 @@ def show_portal(user):
         feedback_attention_count = 0
 
     with page_container():
+        portal_header(
+            app_key="portal",
+        )
+
         with ui.card().classes("jf-hero-card"):
             with ui.row().classes(
                 "w-full items-center justify-between "
@@ -1136,30 +1428,6 @@ def show_portal(user):
                         blood_pressure_portal_reminder(
                             user["id"]
                         )
-
-            with ui.row().classes(
-                "w-full justify-end gap-1 mt-2 flex-wrap"
-            ):
-                ui.button(
-                    "Installer JF Apps",
-                    icon="install_mobile",
-                    on_click=request_pwa_install,
-                ).props("flat color=primary")
-
-                ui.button(
-                    "Mon compte",
-                    icon="account_circle",
-                    on_click=lambda: ui.navigate.to(
-                        "/?tab=compte"
-                    ),
-                ).props("flat color=primary")
-
-                ui.button(
-                    icon="logout",
-                    on_click=logout,
-                ).props("flat round").tooltip(
-                    "Déconnexion"
-                )
 
         accessible_families = get_accessible_families(
             user["id"]
@@ -1228,6 +1496,7 @@ def show_portal(user):
                     ),
                     icon="shopping_cart",
                     action_label="Ouvrir",
+                    badge=version_label("grocery"),
                     on_click=lambda: ui.navigate.to(
                         "/?tab=items"
                     ),
@@ -1243,7 +1512,7 @@ def show_portal(user):
                     ),
                     icon="monitor_heart",
                     action_label="Ouvrir",
-                    badge="App 2",
+                    badge=version_label("blood_pressure"),
                     on_click=lambda: ui.navigate.to(
                         "/?tab=pression"
                     ),
@@ -1275,7 +1544,7 @@ def show_portal(user):
                     ),
                     icon="casino",
                     action_label="Ouvrir",
-                    badge="App 4",
+                    badge=version_label("rpg"),
                     on_click=lambda: ui.navigate.to(
                         "/?tab=jdr"
                     ),
@@ -1606,149 +1875,270 @@ def show_app_access_denied(
         )
 
 
-def portal_header(title):
-    with ui.card().classes("jf-topbar"):
+def _header_feedback_count(user):
+    if not user:
+        return 0
+
+    try:
+        if user["is_admin"]:
+            return count_feedback_attention()
+        return count_user_unread_feedback(user["id"])
+    except Exception:
+        return 0
+
+
+def _suite_action(
+    label,
+    icon,
+    target,
+    *,
+    active=False,
+    count=0,
+):
+    classes = "jf-suite-action"
+    if active:
+        classes += " jf-suite-action-active"
+
+    with ui.element("div").classes("jf-suite-action-wrap"):
+        button = ui.button(
+            label,
+            icon=icon,
+            on_click=lambda: ui.navigate.to(target),
+        ).props(
+            "flat dense no-caps"
+        ).classes(classes)
+
+        if count:
+            ui.label(
+                str(count)
+                if count < 100
+                else "99+"
+            ).classes("jf-suite-count")
+
+    return button
+
+
+def portal_header(
+    title=None,
+    *,
+    app_key="portal",
+    subtitle=None,
+):
+    user = get_current_user()
+    meta = APP_SHELL_META.get(
+        app_key,
+        APP_SHELL_META["portal"],
+    )
+    final_title = title or meta["title"]
+    final_subtitle = subtitle or meta["subtitle"]
+    version = (
+        PORTAL_VERSION
+        if app_key == "portal"
+        else get_app_version(app_key)
+    )
+    feedback_count = _header_feedback_count(user)
+
+    with ui.element("header").classes("jf-suite-header"):
         with ui.row().classes(
-            "w-full items-center justify-between "
-            "gap-3"
+            "w-full items-center justify-between gap-2 flex-nowrap"
         ):
             with ui.row().classes(
-                "items-center gap-2 min-w-0"
+                "items-center gap-2 min-w-0 flex-nowrap"
             ):
-                ui.button(
-                    icon="arrow_back",
+                with ui.button(
                     on_click=lambda: ui.navigate.to(
                         "/?tab=portail"
                     ),
-                ).props("flat round").tooltip(
-                    "Retour au portail"
-                )
-
-                brand_mark()
-
-                ui.label(title).classes(
-                    "jf-topbar-title truncate"
-                )
-
-            ui.button(
-                icon="logout",
-                on_click=logout,
-            ).props("flat round").tooltip(
-                "Déconnexion"
-            )
-
-
-def application_header(active_tab):
-    with ui.element("div").classes(
-        "jf-app-header"
-    ):
-        with ui.row().classes(
-            "w-full items-center justify-between "
-            "gap-3"
-        ):
-            with ui.row().classes(
-                "items-center gap-3 min-w-0"
-            ):
-                brand_mark()
+                ).props(
+                    "flat dense"
+                ).classes(
+                    "jf-suite-brand-button"
+                ).tooltip(
+                    "Retour au Portail"
+                ):
+                    ui.image(
+                        "/assets/pwa-icon-192.png"
+                    ).props(
+                        'fit="cover" alt="Logo JF Apps"'
+                    ).classes(
+                        "jf-suite-logo"
+                    )
 
                 with ui.column().classes(
                     "gap-0 min-w-0"
                 ):
+                    with ui.row().classes(
+                        "items-center gap-2 flex-nowrap min-w-0"
+                    ):
+                        ui.icon(
+                            meta["icon"]
+                        ).classes(
+                            "text-primary text-lg shrink-0"
+                        )
+                        ui.label(
+                            final_title
+                        ).classes(
+                            "jf-suite-title truncate"
+                        )
+                        if version:
+                            ui.label(
+                                f"V{version}"
+                            ).classes(
+                                "jf-suite-version"
+                            )
+
                     ui.label(
-                        "Liste d’épicerie"
+                        final_subtitle
                     ).classes(
-                        "jf-app-title truncate"
-                    )
-                    ui.label(
-                        "Items et besoins partagés"
-                    ).classes(
-                        "text-xs jf-muted"
+                        "jf-suite-subtitle"
                     )
 
-            with ui.row().classes(
-                "items-center gap-0"
+            with ui.element("nav").classes(
+                "jf-suite-actions shrink-0"
             ):
-                planning_button = ui.button(
-                    icon="menu_book",
-                ).props(
-                    "flat round color=primary"
-                    if active_tab in {
-                        "modeles",
-                        "recettes",
-                        "bibliotheque",
-                    }
-                    else "flat round"
-                ).tooltip(
-                    "Planification"
+                _suite_action(
+                    "Portail",
+                    "apps",
+                    "/?tab=portail",
+                    active=app_key == "portal",
                 )
 
-                with planning_button:
+                _suite_action(
+                    "Commentaires",
+                    "rate_review",
+                    (
+                        "/?tab=commentaires&section=mes"
+                        if feedback_count
+                        else "/?tab=commentaires&section=nouveau"
+                    ),
+                    active=app_key == "feedback",
+                    count=feedback_count,
+                )
+
+                _suite_action(
+                    "Aide",
+                    "help_outline",
+                    "/?tab=manuel",
+                )
+
+                _suite_action(
+                    "Compte",
+                    "account_circle",
+                    "/?tab=compte",
+                )
+
+                more_button = ui.button(
+                    icon="more_vert",
+                ).props(
+                    "flat dense round"
+                ).classes(
+                    "jf-suite-action"
+                ).tooltip(
+                    "Autres options"
+                )
+
+                with more_button:
                     with ui.menu().props(
                         "auto-close"
                     ):
                         ui.menu_item(
-                            "Listes modèles",
+                            "Nouveautés et versions",
                             lambda: ui.navigate.to(
-                                "/?tab=modeles"
+                                "/?tab=nouveautes"
                             ),
                         )
                         ui.menu_item(
-                            "Recettes",
-                            lambda: ui.navigate.to(
-                                "/?tab=recettes"
-                            ),
+                            "Installer JF Apps",
+                            request_pwa_install,
                         )
                         ui.separator()
                         ui.menu_item(
-                            "Bibliothèque partagée",
-                            lambda: ui.navigate.to(
-                                "/?tab=bibliotheque"
-                            ),
+                            "Déconnexion",
+                            logout,
                         )
 
-                ui.button(
-                    icon="history",
-                    on_click=lambda: ui.navigate.to(
-                        "/?tab=activite"
+
+def application_header(
+    active_tab,
+    *,
+    show_tools=True,
+):
+    portal_header(
+        app_key="grocery",
+    )
+
+    if not show_tools:
+        return
+
+    with ui.row().classes(
+        "jf-local-tools items-center justify-end gap-1"
+    ):
+        planning_button = ui.button(
+            "Planification",
+            icon="menu_book",
+        ).props(
+            "flat dense no-caps color=primary"
+            if active_tab in {
+                "modeles",
+                "recettes",
+                "bibliotheque",
+            }
+            else "flat dense no-caps"
+        ).classes(
+            "jf-local-tool"
+        )
+
+        with planning_button:
+            with ui.menu().props(
+                "auto-close"
+            ):
+                ui.menu_item(
+                    "Listes modèles",
+                    lambda: ui.navigate.to(
+                        "/?tab=modeles"
                     ),
-                ).props(
-                    "flat round color=primary"
-                    if active_tab == "activite"
-                    else "flat round"
-                ).tooltip(
-                    "Activité et corbeille"
+                )
+                ui.menu_item(
+                    "Recettes",
+                    lambda: ui.navigate.to(
+                        "/?tab=recettes"
+                    ),
+                )
+                ui.separator()
+                ui.menu_item(
+                    "Bibliothèque partagée",
+                    lambda: ui.navigate.to(
+                        "/?tab=bibliotheque"
+                    ),
                 )
 
-                ui.button(
-                    icon="settings",
-                    on_click=lambda: ui.navigate.to(
-                        "/?tab=donnees"
-                    ),
-                ).props(
-                    "flat round color=primary"
-                    if active_tab == "donnees"
-                    else "flat round"
-                ).tooltip(
-                    "Données et sauvegarde"
-                )
+        ui.button(
+            "Activité",
+            icon="history",
+            on_click=lambda: ui.navigate.to(
+                "/?tab=activite"
+            ),
+        ).props(
+            "flat dense no-caps color=primary"
+            if active_tab == "activite"
+            else "flat dense no-caps"
+        ).classes(
+            "jf-local-tool"
+        )
 
-                ui.button(
-                    icon="help_outline",
-                    on_click=lambda: ui.navigate.to(
-                        "/?tab=manuel"
-                    ),
-                ).props("flat round").tooltip(
-                    "Manuel d’utilisation"
-                )
-
-                ui.button(
-                    icon="apps",
-                    on_click=lambda: ui.navigate.to(
-                        "/?tab=portail"
-                    ),
-                ).props("flat round").tooltip(
-                    "Retour au portail"
-                )
+        ui.button(
+            "Données",
+            icon="settings",
+            on_click=lambda: ui.navigate.to(
+                "/?tab=donnees"
+            ),
+        ).props(
+            "flat dense no-caps color=primary"
+            if active_tab == "donnees"
+            else "flat dense no-caps"
+        ).classes(
+            "jf-local-tool"
+        )
 
 
 def bottom_navigation(
@@ -1923,7 +2313,7 @@ def index(
 
         with page_container():
             portal_header(
-                "Journal de pression"
+                app_key="blood_pressure",
             )
             quick_entry = (
                 str(
@@ -1947,6 +2337,7 @@ def index(
                 quick_entry=(
                     quick_entry
                 ),
+                show_heading=False,
             )
 
         return
@@ -1964,13 +2355,16 @@ def index(
         set_current_tab("finances")
 
         with page_container():
-            portal_header("Finances")
+            portal_header(
+                app_key="finances",
+            )
             finances_panel(
                 user,
                 initial_section=(
                     section
                     or "tableau"
                 ),
+                show_heading=False,
             )
 
         return
@@ -1993,7 +2387,7 @@ def index(
 
         with page_container():
             portal_header(
-                "Personnages JDR"
+                app_key="rpg",
             )
             rpg_character_panel(
                 user,
@@ -2004,6 +2398,7 @@ def index(
                     section
                     or "identite"
                 ),
+                show_heading=False,
             )
 
         return
@@ -2013,7 +2408,7 @@ def index(
 
         with page_container():
             portal_header(
-                "Commentaires et suggestions"
+                app_key="feedback",
             )
             feedback_panel(
                 user,
@@ -2021,6 +2416,7 @@ def index(
                     section
                     or "mes"
                 ),
+                show_heading=False,
             )
 
         return
@@ -2029,8 +2425,14 @@ def index(
         set_current_tab("nouveautes")
 
         with page_container():
-            portal_header("Nouveautés et versions")
-            release_notes_panel()
+            portal_header(
+                "Nouveautés et versions",
+                app_key="portal",
+                subtitle="Historique des changements publiés",
+            )
+            release_notes_panel(
+                show_heading=False,
+            )
 
         return
 
@@ -2038,8 +2440,14 @@ def index(
         set_current_tab("manuel")
 
         with page_container():
-            portal_header("Manuel d’utilisation")
-            manual_panel()
+            portal_header(
+                "Manuel d’utilisation",
+                app_key="portal",
+                subtitle="Aide commune au Portail et aux applications",
+            )
+            manual_panel(
+                show_heading=False,
+            )
 
         return
 
@@ -2095,10 +2503,14 @@ def index(
 
     set_current_tab(normalized_tab)
 
-    # Le mode courses utilise volontairement un écran simplifié,
-    # sans l'en-tête et la navigation habituels.
+    # Le mode Courses conserve son écran simplifié, mais le bouton
+    # Portail et l’identité JF Apps restent toujours visibles.
     if normalized_tab == "courses":
         with page_container():
+            application_header(
+                "courses",
+                show_tools=False,
+            )
             if not ensure_valid_family(user["id"]):
                 show_no_family_message()
             else:

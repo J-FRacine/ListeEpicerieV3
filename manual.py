@@ -63,53 +63,79 @@ Utilisez l'icône de déconnexion située dans l'en-tête du Portail ou de certa
     {
         "title": "Portail et navigation",
         "icon": "apps",
-        "caption": "Accéder aux différentes fonctions",
+        "caption": "En-tête commun et menus des applications",
         "keywords": (
-            "portail navigation applications icônes bas écran "
-            "items besoins catégories modèles recettes"
+            "portail navigation applications en-tête commun logo "
+            "commentaires aide compte versions déconnexion onglets"
         ),
         "content": """
-### Portail
+### Une navigation commune dans tout JF Apps
 
-Le Portail est le point central de **JF Apps**. Sa grille **Applications** contient seulement les grandes applications :
+Le Portail et toutes les applications utilisent maintenant le même en-tête.
+
+Il présente toujours :
+
+- le logo JF Apps;
+- le nom de la page ou de l’application;
+- sa version lorsqu’elle est définie;
+- un bouton **Portail**;
+- un accès aux **Commentaires**;
+- un accès au **Manuel**;
+- un accès à **Mon compte**;
+- un menu pour les nouveautés, l’installation de la PWA et la déconnexion.
+
+Le logo et le bouton **Portail** ramènent tous deux au Portail principal.
+
+Sur téléphone, les libellés des actions sont masqués pour conserver de l’espace, mais les mêmes icônes restent disponibles.
+
+### Applications
+
+La grille **Applications** du Portail contient :
 
 - Liste d’épicerie;
 - Journal de pression;
 - Finances;
 - Personnages JDR.
 
-Le **Journal de pression** et **Personnages JDR** sont disponibles. L’application **Finances** apparaît comme **Bientôt** tant qu’elle n’est pas développée.
+Chaque carte affiche sa version actuelle.
 
-Les fonctions propres à la liste d’épicerie — modèles, recettes, bibliothèque, activité, corbeille et sauvegardes — se trouvent maintenant à l’intérieur de cette application.
+### Menus internes
 
-Le Portail contient aussi :
+L’en-tête commun sert à se déplacer dans tout JF Apps. Les onglets placés sous cet en-tête servent uniquement à naviguer à l’intérieur de l’application ouverte.
 
-- **Mon espace** : familles et compte;
-- **Aide et démarrage** : Commencer ici et Manuel;
-- **Administration** : utilisateurs et maintenance, pour les administrateurs.
+Dans **Finances**, les onglets donnent notamment accès au Tableau, à la Saisie, à l’Historique, aux Récurrences, aux Objectifs, à la Conciliation, à l’Organisation et à l’exportation.
 
-### Barre de navigation de la liste d'épicerie
+Dans le **Journal de pression**, ils donnent accès à la Saisie, à l’Historique, au Rapport PDF et aux Rappels.
 
-La barre située au bas de l'écran permet d'ouvrir rapidement :
+Dans **Personnages JDR**, ils donnent accès aux différentes sections de la feuille.
 
-- **Items** : le catalogue privé de la famille;
-- **Besoins** : les produits actuellement à acheter;
-- **Catégories** : l'organisation des produits;
-- **Portail** : le retour à l'accueil général.
+### Liste d’épicerie
 
-Le nombre affiché près de **Besoins** indique combien d'articles restent dans la liste.
+La liste d’épicerie conserve sa barre inférieure pour les actions quotidiennes :
 
-### Outils dans l'en-tête de l’épicerie
+- **Items**;
+- **Besoins**;
+- **Catégories**;
+- **Portail**.
 
-- **Livre / Planification** : listes modèles, recettes et bibliothèque partagée;
-- **Horloge** : activité et corbeille;
-- **Roue dentée** : données, importation et exportation;
-- **Point d'interrogation** : manuel d'utilisation;
-- **Grille** : retour au Portail.
+Sous l’en-tête commun, une petite barre d’outils donne accès à :
 
-Le bouton **Planification** est souvent le moins évident au départ. Retenez qu’il ouvre tout ce qui sert à préparer des achats à l’avance : vos modèles réutilisables, vos recettes et la bibliothèque publique de partage.
+- **Planification** : listes modèles, recettes et bibliothèque;
+- **Activité** : historique et corbeille;
+- **Données** : importation, exportation et sauvegarde.
 
-Sur téléphone, ces outils sont présentés sous forme d’icônes afin de conserver assez d’espace pour le contenu.
+Le mode **Courses** conserve son écran simplifié, mais l’en-tête commun et le bouton Portail restent visibles.
+
+### Logo, favicon et PWA
+
+Le monogramme du logo JF Apps est utilisé comme :
+
+- favicon dans l’onglet du navigateur;
+- icône de la PWA;
+- icône sur l’écran d’accueil;
+- repère visuel dans l’en-tête commun.
+
+Après une mise à jour, un rechargement complet du navigateur ou une réouverture de la PWA peut être nécessaire pour voir la nouvelle icône.
 """,
     },
     {
@@ -1015,34 +1041,34 @@ Attendez la fin du déploiement Canner avant de tester. En cas d'échec, consult
 ]
 
 
-def manual_panel():
+def manual_panel(show_heading=True):
     user = get_current_user()
     is_admin = bool(
         user
         and user.get("is_admin")
     )
 
-    with ui.row().classes(
-        "w-full items-start justify-between gap-3 flex-wrap"
-    ):
-        with ui.column().classes("gap-0"):
-            ui.label(
-                "Manuel d’utilisation"
-            ).classes(
-                "text-2xl font-bold"
-            )
-            ui.label(
-                "Guide du Portail JF Apps, de la liste d’épicerie, "
-                "du journal de pression et des personnages JDR."
-            ).classes(
-                "text-sm text-gray-500"
-            )
+    if show_heading:
+        with ui.row().classes(
+            "w-full items-start justify-between gap-3 flex-wrap"
+        ):
+            with ui.column().classes("gap-0"):
+                ui.label(
+                    "Manuel d’utilisation"
+                ).classes(
+                    "text-2xl font-bold"
+                )
+                ui.label(
+                    "Guide du Portail JF Apps et de toutes les applications."
+                ).classes(
+                    "text-sm text-gray-500"
+                )
 
-        ui.icon(
-            "help_center"
-        ).classes(
-            "text-4xl text-primary"
-        )
+            ui.icon(
+                "help_center"
+            ).classes(
+                "text-4xl text-primary"
+            )
 
     with ui.card().classes(
         "w-full p-4 border-l-4 border-primary"
@@ -1053,10 +1079,9 @@ def manual_panel():
             "font-bold"
         )
         ui.label(
-            "La liste d’épicerie, le Journal de pression "
-            "et Personnages JDR sont documentés. "
-            "Le manuel sera complété avec l’application Finances "
-            "et les prochaines phases."
+            "La liste d’épicerie, le Journal de pression, Finances, "
+            "Personnages JDR et les fonctions communes du Portail "
+            "sont documentés dans cette page."
         ).classes(
             "text-sm text-gray-600"
         )

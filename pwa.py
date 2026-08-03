@@ -5,7 +5,9 @@ from nicegui import app, ui
 
 PWA_HEAD = r"""
 <link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-64.png">
+<link rel="shortcut icon" type="image/png" href="/assets/favicon-64.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
 <meta name="theme-color" content="#173553">
 <meta name="mobile-web-app-capable" content="yes">
@@ -125,6 +127,11 @@ def configure_pwa(
         "/assets/apple-touch-icon.png": (
             base_dir
             / "apple-touch-icon.png",
+            86400,
+        ),
+        "/assets/favicon-32.png": (
+            base_dir
+            / "favicon-32.png",
             86400,
         ),
         "/assets/favicon-64.png": (

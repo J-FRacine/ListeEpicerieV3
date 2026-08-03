@@ -3759,36 +3759,38 @@ def rpg_character_panel(
     *,
     selected_character_id=None,
     initial_section="identite",
+    show_heading=True,
 ):
     user_id = current_user["id"]
     characters = list_rpg_characters(
         user_id
     )
 
-    with ui.row().classes(
-        "w-full items-start justify-between "
-        "gap-3 flex-wrap"
-    ):
-        with ui.column().classes(
-            "gap-0"
+    if show_heading:
+        with ui.row().classes(
+            "w-full items-start justify-between "
+            "gap-3 flex-wrap"
         ):
-            ui.label(
-                "Personnages JDR"
-            ).classes(
-                "text-2xl font-bold"
-            )
-            ui.label(
-                "Feuille interactive inspirée de "
-                "D&D 3.5 et de Ravenloft."
-            ).classes(
-                "text-sm jf-muted"
-            )
+            with ui.column().classes(
+                "gap-0"
+            ):
+                ui.label(
+                    "Personnages JDR"
+                ).classes(
+                    "text-2xl font-bold"
+                )
+                ui.label(
+                    "Feuille interactive Pathfinder "
+                    "dans l’univers Ravenloft."
+                ).classes(
+                    "text-sm jf-muted"
+                )
 
-        ui.icon(
-            "casino"
-        ).classes(
-            "text-4xl text-primary"
-        )
+            ui.icon(
+                "casino"
+            ).classes(
+                "text-4xl text-primary"
+            )
 
     with ui.element("div").classes(
         "jf-rpg-private"

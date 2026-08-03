@@ -2,7 +2,7 @@
   "id": "/",
   "name": "JF Apps",
   "short_name": "JF Apps",
-  "description": "Portail personnel pour les applications et les listes partagées de Jean-François.",
+  "description": "Portail personnel regroupant la liste d’épicerie, le journal de pression, les finances et les personnages JDR.",
   "lang": "fr-CA",
   "dir": "ltr",
   "start_url": "/?tab=portail",
@@ -37,8 +37,20 @@
   ],
   "shortcuts": [
     {
-      "name": "Items",
-      "short_name": "Items",
+      "name": "Portail JF Apps",
+      "short_name": "Portail",
+      "url": "/?tab=portail",
+      "icons": [
+        {
+          "src": "/assets/pwa-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Liste d’épicerie",
+      "short_name": "Épicerie",
       "url": "/?tab=items",
       "icons": [
         {
@@ -49,9 +61,9 @@
       ]
     },
     {
-      "name": "Besoins",
-      "short_name": "Besoins",
-      "url": "/?tab=besoins",
+      "name": "Journal de pression",
+      "short_name": "Pression",
+      "url": "/?tab=pression",
       "icons": [
         {
           "src": "/assets/pwa-icon-192.png",
@@ -61,9 +73,9 @@
       ]
     },
     {
-      "name": "Mode courses",
-      "short_name": "Courses",
-      "url": "/?tab=courses",
+      "name": "Finances",
+      "short_name": "Finances",
+      "url": "/?tab=finances",
       "icons": [
         {
           "src": "/assets/pwa-icon-192.png",

@@ -857,7 +857,7 @@ def _transaction_dialog(
     dialog.open()
 
 
-def finances_panel(current_user, initial_section=None):
+def finances_panel(current_user, initial_section=None, show_heading=True):
     user_id = current_user["id"]
     ensure_default_finance_categories(
         user_id
@@ -873,25 +873,33 @@ def finances_panel(current_user, initial_section=None):
 
     month_state = {"value": date.today().replace(day=1)}
 
-    with ui.row().classes(
-        "w-full items-center justify-between gap-2 flex-wrap"
-    ):
-        with ui.column().classes("gap-0"):
-            with ui.row().classes("items-center gap-2"):
-                ui.label("Finances").classes("text-2xl font-bold")
-                ui.label(version_label("finances")).classes(
-                    "text-xs font-bold px-2 py-1 rounded-full "
-                    "bg-blue-100 text-blue-800"
-                )
-            ui.label(
-                "Dépenses variables, revenus et objectifs mensuels."
-            ).classes("text-sm jf-muted")
+    if show_heading:
+        with ui.row().classes(
+            "w-full items-center justify-between gap-2 flex-wrap"
+        ):
+            with ui.column().classes("gap-0"):
+                with ui.row().classes("items-center gap-2"):
+                    ui.label("Finances").classes("text-2xl font-bold")
+                    ui.label(version_label("finances")).classes(
+                        "text-xs font-bold px-2 py-1 rounded-full "
+                        "bg-blue-100 text-blue-800"
+                    )
+                ui.label(
+                    "Dépenses variables, revenus et objectifs mensuels."
+                ).classes("text-sm jf-muted")
 
-        ui.button(
-            "Ajouter",
-            icon="add",
-            on_click=lambda: _transaction_dialog(user_id, refresh_all),
-        ).props("color=primary dense")
+            ui.button(
+                "Ajouter",
+                icon="add",
+                on_click=lambda: _transaction_dialog(user_id, refresh_all),
+            ).props("color=primary dense")
+    else:
+        with ui.row().classes("w-full justify-end"):
+            ui.button(
+                "Ajouter une transaction",
+                icon="add",
+                on_click=lambda: _transaction_dialog(user_id, refresh_all),
+            ).props("color=primary dense")
 
     with ui.tabs().classes("w-full") as tabs:
         dashboard_tab = ui.tab("Tableau", icon="dashboard")

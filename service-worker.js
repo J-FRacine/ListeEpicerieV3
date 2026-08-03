@@ -1,14 +1,15 @@
-const CACHE_NAME = 'jf-apps-pwa-v1';
+const CACHE_NAME = 'jf-apps-pwa-v2-uniformisation';
 
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/offline.html',
   '/assets/logo_jf.png',
+  '/assets/favicon-32.png',
+  '/assets/favicon-64.png',
   '/assets/pwa-icon-192.png',
   '/assets/pwa-icon-512.png',
   '/assets/pwa-icon-maskable-512.png',
-  '/assets/apple-touch-icon.png',
-  '/assets/favicon-64.png'
+  '/assets/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', (event) => {

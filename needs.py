@@ -1,3 +1,4 @@
+import asyncio
 import time
 from collections import defaultdict
 
@@ -25,6 +26,28 @@ from utils import ensure_family_selected
 
 
 UNDO_SECONDS = 10
+
+_BACKGROUND_TASKS = set()
+
+
+def _start_background_task(coroutine):
+    task = asyncio.create_task(coroutine)
+    _BACKGROUND_TASKS.add(task)
+
+    def finish(done_task):
+        _BACKGROUND_TASKS.discard(done_task)
+        try:
+            done_task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as error:
+            print(
+                "Tâche d’arrière-plan Besoins interrompue :",
+                error,
+            )
+
+    task.add_done_callback(finish)
+    return task
 
 
 def needs_panel():
@@ -103,6 +126,29 @@ def needs_panel():
                 ).style("overflow-wrap:anywhere;")
 
                 def undo_last():
+                    current_pending = app.storage.user.get(
+                        undo_key
+                    )
+                    if (
+                        not current_pending
+                        or current_pending.get("item_id")
+                        != pending["item_id"]
+                        or float(
+                            current_pending.get("expires_at", 0)
+                        ) <= time.time()
+                    ):
+                        app.storage.user.pop(
+                            undo_key,
+                            None,
+                        )
+                        ui.notify(
+                            "La période d’annulation est terminée.",
+                            type="warning",
+                        )
+                        if not undo_card.is_deleted:
+                            undo_card.delete()
+                        return
+
                     try:
                         set_item_needed(
                             user_id,
@@ -137,24 +183,18 @@ def needs_panel():
             0.1,
             float(pending["expires_at"]) - time.time(),
         )
-        pending_item_id = pending["item_id"]
 
-        def expire_undo():
-            current_pending = app.storage.user.get(
-                undo_key
-            )
-            if (
-                current_pending
-                and current_pending.get("item_id")
-                == pending_item_id
-            ):
-                app.storage.user.pop(undo_key, None)
-            undo_card.delete()
+        async def hide_expired_undo():
+            await asyncio.sleep(remaining_seconds)
+            if undo_card.is_deleted:
+                return
+            try:
+                undo_card.delete()
+            except RuntimeError:
+                return
 
-        ui.timer(
-            remaining_seconds,
-            expire_undo,
-            once=True,
+        _start_background_task(
+            hide_expired_undo()
         )
 
     items = [

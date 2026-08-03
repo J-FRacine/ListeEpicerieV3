@@ -13,7 +13,7 @@ APP_LABELS = {
 
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
-    "grocery": "1.1.0",
+    "grocery": "1.1.1",
     "blood_pressure": "1.0.0",
     "finances": "1.4.0",
     "rpg": "1.0.0",
@@ -21,6 +21,22 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "grocery",
+        "version": "1.1.1",
+        "date": "2026-08-03",
+        "title": "Liste d’épicerie — stabilité du Mode courses",
+        "summary": (
+            "Correction d’un arrêt du service causé par des minuteries "
+            "NiceGUI dont la page avait déjà été fermée."
+        ),
+        "changes": [
+            "Remplacement des minuteries liées à l’interface par des tâches contrôlées.",
+            "Arrêt automatique de l’actualisation du Mode courses lorsque la page est quittée.",
+            "Protection de la période d’annulation dans Besoins après navigation.",
+            "Conservation du bouton d’actualisation manuelle dans le Mode courses.",
+        ],
+    },
     {
         "app_key": "portal",
         "version": "1.2.0",

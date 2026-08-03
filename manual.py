@@ -800,6 +800,12 @@ L’avis est affiché seulement pour un véritable ajout détecté pendant la se
 
 Lorsque les catégories sont désactivées pour la famille, le Mode courses regroupe les articles directement par magasin.
 
+### Actualisation automatique
+
+Le Mode courses vérifie périodiquement si de nouveaux items ont été ajoutés. Cette vérification s’arrête automatiquement lorsque l’utilisateur quitte la page, afin d’éviter qu’une tâche liée à une ancienne page continue de fonctionner.
+
+Le bouton **Actualiser** reste disponible en tout temps pour forcer immédiatement une nouvelle vérification.
+
 ### Terminer
 
 **Terminer les courses** ferme la session. Les articles non achetés demeurent dans les besoins.

@@ -1,3 +1,4 @@
+import asyncio
 import time
 from collections import defaultdict
 from datetime import datetime
@@ -20,6 +21,28 @@ from utils import ensure_family_selected
 
 AUTO_REFRESH_SECONDS = 5
 UNDO_SECONDS = 10
+
+_BACKGROUND_TASKS = set()
+
+
+def _start_background_task(coroutine):
+    task = asyncio.create_task(coroutine)
+    _BACKGROUND_TASKS.add(task)
+
+    def finish(done_task):
+        _BACKGROUND_TASKS.discard(done_task)
+        try:
+            done_task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as error:
+            print(
+                "Actualisation automatique du Mode courses interrompue :",
+                error,
+            )
+
+    task.add_done_callback(finish)
+    return task
 
 
 def _session_key(family_id):
@@ -792,7 +815,29 @@ def shopping_panel():
         )
 
     render_shopping()
-    ui.timer(
-        AUTO_REFRESH_SECONDS,
-        render_shopping.refresh,
+    auto_refresh_guard = ui.element(
+        "span"
+    ).classes("hidden")
+
+    async def auto_refresh_loop():
+        while True:
+            await asyncio.sleep(
+                AUTO_REFRESH_SECONDS
+            )
+            if auto_refresh_guard.is_deleted:
+                return
+
+            try:
+                render_shopping.refresh()
+            except RuntimeError:
+                return
+            except Exception as error:
+                print(
+                    "Actualisation automatique du Mode courses arrêtée :",
+                    error,
+                )
+                return
+
+    _start_background_task(
+        auto_refresh_loop()
     )

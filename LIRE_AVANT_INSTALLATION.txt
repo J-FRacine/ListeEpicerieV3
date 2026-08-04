@@ -1,41 +1,29 @@
-JF APPS — CORRECTIF JOURNAL DE PRESSION V1.1.1
+JF APPS — CORRECTIF PERSONNAGES JDR V1.1.1
 
-PROBLÈME
+CHANGEMENT
 
-Après l’installation de Journal de pression V1.1.0, l’avis de prise
-n’apparaissait plus dans le Portail.
+Dans Combat et défenses, le grand encadré contenant les formules
+BMO/CMB et DMD/CMD est retiré.
 
-CAUSE
+Les mêmes renseignements restent disponibles dans la fenêtre
+Règles de calcul :
 
-La fonction qui lit le statut du rappel est asynchrone.
+- formule BMO/CMB;
+- formule DMD/CMD;
+- utilisation de la Dextérité pour les créatures Très petites
+  ou plus petites;
+- bonus d’esquive et autres bonus applicables;
+- pénalités négatives de Divers CA appliquées au DMD/CMD;
+- exemple calculé avec les valeurs du personnage.
 
-Lors du remplacement d’une minuterie NiceGUI par une tâche contrôlée,
-la fonction était appelée ainsi :
+RÉSULTAT
 
-load_status()
-
-au lieu de :
-
-await load_status()
-
-La coroutine était donc créée, mais jamais exécutée. Le Portail ne
-recevait aucun statut et n’affichait aucune notification.
-
-CORRECTION
-
-Le chargement du statut est maintenant correctement attendu avec :
-
-await load_status()
-
-L’avis Journal de pression et le bouton Saisir maintenant réapparaissent
-lorsque :
-- les rappels sont actifs;
-- la date se trouve dans la période configurée;
-- au moins une prise reste à faire dans la journée.
+La section Combat et défenses est plus compacte et les explications
+détaillées sont regroupées au même endroit que les autres règles.
 
 FICHIERS COMPLETS À REMPLACER
 
-- blood_pressure.py
+- rpg_character.py
 - app_versions.py
 - manual.py
 
@@ -44,17 +32,17 @@ INSTALLATION
 1. Déposer les trois fichiers ensemble à la racine de GitHub.
 2. Faire Commit changes.
 3. Attendre le redémarrage Canner.
-4. Fermer puis rouvrir la PWA ou faire Ctrl+F5.
-5. Ouvrir le Portail.
+4. Recharger avec Ctrl+F5 ou fermer puis rouvrir la PWA.
+5. Vérifier que Personnages JDR affiche V1.1.1.
 
-TEST RECOMMANDÉ
+TESTS
 
-1. Vérifier que les rappels sont actifs dans Journal de pression.
-2. Vérifier que la période de rappel comprend la date actuelle.
-3. S’assurer qu’au moins une prise reste à faire aujourd’hui.
-4. Revenir au Portail.
-5. Confirmer que l’avis Journal de pression est affiché.
-6. Tester le bouton Saisir maintenant.
+1. Ouvrir un personnage.
+2. Aller dans Caractéristiques.
+3. Vérifier que l’encadré sous les champs Combat et défenses a disparu.
+4. Cliquer sur Règles de calcul.
+5. Ouvrir BMO / CMB et DMD / CMD.
+6. Vérifier que les formules et les exemples y sont toujours présents.
 
-Aucune donnée PostgreSQL n’est modifiée.
-Aucune nouvelle dépendance n’est requise.
+Aucun calcul, aucune table PostgreSQL et aucune donnée de personnage
+ne sont modifiés.

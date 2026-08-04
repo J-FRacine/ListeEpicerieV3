@@ -16,11 +16,28 @@ APP_VERSIONS = {
     "grocery": "1.1.1",
     "blood_pressure": "1.1.1",
     "finances": "1.4.1",
-    "rpg": "1.1.0",
+    "rpg": "1.1.1",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "rpg",
+        "version": "1.1.1",
+        "date": "2026-08-04",
+        "title": "Personnages JDR — aide de combat déplacée",
+        "summary": (
+            "Les formules BMO/CMB et DMD/CMD sont maintenant "
+            "regroupées uniquement dans la fenêtre Règles de calcul."
+        ),
+        "changes": [
+            "Retrait du grand encadré explicatif dans Combat et défenses.",
+            "Conservation des formules BMO/CMB et DMD/CMD dans Règles de calcul.",
+            "Conservation de l’explication sur les bonus d’esquive et les pénalités de CA.",
+            "Interface Combat et défenses plus compacte et plus directe.",
+            "Aucun calcul ni aucune donnée de personnage n’est modifié.",
+        ],
+    },
     {
         "app_key": "blood_pressure",
         "version": "1.1.0",

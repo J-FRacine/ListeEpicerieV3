@@ -561,7 +561,7 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
 """,
     },
     {
-        "title": "Personnages JDR — V1.1.0",
+        "title": "Personnages JDR — V1.1.1",
         "icon": "casino",
         "caption": "Créer une feuille interactive Pathfinder / Ravenloft",
         "keywords": (
@@ -616,6 +616,17 @@ La phase 1 calcule notamment :
 - le **DMD / CMD**.
 
 ### BMO / CMB et DMD / CMD
+
+Les champs et les résultats de **Combat et défenses** restent visibles directement dans la feuille. Le grand encadré permanent des formules a toutefois été retiré afin de réduire la hauteur de la page.
+
+Les explications détaillées sont regroupées avec le bouton **Règles de calcul**, notamment :
+
+- la formule du BMO/CMB;
+- la formule du DMD/CMD;
+- l’utilisation de la Dextérité pour une créature Très petite ou plus petite;
+- les bonus d’esquive et autres bonus applicables;
+- l’application automatique des pénalités négatives inscrites dans Divers CA.
+
 
 - **BMO / CMB** : bonus de manœuvre offensive, utilisé pour effectuer une manœuvre de combat;
 - **DMD / CMD** : degré de manœuvre défensive, utilisé comme difficulté pour résister à une manœuvre.

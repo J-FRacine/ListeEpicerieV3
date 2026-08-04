@@ -1711,19 +1711,6 @@ def _combat_panel(
                 "dense outlined inputmode=numeric"
             ).classes("jf-rpg-compact-field")
 
-        with ui.element("div").classes(
-            "jf-rpg-help mt-3"
-        ):
-            ui.markdown(
-                """
-**BMO / CMB** = BBA + modificateur de Force *(ou Dextérité pour une créature Très petite ou plus petite)* + modificateur spécial de taille + divers.
-
-**DMD / CMD** = 10 + BBA + modificateur de Force + modificateur de Dextérité + modificateur spécial de taille + bonus de déviation + autres bonus applicables + divers.
-
-Les bonus d’esquive et les autres bonus applicables doivent être inscrits dans **Divers – DMD/CMD**. Les pénalités négatives inscrites dans **Divers CA** sont appliquées automatiquement au DMD/CMD.
-                """
-            ).classes("text-sm")
-
         def current_draft():
             draft = dict(character)
 

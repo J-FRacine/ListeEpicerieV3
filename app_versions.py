@@ -16,11 +16,36 @@ APP_VERSIONS = {
     "grocery": "1.1.1",
     "blood_pressure": "1.1.1",
     "finances": "1.4.1",
-    "rpg": "1.1.1",
+    "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "rpg",
+        "version": "1.2.0",
+        "date": "2026-08-04",
+        "title": "Personnages JDR — races, équipement et encombrement",
+        "summary": (
+            "Ajout des profils raciaux, d’une section Équipement "
+            "et du calcul automatique du poids, de la vitesse et des protections."
+        ),
+        "changes": [
+            "Race principale dans une liste déroulante recherchable avec les sept races de base Pathfinder et un profil personnalisé.",
+            "Héritage, sous-race, traits alternatifs, type, sous-types, vision, langues et ajustements raciaux.",
+            "Prévisualisation sécurisée avant d’appliquer un profil racial, sans modifier silencieusement les caractéristiques.",
+            "Nouvel onglet Équipement pour les armures, boucliers, armes et possessions.",
+            "Une seule armure et un seul bouclier équipés contribuent automatiquement aux calculs.",
+            "Bonus d’armure, de bouclier et d’altération intégrés à la CA.",
+            "Bonus maximal de Dextérité, pénalité d’armure et vitesse issus de l’équipement.",
+            "Calcul du poids total transporté selon la quantité et le poids de chaque objet.",
+            "Seuils de charge légère, moyenne et lourde selon la Force, la taille et le type bipède ou quadrupède.",
+            "Vitesse finale calculée avec l’armure, la charge et les exceptions raciales.",
+            "Application de la restriction la plus défavorable entre armure et charge, sans doubler les pénalités.",
+            "Valeurs numériques de Combat et défenses plus grandes et plus faciles à lire.",
+            "Règles de calcul enrichies d’une décomposition de l’équipement, du poids et de la vitesse.",
+        ],
+    },
     {
         "app_key": "rpg",
         "version": "1.1.1",

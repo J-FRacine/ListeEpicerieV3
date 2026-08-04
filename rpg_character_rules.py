@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from math import floor
+import re
 
 
 ABILITY_LABELS = {
@@ -384,6 +385,372 @@ def format_number(value) -> str:
     )
 
 
+
+CARRYING_CAPACITY_BASE = {
+    1: (3, 6, 10),
+    2: (6, 13, 20),
+    3: (10, 20, 30),
+    4: (13, 26, 40),
+    5: (16, 33, 50),
+    6: (20, 40, 60),
+    7: (23, 46, 70),
+    8: (26, 53, 80),
+    9: (30, 60, 90),
+    10: (33, 66, 100),
+    11: (38, 76, 115),
+    12: (43, 86, 130),
+    13: (50, 100, 150),
+    14: (58, 116, 175),
+    15: (66, 133, 200),
+    16: (76, 153, 230),
+    17: (86, 173, 260),
+    18: (100, 200, 300),
+    19: (116, 233, 350),
+    20: (133, 266, 400),
+    21: (153, 306, 460),
+    22: (173, 346, 520),
+    23: (200, 400, 600),
+    24: (233, 466, 700),
+    25: (266, 533, 800),
+    26: (306, 613, 920),
+    27: (346, 693, 1040),
+    28: (400, 800, 1200),
+    29: (466, 933, 1400),
+}
+
+BIPED_SIZE_LOAD_MULTIPLIERS = {
+    "fine": Decimal("0.125"),
+    "diminutive": Decimal("0.25"),
+    "tiny": Decimal("0.5"),
+    "small": Decimal("0.75"),
+    "medium": Decimal("1"),
+    "large": Decimal("2"),
+    "huge": Decimal("4"),
+    "gargantuan": Decimal("8"),
+    "colossal": Decimal("16"),
+}
+
+QUADRUPED_SIZE_LOAD_MULTIPLIERS = {
+    "fine": Decimal("0.25"),
+    "diminutive": Decimal("0.5"),
+    "tiny": Decimal("0.75"),
+    "small": Decimal("1"),
+    "medium": Decimal("1.5"),
+    "large": Decimal("3"),
+    "huge": Decimal("6"),
+    "gargantuan": Decimal("12"),
+    "colossal": Decimal("24"),
+}
+
+LOAD_LABELS = {
+    "light": "Légère",
+    "medium": "Moyenne",
+    "heavy": "Lourde",
+    "overloaded": "Surcharge",
+    "immovable": "Impossible à soulever",
+}
+
+
+def effective_ability_score(character, ability_key):
+    temporary = character.get(f"{ability_key}_temp_score")
+    if temporary not in (None, ""):
+        return as_int(temporary, 10)
+    return as_int(character.get(f"{ability_key}_score"), 10)
+
+
+def _base_carrying_capacity(strength_score):
+    strength = max(1, as_int(strength_score, 10))
+    if strength <= 29:
+        return tuple(
+            Decimal(str(value))
+            for value in CARRYING_CAPACITY_BASE[strength]
+        )
+
+    reference_strength = 20 + (strength % 10)
+    decades = (strength - reference_strength) // 10
+    multiplier = Decimal(4) ** decades
+    return tuple(
+        Decimal(str(value)) * multiplier
+        for value in CARRYING_CAPACITY_BASE[reference_strength]
+    )
+
+
+def carrying_capacity(character):
+    strength = effective_ability_score(character, "str")
+    light, medium, heavy = _base_carrying_capacity(strength)
+    size_key = str(character.get("size_key") or "medium")
+    quadruped = bool(character.get("is_quadruped"))
+    size_multipliers = (
+        QUADRUPED_SIZE_LOAD_MULTIPLIERS
+        if quadruped
+        else BIPED_SIZE_LOAD_MULTIPLIERS
+    )
+    size_multiplier = size_multipliers.get(
+        size_key,
+        Decimal("1"),
+    )
+    try:
+        racial_multiplier = Decimal(
+            str(character.get("carrying_capacity_multiplier") or 1)
+        )
+    except Exception:
+        racial_multiplier = Decimal("1")
+    if racial_multiplier <= 0:
+        racial_multiplier = Decimal("1")
+
+    multiplier = size_multiplier * racial_multiplier
+    return {
+        "strength": strength,
+        "size_key": size_key,
+        "quadruped": quadruped,
+        "size_multiplier": size_multiplier,
+        "racial_multiplier": racial_multiplier,
+        "total_multiplier": multiplier,
+        "light_max": light * multiplier,
+        "medium_max": medium * multiplier,
+        "heavy_max": heavy * multiplier,
+        "lift_off_ground_max": heavy * multiplier * 2,
+        "push_drag_max": heavy * multiplier * 5,
+    }
+
+
+def reduced_speed_for_base(base_speed):
+    speed = max(0, as_int(base_speed, 30))
+    if speed <= 5:
+        return speed
+    ranges = (
+        (15, 10),
+        (20, 15),
+        (30, 20),
+        (35, 25),
+        (45, 30),
+        (50, 35),
+        (60, 40),
+        (65, 45),
+        (75, 50),
+        (80, 55),
+        (90, 60),
+        (95, 65),
+        (105, 70),
+        (110, 75),
+        (120, 80),
+    )
+    for maximum, reduced in ranges:
+        if speed <= maximum:
+            return reduced
+    return max(5, int((speed * 2 / 3) // 5 * 5))
+
+
+def _item_decimal(item, key, default="0"):
+    try:
+        return Decimal(str(item.get(key, default) or default))
+    except Exception:
+        return Decimal(default)
+
+
+def _item_int(item, key, default=0):
+    return as_int(item.get(key), default)
+
+
+def equipment_effects(character, equipment_rows):
+    equipment = [dict(row) for row in (equipment_rows or [])]
+    carried = [row for row in equipment if bool(row.get("carried", True))]
+    equipped = [row for row in equipment if bool(row.get("equipped"))]
+
+    total_weight = sum(
+        (
+            _item_decimal(row, "weight_each")
+            * max(0, _item_int(row, "quantity", 1))
+            for row in carried
+        ),
+        Decimal("0"),
+    )
+
+    armors = [row for row in equipped if row.get("item_type") == "armor"]
+    shields = [row for row in equipped if row.get("item_type") == "shield"]
+    armor = armors[0] if armors else None
+    shield = shields[0] if shields else None
+
+    equipment_armor_bonus = 0
+    if armor:
+        equipment_armor_bonus = (
+            _item_int(armor, "armor_bonus")
+            + _item_int(armor, "enhancement_bonus")
+        )
+
+    equipment_shield_bonus = 0
+    if shield:
+        equipment_shield_bonus = (
+            _item_int(shield, "shield_bonus")
+            + _item_int(shield, "enhancement_bonus")
+        )
+
+    equipment_penalty = sum(
+        _item_int(row, "armor_check_penalty")
+        for row in equipped
+        if row.get("item_type") in {"armor", "shield"}
+    )
+
+    max_dex_candidates = [
+        _item_int(row, "max_dex_bonus")
+        for row in equipped
+        if row.get("item_type") in {"armor", "shield"}
+        and row.get("max_dex_bonus") not in (None, "")
+    ]
+
+    capacity = carrying_capacity(character)
+    if total_weight <= capacity["light_max"]:
+        load_key = "light"
+        load_max_dex = None
+        load_penalty = 0
+        load_speed = None
+        load_run_multiplier = 4
+        next_threshold = capacity["light_max"]
+    elif total_weight <= capacity["medium_max"]:
+        load_key = "medium"
+        load_max_dex = 3
+        load_penalty = -3
+        load_speed = reduced_speed_for_base(character.get("base_speed", 30))
+        load_run_multiplier = 4
+        next_threshold = capacity["medium_max"]
+    elif total_weight <= capacity["heavy_max"]:
+        load_key = "heavy"
+        load_max_dex = 1
+        load_penalty = -6
+        load_speed = reduced_speed_for_base(character.get("base_speed", 30))
+        load_run_multiplier = 3
+        next_threshold = capacity["heavy_max"]
+    elif total_weight <= capacity["lift_off_ground_max"]:
+        load_key = "overloaded"
+        load_max_dex = 0
+        load_penalty = -6
+        load_speed = 5
+        load_run_multiplier = 0
+        next_threshold = capacity["lift_off_ground_max"]
+    else:
+        load_key = "immovable"
+        load_max_dex = 0
+        load_penalty = -6
+        load_speed = 0
+        load_run_multiplier = 0
+        next_threshold = capacity["lift_off_ground_max"]
+
+    if load_max_dex is not None:
+        max_dex_candidates.append(load_max_dex)
+
+    effective_max_dex = (
+        min(max_dex_candidates)
+        if max_dex_candidates
+        else None
+    )
+
+    manual_armor = as_int(character.get("armor_bonus"))
+    manual_shield = as_int(character.get("shield_bonus"))
+    manual_penalty = as_int(character.get("armor_check_penalty"))
+    effective_armor = max(manual_armor, equipment_armor_bonus)
+    effective_shield = max(manual_shield, equipment_shield_bonus)
+    effective_penalty = min(
+        manual_penalty,
+        equipment_penalty,
+        load_penalty,
+    )
+
+    base_speed = max(0, as_int(character.get("base_speed"), 30))
+    armor_speed = None
+    armor_run_multiplier = 4
+    speed_armor_item = None
+    for row in equipped:
+        if row.get("item_type") != "armor":
+            continue
+        category = str(row.get("armor_category") or "none")
+        applies = bool(row.get("speed_reduction_applies")) or category in {
+            "medium",
+            "heavy",
+        }
+        if applies:
+            custom_speed = row.get("reduced_speed_override")
+            armor_speed = (
+                _item_int(row, "reduced_speed_override")
+                if custom_speed not in (None, "")
+                else reduced_speed_for_base(base_speed)
+            )
+            speed_armor_item = row
+        if category == "heavy":
+            armor_run_multiplier = min(armor_run_multiplier, 3)
+
+    ignore_armor_speed = bool(character.get("ignore_armor_speed"))
+    ignore_load_speed = bool(character.get("ignore_encumbrance_speed"))
+    speed_candidates = [base_speed]
+    if armor_speed is not None and not ignore_armor_speed:
+        speed_candidates.append(armor_speed)
+    if load_speed is not None and not ignore_load_speed:
+        speed_candidates.append(load_speed)
+    final_speed = min(speed_candidates) if speed_candidates else base_speed
+
+    run_multiplier = min(armor_run_multiplier, load_run_multiplier)
+    remaining = max(Decimal("0"), next_threshold - total_weight)
+
+    raw_dex_modifier = ability_modifier_for_character(character, "dex")
+    effective_dex_modifier = (
+        min(raw_dex_modifier, effective_max_dex)
+        if effective_max_dex is not None
+        else raw_dex_modifier
+    )
+
+    return {
+        "equipment": equipment,
+        "carried_weight": total_weight,
+        "carrying_capacity": capacity,
+        "load_key": load_key,
+        "load_label": LOAD_LABELS[load_key],
+        "remaining_before_next_threshold": remaining,
+        "next_threshold": next_threshold,
+        "equipped_armor": armor,
+        "equipped_shield": shield,
+        "equipment_armor_bonus": equipment_armor_bonus,
+        "equipment_shield_bonus": equipment_shield_bonus,
+        "equipment_armor_check_penalty": equipment_penalty,
+        "manual_armor_bonus": manual_armor,
+        "manual_shield_bonus": manual_shield,
+        "manual_armor_check_penalty": manual_penalty,
+        "effective_armor_bonus": effective_armor,
+        "effective_shield_bonus": effective_shield,
+        "effective_armor_check_penalty": effective_penalty,
+        "effective_max_dex_bonus": effective_max_dex,
+        "raw_dex_modifier": raw_dex_modifier,
+        "effective_ac_dex_modifier": effective_dex_modifier,
+        "base_speed": base_speed,
+        "armor_speed": armor_speed,
+        "load_speed": load_speed,
+        "final_speed": final_speed,
+        "run_multiplier": run_multiplier,
+        "ignore_armor_speed": ignore_armor_speed,
+        "ignore_encumbrance_speed": ignore_load_speed,
+        "speed_armor_item": speed_armor_item,
+    }
+
+
+def apply_equipment_effects(character, equipment_rows):
+    enriched = dict(character)
+    effects = equipment_effects(enriched, equipment_rows)
+    enriched["equipment_effects"] = effects
+    for key in (
+        "effective_armor_bonus",
+        "effective_shield_bonus",
+        "effective_armor_check_penalty",
+        "effective_max_dex_bonus",
+        "effective_ac_dex_modifier",
+        "carried_weight",
+        "load_key",
+        "load_label",
+        "base_speed",
+        "final_speed",
+        "run_multiplier",
+    ):
+        enriched[key] = effects[key]
+    return enriched
+
+
 def ability_modifier(
     score,
     temporary_score=None,
@@ -460,15 +827,27 @@ def armor_class_breakdown(
 ):
     """Décompose les trois formes de classe d’armure."""
 
-    dex_modifier = ability_modifier_for_character(
-        character,
-        "dex",
+    dex_modifier = as_int(
+        character.get(
+            "effective_ac_dex_modifier",
+            ability_modifier_for_character(character, "dex"),
+        )
     )
     size_modifier = ac_size_modifier(
         character.get("size_key")
     )
-    armor_bonus = as_int(character.get("armor_bonus"))
-    shield_bonus = as_int(character.get("shield_bonus"))
+    armor_bonus = as_int(
+        character.get(
+            "effective_armor_bonus",
+            character.get("armor_bonus"),
+        )
+    )
+    shield_bonus = as_int(
+        character.get(
+            "effective_shield_bonus",
+            character.get("shield_bonus"),
+        )
+    )
     natural_bonus = as_int(
         character.get("natural_armor_bonus")
     )
@@ -626,9 +1005,11 @@ def cmd_breakdown(
         character,
         "str",
     )
-    dexterity_modifier = ability_modifier_for_character(
-        character,
-        "dex",
+    dexterity_modifier = as_int(
+        character.get(
+            "effective_ac_dex_modifier",
+            ability_modifier_for_character(character, "dex"),
+        )
     )
     size_modifier = combat_maneuver_size_modifier(
         character.get("size_key")
@@ -794,7 +1175,8 @@ def skill_breakdown(
     ):
         armor_penalty = as_int(
             character.get(
-                "armor_check_penalty"
+                "effective_armor_check_penalty",
+                character.get("armor_check_penalty"),
             )
         )
 
@@ -1001,7 +1383,10 @@ def character_sheet_audit(
     warnings = []
 
     armor_penalty = as_int(
-        character.get("armor_check_penalty")
+        character.get(
+            "effective_armor_check_penalty",
+            character.get("armor_check_penalty"),
+        )
     )
     if armor_penalty > 0:
         warnings.append(

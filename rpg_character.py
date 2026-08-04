@@ -4,21 +4,32 @@ from decimal import Decimal
 
 from nicegui import ui
 
+from rpg_character_catalog import (
+    ARMOR_CATEGORY_LABELS,
+    EQUIPMENT_TYPE_LABELS,
+    RACE_LABELS,
+    get_race_profile,
+    infer_race_key,
+)
 from rpg_character_data import (
     create_custom_rpg_skill,
     create_rpg_attack,
     create_rpg_character,
     delete_custom_rpg_skill,
+    delete_rpg_equipment,
     delete_rpg_attack,
     delete_rpg_character,
     get_rpg_character,
     list_rpg_attacks,
+    list_rpg_equipment,
     list_rpg_characters,
     list_rpg_saves,
     list_rpg_skills,
+    save_rpg_equipment,
     update_rpg_attack,
     update_rpg_character_combat,
     update_rpg_character_identity,
+    update_rpg_equipment_state,
     update_rpg_saves,
     update_rpg_skills,
 )
@@ -29,11 +40,13 @@ from rpg_character_rules import (
     SIZE_LABELS,
     ability_modifier,
     ability_modifier_for_character,
+    apply_equipment_effects,
     armor_class_breakdown,
     armor_class_total,
     attack_breakdown,
     attack_total,
     character_sheet_audit,
+    carrying_capacity,
     cmb_breakdown,
     cmb_total,
     cmd_breakdown,
@@ -41,6 +54,7 @@ from rpg_character_rules import (
     flat_footed_armor_class,
     format_modifier,
     format_number,
+    equipment_effects,
     initiative_breakdown,
     initiative_total,
     pathfinder_reference_checks,
@@ -370,6 +384,136 @@ RPG_CSS = r"""
             minmax(5.8rem, 1fr)
             minmax(4.2rem, 0.75fr)
             minmax(4.2rem, 0.75fr);
+    }
+}
+
+.jf-rpg-main-tabs {
+    width: 100%;
+    overflow: hidden;
+    border-bottom: 1px solid var(--jf-border);
+}
+.jf-rpg-main-tabs .q-tabs__content {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+}
+.jf-rpg-main-tabs .q-tab {
+    flex: 0 0 auto;
+    min-width: max-content;
+    padding-inline: .72rem;
+}
+.jf-rpg-main-tabs .q-tab__content {
+    min-width: max-content;
+}
+.jf-rpg-main-tabs .q-tab__label {
+    overflow: visible;
+    white-space: nowrap;
+    text-overflow: clip;
+}
+.jf-rpg-race-profile {
+    width: 100%;
+    padding: .8rem .9rem;
+    border: 1px solid var(--jf-border);
+    border-left: 4px solid #65508f;
+    border-radius: 13px;
+    background: rgba(101, 80, 143, .07);
+}
+.jf-rpg-race-preview-row {
+    display: grid;
+    grid-template-columns: minmax(7rem, .8fr) minmax(0, 1fr) minmax(0, 1fr);
+    gap: .45rem;
+    width: 100%;
+    padding: .34rem 0;
+    border-bottom: 1px solid var(--jf-border);
+    font-size: .76rem;
+}
+.jf-rpg-combat-value .q-field__native,
+.jf-rpg-combat-value .q-field__input {
+    color: var(--jf-navy);
+    font-size: 1.1rem;
+    font-weight: 820;
+}
+.body--dark .jf-rpg-combat-value .q-field__native,
+.body--dark .jf-rpg-combat-value .q-field__input {
+    color: #e2edf6;
+}
+.jf-rpg-equipment-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+    gap: .55rem;
+    width: 100%;
+}
+.jf-rpg-equipment-stat {
+    padding: .65rem .72rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 11px;
+    background: var(--jf-surface);
+}
+.jf-rpg-equipment-stat-value {
+    color: var(--jf-navy);
+    font-size: 1.18rem;
+    font-weight: 850;
+}
+.body--dark .jf-rpg-equipment-stat-value {
+    color: #dceaf6;
+}
+.jf-rpg-equipment-card {
+    width: 100%;
+    padding: .72rem .8rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 13px;
+    background: var(--jf-surface);
+}
+.jf-rpg-equipment-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: .55rem;
+    width: 100%;
+}
+.jf-rpg-equipment-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: .9rem;
+    font-weight: 820;
+}
+.jf-rpg-equipment-meta {
+    color: var(--jf-muted);
+    font-size: .7rem;
+}
+.jf-rpg-equipment-breakdown {
+    width: 100%;
+    padding: .7rem .8rem;
+    border-left: 4px solid var(--jf-blue);
+    border-radius: 11px;
+    background: var(--jf-blue-soft);
+    font-size: .75rem;
+}
+
+@media (max-width: 680px) {
+    .jf-rpg-main-tabs .q-tab {
+        min-height: 3rem;
+        padding-inline: .62rem;
+    }
+    .jf-rpg-main-tabs .q-tab__content {
+        flex-direction: row;
+        gap: .3rem;
+    }
+    .jf-rpg-main-tabs .q-tab__icon {
+        margin-bottom: 0;
+        font-size: 1.15rem;
+    }
+    .jf-rpg-main-tabs .q-tab__label {
+        font-size: .7rem;
+    }
+    .jf-rpg-race-preview-row {
+        grid-template-columns: minmax(6rem, .8fr) minmax(0, 1fr);
+    }
+    .jf-rpg-race-preview-row > :nth-child(2) {
+        display: none;
     }
 }
 
@@ -764,6 +908,13 @@ def _identity_panel(
     user_id,
     character,
 ):
+    current_race_key = str(
+        character.get("race_key")
+        or infer_race_key(character.get("race"))
+    )
+    if current_race_key not in RACE_LABELS:
+        current_race_key = "custom"
+
     with ui.card().classes(
         "w-full p-5"
     ):
@@ -773,8 +924,8 @@ def _identity_panel(
             "text-xl font-bold"
         )
         ui.label(
-            "Les champs suivent l’organisation générale "
-            "de la feuille Ravenloft fournie."
+            "La race alimente le profil de taille, de vitesse et "
+            "d’encombrement, sans modifier silencieusement les scores."
         ).classes(
             "text-sm jf-muted"
         )
@@ -835,16 +986,6 @@ def _identity_panel(
             ).classes(
                 "w-full"
             )
-            race_input = ui.input(
-                label="Race",
-                value=character[
-                    "race"
-                ] or "",
-            ).props(
-                "maxlength=120"
-            ).classes(
-                "w-full"
-            )
             alignment_input = ui.input(
                 label="Alignement",
                 value=character[
@@ -862,15 +1003,6 @@ def _identity_panel(
                 ] or "",
             ).props(
                 "maxlength=120"
-            ).classes(
-                "w-full"
-            )
-            size_input = ui.select(
-                SIZE_LABELS,
-                label="Catégorie de taille",
-                value=character[
-                    "size_key"
-                ],
             ).classes(
                 "w-full"
             )
@@ -905,7 +1037,7 @@ def _identity_panel(
                 "w-full"
             )
             weight_input = ui.input(
-                label="Poids",
+                label="Poids du personnage",
                 value=character[
                     "weight_text"
                 ] or "",
@@ -957,63 +1089,362 @@ def _identity_panel(
                 "w-full"
             )
 
+        with ui.element("section").classes(
+            "jf-rpg-race-profile mt-3"
+        ):
+            ui.label(
+                "Profil racial"
+            ).classes(
+                "text-lg font-bold"
+            )
+            ui.label(
+                "Choisissez une race de base ou conservez un profil "
+                "personnalisé pour Ravenloft et les suppléments."
+            ).classes(
+                "text-sm jf-muted"
+            )
+
+            with ui.element("div").classes(
+                "jf-rpg-grid mt-2"
+            ):
+                race_select = ui.select(
+                    RACE_LABELS,
+                    label="Race principale",
+                    value=current_race_key,
+                ).props(
+                    "use-input fill-input hide-selected "
+                    "input-debounce=0 options-dense"
+                ).classes("w-full")
+                custom_race_input = ui.input(
+                    label="Nom de la race personnalisée",
+                    value=(
+                        character.get("race") or ""
+                        if current_race_key == "custom"
+                        else ""
+                    ),
+                ).props(
+                    "maxlength=120"
+                ).classes("w-full")
+                heritage_input = ui.input(
+                    label="Héritage / sous-race facultatif",
+                    value=character.get("race_heritage") or "",
+                ).props(
+                    "maxlength=160"
+                ).classes("w-full")
+                size_input = ui.select(
+                    SIZE_LABELS,
+                    label="Catégorie de taille",
+                    value=character[
+                        "size_key"
+                    ],
+                ).classes(
+                    "w-full"
+                )
+                base_speed_input = ui.number(
+                    label="Vitesse de base (pi)",
+                    value=character.get("base_speed") or 30,
+                    min=0,
+                    max=500,
+                    step=5,
+                ).props(
+                    "inputmode=numeric"
+                ).classes("w-full")
+                creature_type_input = ui.input(
+                    label="Type de créature",
+                    value=character.get("creature_type") or "Humanoïde",
+                ).props(
+                    "maxlength=120"
+                ).classes("w-full")
+                subtypes_input = ui.input(
+                    label="Sous-types raciaux",
+                    value=character.get("racial_subtypes") or "",
+                ).props(
+                    "maxlength=240"
+                ).classes("w-full")
+                vision_input = ui.input(
+                    label="Sens et vision",
+                    value=character.get("vision") or "",
+                ).props(
+                    "maxlength=240"
+                ).classes("w-full")
+                languages_input = ui.input(
+                    label="Langues",
+                    value=character.get("languages") or "",
+                ).props(
+                    "maxlength=500"
+                ).classes("w-full")
+                ability_adjustments_input = ui.input(
+                    label="Ajustements raciaux de caractéristiques",
+                    value=(
+                        character.get("racial_ability_adjustments") or ""
+                    ),
+                ).props(
+                    "maxlength=240"
+                ).classes("w-full")
+                carrying_multiplier_input = ui.number(
+                    label="Multiplicateur de capacité de charge",
+                    value=float(
+                        character.get("carrying_capacity_multiplier") or 1
+                    ),
+                    min=.001,
+                    max=100,
+                    step=.25,
+                ).props(
+                    "inputmode=decimal"
+                ).classes("w-full")
+
+            with ui.row().classes(
+                "w-full gap-4 flex-wrap mt-2"
+            ):
+                quadruped_input = ui.checkbox(
+                    "Quadrupède",
+                    value=bool(character.get("is_quadruped")),
+                )
+                ignore_armor_speed_input = ui.checkbox(
+                    "L’armure ne réduit pas la vitesse",
+                    value=bool(character.get("ignore_armor_speed")),
+                )
+                ignore_load_speed_input = ui.checkbox(
+                    "L’encombrement ne réduit pas la vitesse",
+                    value=bool(
+                        character.get("ignore_encumbrance_speed")
+                    ),
+                )
+
+            alternate_traits_input = ui.textarea(
+                label="Traits raciaux alternatifs / personnalisés",
+                value=character.get("alternate_racial_traits") or "",
+                placeholder=(
+                    "Un trait par ligne. Indiquez aussi le trait standard "
+                    "remplacé lorsqu’il y a lieu."
+                ),
+            ).props(
+                "outlined autogrow maxlength=4000"
+            ).classes("w-full mt-2")
+
+            standard_traits_label = ui.label("").classes(
+                "text-xs jf-muted mt-1"
+            )
+            ui.label(
+                "Les ajustements raciaux sont documentés, mais les scores "
+                "déjà saisis ne sont jamais modifiés automatiquement."
+            ).classes(
+                "text-xs jf-muted"
+            )
+
+        race_state = {
+            "accepted_key": current_race_key,
+            "suppress": False,
+        }
+
+        def refresh_race_visibility():
+            is_custom = race_select.value == "custom"
+            custom_race_input.set_visibility(is_custom)
+            profile = get_race_profile(race_select.value)
+            standard_traits_label.set_text(
+                (
+                    "Traits standards suggérés : "
+                    + profile["standard_traits"]
+                    if profile["standard_traits"]
+                    else (
+                        "Profil personnalisé : inscrivez les traits "
+                        "utilisés dans votre campagne."
+                    )
+                )
+            )
+
+        def set_control(control, value):
+            control.value = value
+            control.update()
+
+        def apply_profile(profile_key, *, keep_current=False):
+            profile = get_race_profile(profile_key)
+            race_state["accepted_key"] = profile_key
+            set_control(race_select, profile_key)
+            if profile_key != "custom":
+                set_control(custom_race_input, "")
+            if not keep_current:
+                set_control(size_input, profile["size_key"])
+                set_control(base_speed_input, profile["base_speed"])
+                set_control(creature_type_input, profile["creature_type"])
+                set_control(subtypes_input, profile["subtypes"])
+                set_control(vision_input, profile["vision"])
+                set_control(languages_input, profile["languages"])
+                set_control(
+                    ability_adjustments_input,
+                    profile["ability_adjustments"],
+                )
+                set_control(
+                    carrying_multiplier_input,
+                    profile["carrying_capacity_multiplier"],
+                )
+                set_control(quadruped_input, profile["is_quadruped"])
+                set_control(
+                    ignore_armor_speed_input,
+                    profile["ignore_armor_speed"],
+                )
+                set_control(
+                    ignore_load_speed_input,
+                    profile["ignore_encumbrance_speed"],
+                )
+            refresh_race_visibility()
+
+        def race_preview_dialog(new_key):
+            profile = get_race_profile(new_key)
+            old_key = race_state["accepted_key"]
+            old_label = RACE_LABELS.get(old_key, "Personnalisée")
+            rows = (
+                ("Race", old_label, profile["label"]),
+                (
+                    "Taille",
+                    SIZE_LABELS.get(size_input.value, size_input.value),
+                    SIZE_LABELS.get(profile["size_key"], profile["size_key"]),
+                ),
+                ("Vitesse", f"{base_speed_input.value} pi", f"{profile['base_speed']} pi"),
+                ("Vision", vision_input.value or "—", profile["vision"] or "—"),
+                ("Langues", languages_input.value or "—", profile["languages"] or "—"),
+                (
+                    "Charge",
+                    str(carrying_multiplier_input.value or 1),
+                    str(profile["carrying_capacity_multiplier"]),
+                ),
+                (
+                    "Vitesse sous armure",
+                    "Exception" if ignore_armor_speed_input.value else "Normale",
+                    "Exception" if profile["ignore_armor_speed"] else "Normale",
+                ),
+                (
+                    "Vitesse sous charge",
+                    "Exception" if ignore_load_speed_input.value else "Normale",
+                    "Exception" if profile["ignore_encumbrance_speed"] else "Normale",
+                ),
+            )
+
+            with ui.dialog() as dialog:
+                with ui.card().classes("w-full max-w-3xl p-4"):
+                    ui.label("Prévisualiser le changement de race").classes(
+                        "text-xl font-bold"
+                    )
+                    ui.label(
+                        "Le profil suggéré peut être appliqué ou ignoré. "
+                        "Les six scores de caractéristiques ne seront pas changés."
+                    ).classes("text-sm jf-muted")
+                    with ui.element("div").classes(
+                        "jf-rpg-race-preview-row mt-2 font-bold"
+                    ):
+                        ui.label("Valeur")
+                        ui.label("Actuelle")
+                        ui.label("Suggérée")
+                    for label, current_value, suggested_value in rows:
+                        with ui.element("div").classes(
+                            "jf-rpg-race-preview-row"
+                        ):
+                            ui.label(label).classes("font-bold")
+                            ui.label(str(current_value))
+                            ui.label(str(suggested_value))
+
+                    def cancel_change():
+                        race_state["suppress"] = True
+                        set_control(race_select, old_key)
+                        race_state["suppress"] = False
+                        refresh_race_visibility()
+                        dialog.close()
+
+                    def keep_values():
+                        apply_profile(new_key, keep_current=True)
+                        dialog.close()
+
+                    def apply_values():
+                        apply_profile(new_key, keep_current=False)
+                        dialog.close()
+
+                    with ui.row().classes(
+                        "w-full justify-end gap-2 mt-3 flex-wrap"
+                    ):
+                        ui.button(
+                            "Annuler",
+                            on_click=cancel_change,
+                        ).props("flat")
+                        ui.button(
+                            "Conserver mes valeurs",
+                            on_click=keep_values,
+                        ).props("outline color=primary")
+                        ui.button(
+                            "Appliquer le profil",
+                            icon="check",
+                            on_click=apply_values,
+                        ).props("color=primary")
+            dialog.open()
+
+        def race_changed(event):
+            if race_state["suppress"]:
+                return
+            new_key = str(event.value or "custom")
+            if new_key == race_state["accepted_key"]:
+                refresh_race_visibility()
+                return
+            if new_key == "custom":
+                race_state["accepted_key"] = "custom"
+                refresh_race_visibility()
+                return
+            race_preview_dialog(new_key)
+
+        race_select.on_value_change(race_changed)
+        refresh_race_visibility()
+
         def save_identity():
+            race_key = str(race_select.value or "custom")
+            race_name = (
+                custom_race_input.value
+                if race_key == "custom"
+                else RACE_LABELS[race_key]
+            )
             try:
                 update_rpg_character_identity(
                     user_id,
                     character["id"],
                     {
-                        "character_name": (
-                            name_input.value
-                        ),
-                        "player_name": (
-                            player_input.value
-                        ),
-                        "campaign": (
-                            campaign_input.value
-                        ),
-                        "class_name": (
-                            class_input.value
-                        ),
-                        "character_level": (
-                            level_input.value
-                        ),
-                        "race": race_input.value,
-                        "alignment": (
-                            alignment_input.value
-                        ),
+                        "character_name": name_input.value,
+                        "player_name": player_input.value,
+                        "campaign": campaign_input.value,
+                        "class_name": class_input.value,
+                        "character_level": level_input.value,
+                        "race_key": race_key,
+                        "race": race_name,
+                        "race_heritage": heritage_input.value,
+                        "alternate_racial_traits": alternate_traits_input.value,
+                        "creature_type": creature_type_input.value,
+                        "racial_subtypes": subtypes_input.value,
+                        "vision": vision_input.value,
+                        "languages": languages_input.value,
+                        "racial_ability_adjustments": ability_adjustments_input.value,
+                        "carrying_capacity_multiplier": carrying_multiplier_input.value,
+                        "is_quadruped": quadruped_input.value,
+                        "ignore_armor_speed": ignore_armor_speed_input.value,
+                        "ignore_encumbrance_speed": ignore_load_speed_input.value,
+                        "base_speed": base_speed_input.value,
+                        "alignment": alignment_input.value,
                         "deity": deity_input.value,
-                        "size_key": (
-                            size_input.value
-                        ),
+                        "size_key": size_input.value,
                         "age_text": age_input.value,
                         "gender": gender_input.value,
-                        "height_text": (
-                            height_input.value
-                        ),
-                        "weight_text": (
-                            weight_input.value
-                        ),
+                        "height_text": height_input.value,
+                        "weight_text": weight_input.value,
                         "eyes": eyes_input.value,
                         "hair": hair_input.value,
                         "skin": skin_input.value,
-                        "experience_points": (
-                            xp_input.value
-                        ),
+                        "experience_points": xp_input.value,
                     },
                 )
             except Exception as error:
                 _safe_notify_error(
                     error,
-                    (
-                        "L’identité n’a pas "
-                        "pu être enregistrée."
-                    ),
+                    "L’identité n’a pas pu être enregistrée.",
                 )
                 return
 
             ui.notify(
-                "Identité enregistrée.",
+                "Identité et profil racial enregistrés.",
                 type="positive",
             )
             ui.navigate.to(
@@ -1077,6 +1508,10 @@ def _calculation_rules_dialog(
     initiative = initiative_breakdown(character)
     cmb = cmb_breakdown(character)
     cmd = cmd_breakdown(character)
+    effects = character.get("equipment_effects") or equipment_effects(
+        character,
+        [],
+    )
 
     def formula_block(
         title,
@@ -1248,6 +1683,60 @@ def _calculation_rules_dialog(
                             _signed_rule_part("divers", cmd["misc_modifier"]),
                         ]) + f" = {cmd['total']}",
                         "Les bonus d’esquive et les autres bonus applicables doivent être inscrits dans Divers – DMD/CMD. Les pénalités négatives du champ Divers CA sont appliquées automatiquement.",
+                    )
+
+                with ui.expansion(
+                    "Équipement, poids et vitesse",
+                    icon="backpack",
+                ).props(
+                    "expand-separator"
+                ).classes("w-full"):
+                    capacity = effects["carrying_capacity"]
+                    ui.label(
+                        "Charge = somme des poids transportés; les seuils dépendent de la Force, de la taille, du type bipède ou quadrupède et du multiplicateur racial."
+                    ).classes("jf-rpg-rules-formula")
+                    formula_block(
+                        "Capacité de charge",
+                        "Comparer le poids transporté aux seuils de charge légère, moyenne et lourde",
+                        (
+                            f"FOR {capacity['strength']} — légère "
+                            f"{format_number(capacity['light_max'])} lb — moyenne "
+                            f"{format_number(capacity['medium_max'])} lb — lourde "
+                            f"{format_number(capacity['heavy_max'])} lb"
+                        ),
+                        (
+                            f"Poids actuel {format_number(effects['carried_weight'])} lb : "
+                            f"charge {effects['load_label'].lower()}."
+                        ),
+                    )
+                    formula_block(
+                        "Vitesse finale",
+                        "Retenir la vitesse la plus défavorable entre la base, l’armure et la charge, sauf exception raciale",
+                        (
+                            f"Base {effects['base_speed']} pi — armure "
+                            f"{effects['armor_speed'] if effects['armor_speed'] is not None else 'sans réduction'} — "
+                            f"charge {effects['load_speed'] if effects['load_speed'] is not None else 'sans réduction'} "
+                            f"= {effects['final_speed']} pi"
+                        ),
+                        (
+                            "Exception d’armure active. "
+                            if effects['ignore_armor_speed']
+                            else ""
+                        ) + (
+                            "Exception d’encombrement active."
+                            if effects['ignore_encumbrance_speed']
+                            else ""
+                        ),
+                    )
+                    formula_block(
+                        "DEX maximale et pénalité aux tests",
+                        "Pour chaque catégorie, utiliser la restriction la plus défavorable entre l’armure et la charge; ne pas les additionner deux fois",
+                        (
+                            f"DEX brute {format_modifier(effects['raw_dex_modifier'])}; "
+                            f"DEX max {effects['effective_max_dex_bonus'] if effects['effective_max_dex_bonus'] is not None else 'aucune'}; "
+                            f"DEX retenue {format_modifier(effects['effective_ac_dex_modifier'])}; "
+                            f"pénalité retenue {format_modifier(effects['effective_armor_check_penalty'])}"
+                        ),
                     )
 
                 with ui.expansion(
@@ -1472,6 +1961,11 @@ def _combat_panel(
     user_id,
     character,
 ):
+    equipment = list_rpg_equipment(
+        user_id,
+        character["id"],
+    )
+
     with ui.card().classes(
         "w-full p-4"
     ):
@@ -1589,14 +2083,14 @@ def _combat_panel(
                 step=1,
             ).props(
                 "dense outlined inputmode=numeric"
-            ).classes("jf-rpg-compact-field")
+            ).classes("jf-rpg-compact-field jf-rpg-combat-value")
             current_hp_input = ui.number(
                 label="PV actuels",
                 value=character["current_hp"],
                 step=1,
             ).props(
                 "dense outlined inputmode=numeric"
-            ).classes("jf-rpg-compact-field")
+            ).classes("jf-rpg-compact-field jf-rpg-combat-value")
             nonlethal_input = ui.number(
                 label="Dégâts non létaux",
                 value=character["nonlethal_damage"],
@@ -1604,21 +2098,31 @@ def _combat_panel(
                 step=1,
             ).props(
                 "dense outlined inputmode=numeric"
-            ).classes("jf-rpg-compact-field")
+            ).classes("jf-rpg-compact-field jf-rpg-combat-value")
+            final_speed_display = ui.input(
+                label="Vitesse finale",
+                value=f"{character.get('final_speed', character.get('base_speed', 30))} pi",
+            ).props(
+                "dense outlined readonly"
+            ).classes(
+                "jf-rpg-compact-field jf-rpg-combat-value"
+            ).tooltip(
+                "Calculée à partir de la race, de l’armure et de la charge"
+            )
             speed_input = ui.input(
-                label="Vitesse",
+                label="Autres vitesses / note",
                 value=character["speed"] or "",
-                placeholder="Ex. 30 ft",
+                placeholder="Ex. nage 20 pi",
             ).props(
                 "dense outlined maxlength=80"
-            ).classes("jf-rpg-compact-field")
+            ).classes("jf-rpg-compact-field jf-rpg-combat-value")
             dr_input = ui.input(
                 label="Réduction dégâts",
                 value=character["damage_reduction"] or "",
                 placeholder="Ex. 5/argent",
             ).props(
                 "dense outlined maxlength=80"
-            ).classes("jf-rpg-compact-field").tooltip(
+            ).classes("jf-rpg-compact-field jf-rpg-combat-value").tooltip(
                 "Réduction des dégâts"
             )
             sr_input = ui.number(
@@ -1628,7 +2132,7 @@ def _combat_panel(
                 step=1,
             ).props(
                 "dense outlined clearable inputmode=numeric"
-            ).classes("jf-rpg-compact-field").tooltip(
+            ).classes("jf-rpg-compact-field jf-rpg-combat-value").tooltip(
                 "Résistance à la magie"
             )
             bab_input = ui.number(
@@ -1637,25 +2141,25 @@ def _combat_panel(
                 step=1,
             ).props(
                 "dense outlined inputmode=numeric"
-            ).classes("jf-rpg-compact-field").tooltip(
+            ).classes("jf-rpg-compact-field jf-rpg-combat-value").tooltip(
                 "Bonus de base à l’attaque"
             )
             armor_input = ui.number(
-                label="Armure",
+                label="Armure (manuel)",
                 value=character["armor_bonus"],
                 step=1,
             ).props(
                 "dense outlined inputmode=numeric"
-            ).classes("jf-rpg-compact-field").tooltip(
+            ).classes("jf-rpg-compact-field jf-rpg-combat-value").tooltip(
                 "Bonus d’armure"
             )
             shield_input = ui.number(
-                label="Bouclier",
+                label="Bouclier (manuel)",
                 value=character["shield_bonus"],
                 step=1,
             ).props(
                 "dense outlined inputmode=numeric"
-            ).classes("jf-rpg-compact-field").tooltip(
+            ).classes("jf-rpg-compact-field jf-rpg-combat-value").tooltip(
                 "Bonus de bouclier"
             )
             natural_input = ui.number(
@@ -1664,14 +2168,14 @@ def _combat_panel(
                 step=1,
             ).props(
                 "dense outlined inputmode=numeric"
-            ).classes("jf-rpg-compact-field")
+            ).classes("jf-rpg-compact-field jf-rpg-combat-value")
             deflection_input = ui.number(
                 label="Déviation",
                 value=character["deflection_bonus"],
                 step=1,
             ).props(
                 "dense outlined inputmode=numeric"
-            ).classes("jf-rpg-compact-field").tooltip(
+            ).classes("jf-rpg-compact-field jf-rpg-combat-value").tooltip(
                 "Bonus de déviation"
             )
             misc_ac_input = ui.number(
@@ -1680,36 +2184,36 @@ def _combat_panel(
                 step=1,
             ).props(
                 "dense outlined inputmode=numeric"
-            ).classes("jf-rpg-compact-field")
+            ).classes("jf-rpg-compact-field jf-rpg-combat-value")
             armor_penalty_input = ui.number(
-                label="Pénalité armure",
+                label="Pénalité armure (manuel)",
                 value=character["armor_check_penalty"],
                 max=0,
                 step=1,
             ).props(
                 "dense outlined inputmode=numeric"
-            ).classes("jf-rpg-compact-field")
+            ).classes("jf-rpg-compact-field jf-rpg-combat-value")
             initiative_misc_input = ui.number(
                 label="Divers initiative",
                 value=character["initiative_misc_modifier"],
                 step=1,
             ).props(
                 "dense outlined inputmode=numeric"
-            ).classes("jf-rpg-compact-field")
+            ).classes("jf-rpg-compact-field jf-rpg-combat-value")
             cmb_misc_input = ui.number(
                 label="Divers BMO/CMB",
                 value=character["cmb_misc_modifier"],
                 step=1,
             ).props(
                 "dense outlined inputmode=numeric"
-            ).classes("jf-rpg-compact-field")
+            ).classes("jf-rpg-compact-field jf-rpg-combat-value")
             cmd_misc_input = ui.number(
                 label="Divers DMD/CMD",
                 value=character["cmd_misc_modifier"],
                 step=1,
             ).props(
                 "dense outlined inputmode=numeric"
-            ).classes("jf-rpg-compact-field")
+            ).classes("jf-rpg-compact-field jf-rpg-combat-value")
 
         def current_draft():
             draft = dict(character)
@@ -1737,11 +2241,18 @@ def _combat_panel(
                 "cmd_misc_modifier": cmd_misc_input.value,
                 "grapple_misc_modifier": cmb_misc_input.value,
             })
-            return draft
+            return apply_equipment_effects(
+                draft,
+                equipment,
+            )
 
         @ui.refreshable
         def render_preview():
             draft = current_draft()
+            final_speed_display.value = (
+                f"{draft['equipment_effects']['final_speed']} pi"
+            )
+            final_speed_display.update()
 
             with ui.element("div").classes(
                 "jf-rpg-summary mt-3"
@@ -1766,6 +2277,44 @@ def _combat_panel(
                             ui.label(str(value)).classes(
                                 "jf-rpg-stat-value"
                             )
+
+                effects = draft["equipment_effects"]
+                capacity = effects["carrying_capacity"]
+                armor_name = (
+                    effects["equipped_armor"]["item_name"]
+                    if effects["equipped_armor"]
+                    else "Aucune"
+                )
+                shield_name = (
+                    effects["equipped_shield"]["item_name"]
+                    if effects["equipped_shield"]
+                    else "Aucun"
+                )
+                max_dex = effects["effective_max_dex_bonus"]
+                with ui.element("div").classes(
+                    "jf-rpg-equipment-breakdown mt-2"
+                ):
+                    ui.label(
+                        "Équipement et encombrement"
+                    ).classes("font-bold")
+                    ui.label(
+                        (
+                            f"Armure : {armor_name} — "
+                            f"bouclier : {shield_name} — "
+                            f"poids {format_number(effects['carried_weight'])} lb — "
+                            f"charge {effects['load_label'].lower()} — "
+                            f"seuil léger {format_number(capacity['light_max'])} lb."
+                        )
+                    )
+                    ui.label(
+                        (
+                            f"Vitesse de base {effects['base_speed']} pi → "
+                            f"vitesse finale {effects['final_speed']} pi; "
+                            f"DEX max {max_dex if max_dex is not None else '—'}; "
+                            f"pénalité aux tests "
+                            f"{format_modifier(effects['effective_armor_check_penalty'])}."
+                        )
+                    )
 
         preview_controls = [
             max_hp_input,
@@ -1848,6 +2397,639 @@ def _combat_panel(
             ).props(
                 "color=primary"
             )
+
+
+def _equipment_dialog(
+    user_id,
+    character,
+    row=None,
+):
+    editing = row is not None
+    row = dict(row or {})
+
+    with ui.dialog() as dialog:
+        with ui.card().classes(
+            "w-full max-w-4xl p-4"
+        ):
+            ui.label(
+                "Modifier l’équipement"
+                if editing
+                else "Ajouter un équipement"
+            ).classes(
+                "text-xl font-bold"
+            )
+
+            with ui.element("div").classes(
+                "jf-rpg-grid mt-2"
+            ):
+                name_input = ui.input(
+                    label="Nom",
+                    value=row.get("item_name") or "",
+                ).props(
+                    "maxlength=160"
+                ).classes("w-full")
+                type_input = ui.select(
+                    EQUIPMENT_TYPE_LABELS,
+                    label="Type",
+                    value=row.get("item_type") or "gear",
+                ).props(
+                    "options-dense"
+                ).classes("w-full")
+                quantity_input = ui.number(
+                    label="Quantité",
+                    value=row.get("quantity") or 1,
+                    min=0,
+                    max=100000,
+                    step=1,
+                ).props(
+                    "inputmode=numeric"
+                ).classes("w-full")
+                weight_input = ui.number(
+                    label="Poids unitaire (lb)",
+                    value=float(row.get("weight_each") or 0),
+                    min=0,
+                    step=.1,
+                ).props(
+                    "inputmode=decimal"
+                ).classes("w-full")
+                value_input = ui.input(
+                    label="Valeur",
+                    value=row.get("value_text") or "",
+                    placeholder="Ex. 1 500 po",
+                ).props(
+                    "maxlength=120"
+                ).classes("w-full")
+                proficiency_input = ui.input(
+                    label="Maîtrise requise",
+                    value=row.get("proficiency_required") or "",
+                    placeholder="Ex. Armures lourdes",
+                ).props(
+                    "maxlength=160"
+                ).classes("w-full")
+
+            with ui.row().classes(
+                "w-full gap-4 flex-wrap mt-2"
+            ):
+                carried_input = ui.checkbox(
+                    "Transporté",
+                    value=bool(row.get("carried", True)),
+                )
+                equipped_input = ui.checkbox(
+                    "Équipé",
+                    value=bool(row.get("equipped")),
+                )
+
+            protection_container = ui.element("section").classes(
+                "jf-rpg-race-profile mt-3"
+            )
+            with protection_container:
+                ui.label(
+                    "Propriétés de protection"
+                ).classes(
+                    "text-lg font-bold"
+                )
+                ui.label(
+                    "Ces valeurs alimentent automatiquement la CA, "
+                    "la DEX maximale, les compétences et la vitesse."
+                ).classes(
+                    "text-sm jf-muted"
+                )
+                with ui.element("div").classes(
+                    "jf-rpg-grid mt-2"
+                ):
+                    armor_category_input = ui.select(
+                        ARMOR_CATEGORY_LABELS,
+                        label="Catégorie d’armure",
+                        value=row.get("armor_category") or "none",
+                    ).classes("w-full")
+                    armor_bonus_input = ui.number(
+                        label="Bonus d’armure",
+                        value=row.get("armor_bonus") or 0,
+                        min=0,
+                        max=100,
+                        step=1,
+                    ).classes("w-full")
+                    shield_bonus_input = ui.number(
+                        label="Bonus de bouclier",
+                        value=row.get("shield_bonus") or 0,
+                        min=0,
+                        max=100,
+                        step=1,
+                    ).classes("w-full")
+                    enhancement_input = ui.number(
+                        label="Bonus d’altération",
+                        value=row.get("enhancement_bonus") or 0,
+                        min=0,
+                        max=20,
+                        step=1,
+                    ).classes("w-full")
+                    max_dex_input = ui.number(
+                        label="Bonus DEX maximal",
+                        value=row.get("max_dex_bonus"),
+                        min=-100,
+                        max=100,
+                        step=1,
+                    ).props(
+                        "clearable"
+                    ).classes("w-full")
+                    armor_penalty_input = ui.number(
+                        label="Pénalité aux tests",
+                        value=row.get("armor_check_penalty") or 0,
+                        min=-100,
+                        max=0,
+                        step=1,
+                    ).classes("w-full")
+                    spell_failure_input = ui.number(
+                        label="Échec sorts profanes (%)",
+                        value=row.get("arcane_spell_failure") or 0,
+                        min=0,
+                        max=100,
+                        step=1,
+                    ).classes("w-full")
+                    reduced_speed_input = ui.number(
+                        label="Vitesse réduite personnalisée",
+                        value=row.get("reduced_speed_override"),
+                        min=0,
+                        max=500,
+                        step=5,
+                    ).props(
+                        "clearable"
+                    ).classes("w-full")
+
+                speed_reduction_input = ui.checkbox(
+                    "Cet équipement réduit la vitesse",
+                    value=bool(row.get("speed_reduction_applies")),
+                )
+
+            notes_input = ui.textarea(
+                label="Note facultative",
+                value=row.get("notes") or "",
+            ).props(
+                "outlined autogrow maxlength=2000"
+            ).classes("w-full mt-3")
+
+            def refresh_type_visibility():
+                item_type = type_input.value or "gear"
+                is_protection = item_type in {"armor", "shield"}
+                protection_container.set_visibility(is_protection)
+                armor_category_input.set_visibility(item_type == "armor")
+                armor_bonus_input.set_visibility(item_type == "armor")
+                shield_bonus_input.set_visibility(item_type == "shield")
+                reduced_speed_input.set_visibility(item_type == "armor")
+                speed_reduction_input.set_visibility(item_type == "armor")
+                proficiency_input.set_visibility(
+                    item_type in {"armor", "shield", "weapon"}
+                )
+
+            type_input.on_value_change(
+                lambda event: refresh_type_visibility()
+            )
+            refresh_type_visibility()
+
+            def save_now():
+                try:
+                    save_rpg_equipment(
+                        user_id,
+                        character["id"],
+                        {
+                            "item_name": name_input.value,
+                            "item_type": type_input.value,
+                            "quantity": quantity_input.value,
+                            "weight_each": weight_input.value,
+                            "value_text": value_input.value,
+                            "notes": notes_input.value,
+                            "carried": carried_input.value,
+                            "equipped": equipped_input.value,
+                            "armor_category": armor_category_input.value,
+                            "armor_bonus": armor_bonus_input.value,
+                            "shield_bonus": shield_bonus_input.value,
+                            "enhancement_bonus": enhancement_input.value,
+                            "max_dex_bonus": max_dex_input.value,
+                            "armor_check_penalty": armor_penalty_input.value,
+                            "arcane_spell_failure": spell_failure_input.value,
+                            "speed_reduction_applies": (
+                                speed_reduction_input.value
+                            ),
+                            "reduced_speed_override": (
+                                reduced_speed_input.value
+                            ),
+                            "proficiency_required": proficiency_input.value,
+                            "sort_order": row.get("sort_order") or 0,
+                        },
+                        equipment_id=row.get("id"),
+                    )
+                except Exception as error:
+                    _safe_notify_error(
+                        error,
+                        "L’équipement n’a pas pu être enregistré.",
+                    )
+                    return
+
+                dialog.close()
+                ui.notify(
+                    "Équipement enregistré.",
+                    type="positive",
+                )
+                ui.navigate.to(
+                    _character_url(
+                        character["id"],
+                        "equipement",
+                    )
+                )
+
+            with ui.row().classes(
+                "w-full justify-end gap-2 mt-3"
+            ):
+                ui.button(
+                    "Annuler",
+                    on_click=dialog.close,
+                ).props("flat")
+                ui.button(
+                    "Enregistrer",
+                    icon="save",
+                    on_click=save_now,
+                ).props("color=primary")
+
+    dialog.open()
+
+
+def _delete_equipment_dialog(
+    user_id,
+    character,
+    row,
+):
+    with ui.dialog() as dialog:
+        with ui.card().classes("w-full max-w-lg p-4"):
+            ui.label("Supprimer l’équipement").classes(
+                "text-xl font-bold"
+            )
+            ui.label(
+                f"Supprimer « {row['item_name']} »?"
+            )
+
+            def confirm():
+                try:
+                    delete_rpg_equipment(
+                        user_id,
+                        character["id"],
+                        row["id"],
+                    )
+                except Exception as error:
+                    _safe_notify_error(
+                        error,
+                        "L’équipement n’a pas pu être supprimé.",
+                    )
+                    return
+                dialog.close()
+                ui.notify("Équipement supprimé.", type="positive")
+                ui.navigate.to(
+                    _character_url(
+                        character["id"],
+                        "equipement",
+                    )
+                )
+
+            with ui.row().classes(
+                "w-full justify-end gap-2 mt-3"
+            ):
+                ui.button("Annuler", on_click=dialog.close).props("flat")
+                ui.button(
+                    "Supprimer",
+                    icon="delete",
+                    on_click=confirm,
+                ).props("color=negative")
+    dialog.open()
+
+
+def _equipment_panel(
+    user_id,
+    character,
+):
+    equipment = list_rpg_equipment(
+        user_id,
+        character["id"],
+    )
+    effective = apply_equipment_effects(
+        character,
+        equipment,
+    )
+    effects = effective["equipment_effects"]
+    capacity = effects["carrying_capacity"]
+
+    with ui.card().classes("w-full p-5"):
+        with ui.row().classes(
+            "w-full items-start justify-between gap-3 flex-wrap"
+        ):
+            with ui.column().classes("gap-0"):
+                ui.label("Équipement et encombrement").classes(
+                    "text-xl font-bold"
+                )
+                ui.label(
+                    "Les armures, boucliers et objets transportés "
+                    "alimentent automatiquement les statistiques."
+                ).classes("text-sm jf-muted")
+            ui.button(
+                "Ajouter",
+                icon="add",
+                on_click=lambda: _equipment_dialog(
+                    user_id,
+                    character,
+                ),
+            ).props("color=primary")
+
+        with ui.element("div").classes(
+            "jf-rpg-equipment-summary-grid mt-3"
+        ):
+            threshold_label = {
+                "light": "Avant ralentissement",
+                "medium": "Avant charge lourde",
+                "heavy": "Avant surcharge",
+                "overloaded": "Avant immobilisation",
+                "immovable": "Surcharge excédentaire",
+            }.get(
+                effects["load_key"],
+                "Avant le prochain seuil",
+            )
+            threshold_value = (
+                effects["remaining_before_next_threshold"]
+                if effects["load_key"] != "immovable"
+                else max(
+                    Decimal("0"),
+                    effects["carried_weight"]
+                    - capacity["lift_off_ground_max"],
+                )
+            )
+            summary_values = (
+                (
+                    "Poids transporté",
+                    f"{format_number(effects['carried_weight'])} lb",
+                ),
+                (
+                    "Charge actuelle",
+                    effects["load_label"],
+                ),
+                (
+                    threshold_label,
+                    f"{format_number(threshold_value)} lb",
+                ),
+                (
+                    "Charge légère max.",
+                    f"{format_number(capacity['light_max'])} lb",
+                ),
+                (
+                    "Charge moyenne max.",
+                    f"{format_number(capacity['medium_max'])} lb",
+                ),
+                (
+                    "Charge lourde max.",
+                    f"{format_number(capacity['heavy_max'])} lb",
+                ),
+                (
+                    "Soulever du sol max.",
+                    f"{format_number(capacity['lift_off_ground_max'])} lb",
+                ),
+                (
+                    "Pousser / tirer max.",
+                    f"{format_number(capacity['push_drag_max'])} lb",
+                ),
+                (
+                    "Vitesse finale",
+                    f"{effects['final_speed']} pi",
+                ),
+                (
+                    "Course",
+                    (
+                        f"×{effects['run_multiplier']}"
+                        if effects["run_multiplier"]
+                        else "Impossible"
+                    ),
+                ),
+            )
+            for label, value in summary_values:
+                with ui.element("div").classes(
+                    "jf-rpg-equipment-stat"
+                ):
+                    ui.label(label).classes("text-xs jf-muted")
+                    ui.label(value).classes(
+                        "jf-rpg-equipment-stat-value"
+                    )
+
+        armor = effects["equipped_armor"]
+        shield = effects["equipped_shield"]
+        with ui.element("div").classes(
+            "jf-rpg-equipment-breakdown mt-3"
+        ):
+            ui.label("Décomposition retenue").classes("font-bold")
+            ui.label(
+                (
+                    f"Armure : {armor['item_name'] if armor else 'aucune'} "
+                    f"({format_modifier(effects['equipment_armor_bonus'])}); "
+                    f"bouclier : {shield['item_name'] if shield else 'aucun'} "
+                    f"({format_modifier(effects['equipment_shield_bonus'])})."
+                )
+            )
+            ui.label(
+                (
+                    f"DEX brute {format_modifier(effects['raw_dex_modifier'])}; "
+                    f"DEX maximale "
+                    f"{effects['effective_max_dex_bonus'] if effects['effective_max_dex_bonus'] is not None else 'aucune'}; "
+                    f"DEX retenue {format_modifier(effects['effective_ac_dex_modifier'])}."
+                )
+            )
+            ui.label(
+                (
+                    f"Pénalité équipement "
+                    f"{format_modifier(effects['equipment_armor_check_penalty'])}; "
+                    f"pénalité finale "
+                    f"{format_modifier(effects['effective_armor_check_penalty'])}."
+                )
+            )
+            speed_parts = [f"base {effects['base_speed']} pi"]
+            if effects["armor_speed"] is not None:
+                speed_parts.append(
+                    (
+                        "armure ignorée par exception"
+                        if effects["ignore_armor_speed"]
+                        else f"armure {effects['armor_speed']} pi"
+                    )
+                )
+            if effects["load_speed"] is not None:
+                speed_parts.append(
+                    (
+                        "charge ignorée par exception"
+                        if effects["ignore_encumbrance_speed"]
+                        else f"charge {effects['load_speed']} pi"
+                    )
+                )
+            speed_parts.append(f"retenue {effects['final_speed']} pi")
+            ui.label("Vitesse : " + " → ".join(speed_parts) + ".")
+
+        ui.label(
+            "Une seule armure principale et un seul bouclier peuvent "
+            "contribuer automatiquement à la fois. Équiper une nouvelle "
+            "protection retire automatiquement l’ancienne du calcul."
+        ).classes("text-xs jf-muted mt-2")
+
+    if not equipment:
+        with ui.card().classes(
+            "w-full p-7 items-center text-center mt-3"
+        ):
+            ui.icon("backpack").classes("text-6xl text-gray-400")
+            ui.label("Aucun équipement").classes("text-xl font-bold")
+            ui.label(
+                "Ajoutez d’abord une armure, un bouclier, une arme "
+                "ou une possession."
+            ).classes("text-sm jf-muted")
+            ui.button(
+                "Ajouter un équipement",
+                icon="add",
+                on_click=lambda: _equipment_dialog(user_id, character),
+            ).props("color=primary")
+        return
+
+    for item_type, type_label in EQUIPMENT_TYPE_LABELS.items():
+        rows = [
+            row
+            for row in equipment
+            if row["item_type"] == item_type
+        ]
+        if not rows:
+            continue
+        ui.label(type_label).classes("text-lg font-bold mt-3")
+        with ui.column().classes("w-full gap-2"):
+            for row in rows:
+                total_weight = (
+                    Decimal(str(row["weight_each"] or 0))
+                    * Decimal(str(row["quantity"] or 0))
+                )
+                with ui.element("article").classes(
+                    "jf-rpg-equipment-card"
+                ):
+                    with ui.element("div").classes(
+                        "jf-rpg-equipment-row"
+                    ):
+                        with ui.column().classes("gap-0 min-w-0"):
+                            with ui.row().classes(
+                                "items-center gap-2 flex-wrap"
+                            ):
+                                ui.label(row["item_name"]).classes(
+                                    "jf-rpg-equipment-name"
+                                )
+                                if row["equipped"]:
+                                    ui.badge("Équipé", color="positive")
+                                if not row["carried"]:
+                                    ui.badge("Non transporté", color="grey")
+                            ui.label(
+                                (
+                                    f"Quantité {row['quantity']} — "
+                                    f"{format_number(row['weight_each'])} lb chacun — "
+                                    f"total {format_number(total_weight)} lb"
+                                )
+                            ).classes("jf-rpg-equipment-meta")
+                            if item_type in {"armor", "shield"}:
+                                protection_bits = []
+                                if item_type == "armor":
+                                    protection_bits.append(
+                                        "armure "
+                                        + format_modifier(
+                                            row["armor_bonus"]
+                                            + row["enhancement_bonus"]
+                                        )
+                                    )
+                                    protection_bits.append(
+                                        ARMOR_CATEGORY_LABELS.get(
+                                            row["armor_category"],
+                                            row["armor_category"],
+                                        )
+                                    )
+                                else:
+                                    protection_bits.append(
+                                        "bouclier "
+                                        + format_modifier(
+                                            row["shield_bonus"]
+                                            + row["enhancement_bonus"]
+                                        )
+                                    )
+                                if row["max_dex_bonus"] is not None:
+                                    protection_bits.append(
+                                        f"DEX max {row['max_dex_bonus']}"
+                                    )
+                                protection_bits.append(
+                                    "tests "
+                                    + format_modifier(
+                                        row["armor_check_penalty"]
+                                    )
+                                )
+                                protection_bits.append(
+                                    f"échec profane {row['arcane_spell_failure']} %"
+                                )
+                                ui.label(
+                                    " — ".join(protection_bits)
+                                ).classes("jf-rpg-equipment-meta")
+                            if row.get("notes"):
+                                ui.label(row["notes"]).classes(
+                                    "text-xs jf-muted"
+                                )
+
+                        with ui.row().classes(
+                            "items-center gap-1 flex-wrap justify-end"
+                        ):
+                            carried_switch = ui.switch(
+                                "Transporté",
+                                value=bool(row["carried"]),
+                            ).props("dense")
+                            equipped_switch = ui.switch(
+                                "Équipé",
+                                value=bool(row["equipped"]),
+                            ).props("dense")
+
+                            def state_changed(
+                                _=None,
+                                *,
+                                current_row=row,
+                                carried_control=carried_switch,
+                                equipped_control=equipped_switch,
+                            ):
+                                try:
+                                    update_rpg_equipment_state(
+                                        user_id,
+                                        character["id"],
+                                        current_row["id"],
+                                        carried=carried_control.value,
+                                        equipped=equipped_control.value,
+                                    )
+                                except Exception as error:
+                                    _safe_notify_error(
+                                        error,
+                                        "L’état de l’équipement n’a pas pu être modifié.",
+                                    )
+                                    return
+                                ui.navigate.to(
+                                    _character_url(
+                                        character["id"],
+                                        "equipement",
+                                    )
+                                )
+
+                            carried_switch.on_value_change(state_changed)
+                            equipped_switch.on_value_change(state_changed)
+                            ui.button(
+                                icon="edit",
+                                on_click=lambda current=row: _equipment_dialog(
+                                    user_id,
+                                    character,
+                                    current,
+                                ),
+                            ).props("flat round")
+                            ui.button(
+                                icon="delete",
+                                on_click=lambda current=row: _delete_equipment_dialog(
+                                    user_id,
+                                    character,
+                                    current,
+                                ),
+                            ).props("flat round color=negative")
+
 
 
 def _saves_panel(
@@ -4235,8 +5417,11 @@ def rpg_character_panel(
                         "text-xl font-bold"
                     )
 
-    with ui.tabs().classes(
-        "w-full"
+    with ui.tabs().props(
+        "dense no-caps inline-label "
+        "mobile-arrows outside-arrows align=left"
+    ).classes(
+        "jf-rpg-main-tabs"
     ) as tabs:
         identity_tab = ui.tab(
             "Identité",
@@ -4245,6 +5430,10 @@ def rpg_character_panel(
         combat_tab = ui.tab(
             "Combat",
             icon="shield",
+        )
+        equipment_tab = ui.tab(
+            "Équipement",
+            icon="backpack",
         )
         saves_tab = ui.tab(
             "Sauvegardes",
@@ -4269,6 +5458,9 @@ def rpg_character_panel(
         "identity": identity_tab,
         "combat": combat_tab,
         "caracteristiques": combat_tab,
+        "equipement": equipment_tab,
+        "équipement": equipment_tab,
+        "equipment": equipment_tab,
         "sauvegardes": saves_tab,
         "saves": saves_tab,
         "competences": skills_tab,
@@ -4302,6 +5494,16 @@ def rpg_character_panel(
             "px-0"
         ):
             _combat_panel(
+                user_id,
+                character,
+            )
+
+        with ui.tab_panel(
+            equipment_tab
+        ).classes(
+            "px-0"
+        ):
+            _equipment_panel(
                 user_id,
                 character,
             )
@@ -4345,9 +5547,9 @@ def rpg_character_panel(
             "font-bold"
         )
         ui.label(
-            "L’équipement, les dons, les capacités spéciales, "
-            "les langues, les sorts, le PDF et les campagnes "
-            "seront ajoutés dans les phases suivantes."
+            "Les dons, les capacités spéciales, les sorts, le PDF "
+            "et les campagnes seront ajoutés dans les phases suivantes. "
+            "L’équipement, la race et l’encombrement sont maintenant actifs."
         ).classes(
             "text-sm"
         )

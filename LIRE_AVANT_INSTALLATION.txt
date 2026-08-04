@@ -1,48 +1,295 @@
-JF APPS — CORRECTIF PERSONNAGES JDR V1.1.1
+JF APPS — PERSONNAGES JDR V1.2.0
+RACES, ÉQUIPEMENT, POIDS ET ENCOMBREMENT
 
-CHANGEMENT
-
-Dans Combat et défenses, le grand encadré contenant les formules
-BMO/CMB et DMD/CMD est retiré.
-
-Les mêmes renseignements restent disponibles dans la fenêtre
-Règles de calcul :
-
-- formule BMO/CMB;
-- formule DMD/CMD;
-- utilisation de la Dextérité pour les créatures Très petites
-  ou plus petites;
-- bonus d’esquive et autres bonus applicables;
-- pénalités négatives de Divers CA appliquées au DMD/CMD;
-- exemple calculé avec les valeurs du personnage.
-
-RÉSULTAT
-
-La section Combat et défenses est plus compacte et les explications
-détaillées sont regroupées au même endroit que les autres règles.
-
-FICHIERS COMPLETS À REMPLACER
+FICHIERS COMPLETS À REMPLACER ENSEMBLE
+Déposer à la racine du dépôt GitHub :
 
 - rpg_character.py
+- rpg_character_data.py
+- rpg_character_rules.py
+- rpg_character_catalog.py
 - app_versions.py
 - manual.py
 
+IMPORTANT
+rpg_character_catalog.py est un nouveau fichier. Il doit être ajouté à
+la racine du dépôt en même temps que les cinq fichiers remplacés.
+
+AUCUN CHANGEMENT REQUIS
+Ne pas remplacer :
+
+- app.py
+- app_access.py
+- release_notes.py
+- requirements.txt
+- db.py
+
+Aucune nouvelle dépendance Python n’est requise.
+
+============================================================
+1. RACE PRINCIPALE ET PROFIL RACIAL
+============================================================
+
+Le champ Race devient une liste déroulante recherchable :
+
+- Humain;
+- Nain;
+- Elfe;
+- Gnome;
+- Demi-elfe;
+- Demi-orque;
+- Halfelin;
+- Autre / personnalisée.
+
+Le profil racial peut fournir :
+
+- type et sous-types;
+- taille;
+- vitesse de base;
+- vision;
+- langues;
+- résumé des ajustements raciaux;
+- multiplicateur de capacité de charge;
+- bipède ou quadrupède;
+- exception de vitesse sous armure;
+- exception de vitesse sous encombrement.
+
+Un champ facultatif permet l’héritage ou la sous-race.
+Un autre champ permet les traits raciaux alternatifs ou personnalisés.
+
+CHANGEMENT SÉCURITAIRE
+Lors du choix d’une race de base, une prévisualisation compare les
+valeurs actuelles et suggérées.
+
+Trois choix sont offerts :
+
+- Annuler;
+- Conserver mes valeurs;
+- Appliquer le profil.
+
+Les six scores de caractéristiques ne sont jamais modifiés
+automatiquement.
+
+============================================================
+2. NOUVEL ONGLET ÉQUIPEMENT
+============================================================
+
+L’onglet Équipement permet d’ajouter :
+
+- armures;
+- boucliers;
+- armes;
+- objets et possessions.
+
+Chaque entrée peut contenir :
+
+- nom;
+- type;
+- quantité;
+- poids unitaire;
+- valeur;
+- note;
+- Transporté;
+- Équipé.
+
+Pour une armure ou un bouclier :
+
+- catégorie d’armure;
+- bonus d’armure ou de bouclier;
+- bonus d’altération;
+- bonus maximal de Dextérité;
+- pénalité aux tests;
+- échec des sorts profanes;
+- réduction de vitesse;
+- vitesse réduite personnalisée;
+- maîtrise requise.
+
+Une seule armure et un seul bouclier contribuent automatiquement à la
+fois. Équiper une nouvelle protection du même type retire l’ancienne
+protection du calcul.
+
+============================================================
+3. CALCULS AUTOMATIQUES DE L’ÉQUIPEMENT
+============================================================
+
+L’équipement équipé peut alimenter :
+
+- CA totale;
+- CA pris au dépourvu;
+- bonus maximal de Dextérité;
+- pénalité d’armure aux compétences;
+- vitesse finale;
+- multiplicateur de course.
+
+La CA de contact ne reçoit normalement ni le bonus d’armure ni le bonus
+de bouclier.
+
+Les champs manuels existants sont conservés pour les anciens personnages
+et les cas personnalisés. L’application retient la valeur applicable
+sans cumuler deux fois des bonus incompatibles du même type.
+
+============================================================
+4. POIDS ET ENCOMBREMENT
+============================================================
+
+Poids total =
+quantité × poids unitaire de chaque objet marqué Transporté.
+
+Le résumé affiche :
+
+- poids transporté;
+- charge actuelle;
+- poids restant avant ralentissement ou avant le prochain seuil;
+- charge légère maximale;
+- charge moyenne maximale;
+- charge lourde maximale;
+- poids maximal soulevé du sol;
+- poids maximal poussé ou tiré;
+- vitesse finale;
+- multiplicateur de course.
+
+Les seuils utilisent :
+
+- la Force effective;
+- la taille;
+- bipède ou quadrupède;
+- le multiplicateur racial ou personnalisé.
+
+Une charge légère n’impose pas de restriction.
+
+Une charge moyenne ou lourde peut modifier :
+
+- vitesse;
+- bonus maximal de Dextérité;
+- pénalité aux tests;
+- course.
+
+Quand l’armure et le poids imposent une restriction, l’application
+retient la valeur la plus défavorable pour chaque catégorie. Les
+pénalités ne sont pas additionnées deux fois.
+
+============================================================
+5. VITESSE ET EXCEPTIONS
+============================================================
+
+La vitesse finale compare :
+
+- vitesse de base;
+- vitesse imposée par l’armure;
+- vitesse imposée par la charge;
+- vitesse personnalisée;
+- exceptions raciales.
+
+Le profil Nain active les exceptions de vitesse sous armure et sous
+encombrement. Les cases restent modifiables pour les races personnalisées,
+les capacités de classe et les règles de campagne.
+
+============================================================
+6. COMBAT ET DÉFENSES
+============================================================
+
+Les valeurs saisies dans les champs numériques de Combat et défenses sont
+plus grandes, tout en conservant les cartes compactes.
+
+La prévisualisation affiche maintenant la vitesse finale calculée.
+
+La fenêtre Règles de calcul contient une nouvelle rubrique :
+
+- Équipement, poids et vitesse;
+- seuils de charge;
+- vitesse retenue;
+- DEX maximale;
+- pénalité finale;
+- exceptions actives.
+
+============================================================
+MIGRATIONS POSTGRESQL AUTOMATIQUES
+============================================================
+
+Le démarrage ajoute automatiquement les renseignements raciaux aux
+personnages existants et crée la table :
+
+rpg_character_equipment
+
+Aucun script SQL manuel n’est requis.
+
+Les personnages, compétences, attaques, sauvegardes et autres données
+existantes sont conservés.
+
+Les noms de races de base déjà inscrits sont reconnus lorsque possible.
+Les autres races restent dans le profil Autre / personnalisée.
+
+============================================================
 INSTALLATION
+============================================================
 
-1. Déposer les trois fichiers ensemble à la racine de GitHub.
-2. Faire Commit changes.
-3. Attendre le redémarrage Canner.
-4. Recharger avec Ctrl+F5 ou fermer puis rouvrir la PWA.
-5. Vérifier que Personnages JDR affiche V1.1.1.
+1. Ouvrir le dépôt GitHub.
+2. Choisir Add file > Upload files.
+3. Déposer les six fichiers ensemble.
+4. Vérifier que rpg_character_catalog.py est bien présent.
+5. Faire Commit changes.
+6. Attendre le redémarrage complet de Canner.
+7. Sur ordinateur, faire Ctrl+F5.
+8. Sur téléphone, fermer puis rouvrir la PWA.
+9. Vérifier que Personnages JDR affiche V1.2.0.
 
-TESTS
+============================================================
+TESTS RECOMMANDÉS
+============================================================
 
-1. Ouvrir un personnage.
-2. Aller dans Caractéristiques.
-3. Vérifier que l’encadré sous les champs Combat et défenses a disparu.
-4. Cliquer sur Règles de calcul.
-5. Ouvrir BMO / CMB et DMD / CMD.
-6. Vérifier que les formules et les exemples y sont toujours présents.
+RACE
+1. Ouvrir Identité.
+2. Choisir Nain.
+3. Vérifier la prévisualisation.
+4. Tester Annuler.
+5. Refaire le choix et tester Conserver mes valeurs.
+6. Refaire le choix et tester Appliquer le profil.
+7. Vérifier vitesse 20 pi et les deux exceptions de vitesse.
+8. Tester Autre / personnalisée.
+9. Vérifier qu’aucun score de caractéristique n’a changé.
 
-Aucun calcul, aucune table PostgreSQL et aucune donnée de personnage
-ne sont modifiés.
+ÉQUIPEMENT
+1. Ajouter une armure et l’équiper.
+2. Ajouter un bouclier et l’équiper.
+3. Vérifier la CA et la pénalité aux tests.
+4. Équiper une deuxième armure.
+5. Vérifier que la première ne contribue plus.
+6. Modifier les états Transporté et Équipé.
+
+POIDS
+1. Utiliser un personnage de Force 16, taille Moyenne, bipède.
+2. Vérifier les seuils 76 / 153 / 230 lb.
+3. Dépasser 76 lb et vérifier la charge Moyenne.
+4. Vérifier la réduction d’une vitesse de 30 pi à 20 pi.
+5. Tester une charge lourde.
+6. Tester ensuite le profil Nain et vérifier que sa vitesse reste 20 pi.
+
+COMBAT
+1. Vérifier que les chiffres sont plus lisibles.
+2. Vérifier la vitesse finale.
+3. Ouvrir Règles de calcul.
+4. Vérifier Équipement, poids et vitesse.
+5. Vérifier la décomposition de la CA.
+
+============================================================
+VÉRIFICATIONS EFFECTUÉES
+============================================================
+
+- syntaxe Python des six fichiers;
+- imports internes du paquet;
+- chargement du module d’interface avec un environnement simulé;
+- paramètres SQL littéraux;
+- création et modification simulées d’un équipement;
+- mise à jour simulée du profil racial;
+- sept profils de races de base et profil personnalisé;
+- seuils de Force 16 : 76 / 153 / 230 lb;
+- multiplicateurs de taille et de quadrupède;
+- armure, bouclier et bonus d’altération;
+- bonus maximal de Dextérité;
+- pénalité la plus défavorable sans cumul de l’armure et de la charge;
+- vitesse réduite et exception du Nain;
+- cinq tests Pathfinder de référence;
+- Manuel et notes de version mis à jour.
+
+Le rendu réel NiceGUI et les opérations PostgreSQL doivent être confirmés
+après le déploiement sur Canner.

@@ -4,8 +4,15 @@ from decimal import Decimal
 from uuid import uuid4
 
 from db import get_connection
+from rpg_character_catalog import (
+    ARMOR_CATEGORY_LABELS,
+    EQUIPMENT_TYPE_LABELS,
+    RACE_PROFILES,
+    infer_race_key,
+)
 from rpg_character_rules import (
     ABILITY_LABELS,
+    apply_equipment_effects,
     PATHFINDER_SKILL_KEYS,
     SAVE_DEFINITIONS,
     SKILL_ENGLISH_NAMES,
@@ -192,6 +199,19 @@ def init_rpg_character_schema():
                             BETWEEN 1 AND 100
                         ),
                     race TEXT,
+                    race_key TEXT NOT NULL DEFAULT 'custom',
+                    race_heritage TEXT,
+                    alternate_racial_traits TEXT,
+                    creature_type TEXT,
+                    racial_subtypes TEXT,
+                    vision TEXT,
+                    languages TEXT,
+                    racial_ability_adjustments TEXT,
+                    carrying_capacity_multiplier NUMERIC(8, 3)
+                        NOT NULL DEFAULT 1,
+                    is_quadruped BOOLEAN NOT NULL DEFAULT FALSE,
+                    ignore_armor_speed BOOLEAN NOT NULL DEFAULT FALSE,
+                    ignore_encumbrance_speed BOOLEAN NOT NULL DEFAULT FALSE,
                     alignment TEXT,
                     deity TEXT,
                     size_key TEXT NOT NULL
@@ -252,6 +272,8 @@ def init_rpg_character_schema():
                     current_hp INTEGER NOT NULL DEFAULT 0,
                     nonlethal_damage INTEGER NOT NULL DEFAULT 0,
                     speed TEXT,
+                    base_speed INTEGER NOT NULL DEFAULT 30
+                        CHECK (base_speed BETWEEN 0 AND 500),
                     damage_reduction TEXT,
                     spell_resistance INTEGER,
 
@@ -437,6 +459,69 @@ def init_rpg_character_schema():
                 """
             )
 
+            for definition in (
+                "race_key TEXT NOT NULL DEFAULT 'custom'",
+                "race_heritage TEXT",
+                "alternate_racial_traits TEXT",
+                "creature_type TEXT",
+                "racial_subtypes TEXT",
+                "vision TEXT",
+                "languages TEXT",
+                "racial_ability_adjustments TEXT",
+                "carrying_capacity_multiplier NUMERIC(8, 3) NOT NULL DEFAULT 1",
+                "is_quadruped BOOLEAN NOT NULL DEFAULT FALSE",
+                "ignore_armor_speed BOOLEAN NOT NULL DEFAULT FALSE",
+                "ignore_encumbrance_speed BOOLEAN NOT NULL DEFAULT FALSE",
+                "base_speed INTEGER NOT NULL DEFAULT 30",
+            ):
+                column_name = definition.split()[0]
+                cur.execute(
+                    f"""
+                    ALTER TABLE rpg_characters
+                    ADD COLUMN IF NOT EXISTS {definition};
+                    """
+                )
+
+            cur.execute(
+                """
+                UPDATE rpg_characters
+                SET race_key = CASE
+                    WHEN LOWER(COALESCE(race, '')) IN ('humain', 'human') THEN 'human'
+                    WHEN LOWER(COALESCE(race, '')) IN ('nain', 'dwarf') THEN 'dwarf'
+                    WHEN LOWER(COALESCE(race, '')) IN ('elfe', 'elf') THEN 'elf'
+                    WHEN LOWER(COALESCE(race, '')) = 'gnome' THEN 'gnome'
+                    WHEN LOWER(COALESCE(race, '')) IN ('demi-elfe', 'half-elf', 'half elf') THEN 'half_elf'
+                    WHEN LOWER(COALESCE(race, '')) IN ('demi-orque', 'demi-orc', 'half-orc', 'half orc') THEN 'half_orc'
+                    WHEN LOWER(COALESCE(race, '')) IN ('halfelin', 'halfling') THEN 'halfling'
+                    ELSE COALESCE(NULLIF(race_key, ''), 'custom')
+                END
+                WHERE race IS NOT NULL;
+                """
+            )
+            cur.execute(
+                """
+                UPDATE rpg_characters
+                SET
+                    base_speed = CASE
+                        WHEN race_key IN ('dwarf', 'gnome', 'halfling') THEN 20
+                        ELSE 30
+                    END,
+                    ignore_armor_speed = CASE
+                        WHEN race_key = 'dwarf' THEN TRUE
+                        ELSE ignore_armor_speed
+                    END,
+                    ignore_encumbrance_speed = CASE
+                        WHEN race_key = 'dwarf' THEN TRUE
+                        ELSE ignore_encumbrance_speed
+                    END
+                WHERE race_key IN (
+                    'human', 'dwarf', 'elf', 'gnome',
+                    'half_elf', 'half_orc', 'halfling'
+                )
+                  AND (speed IS NULL OR speed = '');
+                """
+            )
+
             pathfinder_keys = sorted(
                 PATHFINDER_SKILL_KEYS
             )
@@ -534,6 +619,59 @@ def init_rpg_character_schema():
                 rpg_character_attacks_character_idx
                 ON rpg_character_attacks (
                     character_id,
+                    sort_order,
+                    id
+                );
+                """
+            )
+
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS
+                rpg_character_equipment (
+                    id BIGSERIAL PRIMARY KEY,
+                    character_id BIGINT NOT NULL
+                        REFERENCES rpg_characters(id)
+                        ON DELETE CASCADE,
+                    item_name TEXT NOT NULL,
+                    item_type TEXT NOT NULL DEFAULT 'gear'
+                        CHECK (item_type IN ('armor', 'shield', 'weapon', 'gear')),
+                    quantity INTEGER NOT NULL DEFAULT 1
+                        CHECK (quantity BETWEEN 0 AND 100000),
+                    weight_each NUMERIC(10, 3) NOT NULL DEFAULT 0
+                        CHECK (weight_each BETWEEN 0 AND 1000000),
+                    value_text TEXT,
+                    notes TEXT,
+                    carried BOOLEAN NOT NULL DEFAULT TRUE,
+                    equipped BOOLEAN NOT NULL DEFAULT FALSE,
+                    armor_category TEXT NOT NULL DEFAULT 'none'
+                        CHECK (armor_category IN ('none', 'light', 'medium', 'heavy')),
+                    armor_bonus INTEGER NOT NULL DEFAULT 0,
+                    shield_bonus INTEGER NOT NULL DEFAULT 0,
+                    enhancement_bonus INTEGER NOT NULL DEFAULT 0,
+                    max_dex_bonus INTEGER,
+                    armor_check_penalty INTEGER NOT NULL DEFAULT 0
+                        CHECK (armor_check_penalty <= 0),
+                    arcane_spell_failure INTEGER NOT NULL DEFAULT 0
+                        CHECK (arcane_spell_failure BETWEEN 0 AND 100),
+                    speed_reduction_applies BOOLEAN NOT NULL DEFAULT FALSE,
+                    reduced_speed_override INTEGER,
+                    proficiency_required TEXT,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CHECK (max_dex_bonus IS NULL OR max_dex_bonus BETWEEN -100 AND 100),
+                    CHECK (reduced_speed_override IS NULL OR reduced_speed_override BETWEEN 0 AND 500)
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS
+                rpg_character_equipment_character_idx
+                ON rpg_character_equipment (
+                    character_id,
+                    item_type,
                     sort_order,
                     id
                 );
@@ -753,6 +891,51 @@ def list_rpg_characters(
             return cur.fetchall()
 
 
+def _fetch_rpg_equipment(cur, character_id):
+    cur.execute(
+        """
+        SELECT
+            id,
+            character_id,
+            item_name,
+            item_type,
+            quantity,
+            weight_each,
+            value_text,
+            notes,
+            carried,
+            equipped,
+            armor_category,
+            armor_bonus,
+            shield_bonus,
+            enhancement_bonus,
+            max_dex_bonus,
+            armor_check_penalty,
+            arcane_spell_failure,
+            speed_reduction_applies,
+            reduced_speed_override,
+            proficiency_required,
+            sort_order,
+            created_at,
+            updated_at
+        FROM rpg_character_equipment
+        WHERE character_id = %s
+        ORDER BY
+            CASE item_type
+                WHEN 'armor' THEN 1
+                WHEN 'shield' THEN 2
+                WHEN 'weapon' THEN 3
+                ELSE 4
+            END,
+            sort_order,
+            item_name,
+            id;
+        """,
+        (character_id,),
+    )
+    return cur.fetchall()
+
+
 def get_rpg_character(
     user_id,
     character_id,
@@ -784,9 +967,16 @@ def get_rpg_character(
                 cur,
                 character_id,
             )
+            equipment = _fetch_rpg_equipment(
+                cur,
+                character_id,
+            )
             conn.commit()
 
-            return character
+            return apply_equipment_effects(
+                dict(character),
+                equipment,
+            )
 
 
 def delete_rpg_character(
@@ -852,10 +1042,67 @@ def update_rpg_character_identity(
             maximum=100,
             default=1,
         ),
+        "race_key": str(
+            values.get("race_key")
+            or infer_race_key(values.get("race"))
+        ).strip(),
         "race": _normalize_text(
             values.get("race"),
             label="La race",
             maximum=120,
+        ),
+        "race_heritage": _normalize_text(
+            values.get("race_heritage"),
+            label="L’héritage racial",
+            maximum=160,
+        ),
+        "alternate_racial_traits": _normalize_text(
+            values.get("alternate_racial_traits"),
+            label="Les traits raciaux alternatifs",
+            maximum=4000,
+        ),
+        "creature_type": _normalize_text(
+            values.get("creature_type"),
+            label="Le type de créature",
+            maximum=120,
+        ),
+        "racial_subtypes": _normalize_text(
+            values.get("racial_subtypes"),
+            label="Les sous-types raciaux",
+            maximum=240,
+        ),
+        "vision": _normalize_text(
+            values.get("vision"),
+            label="Les sens et la vision",
+            maximum=240,
+        ),
+        "languages": _normalize_text(
+            values.get("languages"),
+            label="Les langues",
+            maximum=500,
+        ),
+        "racial_ability_adjustments": _normalize_text(
+            values.get("racial_ability_adjustments"),
+            label="Les ajustements raciaux",
+            maximum=240,
+        ),
+        "carrying_capacity_multiplier": _normalize_decimal(
+            values.get("carrying_capacity_multiplier"),
+            label="Le multiplicateur de capacité de charge",
+            minimum=Decimal("0.001"),
+            maximum=Decimal("100"),
+        ),
+        "is_quadruped": bool(values.get("is_quadruped")),
+        "ignore_armor_speed": bool(values.get("ignore_armor_speed")),
+        "ignore_encumbrance_speed": bool(
+            values.get("ignore_encumbrance_speed")
+        ),
+        "base_speed": _normalize_int(
+            values.get("base_speed"),
+            label="La vitesse de base",
+            minimum=0,
+            maximum=500,
+            default=30,
         ),
         "alignment": _normalize_text(
             values.get("alignment"),
@@ -915,6 +1162,18 @@ def update_rpg_character_identity(
         ),
     }
 
+    if normalized["race_key"] not in RACE_PROFILES:
+        raise ValueError("La race sélectionnée est invalide.")
+
+    if normalized["race_key"] != "custom":
+        normalized["race"] = RACE_PROFILES[
+            normalized["race_key"]
+        ]["label"]
+    elif not normalized["race"]:
+        raise ValueError(
+            "Le nom de la race personnalisée est obligatoire."
+        )
+
     if normalized["size_key"] not in SIZE_LABELS:
         raise ValueError(
             "La catégorie de taille est invalide."
@@ -938,6 +1197,19 @@ def update_rpg_character_identity(
                     class_name = %s,
                     character_level = %s,
                     race = %s,
+                    race_key = %s,
+                    race_heritage = %s,
+                    alternate_racial_traits = %s,
+                    creature_type = %s,
+                    racial_subtypes = %s,
+                    vision = %s,
+                    languages = %s,
+                    racial_ability_adjustments = %s,
+                    carrying_capacity_multiplier = %s,
+                    is_quadruped = %s,
+                    ignore_armor_speed = %s,
+                    ignore_encumbrance_speed = %s,
+                    base_speed = %s,
                     alignment = %s,
                     deity = %s,
                     size_key = %s,
@@ -960,6 +1232,19 @@ def update_rpg_character_identity(
                     normalized["class_name"],
                     normalized["character_level"],
                     normalized["race"],
+                    normalized["race_key"],
+                    normalized["race_heritage"],
+                    normalized["alternate_racial_traits"],
+                    normalized["creature_type"],
+                    normalized["racial_subtypes"],
+                    normalized["vision"],
+                    normalized["languages"],
+                    normalized["racial_ability_adjustments"],
+                    normalized["carrying_capacity_multiplier"],
+                    normalized["is_quadruped"],
+                    normalized["ignore_armor_speed"],
+                    normalized["ignore_encumbrance_speed"],
+                    normalized["base_speed"],
                     normalized["alignment"],
                     normalized["deity"],
                     normalized["size_key"],
@@ -1143,6 +1428,337 @@ def update_rpg_character_combat(
                 ],
             )
 
+            conn.commit()
+
+
+
+def list_rpg_equipment(user_id, character_id):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            _require_character(cur, user_id, character_id)
+            return _fetch_rpg_equipment(cur, character_id)
+
+
+def save_rpg_equipment(
+    user_id,
+    character_id,
+    values,
+    equipment_id=None,
+):
+    item_name = _normalize_text(
+        values.get("item_name"),
+        label="Le nom de l’objet",
+        maximum=160,
+        required=True,
+    )
+    item_type = str(values.get("item_type") or "gear").strip()
+    if item_type not in EQUIPMENT_TYPE_LABELS:
+        raise ValueError("Le type d’équipement est invalide.")
+
+    armor_category = str(
+        values.get("armor_category") or "none"
+    ).strip()
+    if armor_category not in ARMOR_CATEGORY_LABELS:
+        raise ValueError("La catégorie d’armure est invalide.")
+
+    quantity = _normalize_int(
+        values.get("quantity"),
+        label="La quantité",
+        minimum=0,
+        maximum=100000,
+        default=1,
+    )
+    weight_each = _normalize_decimal(
+        values.get("weight_each"),
+        label="Le poids unitaire",
+        minimum=Decimal("0"),
+        maximum=Decimal("1000000"),
+    )
+    carried = bool(values.get("carried", True))
+    equipped = bool(values.get("equipped"))
+    if equipped:
+        carried = True
+
+    normalized = {
+        "value_text": _normalize_text(
+            values.get("value_text"),
+            label="La valeur",
+            maximum=120,
+        ),
+        "notes": _normalize_text(
+            values.get("notes"),
+            label="La note",
+            maximum=2000,
+        ),
+        "armor_bonus": _normalize_int(
+            values.get("armor_bonus"),
+            label="Le bonus d’armure",
+            minimum=0,
+            maximum=100,
+            default=0,
+        ),
+        "shield_bonus": _normalize_int(
+            values.get("shield_bonus"),
+            label="Le bonus de bouclier",
+            minimum=0,
+            maximum=100,
+            default=0,
+        ),
+        "enhancement_bonus": _normalize_int(
+            values.get("enhancement_bonus"),
+            label="Le bonus d’altération",
+            minimum=0,
+            maximum=20,
+            default=0,
+        ),
+        "max_dex_bonus": _normalize_optional_int(
+            values.get("max_dex_bonus"),
+            label="Le bonus maximal de Dextérité",
+            minimum=-100,
+            maximum=100,
+        ),
+        "armor_check_penalty": _normalize_int(
+            values.get("armor_check_penalty"),
+            label="La pénalité d’armure aux tests",
+            minimum=-100,
+            maximum=0,
+            default=0,
+        ),
+        "arcane_spell_failure": _normalize_int(
+            values.get("arcane_spell_failure"),
+            label="Le risque d’échec des sorts profanes",
+            minimum=0,
+            maximum=100,
+            default=0,
+        ),
+        "speed_reduction_applies": bool(
+            values.get("speed_reduction_applies")
+        ),
+        "reduced_speed_override": _normalize_optional_int(
+            values.get("reduced_speed_override"),
+            label="La vitesse réduite personnalisée",
+            minimum=0,
+            maximum=500,
+        ),
+        "proficiency_required": _normalize_text(
+            values.get("proficiency_required"),
+            label="La maîtrise requise",
+            maximum=160,
+        ),
+        "sort_order": _normalize_int(
+            values.get("sort_order"),
+            label="L’ordre",
+            minimum=-100000,
+            maximum=100000,
+            default=0,
+        ),
+    }
+
+    if item_type not in {"armor", "shield"}:
+        armor_category = "none"
+        normalized.update({
+            "armor_bonus": 0,
+            "shield_bonus": 0,
+            "enhancement_bonus": 0,
+            "max_dex_bonus": None,
+            "armor_check_penalty": 0,
+            "arcane_spell_failure": 0,
+            "speed_reduction_applies": False,
+            "reduced_speed_override": None,
+            "proficiency_required": None,
+        })
+    elif item_type == "armor":
+        normalized["shield_bonus"] = 0
+    else:
+        normalized["armor_bonus"] = 0
+        armor_category = "none"
+        normalized["speed_reduction_applies"] = False
+        normalized["reduced_speed_override"] = None
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            _require_character(cur, user_id, character_id)
+
+            if equipment_id is not None:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM rpg_character_equipment
+                    WHERE id = %s AND character_id = %s
+                    FOR UPDATE;
+                    """,
+                    (equipment_id, character_id),
+                )
+                if cur.fetchone() is None:
+                    raise ValueError("Cet équipement n’existe plus.")
+
+            if equipped and item_type in {"armor", "shield"}:
+                cur.execute(
+                    """
+                    UPDATE rpg_character_equipment
+                    SET equipped = FALSE, updated_at = NOW()
+                    WHERE character_id = %s
+                      AND item_type = %s
+                      AND (%s IS NULL OR id <> %s);
+                    """,
+                    (
+                        character_id,
+                        item_type,
+                        equipment_id,
+                        equipment_id,
+                    ),
+                )
+
+            parameters = (
+                item_name,
+                item_type,
+                quantity,
+                weight_each,
+                normalized["value_text"],
+                normalized["notes"],
+                carried,
+                equipped,
+                armor_category,
+                normalized["armor_bonus"],
+                normalized["shield_bonus"],
+                normalized["enhancement_bonus"],
+                normalized["max_dex_bonus"],
+                normalized["armor_check_penalty"],
+                normalized["arcane_spell_failure"],
+                normalized["speed_reduction_applies"],
+                normalized["reduced_speed_override"],
+                normalized["proficiency_required"],
+                normalized["sort_order"],
+            )
+
+            if equipment_id is None:
+                cur.execute(
+                    """
+                    INSERT INTO rpg_character_equipment (
+                        character_id, item_name, item_type, quantity,
+                        weight_each, value_text, notes, carried, equipped,
+                        armor_category, armor_bonus, shield_bonus,
+                        enhancement_bonus, max_dex_bonus,
+                        armor_check_penalty, arcane_spell_failure,
+                        speed_reduction_applies, reduced_speed_override,
+                        proficiency_required, sort_order
+                    )
+                    VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    )
+                    RETURNING id;
+                    """,
+                    (character_id,) + parameters,
+                )
+                saved_id = cur.fetchone()["id"]
+            else:
+                cur.execute(
+                    """
+                    UPDATE rpg_character_equipment
+                    SET
+                        item_name = %s,
+                        item_type = %s,
+                        quantity = %s,
+                        weight_each = %s,
+                        value_text = %s,
+                        notes = %s,
+                        carried = %s,
+                        equipped = %s,
+                        armor_category = %s,
+                        armor_bonus = %s,
+                        shield_bonus = %s,
+                        enhancement_bonus = %s,
+                        max_dex_bonus = %s,
+                        armor_check_penalty = %s,
+                        arcane_spell_failure = %s,
+                        speed_reduction_applies = %s,
+                        reduced_speed_override = %s,
+                        proficiency_required = %s,
+                        sort_order = %s,
+                        updated_at = NOW()
+                    WHERE id = %s AND character_id = %s
+                    RETURNING id;
+                    """,
+                    parameters + (equipment_id, character_id),
+                )
+                saved_id = cur.fetchone()["id"]
+
+            conn.commit()
+            return saved_id
+
+
+def update_rpg_equipment_state(
+    user_id,
+    character_id,
+    equipment_id,
+    *,
+    carried=None,
+    equipped=None,
+):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            _require_character(cur, user_id, character_id)
+            cur.execute(
+                """
+                SELECT id, item_type, carried, equipped
+                FROM rpg_character_equipment
+                WHERE id = %s AND character_id = %s
+                FOR UPDATE;
+                """,
+                (equipment_id, character_id),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise ValueError("Cet équipement n’existe plus.")
+
+            final_carried = row["carried"] if carried is None else bool(carried)
+            final_equipped = row["equipped"] if equipped is None else bool(equipped)
+            if final_equipped:
+                final_carried = True
+
+            if final_equipped and row["item_type"] in {"armor", "shield"}:
+                cur.execute(
+                    """
+                    UPDATE rpg_character_equipment
+                    SET equipped = FALSE, updated_at = NOW()
+                    WHERE character_id = %s
+                      AND item_type = %s
+                      AND id <> %s;
+                    """,
+                    (character_id, row["item_type"], equipment_id),
+                )
+
+            cur.execute(
+                """
+                UPDATE rpg_character_equipment
+                SET carried = %s, equipped = %s, updated_at = NOW()
+                WHERE id = %s AND character_id = %s;
+                """,
+                (
+                    final_carried,
+                    final_equipped,
+                    equipment_id,
+                    character_id,
+                ),
+            )
+            conn.commit()
+
+
+def delete_rpg_equipment(user_id, character_id, equipment_id):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            _require_character(cur, user_id, character_id)
+            cur.execute(
+                """
+                DELETE FROM rpg_character_equipment
+                WHERE id = %s AND character_id = %s
+                RETURNING id;
+                """,
+                (equipment_id, character_id),
+            )
+            if cur.fetchone() is None:
+                raise ValueError("Cet équipement n’existe plus.")
             conn.commit()
 
 

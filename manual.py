@@ -561,101 +561,222 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
 """,
     },
     {
-        "title": "Personnages JDR — V1.1.1",
+        "title": "Personnages JDR — V1.2.0",
         "icon": "casino",
-        "caption": "Créer une feuille interactive Pathfinder / Ravenloft",
+        "caption": "Races, équipement, poids et feuille Pathfinder / Ravenloft",
         "keywords": (
             "jdr personnage ravenloft pathfinder feuille force "
             "dextérité constitution intelligence sagesse charisme "
             "classe armure initiative sauvegarde peur horreur folie "
-            "compétence attaque points vie audit vérification "
-            "test référence calcul"
+            "compétence attaque points vie audit vérification calcul "
+            "race héritage traits raciaux équipement armure bouclier "
+            "poids encombrement charge légère moyenne lourde vitesse"
         ),
         "content": """
 ### Données privées et plusieurs personnages
 
-Chaque personnage appartient uniquement à l’utilisateur connecté. Il n’est pas partagé avec une famille ou un autre compte pendant la phase 1.
+Chaque personnage appartient uniquement à l’utilisateur connecté. Il n’est pas partagé avec une famille ou un autre compte pendant cette version.
 
 L’utilisateur peut créer plusieurs personnages, passer de l’un à l’autre et supprimer un personnage avec confirmation.
 
 ### Identité
 
-L’onglet **Identité** permet de saisir :
+L’onglet **Identité** permet notamment de saisir :
 
-- nom du personnage et nom du joueur;
-- campagne;
-- classe et niveau;
-- race, alignement et divinité;
-- catégorie de taille;
-- âge, genre, taille physique et poids;
-- yeux, cheveux et peau;
-- points d’expérience.
+- le nom du personnage et du joueur;
+- la campagne;
+- la classe et le niveau;
+- la race, l’héritage ou la sous-race;
+- l’alignement et la divinité;
+- la catégorie de taille;
+- l’âge, le genre, la taille physique et le poids du personnage;
+- les yeux, les cheveux et la peau;
+- les points d’expérience.
+
+### Race principale et profil racial
+
+Le champ **Race principale** est une liste déroulante recherchable. Elle contient :
+
+- Humain;
+- Nain;
+- Elfe;
+- Gnome;
+- Demi-elfe;
+- Demi-orque;
+- Halfelin;
+- Autre / personnalisée.
+
+Le profil racial peut alimenter :
+
+- le type et les sous-types;
+- la catégorie de taille;
+- la vitesse de base;
+- les sens et la vision;
+- les langues;
+- un résumé des ajustements raciaux de caractéristiques;
+- le multiplicateur de capacité de charge;
+- le statut bipède ou quadrupède;
+- les exceptions de vitesse sous armure ou sous encombrement.
+
+Le champ **Héritage / sous-race** demeure facultatif. Les **traits raciaux alternatifs** peuvent être inscrits librement, en précisant idéalement quel trait standard est remplacé.
+
+### Changement de race sécuritaire
+
+Lorsqu’une race de base est choisie, l’application affiche un aperçu des changements suggérés avant de les appliquer.
+
+L’utilisateur peut :
+
+- annuler le changement;
+- conserver ses valeurs actuelles;
+- appliquer le profil proposé.
+
+Les six scores de caractéristiques ne sont jamais modifiés silencieusement. Le résumé des ajustements raciaux sert de référence et permet de conserver les personnages déjà créés ou les règles particulières d’une campagne Ravenloft.
 
 ### Caractéristiques et combat
 
 L’onglet **Combat** contient les six caractéristiques :
 
-- FOR - Force;
-- DEX - Dextérité;
-- CON - Constitution;
-- INT - Intelligence;
-- SAG - Sagesse;
-- CHA - Charisme.
+- FOR — Force;
+- DEX — Dextérité;
+- CON — Constitution;
+- INT — Intelligence;
+- SAG — Sagesse;
+- CHA — Charisme.
 
-Le modificateur est calculé automatiquement. Un score temporaire peut être inscrit pour représenter un effet magique, une maladie ou une autre modification temporaire.
+Le modificateur est calculé automatiquement. Un score temporaire peut remplacer le score normal pour représenter un effet magique, une maladie ou une autre modification.
 
-La présentation est maintenant plus compacte : les six caractéristiques peuvent tenir sur une seule ligne sur un grand écran. Chaque carte affiche le score, le score temporaire et le modificateur sans occuper inutilement de hauteur. Sur téléphone, les cartes se replacent automatiquement sur deux colonnes, puis une seule lorsque nécessaire.
+Les six cartes restent compactes. Les champs de **Combat et défenses** conservent leurs petits libellés, mais les valeurs numériques sont maintenant affichées plus gros afin de faciliter la lecture sur ordinateur et téléphone.
 
-La phase 1 calcule notamment :
+La feuille calcule notamment :
 
-- la classe d’armure totale;
-- la classe d’armure de contact;
-- la classe d’armure lorsque le personnage est pris au dépourvu;
+- la CA totale;
+- la CA de contact;
+- la CA lorsque le personnage est pris au dépourvu;
 - l’initiative;
-- le **BMO / CMB**;
-- le **DMD / CMD**.
+- le BMO / CMB;
+- le DMD / CMD;
+- la vitesse finale après l’armure et l’encombrement.
+
+Les anciens champs **Armure manuel**, **Bouclier manuel** et **Pénalité d’armure manuelle** demeurent disponibles pour les personnages existants et les situations personnalisées. Lorsqu’un équipement fournit le même type de bonus, l’application retient la valeur applicable sans additionner deux fois deux sources incompatibles du même type.
+
+### Équipement
+
+Le nouvel onglet **Équipement** permet d’enregistrer :
+
+- des armures;
+- des boucliers;
+- des armes;
+- d’autres objets et possessions.
+
+Chaque entrée peut contenir :
+
+- un nom;
+- un type;
+- une quantité;
+- un poids unitaire;
+- une valeur;
+- une note;
+- un état **Transporté**;
+- un état **Équipé**.
+
+Pour les armures et boucliers, des renseignements supplémentaires sont disponibles :
+
+- catégorie d’armure;
+- bonus d’armure ou de bouclier;
+- bonus d’altération;
+- bonus maximal de Dextérité;
+- pénalité d’armure aux tests;
+- risque d’échec des sorts profanes;
+- réduction de vitesse;
+- vitesse personnalisée;
+- maîtrise requise.
+
+Une seule armure principale et un seul bouclier peuvent normalement contribuer aux calculs en même temps. Équiper une autre protection du même type retire automatiquement l’ancienne contribution.
+
+### Effets automatiques de l’équipement
+
+Une armure ou un bouclier équipé peut alimenter automatiquement :
+
+- la CA totale;
+- la CA lorsque le personnage est pris au dépourvu;
+- le bonus maximal de Dextérité applicable à la CA;
+- la pénalité d’armure aux compétences;
+- la vitesse;
+- le multiplicateur de course.
+
+La CA de contact n’inclut normalement ni le bonus d’armure ni le bonus de bouclier. La décomposition des calculs indique les valeurs effectivement retenues.
+
+### Poids et encombrement
+
+Le poids total transporté est calculé avec :
+
+```text
+Quantité × poids unitaire de chaque objet transporté
+```
+
+Le résumé affiche :
+
+- le poids total transporté;
+- la charge légère maximale;
+- la charge moyenne maximale;
+- la charge lourde maximale;
+- la charge actuelle;
+- le poids restant avant le prochain seuil;
+- la capacité pour soulever ou pousser;
+- la vitesse finale;
+- le multiplicateur de course.
+
+Les seuils sont calculés à partir de la Force effective. Ils tiennent aussi compte de la taille, du statut bipède ou quadrupède et d’un multiplicateur racial ou personnalisé.
+
+Une charge légère n’impose pas de restriction. Une charge moyenne ou lourde peut réduire :
+
+- la vitesse;
+- le bonus maximal de Dextérité;
+- certains tests;
+- la course.
+
+Lorsqu’une armure et la charge imposent toutes deux une restriction, l’application utilise la valeur la plus défavorable sans additionner deux fois les pénalités d’armure et d’encombrement.
+
+### Vitesse et exceptions raciales
+
+La vitesse finale est décomposée à partir de :
+
+- la vitesse raciale ou vitesse de base;
+- la restriction de l’armure;
+- la restriction de la charge;
+- une éventuelle vitesse personnalisée;
+- les exceptions raciales ou de campagne.
+
+Le profil du Nain active notamment les exceptions permettant de conserver sa vitesse sous certaines armures ou charges. Les cases de dérogation demeurent modifiables afin d’accommoder les races personnalisées, les capacités de classe et les campagnes Ravenloft.
 
 ### BMO / CMB et DMD / CMD
 
-Les champs et les résultats de **Combat et défenses** restent visibles directement dans la feuille. Le grand encadré permanent des formules a toutefois été retiré afin de réduire la hauteur de la page.
+Les champs et les résultats de **Combat et défenses** restent visibles directement dans la feuille. Les explications détaillées sont regroupées avec le bouton **Règles de calcul**.
 
-Les explications détaillées sont regroupées avec le bouton **Règles de calcul**, notamment :
+Cette rubrique présente :
 
 - la formule du BMO/CMB;
 - la formule du DMD/CMD;
 - l’utilisation de la Dextérité pour une créature Très petite ou plus petite;
 - les bonus d’esquive et autres bonus applicables;
-- l’application automatique des pénalités négatives inscrites dans Divers CA.
-
-
-- **BMO / CMB** : bonus de manœuvre offensive, utilisé pour effectuer une manœuvre de combat;
-- **DMD / CMD** : degré de manœuvre défensive, utilisé comme difficulté pour résister à une manœuvre.
-
-**BMO/CMB = BBA + modificateur de Force** — ou Dextérité pour une créature Très petite ou plus petite — **+ modificateur spécial de taille + divers**.
-
-**DMD/CMD = 10 + BBA + modificateur de Force + modificateur de Dextérité + modificateur spécial de taille + bonus de déviation + autres bonus applicables + divers**.
-
-Les bonus d’esquive et les autres bonus applicables doivent être inscrits dans **Divers – DMD/CMD**. Les pénalités négatives inscrites dans **Divers CA** sont appliquées automatiquement au DMD/CMD.
-
-Les champs de **Combat et défenses** sont plus courts et plus denses. Les valeurs numériques, généralement limitées à quelques chiffres, sont regroupées sur davantage de colonnes sur ordinateur et se replacent proprement sur téléphone.
+- l’application des pénalités négatives de Divers CA.
 
 ### Règles de calcul intégrées
 
-Un bouton **Règles de calcul**, placé près des boutons d’enregistrement, ouvre une aide détaillée destinée aux joueurs moins familiers avec Pathfinder ou Ravenloft.
+Le bouton **Règles de calcul** ouvre une aide détaillée regroupant :
 
-La fenêtre regroupe :
-
-- le calcul des modificateurs de caractéristiques;
+- les modificateurs de caractéristiques;
 - la CA totale, la CA de contact et la CA pris au dépourvu;
 - l’initiative;
 - le BMO/CMB et le DMD/CMD;
 - Vigueur, Réflexes, Volonté, Peur, Horreur et Folie;
 - les compétences;
-- les bonus d’attaque.
+- les bonus d’attaque;
+- l’équipement, le poids et la vitesse.
 
-Chaque rubrique présente la formule générale et, lorsque des données sont disponibles, un exemple calculé avec les valeurs du personnage actuel.
+Chaque rubrique présente une formule générale et, lorsque possible, un exemple calculé à partir du personnage actuel.
 
-La rubrique Compétences contient aussi un exemple de référence permanent pour **Dressage — Handle Animal** et la liste des tests internes de calcul.
+La rubrique Compétences contient aussi l’exemple de référence **Dressage — Handle Animal** et les tests internes des calculs.
 
 ### Jets de sauvegarde Ravenloft
 
@@ -672,11 +793,9 @@ Le total combine automatiquement le bonus de base, la caractéristique correspon
 
 ### Compétences Pathfinder
 
-La liste de départ utilise maintenant les compétences de Pathfinder 1re édition, notamment Acrobaties, Perception, Discrétion, Linguistique et les différentes Connaissances.
+La liste de départ utilise les compétences de Pathfinder 1re édition. Pour chaque compétence, l’utilisateur peut modifier :
 
-Pour chaque compétence, l’utilisateur peut modifier :
-
-- le nom;
+- le nom français et le nom anglais;
 - la caractéristique associée;
 - les rangs entiers;
 - le modificateur divers;
@@ -684,52 +803,20 @@ Pour chaque compétence, l’utilisateur peut modifier :
 - la formation requise;
 - l’application de la pénalité d’armure.
 
-Une compétence est considérée comme **possédée** lorsqu’au moins 1 rang y est investi. Une compétence de classe possédée reçoit automatiquement le bonus Pathfinder de **+3**.
+Une compétence est considérée comme possédée lorsqu’au moins 1 rang y est investi. Une compétence de classe possédée reçoit automatiquement le bonus de +3.
 
-### Filtres rapides
-
-Quatre filtres permettent de réduire la longue liste :
-
-- **Mes compétences** : seulement les compétences avec au moins 1 rang;
-- **Compétences de classe** : toutes les compétences cochées comme compétences de classe;
-- **Sans rang** : les compétences où aucun rang n’est encore investi;
-- **Toutes** : l’ensemble de la liste.
-
-Un champ de recherche permet aussi de retrouver rapidement une compétence. La recherche fonctionne autant avec le nom français qu’avec le nom anglais.
-
-### Noms français et anglais
-
-Le nom français et le nom anglais sont affichés sur une seule ligne compacte.
-
-Exemples :
-
-- **Acrobaties — Acrobatics**;
-- **Sabotage — Disable Device**;
-- **Psychologie — Sense Motive**;
-- **Escamotage — Sleight of Hand**;
-- **Art de la magie — Spellcraft**.
-
-Le petit bouton de modification permet d’ouvrir une fenêtre pour corriger séparément les deux noms. Lors de l’ajout d’une compétence personnalisée, le nom anglais demeure facultatif.
-
-Des pastilles compactes indiquent **Possédée**, **Classe**, **Formation** et **Armure**.
-
-### Présentation compacte
-
-Les champs **Carac.**, **Rangs** et **Divers**, ainsi que les cases **Classe**, **Formation**, **Armure** et **×2**, sont placés sur une seule ligne lorsque la largeur de l’écran le permet. Sur téléphone, ils se replacent automatiquement sur quelques lignes plus courtes.
+Les champs **Carac.**, **Rangs** et **Divers**, ainsi que les cases **Classe**, **Formation**, **Armure** et **×2**, restent regroupés sur une ligne lorsque la largeur le permet.
 
 ### Vérification générale de la feuille
 
-La section **Compétences** présente maintenant un encadré **Vérification des calculs**.
+La section **Compétences** présente un encadré **Vérification des calculs**.
 
-Il indique :
+Il peut signaler :
 
-- combien de tests de référence internes réussissent;
-- si une pénalité d’armure a été inscrite avec un signe positif;
-- si une compétence de classe possédée semble recevoir deux fois le bonus de +3;
-- si une compétence exigeant une formation ne possède aucun rang;
-- si l’option de pénalité d’armure ×2 est activée sans activer l’option Armure.
-
-Cette vérification ne modifie jamais automatiquement les données du personnage. Elle attire seulement l’attention sur les valeurs à examiner.
+- une pénalité d’armure inscrite avec un signe positif;
+- un possible double bonus de compétence de classe;
+- une compétence exigeant une formation sans rang;
+- l’option de pénalité d’armure ×2 sans l’option Armure.
 
 Les tests de référence comprennent notamment :
 
@@ -739,43 +826,29 @@ Les tests de référence comprennent notamment :
 - l’utilisation de la Dextérité pour le BMO/CMB d’une créature Très petite;
 - un exemple complet de DMD/CMD.
 
-### Vérification du calcul
-
-Sous chaque compétence, l’application montre la formule complète utilisée pour calculer le total.
-
-Exemple pour Dressage / Handle Animal :
-
-```text
-CHA -2 + rangs +1 + classe +3 + divers +0 = total +2
-```
-
-Le bonus de compétence de classe de **+3** est ajouté automatiquement lorsque la compétence possède au moins 1 rang. Il ne faut donc pas inscrire ce bonus une deuxième fois dans **Divers**.
-
-Lorsque l’application détecte une compétence de classe possédée avec **Divers +3**, elle affiche un avertissement et un bouton permettant de remettre rapidement **Divers** à zéro. Aucun changement n’est appliqué automatiquement, car un bonus divers de +3 peut parfois être légitime.
-
-Lors de la migration, les anciennes compétences D&D 3.5 sans données sont remplacées par la liste Pathfinder. Une ancienne compétence contenant déjà des rangs ou des modificateurs est conservée comme compétence personnalisée avec la mention **ancienne 3.5**, afin de ne perdre aucune donnée.
+Cette vérification ne modifie jamais automatiquement les données.
 
 ### Attaques
 
 L’utilisateur peut enregistrer autant d’attaques que nécessaire avec :
 
-- nom;
-- caractéristique utilisée;
-- bonus magique et divers;
-- dégâts;
-- critique;
-- portée;
-- type;
-- notes;
-- munitions actuelles et maximums.
+- le nom;
+- la caractéristique utilisée;
+- les bonus magique et divers;
+- les dégâts;
+- le critique;
+- la portée;
+- le type;
+- les notes;
+- les munitions actuelles et maximales.
 
-Le bonus total d’attaque combine le bonus de base à l’attaque, le modificateur de caractéristique, la taille, la magie et les modificateurs divers.
+Le bonus total combine le bonus de base à l’attaque, le modificateur de caractéristique, la taille, la magie et les modificateurs divers.
 
-### Limites de la phase 1
+### Limites de cette version
 
-L’équipement, les dons, les capacités spéciales, les langues, les sorts, l’impression PDF, la progression avancée et les groupes de campagne seront ajoutés dans les phases suivantes.
+La section Équipement automatise d’abord les armures, les boucliers, le poids et l’encombrement. Les armes et possessions sont enregistrées, mais leurs effets spéciaux ne sont pas tous interprétés automatiquement.
 
-La feuille est inspirée de la structure fournie, mais l’interface est adaptée aux téléphones et aux ordinateurs plutôt que de reproduire exactement la mise en page du document papier.
+Les dons, capacités spéciales, sorts, impression PDF, progression avancée et groupes de campagne restent prévus pour des versions ultérieures.
 """,
     },
     {

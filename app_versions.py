@@ -14,7 +14,7 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.1",
-    "blood_pressure": "1.1.0",
+    "blood_pressure": "1.1.1",
     "finances": "1.4.1",
     "rpg": "1.1.0",
     "feedback": "1.0.0",

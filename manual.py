@@ -421,7 +421,7 @@ La version de l’application apparaît près de son nom. Le Portail contient au
 """,
     },
     {
-        "title": "Journal de pression — V1.1.0",
+        "title": "Journal de pression — V1.1.1",
         "icon": "monitor_heart",
         "caption": "Saisir, consulter et imprimer les mesures",
         "keywords": (
@@ -479,6 +479,12 @@ Pendant la période configurée, la grande carte de bienvenue du **Portail** peu
 L’application n’utilise plus la notion de prise **en retard**. Une mesure faite hors de la plage proposée compte normalement.
 
 L’avis disparaît lorsque toutes les prises prévues sont complétées, lorsque le rappel est désactivé ou lorsque la date se trouve hors de la période choisie.
+
+### Avis de rappel sur le Portail
+
+Lorsque les rappels sont actifs et qu’une prise reste à faire dans la journée, le Portail affiche un avis **Journal de pression** avec le bouton **Saisir maintenant**.
+
+La version V1.1.1 corrige le chargement de cet avis après l’ouverture du Portail. Les plages horaires, l’ordre chronologique des prises et la règle voulant que toute mesure de la journée compte comme une prise complétée demeurent inchangés.
 
 ### Saisie rapide depuis le Portail
 

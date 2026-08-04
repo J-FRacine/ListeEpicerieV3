@@ -762,7 +762,7 @@ def blood_pressure_portal_reminder(
         if status_guard.is_deleted:
             return
         try:
-            load_status()
+            await load_status()
         except RuntimeError:
             return
 

@@ -14,13 +14,53 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.1",
-    "blood_pressure": "1.0.0",
+    "blood_pressure": "1.1.0",
     "finances": "1.4.1",
-    "rpg": "1.0.0",
+    "rpg": "1.1.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "blood_pressure",
+        "version": "1.1.0",
+        "date": "2026-08-04",
+        "title": "Journal de pression — sauvegarde privée et importation",
+        "summary": (
+            "Ajout des exportations CSV et JSON, de l’importation "
+            "contrôlée et de la détection des doublons."
+        ),
+        "changes": [
+            "Nouvel onglet Données pour importer et exporter les mesures.",
+            "Export CSV compatible avec Excel.",
+            "Sauvegarde JSON complète incluant les plages et réglages de rappel.",
+            "Prévisualisation avant toute importation.",
+            "Détection des mesures déjà présentes.",
+            "Détection des mesures différentes à la même date et à la même heure.",
+            "Importation facultative des plages de rappel depuis une sauvegarde JSON.",
+            "Onglets horizontaux adaptés au téléphone.",
+            "Remplacement des minuteries de montage par des tâches contrôlées.",
+        ],
+    },
+    {
+        "app_key": "rpg",
+        "version": "1.1.0",
+        "date": "2026-08-04",
+        "title": "Personnages JDR — vérification des calculs Pathfinder",
+        "summary": (
+            "Ajout d’un audit visible de la feuille et de tests "
+            "de référence pour les principaux calculs."
+        ),
+        "changes": [
+            "Vérification automatique des compétences et des pénalités d’armure.",
+            "Avertissement lorsqu’un bonus de classe +3 semble aussi inscrit dans Divers.",
+            "Avertissement pour une compétence exigeant une formation sans rang.",
+            "Contrôle du réglage ×2 de la pénalité d’armure.",
+            "Tests de référence intégrés pour les caractéristiques, compétences, BMO/CMB et DMD/CMD.",
+            "Exemple explicite Dressage — Handle Animal donnant un total de +2.",
+            "Décomposition visible des calculs conservée dans l’interface compacte.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.4.1",

@@ -885,3 +885,224 @@ def attack_total(
 ) -> int:
     return attack_breakdown(character, attack_row)["total"]
 
+
+
+
+def pathfinder_reference_checks():
+    """Tests de référence lisibles utilisés par l’aide intégrée."""
+
+    handle_animal_character = {
+        "cha_score": 7,
+        "armor_check_penalty": 0,
+    }
+    handle_animal_skill = {
+        "ability_key": "cha",
+        "ranks": Decimal("1"),
+        "misc_modifier": 0,
+        "class_skill": True,
+        "armor_check_applies": False,
+        "double_armor_penalty": False,
+    }
+    handle_animal = skill_breakdown(
+        handle_animal_character,
+        handle_animal_skill,
+    )
+
+    untrained_class_skill = skill_breakdown(
+        handle_animal_character,
+        {
+            **handle_animal_skill,
+            "ranks": Decimal("0"),
+        },
+    )
+
+    tiny_cmb = cmb_breakdown(
+        {
+            "size_key": "tiny",
+            "base_attack_bonus": 1,
+            "str_score": 10,
+            "dex_score": 14,
+            "cmb_misc_modifier": 0,
+        }
+    )
+
+    medium_cmd = cmd_breakdown(
+        {
+            "size_key": "medium",
+            "base_attack_bonus": 3,
+            "str_score": 14,
+            "dex_score": 12,
+            "deflection_bonus": 1,
+            "misc_ac_modifier": 0,
+            "cmd_misc_modifier": 0,
+        }
+    )
+
+    checks = [
+        {
+            "key": "ability_modifier_7",
+            "label": "Modificateur de caractéristique 7",
+            "expected": -2,
+            "actual": ability_modifier(7),
+            "formula": "(7 − 10) ÷ 2, arrondi vers le bas = −2",
+        },
+        {
+            "key": "handle_animal",
+            "label": "Dressage — Handle Animal",
+            "expected": Decimal("2"),
+            "actual": handle_animal["total"],
+            "formula": (
+                "Charisme −2 + rangs 1 + compétence de classe 3 "
+                "+ divers 0 = total +2"
+            ),
+        },
+        {
+            "key": "class_bonus_requires_rank",
+            "label": "Bonus de compétence de classe sans rang",
+            "expected": 0,
+            "actual": untrained_class_skill["class_bonus"],
+            "formula": "0 rang = aucun bonus automatique de +3",
+        },
+        {
+            "key": "tiny_cmb_uses_dexterity",
+            "label": "BMO/CMB d’une créature Très petite",
+            "expected": 1,
+            "actual": tiny_cmb["total"],
+            "formula": "BBA 1 + DEX 2 + taille spéciale −2 = +1",
+        },
+        {
+            "key": "medium_cmd",
+            "label": "DMD/CMD de référence",
+            "expected": 20,
+            "actual": medium_cmd["total"],
+            "formula": "10 + BBA 3 + FOR 2 + DEX 1 + taille 0 + déviation 1 = 17",
+        },
+    ]
+
+    # La formule du dernier contrôle est construite explicitement ci-dessus.
+    # L’attendu doit suivre le calcul réel de référence.
+    checks[-1]["expected"] = Decimal("17")
+
+    for check in checks:
+        check["passed"] = (
+            Decimal(str(check["actual"]))
+            == Decimal(str(check["expected"]))
+        )
+
+    return checks
+
+
+def character_sheet_audit(
+    character,
+    skills,
+):
+    """Retourne des avertissements de saisie sans modifier la feuille."""
+
+    warnings = []
+
+    armor_penalty = as_int(
+        character.get("armor_check_penalty")
+    )
+    if armor_penalty > 0:
+        warnings.append(
+            {
+                "severity": "warning",
+                "title": "Pénalité d’armure positive",
+                "detail": (
+                    "Une pénalité d’armure est normalement inscrite "
+                    "avec un signe négatif."
+                ),
+            }
+        )
+
+    for skill in skills:
+        breakdown = skill_breakdown(
+            character,
+            skill,
+        )
+        french_name = str(
+            skill.get("skill_name") or ""
+        ).strip()
+        english_name = str(
+            skill.get("english_name") or ""
+        ).strip()
+        display_name = (
+            f"{french_name} — {english_name}"
+            if french_name and english_name
+            else french_name or english_name or "Compétence"
+        )
+
+        if (
+            breakdown["class_bonus"] == 3
+            and breakdown["misc_modifier"] == 3
+        ):
+            warnings.append(
+                {
+                    "severity": "warning",
+                    "title": display_name,
+                    "detail": (
+                        "Le champ Divers vaut +3 alors que le bonus "
+                        "automatique de compétence de classe vaut déjà +3."
+                    ),
+                }
+            )
+
+        if (
+            bool(skill.get("trained_only"))
+            and as_decimal(skill.get("ranks")) <= 0
+        ):
+            warnings.append(
+                {
+                    "severity": "info",
+                    "title": display_name,
+                    "detail": (
+                        "Cette compétence exige une formation, mais "
+                        "aucun rang n’est actuellement inscrit."
+                    ),
+                }
+            )
+
+        if (
+            bool(skill.get("double_armor_penalty"))
+            and not bool(skill.get("armor_check_applies"))
+        ):
+            warnings.append(
+                {
+                    "severity": "warning",
+                    "title": display_name,
+                    "detail": (
+                        "La pénalité d’armure est réglée à ×2, mais "
+                        "l’option Armure n’est pas activée."
+                    ),
+                }
+            )
+
+    reference_checks = pathfinder_reference_checks()
+    failed_reference_checks = [
+        check
+        for check in reference_checks
+        if not check["passed"]
+    ]
+
+    if failed_reference_checks:
+        warnings.insert(
+            0,
+            {
+                "severity": "error",
+                "title": "Contrôle interne des règles",
+                "detail": (
+                    f"{len(failed_reference_checks)} test(s) de référence "
+                    "ne donnent pas le résultat attendu."
+                ),
+            },
+        )
+
+    return {
+        "warnings": warnings,
+        "reference_checks": reference_checks,
+        "reference_checks_passed": (
+            len(reference_checks)
+            - len(failed_reference_checks)
+        ),
+        "reference_checks_total": len(reference_checks),
+    }

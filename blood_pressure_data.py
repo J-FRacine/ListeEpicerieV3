@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from datetime import date, time
+import csv
+import hashlib
+import io
+import json
+from datetime import date, datetime, time
+from pathlib import Path
 
 from db import get_connection
 
@@ -46,6 +51,36 @@ def init_blood_pressure_schema():
                            <= 1000
                     )
                 );
+                """
+            )
+
+            cur.execute(
+                """
+                ALTER TABLE blood_pressure_readings
+                ADD COLUMN IF NOT EXISTS import_source TEXT;
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE blood_pressure_readings
+                ADD COLUMN IF NOT EXISTS import_key TEXT;
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE blood_pressure_readings
+                ADD COLUMN IF NOT EXISTS imported_at TIMESTAMPTZ;
+                """
+            )
+            cur.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                blood_pressure_user_import_key_idx
+                ON blood_pressure_readings (
+                    user_id,
+                    import_key
+                )
+                WHERE import_key IS NOT NULL;
                 """
             )
 
@@ -452,6 +487,9 @@ def list_blood_pressure_readings(
                     diastolic,
                     pulse,
                     note,
+                    import_source,
+                    import_key,
+                    imported_at,
                     created_at,
                     updated_at
                 FROM blood_pressure_readings
@@ -494,6 +532,567 @@ def count_blood_pressure_readings_on_date(
                 cur.fetchone()["total"]
             )
 
+
+
+CSV_COLUMNS = (
+    "Date",
+    "Heure",
+    "Systolique",
+    "Diastolique",
+    "Pouls",
+    "Note",
+)
+
+CSV_ALIASES = {
+    "date": "measured_date",
+    "measured_date": "measured_date",
+    "date_mesure": "measured_date",
+    "heure": "measured_time",
+    "time": "measured_time",
+    "measured_time": "measured_time",
+    "heure_mesure": "measured_time",
+    "systolique": "systolic",
+    "systolic": "systolic",
+    "sys": "systolic",
+    "diastolique": "diastolic",
+    "diastolic": "diastolic",
+    "dia": "diastolic",
+    "pouls": "pulse",
+    "pulse": "pulse",
+    "note": "note",
+    "notes": "note",
+}
+
+
+def _serializable(value):
+    if isinstance(value, (date, time, datetime)):
+        return value.isoformat()
+    return value
+
+
+def _normalized_header(value):
+    text = str(value or "").strip().casefold()
+    replacements = str.maketrans(
+        "àâäéèêëîïôöùûüç",
+        "aaaeeeeiioouuuc",
+    )
+    return (
+        text.translate(replacements)
+        .replace(" ", "_")
+        .replace("-", "_")
+    )
+
+
+def _reading_import_key(values):
+    payload = "|".join(
+        (
+            values["measured_date"].isoformat(),
+            values["measured_time"].strftime("%H:%M"),
+            str(values["systolic"]),
+            str(values["diastolic"]),
+            str(values["pulse"]),
+            values["note"] or "",
+        )
+    )
+    return hashlib.sha256(
+        payload.encode("utf-8")
+    ).hexdigest()
+
+
+def _reading_exact_key(values):
+    return (
+        values["measured_date"],
+        values["measured_time"],
+        values["systolic"],
+        values["diastolic"],
+        values["pulse"],
+        values["note"] or "",
+    )
+
+
+def _reading_slot_key(values):
+    return (
+        values["measured_date"],
+        values["measured_time"],
+    )
+
+
+def _existing_reading_keys(user_id):
+    readings = list_blood_pressure_readings(user_id)
+    exact = set()
+    slots = set()
+    import_keys = set()
+
+    for row in readings:
+        values = {
+            "measured_date": row["measured_date"],
+            "measured_time": row["measured_time"].replace(
+                second=0,
+                microsecond=0,
+            ),
+            "systolic": int(row["systolic"]),
+            "diastolic": int(row["diastolic"]),
+            "pulse": int(row["pulse"]),
+            "note": row.get("note") or "",
+        }
+        exact.add(_reading_exact_key(values))
+        slots.add(_reading_slot_key(values))
+        if row.get("import_key"):
+            import_keys.add(row["import_key"])
+
+    return exact, slots, import_keys
+
+
+def export_blood_pressure_data(user_id):
+    readings = list_blood_pressure_readings(user_id)
+    settings = get_blood_pressure_reminder_settings(user_id)
+
+    csv_buffer = io.StringIO()
+    writer = csv.writer(csv_buffer)
+    writer.writerow(CSV_COLUMNS)
+
+    for row in reversed(readings):
+        writer.writerow(
+            (
+                row["measured_date"].isoformat(),
+                row["measured_time"].strftime("%H:%M"),
+                row["systolic"],
+                row["diastolic"],
+                row["pulse"],
+                row.get("note") or "",
+            )
+        )
+
+    json_payload = {
+        "application": "JF Apps",
+        "module": "Journal de pression",
+        "version": "1.1.0",
+        "exported_at": datetime.now().astimezone().isoformat(),
+        "readings": [
+            {
+                "measured_date": row["measured_date"].isoformat(),
+                "measured_time": row["measured_time"].strftime("%H:%M"),
+                "systolic": int(row["systolic"]),
+                "diastolic": int(row["diastolic"]),
+                "pulse": int(row["pulse"]),
+                "note": row.get("note"),
+                "import_source": row.get("import_source"),
+                "import_key": row.get("import_key"),
+            }
+            for row in reversed(readings)
+        ],
+        "reminder_settings": {
+            "configured": bool(settings.get("configured")),
+            "enabled": bool(settings.get("enabled")),
+            "target_per_day": int(settings.get("target_per_day") or 2),
+            "start_date": _serializable(settings.get("start_date")),
+            "end_date": _serializable(settings.get("end_date")),
+            "slots": [
+                {
+                    "label": slot["label"],
+                    "start_time": _serializable(slot["start_time"]),
+                    "end_time": _serializable(slot["end_time"]),
+                    "sort_order": int(slot.get("sort_order") or index),
+                }
+                for index, slot in enumerate(
+                    settings.get("slots") or [],
+                    start=1,
+                )
+            ],
+        },
+    }
+
+    return (
+        csv_buffer.getvalue().encode("utf-8-sig"),
+        json.dumps(
+            json_payload,
+            ensure_ascii=False,
+            indent=2,
+        ).encode("utf-8"),
+    )
+
+
+def _parse_csv_import(text):
+    csv_text = str(text or "").lstrip("\ufeff")
+    sample = csv_text[:4096]
+    try:
+        dialect = csv.Sniffer().sniff(
+            sample,
+            delimiters=",;\t",
+        )
+    except csv.Error:
+        dialect = csv.excel
+
+    stream = io.StringIO(csv_text)
+    reader = csv.DictReader(
+        stream,
+        dialect=dialect,
+    )
+    if not reader.fieldnames:
+        raise ValueError("Le fichier CSV ne contient pas d’en-têtes.")
+
+    mapping = {}
+    for header in reader.fieldnames:
+        normalized = _normalized_header(header)
+        destination = CSV_ALIASES.get(normalized)
+        if destination:
+            mapping[header] = destination
+
+    required = {
+        "measured_date",
+        "measured_time",
+        "systolic",
+        "diastolic",
+        "pulse",
+    }
+    if not required.issubset(set(mapping.values())):
+        raise ValueError(
+            "Le CSV doit contenir Date, Heure, Systolique, "
+            "Diastolique et Pouls."
+        )
+
+    rows = []
+    for line_number, source_row in enumerate(reader, start=2):
+        row = {
+            destination: source_row.get(source_header)
+            for source_header, destination in mapping.items()
+        }
+        row["_line_number"] = line_number
+        rows.append(row)
+
+    return rows, None, "CSV JF Apps"
+
+
+def _parse_json_import(text):
+    try:
+        payload = json.loads(str(text or ""))
+    except json.JSONDecodeError as error:
+        raise ValueError("Le fichier JSON est invalide.") from error
+
+    reminder_settings = None
+    if isinstance(payload, list):
+        source_rows = payload
+    elif isinstance(payload, dict):
+        source_rows = payload.get("readings")
+        reminder_settings = payload.get("reminder_settings")
+    else:
+        source_rows = None
+
+    if not isinstance(source_rows, list):
+        raise ValueError(
+            "La sauvegarde JSON ne contient pas de liste de mesures."
+        )
+
+    rows = []
+    for index, source_row in enumerate(source_rows, start=1):
+        if not isinstance(source_row, dict):
+            rows.append(
+                {
+                    "_line_number": index,
+                    "_invalid": "La mesure JSON n’est pas un objet.",
+                }
+            )
+            continue
+        rows.append(
+            {
+                "measured_date": (
+                    source_row.get("measured_date")
+                    or source_row.get("date")
+                ),
+                "measured_time": (
+                    source_row.get("measured_time")
+                    or source_row.get("time")
+                    or source_row.get("heure")
+                ),
+                "systolic": (
+                    source_row.get("systolic")
+                    or source_row.get("systolique")
+                ),
+                "diastolic": (
+                    source_row.get("diastolic")
+                    or source_row.get("diastolique")
+                ),
+                "pulse": (
+                    source_row.get("pulse")
+                    or source_row.get("pouls")
+                ),
+                "note": source_row.get("note"),
+                "import_key": source_row.get("import_key"),
+                "_line_number": index,
+            }
+        )
+
+    return rows, reminder_settings, "JSON JF Apps"
+
+
+def prepare_blood_pressure_import(user_id, filename, text):
+    suffix = Path(str(filename or "")).suffix.lower()
+
+    if suffix == ".json":
+        raw_rows, reminder_settings, source_format = _parse_json_import(text)
+    elif suffix == ".csv":
+        raw_rows, reminder_settings, source_format = _parse_csv_import(text)
+    else:
+        raise ValueError(
+            "Choisissez un fichier CSV ou JSON produit par JF Apps."
+        )
+
+    existing_exact, existing_slots, existing_import_keys = (
+        _existing_reading_keys(user_id)
+    )
+
+    rows = []
+    errors = []
+    exact_duplicates = 0
+    possible_conflicts = 0
+    seen_exact = set()
+    seen_slots = set()
+
+    for raw_row in raw_rows:
+        line_number = raw_row.get("_line_number", "?")
+        if raw_row.get("_invalid"):
+            errors.append(
+                f"Ligne {line_number} : {raw_row['_invalid']}"
+            )
+            continue
+
+        try:
+            values = validate_reading_values(
+                raw_row.get("measured_date"),
+                raw_row.get("measured_time"),
+                raw_row.get("systolic"),
+                raw_row.get("diastolic"),
+                raw_row.get("pulse"),
+                raw_row.get("note"),
+            )
+        except ValueError as error:
+            errors.append(f"Ligne {line_number} : {error}")
+            continue
+
+        import_key = (
+            str(raw_row.get("import_key") or "").strip()
+            or _reading_import_key(values)
+        )
+        exact_key = _reading_exact_key(values)
+        slot_key = _reading_slot_key(values)
+
+        duplicate_reason = None
+        if import_key in existing_import_keys or exact_key in existing_exact:
+            duplicate_reason = "exact"
+            exact_duplicates += 1
+        elif exact_key in seen_exact:
+            duplicate_reason = "file_exact"
+            exact_duplicates += 1
+        elif slot_key in existing_slots or slot_key in seen_slots:
+            duplicate_reason = "same_slot"
+            possible_conflicts += 1
+
+        rows.append(
+            {
+                **values,
+                "import_key": import_key,
+                "duplicate_reason": duplicate_reason,
+                "line_number": line_number,
+            }
+        )
+        seen_exact.add(exact_key)
+        seen_slots.add(slot_key)
+
+    valid_rows = sum(
+        1
+        for row in rows
+        if row["duplicate_reason"] not in {"exact", "file_exact"}
+    )
+
+    reminder_preview = None
+    if isinstance(reminder_settings, dict):
+        try:
+            slots = reminder_settings.get("slots") or []
+            normalized_slots = (
+                _normalize_reminder_slots(slots)
+                if slots
+                else []
+            )
+            reminder_preview = {
+                "enabled": bool(reminder_settings.get("enabled")),
+                "start_date": (
+                    _normalize_date(reminder_settings.get("start_date"))
+                    if reminder_settings.get("start_date")
+                    else None
+                ),
+                "end_date": (
+                    _normalize_date(reminder_settings.get("end_date"))
+                    if reminder_settings.get("end_date")
+                    else None
+                ),
+                "slots": normalized_slots,
+            }
+            if (
+                reminder_preview["start_date"]
+                and reminder_preview["end_date"]
+                and reminder_preview["end_date"]
+                < reminder_preview["start_date"]
+            ):
+                raise ValueError(
+                    "La date de fin du rappel précède sa date de début."
+                )
+        except ValueError as error:
+            errors.append(f"Réglages de rappel : {error}")
+            reminder_preview = None
+
+    return {
+        "format": source_format,
+        "rows": rows,
+        "errors": errors,
+        "total_rows": len(raw_rows),
+        "valid_rows": valid_rows,
+        "exact_duplicates": exact_duplicates,
+        "possible_conflicts": possible_conflicts,
+        "reminder_settings": reminder_preview,
+    }
+
+
+def import_blood_pressure_rows(
+    user_id,
+    rows,
+    *,
+    import_source="JF Apps",
+    include_same_slot=False,
+    reminder_settings=None,
+    import_reminders=False,
+):
+    imported = 0
+    skipped = 0
+    failures = []
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            for row in rows:
+                reason = row.get("duplicate_reason")
+                if reason in {"exact", "file_exact"}:
+                    skipped += 1
+                    continue
+                if reason == "same_slot" and not include_same_slot:
+                    skipped += 1
+                    continue
+
+                try:
+                    values = validate_reading_values(
+                        row.get("measured_date"),
+                        row.get("measured_time"),
+                        row.get("systolic"),
+                        row.get("diastolic"),
+                        row.get("pulse"),
+                        row.get("note"),
+                    )
+                    import_key = (
+                        row.get("import_key")
+                        or _reading_import_key(values)
+                    )
+
+                    cur.execute(
+                        """
+                        INSERT INTO blood_pressure_readings (
+                            user_id,
+                            measured_date,
+                            measured_time,
+                            systolic,
+                            diastolic,
+                            pulse,
+                            note,
+                            import_source,
+                            import_key,
+                            imported_at
+                        )
+                        VALUES (
+                            %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s, NOW()
+                        )
+                        ON CONFLICT DO NOTHING
+                        RETURNING id;
+                        """,
+                        (
+                            user_id,
+                            values["measured_date"],
+                            values["measured_time"],
+                            values["systolic"],
+                            values["diastolic"],
+                            values["pulse"],
+                            values["note"],
+                            str(import_source or "JF Apps")[:100],
+                            import_key,
+                        ),
+                    )
+                    if cur.fetchone():
+                        imported += 1
+                    else:
+                        skipped += 1
+                except Exception as error:
+                    failures.append(
+                        f"Ligne {row.get('line_number', '?')} : {error}"
+                    )
+
+            if (
+                import_reminders
+                and reminder_settings
+                and reminder_settings.get("start_date")
+                and reminder_settings.get("end_date")
+                and reminder_settings.get("slots")
+            ):
+                normalized_slots = _normalize_reminder_slots(
+                    reminder_settings["slots"]
+                )
+                cur.execute(
+                    """
+                    INSERT INTO blood_pressure_reminder_settings (
+                        user_id,
+                        enabled,
+                        target_per_day,
+                        start_date,
+                        end_date
+                    )
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (user_id)
+                    DO UPDATE SET
+                        enabled = EXCLUDED.enabled,
+                        target_per_day = EXCLUDED.target_per_day,
+                        start_date = EXCLUDED.start_date,
+                        end_date = EXCLUDED.end_date,
+                        updated_at = NOW();
+                    """,
+                    (
+                        user_id,
+                        bool(reminder_settings.get("enabled")),
+                        len(normalized_slots),
+                        reminder_settings["start_date"],
+                        reminder_settings["end_date"],
+                    ),
+                )
+                cur.execute(
+                    """
+                    DELETE FROM blood_pressure_reminder_slots
+                    WHERE user_id = %s;
+                    """,
+                    (user_id,),
+                )
+                _insert_reminder_slots(
+                    cur,
+                    user_id,
+                    normalized_slots,
+                )
+
+            conn.commit()
+
+    return {
+        "imported": imported,
+        "skipped": skipped,
+        "failures": failures,
+        "reminders_imported": bool(
+            import_reminders
+            and reminder_settings
+            and reminder_settings.get("slots")
+        ),
+    }
 
 
 

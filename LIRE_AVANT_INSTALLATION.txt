@@ -1,43 +1,202 @@
-JF APPS — CORRECTIF FINANCES V1.4.1
+JF APPS — DÉVELOPPEMENT GROUPÉ
 
-PROBLÈME
+VERSIONS
+- Journal de pression V1.1.0
+- Personnages JDR V1.1.0
 
-Sur téléphone, les huit onglets du sous-menu Finances étaient comprimés
-dans la largeur disponible. Les libellés se superposaient et devenaient
-illisibles.
+FICHIERS COMPLETS À REMPLACER ENSEMBLE
+Déposer à la racine du dépôt GitHub :
 
-CORRECTION
-
-Le sous-menu est maintenant une barre horizontale déroulante :
-
-- chaque onglet conserve une largeur suffisante;
-- les libellés ne se chevauchent plus;
-- l’icône et le texte sont placés sur une même ligne;
-- la barre se déplace au toucher;
-- des flèches apparaissent lorsque tous les onglets ne tiennent pas;
-- la hauteur du menu est réduite.
-
-FICHIERS COMPLETS À REMPLACER
-
-- finances.py
+- blood_pressure.py
+- blood_pressure_data.py
+- rpg_character.py
+- rpg_character_rules.py
 - app_versions.py
 - manual.py
 
+AUCUN CHANGEMENT REQUIS
+Ne pas remplacer :
+
+- app.py
+- blood_pressure_pdf.py
+- rpg_character_data.py
+- release_notes.py
+- requirements.txt
+- db.py
+
+Aucune nouvelle dépendance Python n’est requise.
+
+============================================================
+JOURNAL DE PRESSION V1.1.0
+============================================================
+
+FONCTIONS DÉJÀ PRÉSENTES ET CONSERVÉES
+- plages horaires personnalisables;
+- règle sans notion de retard;
+- toute mesure de la journée compte comme une prise;
+- association chronologique des mesures aux prises planifiées;
+- saisie rapide depuis le Portail;
+- historique compact;
+- rapport PDF privé.
+
+NOUVEL ONGLET DONNÉES
+
+L’onglet Données permet :
+
+1. d’exporter les mesures en CSV;
+2. de produire une sauvegarde JSON complète;
+3. d’importer un CSV ou un JSON de JF Apps;
+4. de prévisualiser les données avant l’importation;
+5. de détecter les doublons;
+6. de détecter les mesures différentes à la même date et à la même heure.
+
+EXPORT CSV
+Colonnes :
+- Date;
+- Heure;
+- Systolique;
+- Diastolique;
+- Pouls;
+- Note.
+
+Les séparateurs virgule, point-virgule et tabulation sont reconnus
+à l’importation.
+
+SAUVEGARDE JSON
+Le JSON conserve :
+- toutes les mesures;
+- les notes;
+- l’état du rappel;
+- la période du rappel;
+- les plages horaires personnalisées.
+
+IMPORTATION CONTRÔLÉE
+Avant l’importation, l’application affiche :
+- mesures valides;
+- mesures déjà présentes;
+- conflits possibles de date et heure;
+- erreurs ignorées;
+- aperçu des premières mesures.
+
+Les doublons exacts sont toujours ignorés.
+
+Les mesures différentes ayant la même date et la même heure sont
+ignorées par défaut. Une case permet de les importer lorsqu’il s’agit
+réellement d’une seconde mesure.
+
+Pour une sauvegarde JSON, une autre case permet de remplacer les plages
+et réglages de rappel. Cette option est désactivée par défaut.
+
+MIGRATION POSTGRESQL
+Le démarrage ajoute automatiquement :
+- import_source;
+- import_key;
+- imported_at;
+- un index privé de détection des importations répétées.
+
+Aucun script SQL manuel n’est requis.
+
+STABILITÉ
+Les trois petites minuteries de montage du Journal ont été remplacées
+par des tâches contrôlées qui cessent lorsque la page est quittée.
+
+============================================================
+PERSONNAGES JDR V1.1.0
+============================================================
+
+CALCULS ET PRÉSENTATION CONSERVÉS
+- noms français et anglais sur une seule ligne;
+- champs Carac., Rangs et Divers compacts;
+- bonus automatique de compétence de classe;
+- décomposition visible de chaque calcul;
+- BMO/CMB et DMD/CMD Pathfinder;
+- aide détaillée des calculs;
+- disposition adaptée au téléphone.
+
+NOUVELLE VÉRIFICATION GÉNÉRALE
+Dans Compétences, un encadré Vérification des calculs indique :
+- le nombre de tests de référence réussis;
+- les valeurs qui méritent une vérification;
+- les pénalités d’armure inscrites avec un signe positif;
+- un possible double bonus de compétence de classe;
+- une compétence nécessitant une formation sans rang;
+- l’option ×2 utilisée sans activer Armure.
+
+Cette vérification ne modifie jamais automatiquement la feuille.
+
+TESTS DE RÉFÉRENCE INTÉGRÉS
+- caractéristique 7 = modificateur −2;
+- Dressage / Handle Animal :
+  Charisme −2 + rangs 1 + classe 3 + divers 0 = +2;
+- aucun bonus de classe avec 0 rang;
+- BMO/CMB d’une créature Très petite utilisant la Dextérité;
+- exemple complet de DMD/CMD.
+
+La fenêtre Règles de calcul affiche aussi ces tests et l’exemple
+Dressage / Handle Animal de façon permanente.
+
+============================================================
 INSTALLATION
+============================================================
 
-1. Déposer les trois fichiers ensemble à la racine de GitHub.
-2. Faire Commit changes.
-3. Attendre le redémarrage Canner.
-4. Fermer puis rouvrir la PWA sur téléphone.
-5. Ouvrir Finances et glisser le sous-menu horizontalement.
+1. Ouvrir le dépôt GitHub.
+2. Choisir Add file > Upload files.
+3. Déposer les six fichiers ensemble.
+4. Faire Commit changes.
+5. Attendre la fin du déploiement Canner.
+6. Recharger avec Ctrl+F5 sur ordinateur.
+7. Fermer puis rouvrir la PWA sur téléphone.
+8. Vérifier les versions V1.1.0 dans le Portail.
 
-TESTS
+============================================================
+TESTS RECOMMANDÉS — JOURNAL DE PRESSION
+============================================================
 
-- vérifier Tableau, Saisie et Historique;
-- glisser jusqu’à Récurrences, Objectifs et Conciliation;
-- glisser jusqu’à Organisation et Exporter;
-- confirmer qu’aucun texte ne se superpose;
-- vérifier que le panneau sélectionné correspond toujours à l’onglet.
+1. Ouvrir Journal de pression > Données.
+2. Exporter un CSV.
+3. Exporter un JSON.
+4. Réimporter le CSV :
+   les mesures existantes doivent être reconnues.
+5. Modifier une ligne de test dans une copie du CSV.
+6. Prévisualiser le conflit de même date et heure.
+7. Tester l’importation d’une nouvelle mesure.
+8. Tester une sauvegarde JSON sans importer les rappels.
+9. Tester ensuite l’option de remplacement des rappels.
+10. Vérifier l’Historique et le Portail.
 
-Aucune donnée PostgreSQL n’est modifiée.
-Aucune nouvelle dépendance n’est requise.
+============================================================
+TESTS RECOMMANDÉS — PERSONNAGES JDR
+============================================================
+
+1. Ouvrir un personnage puis Compétences.
+2. Vérifier que tous les tests de référence sont réussis.
+3. Configurer Dressage avec :
+   - CHA 7;
+   - 1 rang;
+   - compétence de classe;
+   - Divers 0.
+4. Vérifier le total +2.
+5. Mettre Divers à +3 et vérifier l’avertissement.
+6. Tester une compétence Formation sans rang.
+7. Ouvrir Règles de calcul.
+8. Vérifier BMO/CMB, DMD/CMD et l’exemple Dressage.
+9. Vérifier l’affichage sur téléphone.
+
+============================================================
+VÉRIFICATIONS EFFECTUÉES
+============================================================
+
+- syntaxe Python des fichiers;
+- imports internes;
+- paramètres SQL littéraux;
+- export CSV et JSON simulé;
+- lecture de CSV avec virgule et point-virgule;
+- prévisualisation des doublons et conflits;
+- importation simulée avec et sans plages de rappel;
+- absence de ui.timer dans le Journal de pression;
+- cinq tests Pathfinder de référence réussis;
+- audit de compétence de classe vérifié;
+- Manuel et notes de version mis à jour.
+
+Le rendu réel NiceGUI et les opérations PostgreSQL devront être
+confirmés après le déploiement sur Canner.

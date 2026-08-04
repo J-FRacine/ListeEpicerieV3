@@ -421,13 +421,14 @@ La version de l’application apparaît près de son nom. Le Portail contient au
 """,
     },
     {
-        "title": "Journal de pression",
+        "title": "Journal de pression — V1.1.0",
         "icon": "monitor_heart",
         "caption": "Saisir, consulter et imprimer les mesures",
         "keywords": (
             "pression artérielle systolique diastolique pouls "
             "date heure appareil privé note historique pdf rapport "
-            "aucune donnée courriel"
+            "aucune donnée courriel csv json import export "
+            "sauvegarde doublon données"
         ),
         "content": """
 ### Données privées
@@ -498,6 +499,42 @@ Chaque fiche affiche :
 - le pouls;
 - la note facultative.
 
+### Exportation et sauvegarde privée
+
+L’onglet **Données** permet de produire deux formats :
+
+- **CSV** : tableau simple destiné notamment à Excel;
+- **JSON** : sauvegarde complète contenant les mesures et les plages de rappel.
+
+Le CSV contient la date, l’heure, la pression systolique, la pression diastolique, le pouls et la note.
+
+Le JSON conserve aussi :
+
+- l’état du rappel;
+- la période du rappel;
+- le nombre de prises quotidiennes;
+- le nom et les heures de chaque plage.
+
+Les fichiers appartiennent uniquement à l’utilisateur connecté. Ils doivent être conservés dans un emplacement privé.
+
+### Importation contrôlée
+
+L’onglet **Données** accepte les fichiers CSV et JSON produits par JF Apps.
+
+Avant l’importation, l’application affiche :
+
+- le nombre de mesures valides;
+- les mesures déjà présentes;
+- les mesures différentes ayant la même date et la même heure;
+- les lignes invalides;
+- un aperçu des mesures à ajouter.
+
+Les doublons exacts sont toujours ignorés.
+
+Une mesure différente ayant exactement la même date et la même heure est considérée comme un conflit possible. Elle est ignorée par défaut, mais l’utilisateur peut choisir de l’importer lorsqu’il s’agit réellement d’une seconde mesure.
+
+Avec une sauvegarde JSON, une option permet aussi de remplacer les plages et réglages de rappel actuels. Cette option est désactivée par défaut.
+
 ### Rapport PDF
 
 Dans **Rapport PDF**, inscrivez le **nom complet à imprimer**, puis choisissez la date de début et la date de fin.
@@ -518,14 +555,15 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
 """,
     },
     {
-        "title": "Personnages JDR",
+        "title": "Personnages JDR — V1.1.0",
         "icon": "casino",
         "caption": "Créer une feuille interactive Pathfinder / Ravenloft",
         "keywords": (
             "jdr personnage ravenloft pathfinder feuille force "
             "dextérité constitution intelligence sagesse charisme "
             "classe armure initiative sauvegarde peur horreur folie "
-            "compétence attaque points vie"
+            "compétence attaque points vie audit vérification "
+            "test référence calcul"
         ),
         "content": """
 ### Données privées et plusieurs personnages
@@ -600,6 +638,8 @@ La fenêtre regroupe :
 
 Chaque rubrique présente la formule générale et, lorsque des données sont disponibles, un exemple calculé avec les valeurs du personnage actuel.
 
+La rubrique Compétences contient aussi un exemple de référence permanent pour **Dressage — Handle Animal** et la liste des tests internes de calcul.
+
 ### Jets de sauvegarde Ravenloft
 
 L’onglet **Sauvegardes** comprend :
@@ -659,6 +699,28 @@ Des pastilles compactes indiquent **Possédée**, **Classe**, **Formation** et *
 ### Présentation compacte
 
 Les champs **Carac.**, **Rangs** et **Divers**, ainsi que les cases **Classe**, **Formation**, **Armure** et **×2**, sont placés sur une seule ligne lorsque la largeur de l’écran le permet. Sur téléphone, ils se replacent automatiquement sur quelques lignes plus courtes.
+
+### Vérification générale de la feuille
+
+La section **Compétences** présente maintenant un encadré **Vérification des calculs**.
+
+Il indique :
+
+- combien de tests de référence internes réussissent;
+- si une pénalité d’armure a été inscrite avec un signe positif;
+- si une compétence de classe possédée semble recevoir deux fois le bonus de +3;
+- si une compétence exigeant une formation ne possède aucun rang;
+- si l’option de pénalité d’armure ×2 est activée sans activer l’option Armure.
+
+Cette vérification ne modifie jamais automatiquement les données du personnage. Elle attire seulement l’attention sur les valeurs à examiner.
+
+Les tests de référence comprennent notamment :
+
+- un score de caractéristique de 7 donnant un modificateur de −2;
+- Dressage / Handle Animal : Charisme −2 + rangs 1 + classe 3 + divers 0 = +2;
+- aucun bonus de compétence de classe lorsque les rangs sont à zéro;
+- l’utilisation de la Dextérité pour le BMO/CMB d’une créature Très petite;
+- un exemple complet de DMD/CMD.
 
 ### Vérification du calcul
 

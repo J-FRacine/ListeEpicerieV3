@@ -33,6 +33,7 @@ from rpg_character_rules import (
     armor_class_total,
     attack_breakdown,
     attack_total,
+    character_sheet_audit,
     cmb_breakdown,
     cmb_total,
     cmd_breakdown,
@@ -42,6 +43,7 @@ from rpg_character_rules import (
     format_number,
     initiative_breakdown,
     initiative_total,
+    pathfinder_reference_checks,
     save_breakdown,
     save_total,
     skill_breakdown,
@@ -120,6 +122,40 @@ RPG_CSS = r"""
     border-left: 5px solid #65508f;
 }
 
+.jf-rpg-audit {
+    width: 100%;
+    padding: .75rem .85rem;
+    border: 1px solid var(--jf-border);
+    border-left: 4px solid var(--jf-blue);
+    border-radius: 12px;
+    background: var(--jf-blue-soft);
+}
+.jf-rpg-audit-warning {
+    border-left-color: #bf7812;
+    background: rgba(191, 120, 18, .09);
+}
+.jf-rpg-audit-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: .45rem;
+    width: 100%;
+    padding: .32rem 0;
+    border-bottom: 1px solid var(--jf-border);
+}
+.jf-rpg-reference-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .45rem;
+    width: 100%;
+    padding: .35rem 0;
+    border-bottom: 1px solid var(--jf-border);
+}
+.jf-rpg-reference-formula {
+    color: var(--jf-muted);
+    font-size: .7rem;
+}
 .jf-rpg-skill-badges {
     display: flex;
     flex-wrap: wrap;
@@ -1266,6 +1302,80 @@ def _calculation_rules_dialog(
                     ).classes(
                         "jf-rpg-rules-formula"
                     )
+                    formula_block(
+                        "Exemple de référence — Dressage / Handle Animal",
+                        (
+                            "Charisme −2 + rangs 1 + compétence de classe 3 "
+                            "+ divers 0 = total +2"
+                        ),
+                        (
+                            "CHA −2 + rangs +1 + classe +3 "
+                            "+ divers +0 = +2"
+                        ),
+                        (
+                            "Le bonus automatique de compétence de classe "
+                            "ne doit pas être recopié dans le champ Divers."
+                        ),
+                    )
+                    reference_checks = (
+                        pathfinder_reference_checks()
+                    )
+                    with ui.expansion(
+                        "Tests de référence intégrés",
+                        icon="verified",
+                        value=False,
+                    ).props(
+                        "dense expand-separator"
+                    ).classes("w-full"):
+                        for check in reference_checks:
+                            with ui.element("div").classes(
+                                "jf-rpg-reference-row"
+                            ):
+                                ui.icon(
+                                    (
+                                        "check_circle"
+                                        if check["passed"]
+                                        else "error"
+                                    )
+                                ).classes(
+                                    (
+                                        "text-positive"
+                                        if check["passed"]
+                                        else "text-negative"
+                                    )
+                                )
+                                with ui.column().classes(
+                                    "gap-0 min-w-0"
+                                ):
+                                    ui.label(
+                                        check["label"]
+                                    ).classes(
+                                        "text-sm font-bold"
+                                    )
+                                    ui.label(
+                                        check["formula"]
+                                    ).classes(
+                                        "jf-rpg-reference-formula"
+                                    )
+                                ui.label(
+                                    (
+                                        "OK"
+                                        if check["passed"]
+                                        else (
+                                            "Attendu "
+                                            f"{check['expected']}, "
+                                            "obtenu "
+                                            f"{check['actual']}"
+                                        )
+                                    )
+                                ).classes(
+                                    (
+                                        "text-xs text-positive font-bold"
+                                        if check["passed"]
+                                        else "text-xs text-negative font-bold"
+                                    )
+                                )
+
                     sample_skill = next(
                         (
                             row for row in skills
@@ -2276,6 +2386,107 @@ def _skills_panel(
         user_id,
         character["id"],
     )
+    audit = character_sheet_audit(
+        character,
+        skills,
+    )
+
+    audit_class = "jf-rpg-audit"
+    if audit["warnings"]:
+        audit_class += " jf-rpg-audit-warning"
+
+    with ui.element("section").classes(
+        audit_class
+    ):
+        with ui.row().classes(
+            "w-full items-center justify-between gap-2 flex-wrap"
+        ):
+            with ui.column().classes("gap-0 min-w-0"):
+                ui.label(
+                    "Vérification des calculs"
+                ).classes(
+                    "text-sm font-bold"
+                )
+                ui.label(
+                    (
+                        f"{audit['reference_checks_passed']} sur "
+                        f"{audit['reference_checks_total']} tests "
+                        "de référence réussis."
+                    )
+                ).classes(
+                    "text-xs jf-muted"
+                )
+
+            ui.label(
+                (
+                    "Aucun point à examiner"
+                    if not audit["warnings"]
+                    else (
+                        f"{len(audit['warnings'])} point(s) "
+                        "à examiner"
+                    )
+                )
+            ).classes(
+                (
+                    "text-xs text-positive font-bold"
+                    if not audit["warnings"]
+                    else "text-xs text-warning font-bold"
+                )
+            )
+
+        if audit["warnings"]:
+            with ui.expansion(
+                "Afficher les points à vérifier",
+                icon="fact_check",
+                value=True,
+            ).props(
+                "dense expand-separator"
+            ).classes("w-full mt-1"):
+                for warning in audit["warnings"]:
+                    icon = {
+                        "error": "error",
+                        "warning": "warning",
+                        "info": "info",
+                    }.get(
+                        warning["severity"],
+                        "info",
+                    )
+                    css = {
+                        "error": "text-negative",
+                        "warning": "text-warning",
+                        "info": "text-primary",
+                    }.get(
+                        warning["severity"],
+                        "text-primary",
+                    )
+                    with ui.element("div").classes(
+                        "jf-rpg-audit-row"
+                    ):
+                        ui.icon(icon).classes(css)
+                        with ui.column().classes(
+                            "gap-0 min-w-0"
+                        ):
+                            ui.label(
+                                warning["title"]
+                            ).classes(
+                                "text-sm font-bold"
+                            )
+                            ui.label(
+                                warning["detail"]
+                            ).classes(
+                                "text-xs jf-muted"
+                            )
+        else:
+            ui.label(
+                (
+                    "Les bonus de compétence de classe, les rangs "
+                    "et les pénalités d’armure ne présentent aucune "
+                    "incohérence détectable."
+                )
+            ).classes(
+                "text-xs jf-muted mt-1"
+            )
+
     editors = []
 
     initial_owned_count = sum(

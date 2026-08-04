@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import tempfile
@@ -15,9 +16,12 @@ from blood_pressure_data import (
     count_blood_pressure_readings_on_date,
     create_blood_pressure_reading,
     delete_blood_pressure_reading,
+    export_blood_pressure_data,
     get_blood_pressure_reminder_settings,
     get_blood_pressure_reminder_status,
+    import_blood_pressure_rows,
     list_blood_pressure_readings,
+    prepare_blood_pressure_import,
     save_blood_pressure_reminder_schedule,
     update_blood_pressure_reading,
 )
@@ -33,8 +37,123 @@ REPORT_DIRECTORY = (
     / "jf_apps_pressure_reports"
 )
 
+EXPORT_DIRECTORY = (
+    Path(
+        tempfile.gettempdir()
+    )
+    / "jf_apps_pressure_exports"
+)
+
+_BACKGROUND_TASKS = set()
+
+
+def _start_background_task(coroutine):
+    task = asyncio.create_task(coroutine)
+    _BACKGROUND_TASKS.add(task)
+
+    def finish(done_task):
+        _BACKGROUND_TASKS.discard(done_task)
+        try:
+            done_task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as error:
+            print(
+                "Tâche du Journal de pression interrompue :",
+                error,
+            )
+
+    task.add_done_callback(finish)
+    return task
+
 
 BLOOD_PRESSURE_CSS = r"""
+.jf-pressure-main-tabs {
+    width: 100%;
+    overflow: hidden;
+    border-bottom: 1px solid var(--jf-border);
+}
+.jf-pressure-main-tabs .q-tabs__content {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+}
+.jf-pressure-main-tabs .q-tab {
+    flex: 0 0 auto;
+    min-width: max-content;
+    padding-inline: .75rem;
+}
+.jf-pressure-main-tabs .q-tab__content {
+    min-width: max-content;
+}
+.jf-pressure-main-tabs .q-tab__label {
+    overflow: visible;
+    white-space: nowrap;
+    text-overflow: clip;
+}
+.jf-pressure-import-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: .55rem;
+    width: 100%;
+}
+.jf-pressure-import-stat {
+    padding: .65rem .75rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 11px;
+    background: var(--jf-surface);
+}
+.jf-pressure-import-row {
+    display: grid;
+    grid-template-columns: 5.2rem minmax(0, 1fr) 6.5rem;
+    align-items: center;
+    gap: .45rem;
+    width: 100%;
+    padding: .38rem .45rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 9px;
+    background: var(--jf-surface);
+}
+.jf-pressure-import-date {
+    color: var(--jf-muted);
+    font-size: .7rem;
+    white-space: nowrap;
+}
+.jf-pressure-import-values {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .78rem;
+    font-weight: 760;
+}
+.jf-pressure-import-status {
+    justify-self: end;
+    font-size: .66rem;
+    font-weight: 800;
+    text-align: right;
+}
+@media (max-width: 650px) {
+    .jf-pressure-main-tabs .q-tab {
+        min-height: 3rem;
+        padding-inline: .62rem;
+    }
+    .jf-pressure-main-tabs .q-tab__content {
+        flex-direction: row;
+        gap: .3rem;
+    }
+    .jf-pressure-main-tabs .q-tab__icon {
+        margin-bottom: 0;
+        font-size: 1.15rem;
+    }
+    .jf-pressure-main-tabs .q-tab__label {
+        font-size: .7rem;
+    }
+}
+
 .jf-pressure-grid {
     display: grid;
     grid-template-columns:
@@ -636,10 +755,19 @@ def blood_pressure_portal_reminder(
                         "outline color=warning"
                     )
 
-    ui.timer(
-        0.15,
-        load_status,
-        once=True,
+    status_guard = ui.element("span").classes("hidden")
+
+    async def load_status_after_mount():
+        await asyncio.sleep(0.15)
+        if status_guard.is_deleted:
+            return
+        try:
+            load_status()
+        except RuntimeError:
+            return
+
+    _start_background_task(
+        load_status_after_mount()
     )
 
 
@@ -722,8 +850,11 @@ def blood_pressure_panel(
                 "text-sm"
             )
 
-    with ui.tabs().classes(
-        "w-full"
+    with ui.tabs().props(
+        "dense no-caps inline-label "
+        "mobile-arrows outside-arrows align=left"
+    ).classes(
+        "jf-pressure-main-tabs"
     ) as tabs:
         entry_tab = ui.tab(
             "Saisie",
@@ -741,6 +872,10 @@ def blood_pressure_panel(
             "Rappel",
             icon="notifications_active",
         )
+        data_tab = ui.tab(
+            "Données",
+            icon="import_export",
+        )
 
     normalized_section = str(
         initial_section
@@ -756,6 +891,11 @@ def blood_pressure_panel(
         "pdf": report_tab,
         "rappel": reminder_tab,
         "reminder": reminder_tab,
+        "donnees": data_tab,
+        "données": data_tab,
+        "data": data_tab,
+        "import": data_tab,
+        "export": data_tab,
     }.get(
         normalized_section,
         entry_tab,
@@ -1069,10 +1209,19 @@ def blood_pressure_panel(
                         "outline color=primary"
                     )
 
-                ui.timer(
-                    0.15,
-                    use_device_now,
-                    once=True,
+                entry_guard = ui.element("span").classes("hidden")
+
+                async def use_device_after_mount():
+                    await asyncio.sleep(0.15)
+                    if entry_guard.is_deleted:
+                        return
+                    try:
+                        await use_device_now()
+                    except RuntimeError:
+                        return
+
+                _start_background_task(
+                    use_device_after_mount()
                 )
 
         # -------------------------------------------------
@@ -2375,8 +2524,366 @@ def blood_pressure_panel(
                     "text-xs jf-muted"
                 )
 
-                ui.timer(
-                    0.15,
-                    refresh_reminder_preview,
-                    once=True,
+                reminder_guard = ui.element("span").classes("hidden")
+
+                async def refresh_reminder_after_mount():
+                    await asyncio.sleep(0.15)
+                    if reminder_guard.is_deleted:
+                        return
+                    try:
+                        await refresh_reminder_preview()
+                    except RuntimeError:
+                        return
+
+                _start_background_task(
+                    refresh_reminder_after_mount()
+                )
+
+
+        # -------------------------------------------------
+        # DONNÉES PRIVÉES
+        # -------------------------------------------------
+        with ui.tab_panel(
+            data_tab
+        ).classes(
+            "px-0"
+        ):
+            with ui.card().classes(
+                "w-full max-w-4xl p-5"
+            ):
+                ui.label(
+                    "Importer une sauvegarde"
+                ).classes(
+                    "text-xl font-bold"
+                )
+                ui.label(
+                    "Formats reconnus : CSV et JSON produits "
+                    "par JF Apps. Une prévisualisation est toujours "
+                    "affichée avant l’importation."
+                ).classes(
+                    "text-sm jf-muted"
+                )
+
+                async def receive_import(event):
+                    try:
+                        text = await event.file.text()
+                        filename = getattr(
+                            event.file,
+                            "name",
+                            "journal_pression.csv",
+                        )
+                        preview = prepare_blood_pressure_import(
+                            user_id,
+                            filename,
+                            text,
+                        )
+                    except Exception as error:
+                        ui.notify(
+                            str(error),
+                            type="negative",
+                        )
+                        return
+
+                    with ui.dialog() as dialog:
+                        with ui.card().classes(
+                            "w-full max-w-4xl p-4"
+                        ):
+                            ui.label(
+                                "Prévisualisation de l’importation"
+                            ).classes(
+                                "text-xl font-bold"
+                            )
+                            ui.label(
+                                f"Format reconnu : {preview['format']}"
+                            ).classes(
+                                "text-sm jf-muted"
+                            )
+
+                            with ui.element("div").classes(
+                                "jf-pressure-import-summary mt-2"
+                            ):
+                                for label, value in (
+                                    (
+                                        "Mesures valides",
+                                        preview["valid_rows"],
+                                    ),
+                                    (
+                                        "Déjà présentes",
+                                        preview["exact_duplicates"],
+                                    ),
+                                    (
+                                        "Même date et heure",
+                                        preview["possible_conflicts"],
+                                    ),
+                                    (
+                                        "Erreurs",
+                                        len(preview["errors"]),
+                                    ),
+                                ):
+                                    with ui.element("div").classes(
+                                        "jf-pressure-import-stat"
+                                    ):
+                                        ui.label(label).classes(
+                                            "text-xs jf-muted"
+                                        )
+                                        ui.label(str(value)).classes(
+                                            "text-xl font-bold"
+                                        )
+
+                            include_conflicts = ui.checkbox(
+                                "Importer aussi les mesures différentes "
+                                "ayant exactement la même date et la même heure",
+                                value=False,
+                            ).classes("mt-2")
+
+                            import_reminders = None
+                            if preview["reminder_settings"]:
+                                import_reminders = ui.checkbox(
+                                    "Remplacer aussi mes plages et réglages "
+                                    "de rappel par ceux de la sauvegarde JSON",
+                                    value=False,
+                                )
+                                ui.label(
+                                    "Cette option remplace les horaires "
+                                    "actuellement configurés."
+                                ).classes(
+                                    "text-xs jf-muted"
+                                )
+
+                            if preview["errors"]:
+                                with ui.expansion(
+                                    (
+                                        "Lignes ignorées "
+                                        f"({len(preview['errors'])})"
+                                    ),
+                                    icon="warning",
+                                ).classes("w-full"):
+                                    for message in preview["errors"][:40]:
+                                        ui.label(message).classes(
+                                            "text-xs text-negative"
+                                        )
+
+                            ui.label("Aperçu").classes(
+                                "font-bold mt-2"
+                            )
+                            with ui.column().classes(
+                                "w-full gap-1"
+                            ):
+                                visible_rows = [
+                                    row
+                                    for row in preview["rows"]
+                                    if row.get("duplicate_reason")
+                                    not in {"exact", "file_exact"}
+                                ][:12]
+
+                                if not visible_rows:
+                                    ui.label(
+                                        "Aucune nouvelle mesure à afficher."
+                                    ).classes(
+                                        "text-sm jf-muted"
+                                    )
+
+                                for row in visible_rows:
+                                    reason = row.get(
+                                        "duplicate_reason"
+                                    )
+                                    status = (
+                                        "Même heure"
+                                        if reason == "same_slot"
+                                        else "Nouvelle"
+                                    )
+                                    status_class = (
+                                        "text-warning"
+                                        if reason == "same_slot"
+                                        else "text-positive"
+                                    )
+
+                                    with ui.element("div").classes(
+                                        "jf-pressure-import-row"
+                                    ):
+                                        ui.label(
+                                            row["measured_date"].strftime(
+                                                "%d/%m/%Y"
+                                            )
+                                            + " "
+                                            + row["measured_time"].strftime(
+                                                "%H:%M"
+                                            )
+                                        ).classes(
+                                            "jf-pressure-import-date"
+                                        )
+                                        ui.label(
+                                            (
+                                                f"{row['systolic']}/"
+                                                f"{row['diastolic']} — "
+                                                f"pouls {row['pulse']}"
+                                                + (
+                                                    f" — {row['note']}"
+                                                    if row.get("note")
+                                                    else ""
+                                                )
+                                            )
+                                        ).classes(
+                                            "jf-pressure-import-values"
+                                        ).tooltip(
+                                            row.get("note") or ""
+                                        )
+                                        ui.label(status).classes(
+                                            "jf-pressure-import-status "
+                                            + status_class
+                                        )
+
+                            def confirm_import():
+                                try:
+                                    result = import_blood_pressure_rows(
+                                        user_id,
+                                        preview["rows"],
+                                        include_same_slot=(
+                                            include_conflicts.value
+                                        ),
+                                        reminder_settings=(
+                                            preview["reminder_settings"]
+                                        ),
+                                        import_reminders=(
+                                            bool(import_reminders.value)
+                                            if import_reminders
+                                            else False
+                                        ),
+                                    )
+                                except Exception as error:
+                                    ui.notify(
+                                        str(error),
+                                        type="negative",
+                                    )
+                                    return
+
+                                dialog.close()
+                                message = (
+                                    "Importation terminée : "
+                                    f"{result['imported']} ajoutée(s), "
+                                    f"{result['skipped']} ignorée(s)."
+                                )
+                                if result["reminders_imported"]:
+                                    message += (
+                                        " Les réglages de rappel ont "
+                                        "aussi été remplacés."
+                                    )
+                                ui.notify(
+                                    message,
+                                    type="positive",
+                                    timeout=10000,
+                                )
+                                if result["failures"]:
+                                    ui.notify(
+                                        (
+                                            f"{len(result['failures'])} "
+                                            "mesure(s) n’ont pas pu "
+                                            "être importées."
+                                        ),
+                                        type="warning",
+                                        timeout=10000,
+                                    )
+
+                            with ui.row().classes(
+                                "w-full justify-end gap-2 mt-3"
+                            ):
+                                ui.button(
+                                    "Annuler",
+                                    on_click=dialog.close,
+                                ).props("flat")
+                                ui.button(
+                                    "Importer",
+                                    icon="upload",
+                                    on_click=confirm_import,
+                                ).props("color=primary")
+
+                    dialog.open()
+
+                ui.upload(
+                    label="Choisir un fichier CSV ou JSON",
+                    on_upload=receive_import,
+                    auto_upload=True,
+                    max_files=1,
+                ).props(
+                    "accept=.csv,.json,text/csv,application/json"
+                ).classes(
+                    "w-full mt-3"
+                )
+
+            with ui.card().classes(
+                "w-full max-w-4xl p-5 mt-3"
+            ):
+                ui.label(
+                    "Exporter les données"
+                ).classes(
+                    "text-xl font-bold"
+                )
+                ui.label(
+                    "Le CSV convient à Excel. Le JSON constitue "
+                    "la sauvegarde privée complète et conserve "
+                    "également les plages de rappel."
+                ).classes(
+                    "text-sm jf-muted"
+                )
+
+                def do_export(kind):
+                    try:
+                        csv_bytes, json_bytes = (
+                            export_blood_pressure_data(
+                                user_id
+                            )
+                        )
+                        data = (
+                            csv_bytes
+                            if kind == "csv"
+                            else json_bytes
+                        )
+                        EXPORT_DIRECTORY.mkdir(
+                            parents=True,
+                            exist_ok=True,
+                        )
+                        filename = (
+                            "journal_pression_"
+                            f"{date.today().isoformat()}."
+                            f"{kind}"
+                        )
+                        output_path = (
+                            EXPORT_DIRECTORY
+                            / f"{user_id}_{int(time.time() * 1000)}_{filename}"
+                        )
+                        output_path.write_bytes(data)
+                        ui.download(
+                            str(output_path),
+                            filename=filename,
+                        )
+                    except Exception as error:
+                        ui.notify(
+                            str(error),
+                            type="negative",
+                        )
+
+                with ui.row().classes(
+                    "gap-2 flex-wrap mt-2"
+                ):
+                    ui.button(
+                        "Exporter CSV",
+                        icon="table_view",
+                        on_click=lambda: do_export("csv"),
+                    ).props(
+                        "outline color=primary"
+                    )
+                    ui.button(
+                        "Exporter JSON",
+                        icon="data_object",
+                        on_click=lambda: do_export("json"),
+                    ).props(
+                        "outline color=primary"
+                    )
+
+                ui.label(
+                    "Les fichiers sont générés uniquement pour "
+                    "votre compte. Conservez le JSON dans un "
+                    "emplacement privé et sécurisé."
+                ).classes(
+                    "text-xs jf-muted mt-2"
                 )

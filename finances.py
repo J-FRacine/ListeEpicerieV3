@@ -29,6 +29,8 @@ from finances_data import (
     ensure_default_finance_payment_methods,
     export_finances,
     generate_due_recurrences,
+    get_or_create_finance_category,
+    get_or_create_finance_tag,
     get_reconciliation_session,
     get_transaction,
     goal_progress,
@@ -60,6 +62,10 @@ from finances_data import (
     toggle_recurrence,
     toggle_tag,
 )
+
+
+ADD_CATEGORY_OPTION = "__jf_add_category__"
+ADD_TAG_OPTION = "__jf_add_tag__"
 
 
 FINANCE_CSS = r"""
@@ -219,6 +225,95 @@ FINANCE_CSS = r"""
     white-space: nowrap;
     font-size: .75rem;
 }
+.jf-finance-kpi-link {
+    justify-self: start;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0;
+    min-height: 1.8rem;
+    color: var(--jf-blue);
+    font-size: .75rem;
+    font-weight: 800;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+.jf-finance-kpi-link .q-btn__content {
+    min-width: 0;
+    max-width: 100%;
+    justify-content: flex-start;
+}
+.jf-finance-kpi-link .block {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.jf-finance-kpi-detail-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .45rem;
+    width: 100%;
+}
+.jf-finance-kpi-detail-list {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    width: 100%;
+}
+.jf-finance-kpi-detail-row {
+    display: grid;
+    grid-template-columns: 5.2rem minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: .45rem;
+    width: 100%;
+    padding: .42rem .48rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 9px;
+    background: var(--jf-surface);
+}
+.jf-finance-kpi-detail-date {
+    color: var(--jf-muted);
+    font-size: .68rem;
+    white-space: nowrap;
+}
+.jf-finance-kpi-detail-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .78rem;
+    font-weight: 780;
+}
+.jf-finance-kpi-detail-meta {
+    color: var(--jf-muted);
+    font-size: .62rem;
+}
+.jf-finance-kpi-detail-amount {
+    min-width: 6rem;
+    font-size: .78rem;
+    font-weight: 850;
+    text-align: right;
+    white-space: nowrap;
+}
+@media (max-width: 560px) {
+    .jf-finance-kpi-detail-summary {
+        grid-template-columns: 1fr;
+    }
+    .jf-finance-kpi-detail-row {
+        grid-template-columns: 4.7rem minmax(0, 1fr) auto;
+        grid-template-areas:
+            "date name amount"
+            "date meta actions";
+        gap: .15rem .35rem;
+    }
+    .jf-finance-kpi-detail-date {grid-area: date;}
+    .jf-finance-kpi-detail-name {grid-area: name;}
+    .jf-finance-kpi-detail-meta {grid-area: meta;}
+    .jf-finance-kpi-detail-amount {grid-area: amount;}
+    .jf-finance-kpi-detail-actions {grid-area: actions; justify-self: end;}
+}
+
 .jf-finance-kpi-value {
     justify-self: end;
     min-width: 0;
@@ -700,6 +795,21 @@ def _tag_options(user_id):
         for row in list_tags(user_id)
     }
 
+def _quick_category_options(user_id):
+    return {
+        None: "Aucune",
+        **_category_options(user_id),
+        ADD_CATEGORY_OPTION: "+ Ajouter une catégorie…",
+    }
+
+
+def _quick_tag_options(user_id):
+    return {
+        **_tag_options(user_id),
+        ADD_TAG_OPTION: "+ Ajouter une étiquette…",
+    }
+
+
 def _payment_options(
     user_id,
     include_none=True,
@@ -1131,6 +1241,312 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                     user_id
                 )
 
+                def open_kpi_detail(
+                    dimension,
+                    selected_kpi,
+                    transaction_type,
+                ):
+                    selected_id = selected_kpi.get("id")
+                    selected_name = selected_kpi["name"]
+
+                    def matches(row):
+                        if row["transaction_type"] != transaction_type:
+                            return False
+
+                        if dimension == "category":
+                            row_category_id = row.get("category_id")
+                            if selected_id is None:
+                                return row_category_id is None
+                            return (
+                                row_category_id is not None
+                                and int(row_category_id) == int(selected_id)
+                            )
+
+                        row_tag_ids = [
+                            int(value)
+                            for value in (row.get("tag_ids") or [])
+                            if value is not None
+                        ]
+                        if selected_id is not None:
+                            return int(selected_id) in row_tag_ids
+
+                        return selected_name.casefold() in {
+                            str(value).casefold()
+                            for value in (row.get("tag_names") or [])
+                        }
+
+                    detail_rows = sorted(
+                        (
+                            row
+                            for row in projection["transactions"]
+                            if matches(row)
+                        ),
+                        key=lambda row: (
+                            row["projection_bucket"] != "realized",
+                            row["transaction_date"],
+                            str(row["description"]).casefold(),
+                        ),
+                    )
+
+                    realized_rows = [
+                        row
+                        for row in detail_rows
+                        if row["projection_bucket"] == "realized"
+                    ]
+                    upcoming_rows = [
+                        row
+                        for row in detail_rows
+                        if row["projection_bucket"] == "upcoming"
+                    ]
+                    realized_total = sum(
+                        (
+                            Decimal(row["amount"])
+                            for row in realized_rows
+                        ),
+                        Decimal("0.00"),
+                    )
+                    upcoming_total = sum(
+                        (
+                            Decimal(row["amount"])
+                            for row in upcoming_rows
+                        ),
+                        Decimal("0.00"),
+                    )
+
+                    with ui.dialog() as dialog:
+                        with ui.card().classes(
+                            "w-full max-w-4xl p-4"
+                        ):
+                            with ui.row().classes(
+                                "w-full items-start justify-between gap-2"
+                            ):
+                                with ui.column().classes("gap-0 min-w-0"):
+                                    ui.label(
+                                        selected_name
+                                    ).classes(
+                                        "text-xl font-bold"
+                                    ).tooltip(
+                                        selected_name
+                                    )
+                                    ui.label(
+                                        (
+                                            f"{_month_label(month_state['value'])} — "
+                                            + (
+                                                "Catégorie"
+                                                if dimension == "category"
+                                                else "Étiquette"
+                                            )
+                                        )
+                                    ).classes(
+                                        "text-sm jf-muted"
+                                    )
+                                ui.button(
+                                    icon="close",
+                                    on_click=dialog.close,
+                                ).props(
+                                    "flat round dense"
+                                )
+
+                            with ui.element("div").classes(
+                                "jf-finance-kpi-detail-summary mt-2"
+                            ):
+                                for label, value, css in (
+                                    (
+                                        "Réalisé",
+                                        realized_total,
+                                        (
+                                            "jf-finance-expense"
+                                            if transaction_type == "expense"
+                                            else "jf-finance-income"
+                                        ),
+                                    ),
+                                    (
+                                        "À venir",
+                                        upcoming_total,
+                                        "jf-muted",
+                                    ),
+                                    (
+                                        "Total prévu",
+                                        realized_total + upcoming_total,
+                                        (
+                                            "jf-finance-expense"
+                                            if transaction_type == "expense"
+                                            else "jf-finance-income"
+                                        ),
+                                    ),
+                                ):
+                                    with ui.element("div").classes(
+                                        "jf-finance-summary"
+                                    ):
+                                        ui.label(label).classes(
+                                            "jf-finance-summary-label"
+                                        )
+                                        ui.label(
+                                            _money(value)
+                                        ).classes(
+                                            "jf-finance-summary-value "
+                                            + css
+                                        )
+
+                            def edit_from_detail(transaction_id):
+                                transaction = get_transaction(
+                                    user_id,
+                                    transaction_id,
+                                )
+                                if not transaction:
+                                    ui.notify(
+                                        "Transaction introuvable.",
+                                        type="warning",
+                                    )
+                                    return
+                                dialog.close()
+                                _transaction_dialog(
+                                    user_id,
+                                    refresh_all,
+                                    transaction,
+                                )
+
+                            def render_detail_group(
+                                title,
+                                rows,
+                                *,
+                                empty_message,
+                            ):
+                                ui.label(title).classes(
+                                    "text-base font-bold mt-2"
+                                )
+                                if not rows:
+                                    ui.label(
+                                        empty_message
+                                    ).classes(
+                                        "text-sm jf-muted"
+                                    )
+                                    return
+
+                                with ui.element("div").classes(
+                                    "jf-finance-kpi-detail-list"
+                                ):
+                                    for row in rows:
+                                        with ui.element("div").classes(
+                                            "jf-finance-kpi-detail-row"
+                                        ):
+                                            ui.label(
+                                                row["transaction_date"].strftime(
+                                                    "%d/%m/%Y"
+                                                )
+                                            ).classes(
+                                                "jf-finance-kpi-detail-date"
+                                            )
+
+                                            with ui.column().classes(
+                                                "gap-0 min-w-0"
+                                            ):
+                                                ui.label(
+                                                    row["description"]
+                                                ).classes(
+                                                    "jf-finance-kpi-detail-name"
+                                                ).tooltip(
+                                                    row["description"]
+                                                )
+                                                meta_parts = []
+                                                if dimension == "category":
+                                                    meta_parts.extend(
+                                                        row.get("tag_names")
+                                                        or []
+                                                    )
+                                                else:
+                                                    if row.get(
+                                                        "category_full_name"
+                                                    ):
+                                                        meta_parts.append(
+                                                            row[
+                                                                "category_full_name"
+                                                            ]
+                                                        )
+                                                if row.get(
+                                                    "payment_method_name"
+                                                ):
+                                                    meta_parts.append(
+                                                        row[
+                                                            "payment_method_name"
+                                                        ]
+                                                    )
+                                                if row.get("projected"):
+                                                    meta_parts.append(
+                                                        "Récurrence projetée"
+                                                    )
+                                                elif row.get("status") == "planned":
+                                                    meta_parts.append(
+                                                        "À confirmer"
+                                                    )
+                                                ui.label(
+                                                    " • ".join(meta_parts)
+                                                    or "Transaction"
+                                                ).classes(
+                                                    "jf-finance-kpi-detail-meta"
+                                                )
+
+                                            ui.label(
+                                                _money(row["amount"])
+                                            ).classes(
+                                                "jf-finance-kpi-detail-amount "
+                                                + (
+                                                    "jf-finance-expense"
+                                                    if transaction_type == "expense"
+                                                    else "jf-finance-income"
+                                                )
+                                            )
+
+                                            with ui.element("div").classes(
+                                                "jf-finance-kpi-detail-actions"
+                                            ):
+                                                if (
+                                                    row.get("id") is not None
+                                                    and not row.get("projected")
+                                                ):
+                                                    ui.button(
+                                                        icon="edit",
+                                                        on_click=(
+                                                            lambda _event=None,
+                                                            selected_id=int(
+                                                                row["id"]
+                                                            ):
+                                                            edit_from_detail(
+                                                                selected_id
+                                                            )
+                                                        ),
+                                                    ).props(
+                                                        "flat dense round "
+                                                        "size=sm color=primary"
+                                                    ).tooltip(
+                                                        "Ouvrir la transaction"
+                                                    )
+                                                else:
+                                                    ui.icon(
+                                                        "visibility"
+                                                    ).classes(
+                                                        "text-sm jf-muted"
+                                                    ).tooltip(
+                                                        "Projection consultative"
+                                                    )
+
+                            render_detail_group(
+                                "Réalisé",
+                                realized_rows,
+                                empty_message=(
+                                    "Aucune transaction réalisée."
+                                ),
+                            )
+                            render_detail_group(
+                                "À venir",
+                                upcoming_rows,
+                                empty_message=(
+                                    "Aucune transaction à venir."
+                                ),
+                            )
+
+                    dialog.open()
+
                 with dashboard_box:
                     with ui.row().classes(
                         "w-full items-center "
@@ -1440,6 +1856,8 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         *,
                         empty_message,
                         color_class,
+                        dimension,
+                        transaction_type,
                     ):
                         with ui.element("section").classes(
                             "jf-finance-card"
@@ -1476,12 +1894,28 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     with ui.element("div").classes(
                                         "jf-finance-kpi-row"
                                     ):
-                                        ui.label(
-                                            row["name"]
+                                        ui.button(
+                                            row["name"],
+                                            on_click=(
+                                                lambda _event=None,
+                                                selected=dict(row),
+                                                selected_dimension=dimension,
+                                                selected_type=transaction_type:
+                                                open_kpi_detail(
+                                                    selected_dimension,
+                                                    selected,
+                                                    selected_type,
+                                                )
+                                            ),
+                                        ).props(
+                                            "flat dense no-caps"
                                         ).classes(
-                                            "jf-finance-kpi-name"
+                                            "jf-finance-kpi-link"
                                         ).tooltip(
-                                            row["name"]
+                                            (
+                                                "Voir les transactions — "
+                                                + row["name"]
+                                            )
                                         )
                                         ui.label(
                                             _money(row["realized"])
@@ -1534,6 +1968,8 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     "Aucune transaction catégorisée."
                                 ),
                                 color_class=color_class,
+                                dimension="category",
+                                transaction_type=transaction_type,
                             )
                             render_kpi_table(
                                 "Par étiquette",
@@ -1542,6 +1978,8 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     "Aucune transaction étiquetée."
                                 ),
                                 color_class=color_class,
+                                dimension="tag",
+                                transaction_type=transaction_type,
                             )
 
                         if transaction_type == "expense":
@@ -1757,12 +2195,9 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                     "w-full gap-2 flex-wrap"
                 ):
                     category = ui.select(
-                        {
-                            None: "Aucune",
-                            **_category_options(
-                                user_id
-                            ),
-                        },
+                        _quick_category_options(
+                            user_id
+                        ),
                         label=(
                             "Catégorie ou "
                             "sous-catégorie"
@@ -1786,7 +2221,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                     )
 
                 tags = ui.select(
-                    _tag_options(
+                    _quick_tag_options(
                         user_id
                     ),
                     label="Étiquettes",
@@ -1796,6 +2231,267 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                     "clearable options-dense"
                 ).classes(
                     "w-full"
+                )
+
+                def quick_parent_options():
+                    options = {
+                        None: "Catégorie principale",
+                    }
+                    current_type = kind.value or "expense"
+                    for row in list_categories(user_id):
+                        if row.get("parent_id") is not None:
+                            continue
+                        if row.get("category_type") not in (
+                            "both",
+                            current_type,
+                        ):
+                            continue
+                        options[int(row["id"])] = row["name"]
+                    return options
+
+                def open_quick_category_dialog():
+                    with ui.dialog() as dialog:
+                        with ui.card().classes(
+                            "w-full max-w-lg p-4"
+                        ):
+                            ui.label(
+                                "Ajouter une catégorie"
+                            ).classes(
+                                "text-xl font-bold"
+                            )
+                            ui.label(
+                                "La nouvelle catégorie sera créée "
+                                "et sélectionnée pour la transaction en cours."
+                            ).classes(
+                                "text-sm jf-muted"
+                            )
+
+                            new_name = ui.input(
+                                label="Nom de la catégorie",
+                                placeholder="Ex. Pharmacie",
+                            ).props(
+                                "dense outlined maxlength=100 autofocus"
+                            ).classes(
+                                "w-full mt-2"
+                            )
+
+                            parent = ui.select(
+                                quick_parent_options(),
+                                value=None,
+                                label=(
+                                    "Sous-catégorie de "
+                                    "(facultatif)"
+                                ),
+                            ).props(
+                                "dense outlined clearable options-dense"
+                            ).classes(
+                                "w-full"
+                            )
+
+                            ui.label(
+                                "Les différences de majuscules, "
+                                "d’accents et d’espaces sont reconnues "
+                                "afin d’éviter les doublons évidents."
+                            ).classes(
+                                "text-xs jf-muted"
+                            )
+
+                            def save_new_category():
+                                try:
+                                    result = (
+                                        get_or_create_finance_category(
+                                            user_id,
+                                            new_name.value,
+                                            parent_id=parent.value,
+                                            category_type=(
+                                                kind.value
+                                                or "expense"
+                                            ),
+                                        )
+                                    )
+                                except Exception as error:
+                                    ui.notify(
+                                        str(error),
+                                        type="warning",
+                                    )
+                                    return
+
+                                category.options = (
+                                    _quick_category_options(
+                                        user_id
+                                    )
+                                )
+                                category.value = result["id"]
+                                category.update()
+                                dialog.close()
+
+                                ui.notify(
+                                    (
+                                        "Catégorie créée et sélectionnée."
+                                        if result["created"]
+                                        else (
+                                            "Cette catégorie existait déjà; "
+                                            "elle a été sélectionnée."
+                                        )
+                                    ),
+                                    type=(
+                                        "positive"
+                                        if result["created"]
+                                        else "info"
+                                    ),
+                                )
+                                render_dashboard.refresh()
+
+                            with ui.row().classes(
+                                "w-full justify-end gap-2 mt-2"
+                            ):
+                                ui.button(
+                                    "Annuler",
+                                    on_click=dialog.close,
+                                ).props("flat")
+                                ui.button(
+                                    "Ajouter",
+                                    icon="add",
+                                    on_click=save_new_category,
+                                ).props(
+                                    "color=primary"
+                                )
+
+                    dialog.open()
+
+                def category_quick_changed(event):
+                    if event.value != ADD_CATEGORY_OPTION:
+                        return
+                    category.value = None
+                    category.update()
+                    open_quick_category_dialog()
+
+                category.on_value_change(
+                    category_quick_changed
+                )
+
+                def open_quick_tag_dialog(
+                    selected_before,
+                ):
+                    with ui.dialog() as dialog:
+                        with ui.card().classes(
+                            "w-full max-w-lg p-4"
+                        ):
+                            ui.label(
+                                "Ajouter une étiquette"
+                            ).classes(
+                                "text-xl font-bold"
+                            )
+                            ui.label(
+                                "Les étiquettes déjà sélectionnées "
+                                "seront conservées."
+                            ).classes(
+                                "text-sm jf-muted"
+                            )
+
+                            new_name = ui.input(
+                                label="Nom de l’étiquette",
+                                placeholder="Ex. Vacances 2026",
+                            ).props(
+                                "dense outlined maxlength=80 autofocus"
+                            ).classes(
+                                "w-full mt-2"
+                            )
+
+                            ui.label(
+                                "Les différences de majuscules, "
+                                "d’accents et d’espaces sont reconnues "
+                                "afin d’éviter les doublons évidents."
+                            ).classes(
+                                "text-xs jf-muted"
+                            )
+
+                            def save_new_tag():
+                                try:
+                                    result = get_or_create_finance_tag(
+                                        user_id,
+                                        new_name.value,
+                                    )
+                                except Exception as error:
+                                    ui.notify(
+                                        str(error),
+                                        type="warning",
+                                    )
+                                    return
+
+                                selected = [
+                                    int(value)
+                                    for value in selected_before
+                                    if value not in (
+                                        None,
+                                        ADD_TAG_OPTION,
+                                    )
+                                ]
+                                if result["id"] not in selected:
+                                    selected.append(
+                                        result["id"]
+                                    )
+
+                                tags.options = (
+                                    _quick_tag_options(
+                                        user_id
+                                    )
+                                )
+                                tags.value = selected
+                                tags.update()
+                                dialog.close()
+
+                                ui.notify(
+                                    (
+                                        "Étiquette créée et sélectionnée."
+                                        if result["created"]
+                                        else (
+                                            "Cette étiquette existait déjà; "
+                                            "elle a été sélectionnée."
+                                        )
+                                    ),
+                                    type=(
+                                        "positive"
+                                        if result["created"]
+                                        else "info"
+                                    ),
+                                )
+                                render_dashboard.refresh()
+
+                            with ui.row().classes(
+                                "w-full justify-end gap-2 mt-2"
+                            ):
+                                ui.button(
+                                    "Annuler",
+                                    on_click=dialog.close,
+                                ).props("flat")
+                                ui.button(
+                                    "Ajouter",
+                                    icon="add",
+                                    on_click=save_new_tag,
+                                ).props(
+                                    "color=primary"
+                                )
+
+                    dialog.open()
+
+                def tags_quick_changed(event):
+                    selected = list(event.value or [])
+                    if ADD_TAG_OPTION not in selected:
+                        return
+                    selected = [
+                        value
+                        for value in selected
+                        if value != ADD_TAG_OPTION
+                    ]
+                    tags.value = selected
+                    tags.update()
+                    open_quick_tag_dialog(
+                        selected
+                    )
+
+                tags.on_value_change(
+                    tags_quick_changed
                 )
 
                 with ui.expansion(
@@ -1851,11 +2547,21 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                 description.value
                             ),
                             category_id=(
-                                category.value
+                                None
+                                if category.value
+                                in (
+                                    None,
+                                    ADD_CATEGORY_OPTION,
+                                )
+                                else category.value
                             ),
                             tag_ids=(
-                                tags.value
-                                or []
+                                [
+                                    value
+                                    for value
+                                    in (tags.value or [])
+                                    if value != ADD_TAG_OPTION
+                                ]
                             ),
                             payment_method_id=(
                                 payment_method.value
@@ -4870,15 +5576,14 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
         # Actualiser les listes déjà visibles après l’ajout ou
         # la modification d’une catégorie, d’une étiquette ou
         # d’un mode de paiement.
-        category.options = {
-            None: "Aucune",
-            **_category_options(
+        category.options = (
+            _quick_category_options(
                 user_id
-            ),
-        }
+            )
+        )
         category.update()
 
-        tags.options = _tag_options(
+        tags.options = _quick_tag_options(
             user_id
         )
         tags.update()

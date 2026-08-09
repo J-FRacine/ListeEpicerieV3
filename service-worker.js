@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jf-apps-pwa-v2-uniformisation';
+const CACHE_NAME = 'jf-apps-pwa-v3-notifications';
 
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
@@ -61,4 +61,62 @@ self.addEventListener('fetch', (event) => {
         .then((cached) => cached || fetch(request))
     );
   }
+});
+
+
+self.addEventListener('push', (event) => {
+  let payload = {};
+
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (error) {
+    payload = {};
+  }
+
+  const title = payload.title || 'JF Apps';
+  const options = {
+    body: payload.body || 'Une notification est disponible.',
+    icon: '/assets/pwa-icon-192.png',
+    badge: '/assets/favicon-64.png',
+    tag: payload.tag || 'jf-apps-notification',
+    renotify: false,
+    data: {
+      url: payload.url || '/'
+    }
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const targetUrl =
+    (event.notification.data && event.notification.data.url)
+      ? event.notification.data.url
+      : '/';
+
+  event.waitUntil(
+    self.clients
+      .matchAll({
+        type: 'window',
+        includeUncontrolled: true
+      })
+      .then((clientList) => {
+        for (const client of clientList) {
+          if ('focus' in client) {
+            client.navigate(targetUrl);
+            return client.focus();
+          }
+        }
+
+        if (self.clients.openWindow) {
+          return self.clients.openWindow(targetUrl);
+        }
+
+        return undefined;
+      })
+  );
 });

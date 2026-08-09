@@ -678,6 +678,152 @@ def save_tag(user_id, name, tag_id=None):
             conn.commit()
 
 
+
+
+def _normalized_lookup_name(value):
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(
+        character
+        for character in text
+        if not unicodedata.combining(character)
+    )
+    return " ".join(text.casefold().split())
+
+
+def get_or_create_finance_category(
+    user_id,
+    name,
+    *,
+    parent_id=None,
+    category_type="both",
+):
+    """Crée une catégorie depuis la saisie rapide ou réutilise un doublon évident."""
+
+    normalized_name = _normalized_lookup_name(
+        _text(name, "Le nom", 100, True)
+    )
+    normalized_parent = (
+        int(parent_id)
+        if parent_id not in (None, "")
+        else None
+    )
+
+    for row in list_categories(
+        user_id,
+        include_inactive=True,
+    ):
+        row_parent = (
+            int(row["parent_id"])
+            if row.get("parent_id") is not None
+            else None
+        )
+        if (
+            row_parent == normalized_parent
+            and _normalized_lookup_name(row["name"])
+            == normalized_name
+        ):
+            category_id = int(row["id"])
+            if not row.get("is_active", True):
+                toggle_category(
+                    user_id,
+                    category_id,
+                    True,
+                )
+            return {
+                "id": category_id,
+                "created": False,
+                "name": row["name"],
+                "full_name": row["full_name"],
+            }
+
+    save_category(
+        user_id,
+        name,
+        parent_id=normalized_parent,
+        category_type=category_type,
+    )
+
+    for row in list_categories(
+        user_id,
+        include_inactive=True,
+    ):
+        row_parent = (
+            int(row["parent_id"])
+            if row.get("parent_id") is not None
+            else None
+        )
+        if (
+            row_parent == normalized_parent
+            and _normalized_lookup_name(row["name"])
+            == normalized_name
+        ):
+            return {
+                "id": int(row["id"]),
+                "created": True,
+                "name": row["name"],
+                "full_name": row["full_name"],
+            }
+
+    raise RuntimeError(
+        "La catégorie a été créée, mais elle n’a pas pu être relue."
+    )
+
+
+def get_or_create_finance_tag(
+    user_id,
+    name,
+):
+    """Crée une étiquette depuis la saisie rapide ou réutilise un doublon évident."""
+
+    normalized_name = _normalized_lookup_name(
+        _text(name, "Le nom", 80, True)
+    )
+
+    for row in list_tags(
+        user_id,
+        include_inactive=True,
+    ):
+        if (
+            _normalized_lookup_name(row["name"])
+            == normalized_name
+        ):
+            tag_id = int(row["id"])
+            if not row.get("is_active", True):
+                toggle_tag(
+                    user_id,
+                    tag_id,
+                    True,
+                )
+            return {
+                "id": tag_id,
+                "created": False,
+                "name": row["name"],
+            }
+
+    save_tag(
+        user_id,
+        name,
+    )
+
+    for row in list_tags(
+        user_id,
+        include_inactive=True,
+    ):
+        if (
+            _normalized_lookup_name(row["name"])
+            == normalized_name
+        ):
+            return {
+                "id": int(row["id"]),
+                "created": True,
+                "name": row["name"],
+            }
+
+    raise RuntimeError(
+        "L’étiquette a été créée, mais elle n’a pas pu être relue."
+    )
+
+
 def toggle_tag(user_id, tag_id, is_active):
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -1861,13 +2007,20 @@ def _projection_kpis(rows, transaction_type, limit=12):
             else "realized"
         )
 
+        category_id = row.get("category_id")
         category_name = (
             row.get("category_full_name")
             or "Sans catégorie"
         )
+        category_key = (
+            int(category_id)
+            if category_id is not None
+            else None
+        )
         category = category_values.setdefault(
-            category_name,
+            category_key,
             {
+                "id": category_key,
                 "name": category_name,
                 "realized": Decimal("0.00"),
                 "upcoming": Decimal("0.00"),
@@ -1877,10 +2030,24 @@ def _projection_kpis(rows, transaction_type, limit=12):
         category[bucket] += amount
         category["transaction_count"] += 1
 
-        for tag_name in row.get("tag_names") or []:
+        tag_ids = list(row.get("tag_ids") or [])
+        tag_names = list(row.get("tag_names") or [])
+        for index, tag_name in enumerate(tag_names):
+            tag_id = (
+                int(tag_ids[index])
+                if index < len(tag_ids)
+                and tag_ids[index] is not None
+                else None
+            )
+            tag_key = (
+                ("id", tag_id)
+                if tag_id is not None
+                else ("name", str(tag_name).casefold())
+            )
             tag = tag_values.setdefault(
-                tag_name,
+                tag_key,
                 {
+                    "id": tag_id,
                     "name": tag_name,
                     "realized": Decimal("0.00"),
                     "upcoming": Decimal("0.00"),
@@ -2126,6 +2293,7 @@ def dashboard_month_projection(
             ),
         },
         "upcoming_transactions": upcoming_rows,
+        "transactions": combined,
         "kpis": {
             "expense": _projection_kpis(
                 combined,
@@ -4680,7 +4848,7 @@ def export_finances(user_id):
 
     payload = {
         "format": "JF Apps Finances",
-        "version": "1.4.0",
+        "version": "1.5.0",
         "categories": [
             serial(
                 dict(row)

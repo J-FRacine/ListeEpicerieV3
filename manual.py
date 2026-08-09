@@ -154,7 +154,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.4.1",
+        "title": "Finances — V1.5.0",
         "icon": "account_balance_wallet",
         "caption": "Dépenses, prévisions mensuelles et conciliation",
         "keywords": (
@@ -162,7 +162,8 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "sous-catégories étiquettes objectifs report csv json "
             "paiement conciliation carte crédit KPI relevé "
             "solde prévu cumulatif séance historique ajustement "
-            "postdaté à venir total prévu projection"
+            "postdaté à venir total prévu projection "
+            "cliquable détail transaction ajouter catégorie étiquette saisie rapide"
         ),
         "content": """
 ### Objectif de la V1
@@ -191,6 +192,14 @@ La saisie permet d’enregistrer :
 - un statut de conciliation.
 
 Les champs principaux sont compacts pour faciliter l’utilisation sur téléphone.
+
+La **Saisie rapide** permet aussi de créer une catégorie ou une étiquette sans quitter la transaction en cours.
+
+Dans la liste de catégories, choisissez **+ Ajouter une catégorie…**. Une fenêtre permet d’inscrire le nouveau nom et, au besoin, de le rattacher à une catégorie principale pour en faire une sous-catégorie. La catégorie créée est immédiatement sélectionnée.
+
+Dans la liste d’étiquettes, choisissez **+ Ajouter une étiquette…**. Les étiquettes déjà sélectionnées sont conservées et la nouvelle étiquette est ajoutée à la transaction en cours.
+
+Avant de créer un nouvel élément, JF Apps compare les noms en ignorant les différences évidentes de majuscules, d’accents et d’espaces. Lorsqu’un élément correspondant existe déjà, il est simplement réactivé au besoin et sélectionné.
 
 ### Catégories, sous-catégories et étiquettes
 
@@ -268,6 +277,10 @@ Les KPI par catégorie et par étiquette utilisent les colonnes :
 - Total prévu.
 
 Les dépenses et les revenus sont présentés dans des blocs distincts. Les noms trop longs sont tronqués, mais le nom complet demeure disponible au survol.
+
+Le nom d’une **catégorie** ou d’une **étiquette** est cliquable. La fenêtre de détail affiche les transactions du mois correspondant à cette ligne, séparées en **Réalisé** et **À venir**, avec les trois totaux.
+
+Une transaction réelle peut être ouverte depuis cette fenêtre pour consulter ou modifier sa fiche. Une récurrence future qui n’a pas encore créé de transaction demeure consultative et porte l’indication **Récurrence projetée**.
 
 Une transaction portant plusieurs étiquettes peut apparaître dans plusieurs lignes. Les montants par étiquette ne doivent pas être additionnés pour obtenir le total général.
 
@@ -421,14 +434,15 @@ La version de l’application apparaît près de son nom. Le Portail contient au
 """,
     },
     {
-        "title": "Journal de pression — V1.1.1",
+        "title": "Journal de pression — V1.2.0",
         "icon": "monitor_heart",
-        "caption": "Saisir, consulter et imprimer les mesures",
+        "caption": "Saisie, moyennes, rappels et notifications privées",
         "keywords": (
             "pression artérielle systolique diastolique pouls "
             "date heure appareil privé note historique pdf rapport "
             "aucune donnée courriel csv json import export "
-            "sauvegarde doublon données"
+            "sauvegarde doublon données moyenne intervalle "
+            "notification push appareil heure limite rappel"
         ),
         "content": """
 ### Données privées
@@ -445,7 +459,7 @@ Dans l’onglet **Saisie** :
 4. ajoutez éventuellement une note;
 5. utilisez **Enregistrer**.
 
-Il est possible d’enregistrer plus de deux mesures dans une même journée. La phase 1 ne calcule aucune moyenne et ne présente aucun graphique.
+Il est possible d’enregistrer plus de deux mesures dans une même journée. Toutes les mesures peuvent être incluses dans le calcul des moyennes de l’intervalle choisi. Cette version ne présente pas encore de graphique.
 
 ### Horaires et rappel sur le Portail
 
@@ -455,7 +469,8 @@ L’onglet **Rappel** permet de définir :
 - une date de fin;
 - l’activation ou la désactivation de l’avis;
 - une ou plusieurs prises quotidiennes;
-- un nom et une plage horaire pour chaque prise.
+- un nom et une plage horaire pour chaque prise;
+- une heure de notification facultative pour chaque prise.
 
 Exemple :
 
@@ -492,9 +507,25 @@ Le bouton **Saisir maintenant** ouvre directement l’onglet **Saisie**. La date
 
 Le bouton **Enregistrer et revenir au Portail** permet d’enregistrer la mesure puis de retourner immédiatement à la page d’accueil.
 
-Ce rappel est seulement un avis visuel dans le Portail. Il ne produit pas de notification poussée sur le téléphone.
+### Notifications sur l’appareil
 
-### Historique
+Le Journal peut aussi utiliser les notifications **Web Push** de la PWA.
+
+Dans l’onglet **Rappel**, chaque prise possède une option **Notification sur l’appareil** et une heure **Avis appareil à**. Lorsque cette heure est atteinte, le serveur vérifie d’abord combien de mesures ont réellement été enregistrées dans la journée.
+
+La règle reste la même que pour le Portail : les mesures sont associées chronologiquement aux prises prévues. Par exemple, si la première mesure de la journée existe déjà, aucune notification n’est envoyée pour la première prise, même si cette mesure a été enregistrée hors de sa plage horaire.
+
+L’activation se fait séparément avec **Activer sur cet appareil**. Chaque téléphone, tablette ou ordinateur peut donc être activé ou désactivé indépendamment.
+
+Le fuseau horaire de l’appareil est conservé avec son abonnement afin que l’heure de notification reste une heure locale.
+
+La notification ne contient aucune valeur médicale. Le texte utilisé est volontairement générique :
+
+**Journal de pression — Une mesure est prévue.**
+
+Le navigateur doit autoriser les notifications et la PWA doit pouvoir utiliser les notifications Web Push. Sur les appareils où cette fonction n’est pas offerte, le rappel visuel du Portail continue de fonctionner normalement.
+
+### Historique et moyennes
 
 L’onglet **Historique** permet de choisir une plage de dates, puis de consulter, modifier ou supprimer les mesures du compte connecté.
 
@@ -504,6 +535,15 @@ Chaque fiche affiche :
 - la pression systolique et diastolique;
 - le pouls;
 - la note facultative.
+
+Pour la même plage de dates, un encadré **Moyennes de l’intervalle** affiche :
+
+- la moyenne de la pression systolique;
+- la moyenne de la pression diastolique;
+- la moyenne du pouls;
+- le nombre total de mesures utilisées.
+
+Le calcul utilise toutes les mesures réellement enregistrées entre les deux dates inclusivement. Les journées sans mesure n’ajoutent aucune valeur fictive au calcul.
 
 ### Exportation et sauvegarde privée
 
@@ -519,7 +559,8 @@ Le JSON conserve aussi :
 - l’état du rappel;
 - la période du rappel;
 - le nombre de prises quotidiennes;
-- le nom et les heures de chaque plage.
+- le nom et les heures de chaque plage;
+- l’activation et l’heure de notification de chaque prise.
 
 Les fichiers appartiennent uniquement à l’utilisateur connecté. Ils doivent être conservés dans un emplacement privé.
 

@@ -14,13 +14,52 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.1",
-    "blood_pressure": "1.1.1",
-    "finances": "1.4.1",
+    "blood_pressure": "1.2.0",
+    "finances": "1.5.0",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.5.0",
+        "date": "2026-08-09",
+        "title": "Finances — KPI cliquables et création rapide",
+        "summary": (
+            "Les catégories et étiquettes du Tableau ouvrent maintenant "
+            "leurs transactions et peuvent être créées directement pendant la saisie."
+        ),
+        "changes": [
+            "Noms de catégories et d’étiquettes cliquables dans les KPI.",
+            "Fenêtre de détail avec Réalisé, À venir et Total prévu.",
+            "Transactions réelles accessibles depuis le détail; projections de récurrence laissées en consultation.",
+            "Option Ajouter une catégorie directement dans la Saisie rapide.",
+            "Création facultative d’une sous-catégorie sous une catégorie principale.",
+            "Option Ajouter une étiquette sans perdre les étiquettes déjà sélectionnées.",
+            "Détection des doublons évidents en ignorant la casse, les accents et les espaces superflus.",
+        ],
+    },
+    {
+        "app_key": "blood_pressure",
+        "version": "1.2.0",
+        "date": "2026-08-09",
+        "title": "Journal de pression — moyennes et notifications",
+        "summary": (
+            "Ajout des moyennes sur une plage de dates et des notifications "
+            "Web Push lorsqu’une prise attendue n’est toujours pas complétée."
+        ),
+        "changes": [
+            "Moyenne systolique, diastolique et du pouls pour l’intervalle choisi.",
+            "Nombre de mesures utilisées dans le calcul affiché avec les moyennes.",
+            "Heure de notification configurable pour chaque prise quotidienne.",
+            "Activation et désactivation des notifications séparément sur chaque appareil.",
+            "Vérification serveur des mesures avant tout envoi afin d’éviter les avis inutiles.",
+            "Notification volontairement générique sans valeur médicale.",
+            "Fuseau horaire enregistré par appareil pour respecter les heures locales.",
+            "Sauvegarde JSON enrichie des heures et options de notification.",
+        ],
+    },
     {
         "app_key": "rpg",
         "version": "1.2.0",

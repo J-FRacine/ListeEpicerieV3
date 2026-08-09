@@ -13,6 +13,7 @@ from urllib.parse import quote
 from nicegui import run, ui
 
 from blood_pressure_data import (
+    blood_pressure_averages,
     count_blood_pressure_readings_on_date,
     create_blood_pressure_reading,
     delete_blood_pressure_reading,
@@ -27,6 +28,12 @@ from blood_pressure_data import (
 )
 from blood_pressure_pdf import (
     build_blood_pressure_pdf,
+)
+from blood_pressure_push import (
+    count_active_push_subscriptions,
+    deactivate_push_subscription,
+    get_vapid_public_key,
+    save_push_subscription,
 )
 
 
@@ -215,6 +222,51 @@ BLOOD_PRESSURE_CSS = r"""
 .jf-pressure-history-date .q-field__input,
 .jf-pressure-history-date .q-field__label {
     font-size: 0.82rem;
+}
+
+.jf-pressure-average-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .5rem;
+    width: 100%;
+}
+.jf-pressure-average-card {
+    min-width: 0;
+    padding: .65rem .7rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 11px;
+    background: var(--jf-surface);
+}
+.jf-pressure-average-label {
+    color: var(--jf-muted);
+    font-size: .68rem;
+}
+.jf-pressure-average-value {
+    color: var(--jf-navy);
+    font-size: 1.25rem;
+    font-weight: 850;
+    text-align: right;
+    white-space: nowrap;
+}
+.body--dark .jf-pressure-average-value {
+    color: #dceaf6;
+}
+.jf-pressure-push-card {
+    width: 100%;
+    padding: .8rem .9rem;
+    border: 1px solid var(--jf-border);
+    border-left: 4px solid var(--jf-blue);
+    border-radius: 12px;
+    background: var(--jf-blue-soft);
+}
+.jf-pressure-push-status {
+    font-size: .75rem;
+    font-weight: 800;
+}
+@media (max-width: 650px) {
+    .jf-pressure-average-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 .jf-pressure-history-list {
@@ -607,34 +659,43 @@ def _default_new_slot(
             "Matin",
             "06:00",
             "11:00",
+            "10:00",
         ),
         (
             "Soir",
             "17:00",
             "22:00",
+            "21:00",
         ),
         (
             "Après-midi",
             "12:00",
             "16:00",
+            "15:30",
         ),
     ]
 
     if index <= len(defaults):
-        label, start_time, end_time = (
-            defaults[
-                index - 1
-            ]
-        )
+        (
+            label,
+            start_time,
+            end_time,
+            notify_time,
+        ) = defaults[
+            index - 1
+        ]
     else:
         label = f"Prise {index}"
         start_time = "12:00"
         end_time = "13:00"
+        notify_time = "13:00"
 
     return {
         "label": label,
         "start_time": start_time,
         "end_time": end_time,
+        "notify_enabled": True,
+        "notify_time": notify_time,
     }
 
 
@@ -1556,6 +1617,101 @@ def blood_pressure_panel(
                     )
                     return
 
+                try:
+                    averages = blood_pressure_averages(
+                        user_id,
+                        start_value or default_start,
+                        end_value or today_server,
+                    )
+                except Exception:
+                    averages = {
+                        "start_date": (
+                            start_value or default_start
+                        ),
+                        "end_date": (
+                            end_value or today_server
+                        ),
+                        "measurement_count": 0,
+                        "systolic_average": None,
+                        "diastolic_average": None,
+                        "pulse_average": None,
+                    }
+
+                with ui.card().classes(
+                    "w-full p-4 mt-2"
+                ):
+                    with ui.row().classes(
+                        "w-full items-start justify-between gap-2 flex-wrap"
+                    ):
+                        with ui.column().classes("gap-0"):
+                            ui.label(
+                                "Moyennes de l’intervalle"
+                            ).classes(
+                                "text-lg font-bold"
+                            )
+                            ui.label(
+                                (
+                                    f"Du {_date_text(averages['start_date'])} "
+                                    f"au {_date_text(averages['end_date'])}"
+                                )
+                            ).classes(
+                                "text-xs jf-muted"
+                            )
+
+                    if averages["measurement_count"] <= 0:
+                        ui.label(
+                            "Aucune mesure disponible pour calculer une moyenne."
+                        ).classes(
+                            "text-sm jf-muted mt-2"
+                        )
+                    else:
+                        def average_text(value):
+                            if value is None:
+                                return "—"
+                            return (
+                                f"{float(value):.1f}"
+                                .replace(".", ",")
+                            )
+
+                        with ui.element("div").classes(
+                            "jf-pressure-average-grid mt-2"
+                        ):
+                            for label, value in (
+                                (
+                                    "Systolique moyenne",
+                                    average_text(
+                                        averages["systolic_average"]
+                                    ),
+                                ),
+                                (
+                                    "Diastolique moyenne",
+                                    average_text(
+                                        averages["diastolic_average"]
+                                    ),
+                                ),
+                                (
+                                    "Pouls moyen",
+                                    average_text(
+                                        averages["pulse_average"]
+                                    ),
+                                ),
+                                (
+                                    "Mesures utilisées",
+                                    str(
+                                        averages["measurement_count"]
+                                    ),
+                                ),
+                            ):
+                                with ui.element("div").classes(
+                                    "jf-pressure-average-card"
+                                ):
+                                    ui.label(label).classes(
+                                        "jf-pressure-average-label"
+                                    )
+                                    ui.label(value).classes(
+                                        "jf-pressure-average-value"
+                                    )
+
                 if not readings:
                     with ui.card().classes(
                         "w-full p-5 items-center "
@@ -2014,8 +2170,8 @@ def blood_pressure_panel(
 
                 reminder_enabled_input = ui.checkbox(
                     (
-                        "Afficher un avis sur le Portail "
-                        "lorsqu’une prise reste à faire"
+                        "Activer les rappels "
+                        "(Portail et notifications)"
                     ),
                     value=bool(
                         reminder_settings[
@@ -2074,6 +2230,22 @@ def blood_pressure_panel(
                         "end_time": (
                             _time_text(
                                 slot[
+                                    "end_time"
+                                ]
+                            )
+                        ),
+                        "notify_enabled": bool(
+                            slot.get(
+                                "notify_enabled",
+                                True,
+                            )
+                        ),
+                        "notify_time": (
+                            _time_text(
+                                slot.get(
+                                    "notify_time"
+                                )
+                                or slot[
                                     "end_time"
                                 ]
                             )
@@ -2228,39 +2400,89 @@ def blood_pressure_panel(
                                         "w-full"
                                     )
 
-                                    label_input.on_value_change(
-                                        (
-                                            lambda event,
-                                            selected=index:
-                                            update_slot(
-                                                selected,
-                                                "label",
-                                                event.value,
-                                            )
+                                    notify_input = ui.input(
+                                        label="Avis appareil à",
+                                        value=slot[
+                                            "notify_time"
+                                        ],
+                                    ).props(
+                                        "type=time step=60"
+                                    ).classes(
+                                        "w-full"
+                                    )
+
+                                notify_enabled_input = ui.checkbox(
+                                    (
+                                        "Notification sur l’appareil "
+                                        "si cette prise n’est toujours "
+                                        "pas complétée"
+                                    ),
+                                    value=bool(
+                                        slot[
+                                            "notify_enabled"
+                                        ]
+                                    ),
+                                ).classes(
+                                    "mt-1"
+                                )
+
+                                label_input.on_value_change(
+                                    (
+                                        lambda event,
+                                        selected=index:
+                                        update_slot(
+                                            selected,
+                                            "label",
+                                            event.value,
                                         )
                                     )
-                                    start_input.on_value_change(
-                                        (
-                                            lambda event,
-                                            selected=index:
-                                            update_slot(
-                                                selected,
-                                                "start_time",
-                                                event.value,
-                                            )
+                                )
+                                start_input.on_value_change(
+                                    (
+                                        lambda event,
+                                        selected=index:
+                                        update_slot(
+                                            selected,
+                                            "start_time",
+                                            event.value,
                                         )
                                     )
-                                    end_input.on_value_change(
-                                        (
-                                            lambda event,
-                                            selected=index:
-                                            update_slot(
-                                                selected,
-                                                "end_time",
-                                                event.value,
-                                            )
+                                )
+                                end_input.on_value_change(
+                                    (
+                                        lambda event,
+                                        selected=index:
+                                        update_slot(
+                                            selected,
+                                            "end_time",
+                                            event.value,
                                         )
                                     )
+                                )
+                                notify_input.on_value_change(
+                                    (
+                                        lambda event,
+                                        selected=index:
+                                        update_slot(
+                                            selected,
+                                            "notify_time",
+                                            event.value,
+                                        )
+                                    )
+                                )
+                                notify_enabled_input.on_value_change(
+                                    (
+                                        lambda event,
+                                        selected=index:
+                                        update_slot(
+                                            selected,
+                                            "notify_enabled",
+                                            bool(
+                                                event.value
+                                            ),
+                                        )
+                                    )
+                                )
 
                 render_slots()
 
@@ -2425,6 +2647,18 @@ def blood_pressure_panel(
                                             ).classes(
                                                 "text-xs jf-muted"
                                             )
+                                            if slot.get(
+                                                "notify_enabled",
+                                                True,
+                                            ):
+                                                ui.label(
+                                                    (
+                                                        "Avis appareil à "
+                                                        f"{_time_text(slot.get('notify_time') or slot['end_time'])}"
+                                                    )
+                                                ).classes(
+                                                    "text-xs jf-muted"
+                                                )
 
                                         if slot[
                                             "status"
@@ -2516,13 +2750,328 @@ def blood_pressure_panel(
                         "outline color=primary"
                     )
 
-                ui.label(
-                    "L’avis est affiché dans la grande carte "
-                    "de bienvenue du Portail. Il ne s’agit "
-                    "pas d’une notification poussée."
-                ).classes(
-                    "text-xs jf-muted"
-                )
+                with ui.element("div").classes(
+                    "jf-pressure-push-card mt-3"
+                ):
+                    with ui.row().classes(
+                        "w-full items-start justify-between gap-2 flex-wrap"
+                    ):
+                        with ui.column().classes(
+                            "gap-0 min-w-0"
+                        ):
+                            ui.label(
+                                "Notifications sur l’appareil"
+                            ).classes(
+                                "font-bold"
+                            )
+                            ui.label(
+                                (
+                                    "Après l’heure choisie pour une prise, "
+                                    "JF Apps vérifie d’abord vos mesures "
+                                    "avant d’envoyer un avis."
+                                )
+                            ).classes(
+                                "text-sm jf-muted"
+                            )
+
+                        push_count_label = ui.label(
+                            (
+                                f"{count_active_push_subscriptions(user_id)} "
+                                "appareil(s) actif(s)"
+                            )
+                        ).classes(
+                            "jf-pressure-push-status text-primary"
+                        )
+
+                    ui.label(
+                        (
+                            "Le texte de la notification reste générique : "
+                            "« Journal de pression — Une mesure est prévue. »"
+                        )
+                    ).classes(
+                        "text-xs jf-muted mt-1"
+                    )
+
+                    async def activate_device_notifications():
+                        try:
+                            public_key = get_vapid_public_key()
+                            result = await ui.run_javascript(
+                                f"""
+                                const publicKey = {json.dumps(public_key)};
+
+                                function jfUrlBase64ToUint8Array(base64String) {{
+                                    const padding = '='.repeat(
+                                        (4 - base64String.length % 4) % 4
+                                    );
+                                    const base64 = (
+                                        base64String
+                                            .replace(/-/g, '+')
+                                            .replace(/_/g, '/')
+                                            + padding
+                                    );
+                                    const rawData = window.atob(base64);
+                                    return Uint8Array.from(
+                                        [...rawData].map(
+                                            (char) => char.charCodeAt(0)
+                                        )
+                                    );
+                                }}
+
+                                if (
+                                    !('serviceWorker' in navigator)
+                                    || !('PushManager' in window)
+                                    || !('Notification' in window)
+                                ) {{
+                                    return {{status: 'unsupported'}};
+                                }}
+
+                                const permission =
+                                    await Notification.requestPermission();
+
+                                if (permission !== 'granted') {{
+                                    return {{
+                                        status: permission || 'denied'
+                                    }};
+                                }}
+
+                                const registration =
+                                    await navigator.serviceWorker.ready;
+
+                                let subscription =
+                                    await registration.pushManager
+                                        .getSubscription();
+
+                                if (!subscription) {{
+                                    subscription =
+                                        await registration.pushManager
+                                            .subscribe({{
+                                                userVisibleOnly: true,
+                                                applicationServerKey:
+                                                    jfUrlBase64ToUint8Array(
+                                                        publicKey
+                                                    ),
+                                            }});
+                                }}
+
+                                return {{
+                                    status: 'subscribed',
+                                    subscription: subscription.toJSON(),
+                                    timezone:
+                                        Intl.DateTimeFormat()
+                                            .resolvedOptions()
+                                            .timeZone
+                                        || 'UTC',
+                                    userAgent:
+                                        navigator.userAgent
+                                        || '',
+                                }};
+                                """,
+                                timeout=45.0,
+                            )
+                        except Exception as error:
+                            ui.notify(
+                                (
+                                    "L’activation des notifications "
+                                    f"a échoué : {error}"
+                                ),
+                                type="negative",
+                                timeout=10000,
+                            )
+                            return
+
+                        status_value = (
+                            result.get("status")
+                            if isinstance(
+                                result,
+                                dict,
+                            )
+                            else None
+                        )
+
+                        if status_value == "subscribed":
+                            try:
+                                save_push_subscription(
+                                    user_id,
+                                    result.get(
+                                        "subscription"
+                                    )
+                                    or {},
+                                    timezone_name=(
+                                        result.get(
+                                            "timezone"
+                                        )
+                                        or "UTC"
+                                    ),
+                                    user_agent=(
+                                        result.get(
+                                            "userAgent"
+                                        )
+                                    ),
+                                )
+                            except Exception as error:
+                                ui.notify(
+                                    str(error),
+                                    type="negative",
+                                    timeout=10000,
+                                )
+                                return
+
+                            push_count_label.set_text(
+                                (
+                                    f"{count_active_push_subscriptions(user_id)} "
+                                    "appareil(s) actif(s)"
+                                )
+                            )
+                            ui.notify(
+                                (
+                                    "Notifications activées sur "
+                                    "cet appareil."
+                                ),
+                                type="positive",
+                            )
+                            return
+
+                        messages = {
+                            "denied": (
+                                "Le navigateur a refusé "
+                                "l’autorisation de notification."
+                            ),
+                            "default": (
+                                "L’autorisation de notification "
+                                "n’a pas été accordée."
+                            ),
+                            "unsupported": (
+                                "Les notifications Web Push ne sont "
+                                "pas disponibles dans ce navigateur "
+                                "ou dans ce mode d’utilisation."
+                            ),
+                        }
+                        ui.notify(
+                            messages.get(
+                                status_value,
+                                (
+                                    "Les notifications n’ont pas "
+                                    "pu être activées."
+                                ),
+                            ),
+                            type="warning",
+                            timeout=10000,
+                        )
+
+                    async def deactivate_device_notifications():
+                        try:
+                            result = await ui.run_javascript(
+                                """
+                                if (
+                                    !('serviceWorker' in navigator)
+                                    || !('PushManager' in window)
+                                ) {
+                                    return {status: 'unsupported'};
+                                }
+
+                                const registration =
+                                    await navigator.serviceWorker.ready;
+                                const subscription =
+                                    await registration.pushManager
+                                        .getSubscription();
+
+                                if (!subscription) {
+                                    return {status: 'none'};
+                                }
+
+                                const endpoint = subscription.endpoint;
+                                const success =
+                                    await subscription.unsubscribe();
+
+                                return {
+                                    status: (
+                                        success
+                                        ? 'unsubscribed'
+                                        : 'failed'
+                                    ),
+                                    endpoint: endpoint,
+                                };
+                                """,
+                                timeout=30.0,
+                            )
+                        except Exception as error:
+                            ui.notify(
+                                (
+                                    "La désactivation des notifications "
+                                    f"a échoué : {error}"
+                                ),
+                                type="negative",
+                            )
+                            return
+
+                        if (
+                            isinstance(result, dict)
+                            and result.get("endpoint")
+                        ):
+                            deactivate_push_subscription(
+                                user_id,
+                                result["endpoint"],
+                            )
+
+                        status_value = (
+                            result.get("status")
+                            if isinstance(
+                                result,
+                                dict,
+                            )
+                            else None
+                        )
+
+                        if status_value in (
+                            "unsubscribed",
+                            "none",
+                        ):
+                            push_count_label.set_text(
+                                (
+                                    f"{count_active_push_subscriptions(user_id)} "
+                                    "appareil(s) actif(s)"
+                                )
+                            )
+                            ui.notify(
+                                (
+                                    "Notifications désactivées "
+                                    "sur cet appareil."
+                                    if status_value == "unsubscribed"
+                                    else (
+                                        "Aucun abonnement de notification "
+                                        "n’était actif sur cet appareil."
+                                    )
+                                ),
+                                type="info",
+                            )
+                        else:
+                            ui.notify(
+                                "La désactivation n’a pas été confirmée.",
+                                type="warning",
+                            )
+
+                    with ui.row().classes(
+                        "gap-2 flex-wrap mt-2"
+                    ):
+                        ui.button(
+                            "Activer sur cet appareil",
+                            icon="notifications_active",
+                            on_click=(
+                                activate_device_notifications
+                            ),
+                        ).props(
+                            "outline color=primary"
+                        )
+
+                        ui.button(
+                            "Désactiver sur cet appareil",
+                            icon="notifications_off",
+                            on_click=(
+                                deactivate_device_notifications
+                            ),
+                        ).props(
+                            "flat color=secondary"
+                        )
 
                 reminder_guard = ui.element("span").classes("hidden")
 

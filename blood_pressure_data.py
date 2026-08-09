@@ -163,6 +163,27 @@ def init_blood_pressure_schema():
 
             cur.execute(
                 """
+                ALTER TABLE blood_pressure_reminder_slots
+                ADD COLUMN IF NOT EXISTS notify_enabled BOOLEAN
+                    NOT NULL DEFAULT TRUE;
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE blood_pressure_reminder_slots
+                ADD COLUMN IF NOT EXISTS notify_time TIME;
+                """
+            )
+            cur.execute(
+                """
+                UPDATE blood_pressure_reminder_slots
+                SET notify_time = end_time
+                WHERE notify_time IS NULL;
+                """
+            )
+
+            cur.execute(
+                """
                 CREATE INDEX IF NOT EXISTS
                 blood_pressure_reminder_slots_user_idx
                 ON blood_pressure_reminder_slots (
@@ -505,6 +526,75 @@ def list_blood_pressure_readings(
             return cur.fetchall()
 
 
+
+
+def blood_pressure_averages(
+    user_id,
+    start_date,
+    end_date,
+):
+    """Calcule les moyennes de toutes les mesures d’un intervalle."""
+
+    normalized_start = _normalize_date(
+        start_date
+    )
+    normalized_end = _normalize_date(
+        end_date
+    )
+
+    if normalized_end < normalized_start:
+        raise ValueError(
+            "La date de fin doit être égale ou postérieure à la date de début."
+        )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    COUNT(*) AS measurement_count,
+                    AVG(systolic) AS systolic_average,
+                    AVG(diastolic) AS diastolic_average,
+                    AVG(pulse) AS pulse_average
+                FROM blood_pressure_readings
+                WHERE user_id = %s
+                  AND measured_date >= %s
+                  AND measured_date <= %s;
+                """,
+                (
+                    user_id,
+                    normalized_start,
+                    normalized_end,
+                ),
+            )
+            row = cur.fetchone()
+
+    return {
+        "start_date": normalized_start,
+        "end_date": normalized_end,
+        "measurement_count": int(
+            row["measurement_count"]
+            if row
+            else 0
+        ),
+        "systolic_average": (
+            row["systolic_average"]
+            if row
+            else None
+        ),
+        "diastolic_average": (
+            row["diastolic_average"]
+            if row
+            else None
+        ),
+        "pulse_average": (
+            row["pulse_average"]
+            if row
+            else None
+        ),
+    }
+
+
 def count_blood_pressure_readings_on_date(
     user_id,
     measured_date,
@@ -666,7 +756,7 @@ def export_blood_pressure_data(user_id):
     json_payload = {
         "application": "JF Apps",
         "module": "Journal de pression",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "exported_at": datetime.now().astimezone().isoformat(),
         "readings": [
             {
@@ -692,6 +782,16 @@ def export_blood_pressure_data(user_id):
                     "label": slot["label"],
                     "start_time": _serializable(slot["start_time"]),
                     "end_time": _serializable(slot["end_time"]),
+                    "notify_enabled": bool(
+                        slot.get(
+                            "notify_enabled",
+                            True,
+                        )
+                    ),
+                    "notify_time": _serializable(
+                        slot.get("notify_time")
+                        or slot["end_time"]
+                    ),
                     "sort_order": int(slot.get("sort_order") or index),
                 }
                 for index, slot in enumerate(
@@ -1147,6 +1247,11 @@ def _default_reminder_slots(
                     hour=22,
                     minute=0,
                 ),
+                "notify_enabled": True,
+                "notify_time": time(
+                    hour=21,
+                    minute=0,
+                ),
                 "sort_order": 1,
             }
         ]
@@ -1163,6 +1268,11 @@ def _default_reminder_slots(
                     hour=11,
                     minute=0,
                 ),
+                "notify_enabled": True,
+                "notify_time": time(
+                    hour=10,
+                    minute=0,
+                ),
                 "sort_order": 1,
             },
             {
@@ -1173,6 +1283,11 @@ def _default_reminder_slots(
                 ),
                 "end_time": time(
                     hour=22,
+                    minute=0,
+                ),
+                "notify_enabled": True,
+                "notify_time": time(
+                    hour=21,
                     minute=0,
                 ),
                 "sort_order": 2,
@@ -1191,6 +1306,11 @@ def _default_reminder_slots(
                     hour=10,
                     minute=0,
                 ),
+                "notify_enabled": True,
+                "notify_time": time(
+                    hour=9,
+                    minute=30,
+                ),
                 "sort_order": 1,
             },
             {
@@ -1203,6 +1323,11 @@ def _default_reminder_slots(
                     hour=16,
                     minute=0,
                 ),
+                "notify_enabled": True,
+                "notify_time": time(
+                    hour=15,
+                    minute=30,
+                ),
                 "sort_order": 2,
             },
             {
@@ -1213,6 +1338,11 @@ def _default_reminder_slots(
                 ),
                 "end_time": time(
                     hour=22,
+                    minute=0,
+                ),
+                "notify_enabled": True,
+                "notify_time": time(
+                    hour=21,
                     minute=0,
                 ),
                 "sort_order": 3,
@@ -1264,6 +1394,15 @@ def _default_reminder_slots(
                         end_minutes % 60
                     ),
                 ),
+                "notify_enabled": True,
+                "notify_time": time(
+                    hour=(
+                        end_minutes // 60
+                    ),
+                    minute=(
+                        end_minutes % 60
+                    ),
+                ),
                 "sort_order": (
                     index + 1
                 ),
@@ -1284,6 +1423,8 @@ def _fetch_reminder_slots(
             label,
             start_time,
             end_time,
+            notify_enabled,
+            notify_time,
             sort_order,
             created_at,
             updated_at
@@ -1312,9 +1453,13 @@ def _insert_reminder_slots(
             label,
             start_time,
             end_time,
+            notify_enabled,
+            notify_time,
             sort_order
         )
         VALUES (
+            %s,
+            %s,
             %s,
             %s,
             %s,
@@ -1328,6 +1473,14 @@ def _insert_reminder_slots(
                 slot["label"],
                 slot["start_time"],
                 slot["end_time"],
+                bool(
+                    slot.get(
+                        "notify_enabled",
+                        True,
+                    )
+                ),
+                slot.get("notify_time")
+                or slot["end_time"],
                 slot["sort_order"],
             )
             for slot in slots
@@ -1415,11 +1568,33 @@ def _normalize_reminder_slots(
                 "après son heure de début."
             )
 
+        notify_enabled = bool(
+            slot.get(
+                "notify_enabled",
+                True,
+            )
+        )
+        notify_time = _normalize_time(
+            slot.get("notify_time")
+            or end_time
+        )
+
+        if (
+            notify_enabled
+            and notify_time < start_time
+        ):
+            raise ValueError(
+                f"L’heure de notification de « {label} » "
+                "doit être égale ou postérieure au début de la plage."
+            )
+
         normalized.append(
             {
                 "label": label,
                 "start_time": start_time,
                 "end_time": end_time,
+                "notify_enabled": notify_enabled,
+                "notify_time": notify_time,
             }
         )
 
@@ -1787,6 +1962,16 @@ def get_blood_pressure_reminder_status(
                 ),
                 "end_time": (
                     slot["end_time"]
+                ),
+                "notify_enabled": bool(
+                    slot.get(
+                        "notify_enabled",
+                        True,
+                    )
+                ),
+                "notify_time": (
+                    slot.get("notify_time")
+                    or slot["end_time"]
                 ),
                 "sort_order": (
                     slot["sort_order"]

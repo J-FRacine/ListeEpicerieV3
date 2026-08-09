@@ -28,6 +28,10 @@ from blood_pressure import (
 from blood_pressure_data import (
     init_blood_pressure_schema,
 )
+from blood_pressure_push import (
+    init_blood_pressure_push_schema,
+    start_blood_pressure_push_monitor,
+)
 from categories import categories_panel
 from db import (
     create_first_admin,
@@ -2705,9 +2709,14 @@ init_db()
 init_grocery_preferences_schema()
 init_app_access_schema()
 init_blood_pressure_schema()
+init_blood_pressure_push_schema()
 init_rpg_character_schema()
 init_feedback_schema()
 init_finances_schema()
+
+app.on_startup(
+    start_blood_pressure_push_monitor
+)
 
 storage_secret = os.getenv("STORAGE_SECRET")
 

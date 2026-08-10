@@ -1,96 +1,151 @@
-JF APPS — FINANCES V1.6.0
-=========================
+============================================================
+JF APPS — FINANCES V1.6.1
+Budget lié aux récurrences + transactions programmées + rappels
+============================================================
 
-BASE UTILISÉE
-- Finances V1.5.0, confirmée fonctionnelle en usage réel.
-- Les fichiers communs conservent Journal de pression V1.2.1.
+BASE
+- Développé à partir de Finances V1.6.0.
+- Journal de pression demeure en V1.2.1.
+- Aucun script SQL manuel requis.
+- Aucune nouvelle dépendance Python requise.
 
-FICHIERS COMPLETS À REMPLACER À LA RACINE DU DÉPÔT GITHUB
+FICHIERS COMPLETS À REMPLACER À LA RACINE DE GITHUB
 - finances.py
 - finances_data.py
+- blood_pressure_push.py
+- blood_pressure.py
 - app_versions.py
 - manual.py
 
-Aucun script SQL manuel n'est requis.
-Aucune nouvelle dépendance Python n'est requise.
-Les nouvelles colonnes et la table de budget sont créées automatiquement au démarrage.
+POURQUOI blood_pressure_push.py ET blood_pressure.py SONT INCLUS
+Le système Web Push de JF Apps est partagé entre Journal de pression et Finances.
+V1.6.1 ajoute un canal Finances indépendant : désactiver Finances ne désactive
+plus le Journal de pression, et inversement.
 
-NOUVEAUTÉS — ONGLET COMPTE
-- Utilise les modes de paiement de type « Compte bancaire ».
-- Le solde de référence et sa date servent de point de départ.
-- Affiche pour le mois choisi :
-  * Solde de départ
-  * Solde actuel
-  * Plus bas prévu
-  * Solde fin de mois
-- Affiche les entrées/sorties chronologiquement et le solde après chaque mouvement.
-- Projette les transactions prévues, postdatées et les récurrences futures.
-- Vue annuelle des 12 mois avec solde de fin et minimum prévu.
-- Les mois antérieurs à la date de référence du compte restent indisponibles plutôt que d'inventer un solde.
+============================================================
+1. BUDGET LIÉ AUX RÉCURRENCES
+============================================================
 
-NOUVEAUTÉS — ONGLET BUDGET
-- Budget global séparé des Objectifs mensuels.
-- Ligne de revenu ou de dépense.
-- Saisie mensuelle ou aux deux semaines.
-- Conversion sur 26 paies par année :
-  * Aux 2 semaines x 26 / 12 = mensuel
-  * Mensuel x 12 / 26 = aux 2 semaines
-- Montant par paie personnalisé facultatif lorsqu'une ligne est saisie mensuellement.
-- Totaux : revenus, dépenses, reste mensuel et reste par paie.
-- Activation/désactivation, réorganisation et modification des lignes.
+Dans Budget > Ajouter/Modifier un poste :
+- choisir facultativement une « Récurrence associée »;
+- activer « Synchroniser automatiquement le montant avec la récurrence ».
 
-NOUVEAUTÉ — HORS BUDGET
-- Disponible dans les transactions et les récurrences.
-- À utiliser notamment pour :
-  * paiement d'une carte de crédit;
-  * transfert entre comptes;
-  * déplacement vers ou depuis l'épargne.
-- Le mouvement continue d'affecter le solde du compte bancaire associé.
-- Il est exclu des dépenses/revenus budgétaires, KPI et objectifs pour éviter le double comptage.
-- La mention apparaît dans l'Historique, les prévisions et les récurrences.
+Quand la synchronisation est active :
+- une récurrence mensuelle alimente le montant mensuel;
+- une récurrence toutes les 2 semaines alimente le montant aux deux semaines;
+- les autres fréquences sont converties en moyenne mensuelle;
+- une modification ultérieure du montant ou de la fréquence de la récurrence
+  met à jour le poste Budget lié;
+- le montant par paie personnalisé reste disponible pour une ligne mensuelle.
 
-TABLEAU
-- Lorsqu'un compte bancaire est configuré avec un solde et une date de référence,
-  le Tableau montre aussi : Solde de départ, Solde actuel, Plus bas prévu et Fin de mois prévue.
-- Un bouton mène directement à l'onglet Compte.
+Une même récurrence ne peut être liée qu’à un seul poste Budget.
+Les postes sans transaction précise peuvent rester « Budget seulement ».
 
-EXPORT / IMPORT
-- Le CSV et le JSON incluent l'indicateur « Hors budget ».
-- Le JSON V1.6.0 inclut les lignes du Budget global.
-- Une sauvegarde JSON V1.6.0 peut restaurer ces lignes de budget.
+============================================================
+2. TRANSACTION PROGRAMMÉE À LA BANQUE
+============================================================
 
-COMPATIBILITÉ V1.5.0
-- Toutes les transactions et récurrences existantes reçoivent implicitement Hors budget = Non.
-- Les fonctions existantes (KPI cliquables, création rapide de catégories/étiquettes,
-  conciliation, objectifs, récurrences, import Spendee, CSV/JSON) sont conservées.
+Pour une transaction Prévue ou une récurrence :
+- cocher « Programmée dans le compte bancaire » lorsque le paiement/mouvement
+  a déjà été planifié auprès de la banque;
+- l’élément reste Prévu dans JF Apps jusqu’à confirmation;
+- l’indicateur apparaît dans Compte, Historique et Récurrences.
 
+Pour une transaction déjà Confirmée, cet indicateur n’est pas conservé.
+
+============================================================
+3. RAPPELS DE TRANSACTIONS
+============================================================
+
+Pour une transaction Prévue :
+- cocher « Me rappeler cette transaction le jour prévu »;
+- choisir l’heure du rappel (09:00 par défaut).
+
+Pour une récurrence :
+- cocher « Me rappeler chaque occurrence le jour prévu »;
+- choisir l’heure du rappel.
+
+Règles :
+- la notification est envoyée le jour prévu selon le fuseau horaire de l’appareil;
+- si la transaction a déjà été confirmée, le rappel n’est pas envoyé;
+- une récurrence peut être rappelée même si son occurrence n’a pas encore été
+  matérialisée dans l’Historique;
+- si une occurrence matérialisée existe, ses réglages prennent priorité;
+- un seul rappel est enregistré par transaction/récurrence, date et appareil.
+
+Texte volontairement discret :
+Finances
+Une transaction prévue nécessite votre attention.
+
+Le clic ouvre Finances > Historique.
+
+============================================================
+4. ACTIVATION SUR L’APPAREIL
+============================================================
+
+Dans Finances > Compte :
+- « Activer sur cet appareil »;
+- « Désactiver sur cet appareil ».
+
+Le Web Push de JF Apps est partagé techniquement, mais les canaux sont séparés :
+- canal Journal de pression;
+- canal Finances.
+
+Donc désactiver les rappels Finances ne désactive pas ceux du Journal de pression.
+
+Sur iPhone/iPad : utiliser JF Apps ajoutée à l’écran d’accueil et autoriser les
+notifications, comme pour Journal de pression.
+
+============================================================
+5. EXPORT / SAUVEGARDE
+============================================================
+
+CSV et JSON des transactions contiennent maintenant :
+- Programmée à la banque;
+- Rappel actif;
+- Heure du rappel.
+
+Le JSON continue aussi de contenir les récurrences et les postes Budget.
+
+============================================================
 INSTALLATION
-1. Ouvrir le dépôt GitHub JF Apps.
-2. Choisir Add file > Upload files.
-3. Déposer les quatre fichiers .py ensemble à la racine.
-4. Faire Commit changes.
-5. Laisser Canner redéployer l'application.
-6. Sur ordinateur : faire un rechargement complet (Ctrl+F5).
-7. Sur téléphone/PWA : fermer complètement JF Apps puis la rouvrir.
-8. Vérifier que Finances affiche V1.6.0.
-9. Vérifier que Journal de pression affiche toujours V1.2.1.
+============================================================
 
-CONFIGURATION DU COMPTE BANCAIRE
-1. Finances > Organisation > Modes de paiement.
-2. Modifier « Direct » ou créer un nouveau mode.
-3. Type : Compte bancaire.
-4. Inscrire le solde réel à une date connue.
-5. Inscrire cette date comme date de référence.
-6. Enregistrer.
-7. Utiliser ensuite ce mode de paiement pour les mouvements qui passent réellement par ce compte.
+1. GitHub > Add file > Upload files.
+2. Déposer les 6 fichiers .py ensemble à la racine du dépôt.
+3. Faire Commit changes.
+4. Attendre le redéploiement Canner.
+5. Sur ordinateur : Ctrl+F5.
+6. Sur téléphone/PWA : fermer complètement JF Apps puis la rouvrir.
+7. Vérifier que Finances affiche V1.6.1.
 
-TESTS CONSEILLÉS APRÈS DÉPLOIEMENT
-1. Ouvrir Compte et vérifier le solde de référence.
-2. Ajouter une petite dépense sur le compte et confirmer que le solde baisse.
-3. Ajouter un revenu et confirmer que le solde augmente.
-4. Créer une transaction « Paiement carte » sur le compte avec Hors budget activé :
-   elle doit affecter le solde du compte mais ne pas augmenter les dépenses du Tableau/KPI.
-5. Budget : créer un revenu de 2 412 $ aux deux semaines : le mensuel doit être 5 226 $.
-6. Budget : créer une dépense de 1 015 $/mois et inscrire 515 $ comme montant par paie personnalisé.
-7. Vérifier la vue annuelle du Compte et ouvrir un mois en cliquant dessus.
-8. Vérifier une récurrence future associée au compte : elle doit apparaître dans la prévision.
+============================================================
+TESTS RECOMMANDÉS APRÈS DÉPLOIEMENT
+============================================================
+
+A. Budget lié
+1. Créer ou choisir une récurrence mensuelle de test.
+2. Lier un poste Budget à cette récurrence avec synchronisation active.
+3. Modifier le montant de la récurrence.
+4. Vérifier que le montant Budget suit la modification.
+
+B. Programmée à la banque
+1. Créer une transaction future avec statut Prévue.
+2. Cocher Programmée dans le compte bancaire.
+3. Vérifier le libellé dans Compte et Historique.
+
+C. Notification
+1. Dans Compte, cliquer Activer sur cet appareil et autoriser les notifications.
+2. Créer une transaction Prévue pour aujourd’hui.
+3. Activer le rappel et choisir une heure déjà atteinte ou très proche.
+4. Laisser la transaction Prévue.
+5. Le contrôle serveur s’effectue environ toutes les 5 minutes.
+6. Vérifier la notification Finances.
+7. Refaire le test en confirmant la transaction avant l’heure : aucun rappel ne
+   doit être envoyé.
+
+D. Canaux indépendants
+1. Si Journal de pression est aussi activé, désactiver Finances sur l’appareil.
+2. Vérifier que le Journal de pression conserve son canal de notification.
+
+============================================================

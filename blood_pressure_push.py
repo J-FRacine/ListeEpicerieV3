@@ -4,7 +4,8 @@ import asyncio
 import base64
 import json
 import os
-from datetime import datetime, timezone
+from calendar import monthrange
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from cryptography.hazmat.primitives import serialization
@@ -105,6 +106,21 @@ def init_blood_pressure_push_schema():
                         NOT NULL DEFAULT NOW(),
                     UNIQUE (endpoint)
                 );
+                """
+            )
+
+            cur.execute(
+                """
+                ALTER TABLE blood_pressure_push_subscriptions
+                ADD COLUMN IF NOT EXISTS pressure_enabled BOOLEAN
+                NOT NULL DEFAULT TRUE;
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE blood_pressure_push_subscriptions
+                ADD COLUMN IF NOT EXISTS finance_enabled BOOLEAN
+                NOT NULL DEFAULT FALSE;
                 """
             )
 
@@ -239,6 +255,7 @@ def save_push_subscription(
     *,
     timezone_name="UTC",
     user_agent=None,
+    channel="pressure",
 ):
     endpoint = str(
         (subscription or {}).get("endpoint")
@@ -261,6 +278,8 @@ def save_push_subscription(
         raise ValueError(
             "L’abonnement de notification fourni par le navigateur est incomplet."
         )
+    if channel not in {"pressure", "finance"}:
+        raise ValueError("Canal de notification invalide.")
 
     timezone_text = str(
         timezone_name
@@ -290,6 +309,8 @@ def save_push_subscription(
                     timezone_name,
                     user_agent,
                     is_active,
+                    pressure_enabled,
+                    finance_enabled,
                     last_error,
                     updated_at
                 )
@@ -301,6 +322,8 @@ def save_push_subscription(
                     %s,
                     %s,
                     TRUE,
+                    %s,
+                    %s,
                     NULL,
                     NOW()
                 )
@@ -312,6 +335,14 @@ def save_push_subscription(
                     timezone_name = EXCLUDED.timezone_name,
                     user_agent = EXCLUDED.user_agent,
                     is_active = TRUE,
+                    pressure_enabled = CASE
+                        WHEN %s = 'pressure' THEN TRUE
+                        ELSE blood_pressure_push_subscriptions.pressure_enabled
+                    END,
+                    finance_enabled = CASE
+                        WHEN %s = 'finance' THEN TRUE
+                        ELSE blood_pressure_push_subscriptions.finance_enabled
+                    END,
                     last_error = NULL,
                     updated_at = NOW()
                 RETURNING id;
@@ -323,12 +354,46 @@ def save_push_subscription(
                     auth,
                     timezone_text,
                     user_agent_text,
+                    channel == "pressure",
+                    channel == "finance",
+                    channel,
+                    channel,
                 ),
             )
             row = cur.fetchone()
             conn.commit()
 
     return int(row["id"])
+
+
+def set_push_channel_enabled(
+    user_id,
+    endpoint,
+    channel,
+    enabled,
+):
+    if channel not in {"pressure", "finance"}:
+        raise ValueError("Canal de notification invalide.")
+    endpoint_text = str(endpoint or "").strip()
+    if not endpoint_text:
+        return False
+    column = "pressure_enabled" if channel == "pressure" else "finance_enabled"
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                UPDATE blood_pressure_push_subscriptions
+                SET {column}=%s,
+                    is_active=CASE WHEN %s THEN TRUE ELSE is_active END,
+                    updated_at=NOW()
+                WHERE user_id=%s AND endpoint=%s
+                RETURNING id;
+                """,
+                (bool(enabled), bool(enabled), user_id, endpoint_text),
+            )
+            row = cur.fetchone()
+            conn.commit()
+    return row is not None
 
 
 def deactivate_push_subscription(
@@ -381,6 +446,8 @@ def list_push_subscriptions(
                     timezone_name,
                     user_agent,
                     is_active,
+                    pressure_enabled,
+                    finance_enabled,
                     last_success_at,
                     last_error,
                     created_at,
@@ -404,17 +471,19 @@ def list_push_subscriptions(
             return cur.fetchall()
 
 
-def count_active_push_subscriptions(
-    user_id,
-) -> int:
+def count_active_push_subscriptions(user_id, channel="pressure"):
+    if channel not in {"pressure", "finance"}:
+        raise ValueError("Canal de notification invalide.")
+    column = "pressure_enabled" if channel == "pressure" else "finance_enabled"
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT COUNT(*) AS total
                 FROM blood_pressure_push_subscriptions
-                WHERE user_id = %s
-                  AND is_active = TRUE;
+                WHERE user_id=%s
+                  AND is_active=TRUE
+                  AND {column}=TRUE;
                 """,
                 (user_id,),
             )
@@ -434,7 +503,9 @@ def _active_subscriptions():
                     p256dh,
                     auth,
                     timezone_name,
-                    user_agent
+                    user_agent,
+                    pressure_enabled,
+                    finance_enabled
                 FROM blood_pressure_push_subscriptions
                 WHERE is_active = TRUE
                 ORDER BY user_id, id;
@@ -567,6 +638,9 @@ def _due_slots_for_subscription(
     subscription,
     now_utc,
 ):
+    if not bool(subscription.get("pressure_enabled", True)):
+        return (datetime.now(timezone.utc).date(), [])
+
     timezone_name = (
         subscription.get("timezone_name")
         or "UTC"
@@ -659,162 +733,356 @@ def _due_slots_for_subscription(
     )
 
 
+
+def _init_finance_push_schema():
+    """Ajoute le suivi des notifications Finances sans dupliquer les abonnements Web Push."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS finance_push_deliveries (
+                    id BIGSERIAL PRIMARY KEY,
+                    subscription_id BIGINT NOT NULL
+                        REFERENCES blood_pressure_push_subscriptions(id)
+                        ON DELETE CASCADE,
+                    user_id INTEGER NOT NULL
+                        REFERENCES users(id)
+                        ON DELETE CASCADE,
+                    source_type TEXT NOT NULL
+                        CHECK (source_type IN ('transaction', 'recurrence')),
+                    source_id BIGINT NOT NULL,
+                    occurrence_date DATE NOT NULL,
+                    sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE (
+                        subscription_id,
+                        source_type,
+                        source_id,
+                        occurrence_date
+                    )
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS finance_push_deliveries_user_idx
+                ON finance_push_deliveries (
+                    user_id,
+                    occurrence_date DESC
+                );
+                """
+            )
+            conn.commit()
+
+
+def _finance_delivery_exists(subscription_id, source_type, source_id, occurrence_date):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM finance_push_deliveries
+                WHERE subscription_id=%s
+                  AND source_type=%s
+                  AND source_id=%s
+                  AND occurrence_date=%s;
+                """,
+                (subscription_id, source_type, source_id, occurrence_date),
+            )
+            return cur.fetchone() is not None
+
+
+def _record_finance_delivery(subscription_id, user_id, item):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO finance_push_deliveries (
+                    subscription_id,
+                    user_id,
+                    source_type,
+                    source_id,
+                    occurrence_date
+                )
+                VALUES (%s,%s,%s,%s,%s)
+                ON CONFLICT DO NOTHING;
+                """,
+                (
+                    subscription_id,
+                    user_id,
+                    item["source_type"],
+                    item["source_id"],
+                    item["occurrence_date"],
+                ),
+            )
+            conn.commit()
+
+
+def _month_delta(start_date, target_date):
+    return (
+        (target_date.year - start_date.year) * 12
+        + target_date.month
+        - start_date.month
+    )
+
+
+def _recurrence_occurs_on_date(row, target_date):
+    start_date = row["start_date"]
+    end_date = row.get("end_date")
+    if target_date < start_date or (end_date and target_date > end_date):
+        return False
+    interval = int(row.get("frequency_interval") or 1)
+    unit = row["frequency_unit"]
+    if unit == "day":
+        return (target_date - start_date).days % interval == 0
+    if unit == "week":
+        return (target_date - start_date).days % (7 * interval) == 0
+    months = _month_delta(start_date, target_date)
+    if months < 0:
+        return False
+    if unit == "month":
+        if months % interval != 0:
+            return False
+    elif unit == "year":
+        if months % (12 * interval) != 0:
+            return False
+    else:
+        return False
+    expected_day = min(start_date.day, monthrange(target_date.year, target_date.month)[1])
+    return target_date.day == expected_day
+
+
+def _finance_due_items_for_subscription(subscription, now_utc):
+    if not bool(subscription.get("finance_enabled", False)):
+        return []
+    timezone_name = subscription.get("timezone_name") or "UTC"
+    try:
+        local_zone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        local_zone = ZoneInfo("UTC")
+    local_now = now_utc.astimezone(local_zone)
+    local_date = local_now.date()
+    local_time = local_now.time().replace(second=0, microsecond=0)
+    user_id = int(subscription["user_id"])
+    subscription_id = int(subscription["id"])
+    due = {}
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    id,
+                    recurrence_id,
+                    transaction_date,
+                    description,
+                    amount,
+                    reminder_time
+                FROM finance_transactions
+                WHERE user_id=%s
+                  AND status='planned'
+                  AND reminder_enabled=TRUE
+                  AND transaction_date=%s
+                ORDER BY reminder_time, id;
+                """,
+                (user_id, local_date),
+            )
+            for row in cur.fetchall():
+                reminder_time = row.get("reminder_time")
+                if reminder_time and local_time < reminder_time:
+                    continue
+                source_type = "recurrence" if row.get("recurrence_id") else "transaction"
+                source_id = int(row.get("recurrence_id") or row["id"])
+                key = (source_type, source_id, local_date)
+                if _finance_delivery_exists(subscription_id, *key):
+                    continue
+                due[key] = {
+                    "source_type": source_type,
+                    "source_id": source_id,
+                    "occurrence_date": local_date,
+                    "reminder_time": reminder_time,
+                    "description": row.get("description") or "Transaction prévue",
+                }
+
+            cur.execute(
+                """
+                SELECT DISTINCT recurrence_id
+                FROM finance_transactions
+                WHERE user_id=%s
+                  AND recurrence_id IS NOT NULL
+                  AND COALESCE(occurrence_date, transaction_date)=%s;
+                """,
+                (user_id, local_date),
+            )
+            materialized_recurrences = {
+                int(row["recurrence_id"])
+                for row in cur.fetchall()
+            }
+
+            cur.execute(
+                """
+                SELECT
+                    id,
+                    start_date,
+                    end_date,
+                    frequency_unit,
+                    frequency_interval,
+                    description,
+                    reminder_time
+                FROM finance_recurrences
+                WHERE user_id=%s
+                  AND is_active=TRUE
+                  AND reminder_enabled=TRUE
+                  AND start_date<=%s
+                  AND (end_date IS NULL OR end_date>=%s)
+                ORDER BY reminder_time, id;
+                """,
+                (user_id, local_date, local_date),
+            )
+            recurrences = cur.fetchall()
+
+    for row in recurrences:
+        if int(row["id"]) in materialized_recurrences:
+            continue
+        if not _recurrence_occurs_on_date(row, local_date):
+            continue
+        reminder_time = row.get("reminder_time")
+        if reminder_time and local_time < reminder_time:
+            continue
+        key = ("recurrence", int(row["id"]), local_date)
+        if key in due or _finance_delivery_exists(subscription_id, *key):
+            continue
+        due[key] = {
+            "source_type": "recurrence",
+            "source_id": int(row["id"]),
+            "occurrence_date": local_date,
+            "reminder_time": reminder_time,
+            "description": row.get("description") or "Transaction récurrente",
+        }
+
+    return list(due.values())
+
+
+def _send_push_payload(subscription, payload, private_key, vapid_subject):
+    try:
+        webpush(
+            subscription_info={
+                "endpoint": subscription["endpoint"],
+                "keys": {
+                    "p256dh": subscription["p256dh"],
+                    "auth": subscription["auth"],
+                },
+            },
+            data=json.dumps(payload, ensure_ascii=False),
+            vapid_private_key=private_key,
+            vapid_claims={"sub": vapid_subject},
+            ttl=3600,
+            timeout=15,
+        )
+    except WebPushException as error:
+        response = getattr(error, "response", None)
+        status_code = getattr(response, "status_code", None)
+        _mark_subscription_error(
+            int(subscription["id"]),
+            error,
+            deactivate=status_code in {404, 410},
+        )
+        return False
+    except Exception as error:
+        _mark_subscription_error(int(subscription["id"]), error)
+        return False
+    _mark_subscription_success(int(subscription["id"]))
+    return True
+
+
 def process_due_push_notifications(
     now_utc=None,
 ):
-    """Envoie au maximum un avis pertinent par appareil et par passage."""
+    """Vérifie les rappels du Journal de pression et de Finances."""
 
     current_utc = (
         now_utc
-        if isinstance(
-            now_utc,
-            datetime,
-        )
-        else datetime.now(
-            timezone.utc
-        )
+        if isinstance(now_utc, datetime)
+        else datetime.now(timezone.utc)
     )
-
     if current_utc.tzinfo is None:
-        current_utc = current_utc.replace(
-            tzinfo=timezone.utc
-        )
+        current_utc = current_utc.replace(tzinfo=timezone.utc)
 
-    private_key = (
-        _get_vapid_private_key()
-    )
-    vapid_subject = (
-        os.getenv(
-            "JF_APPS_VAPID_SUBJECT"
-        )
-        or DEFAULT_VAPID_SUBJECT
-    )
+    _init_finance_push_schema()
+    private_key = _get_vapid_private_key()
+    vapid_subject = os.getenv("JF_APPS_VAPID_SUBJECT") or DEFAULT_VAPID_SUBJECT
 
     sent = 0
     skipped = 0
     failed = 0
 
     for subscription in _active_subscriptions():
-        (
-            local_date,
-            due_slots,
-        ) = _due_slots_for_subscription(
-            subscription,
-            current_utc,
-        )
-
-        if not due_slots:
-            continue
-
-        # Si le service a été interrompu longtemps, ne pas envoyer
-        # plusieurs avis d’un coup. On conserve la prise la plus récente.
-        due_slots.sort(
-            key=lambda slot: (
-                slot.get("notify_time")
-                or slot["end_time"],
-                int(slot["sort_order"]),
+        # Journal de pression : conserver au maximum le rappel le plus récent.
+        local_date, due_slots = _due_slots_for_subscription(subscription, current_utc)
+        if due_slots:
+            due_slots.sort(
+                key=lambda slot: (
+                    slot.get("notify_time") or slot["end_time"],
+                    int(slot["sort_order"]),
+                )
             )
-        )
-        selected = due_slots[-1]
+            selected = due_slots[-1]
+            for old_slot in due_slots[:-1]:
+                _record_delivery(
+                    int(subscription["id"]),
+                    int(subscription["user_id"]),
+                    local_date,
+                    old_slot,
+                    "skipped_superseded",
+                )
+                skipped += 1
 
-        for old_slot in due_slots[:-1]:
-            _record_delivery(
-                int(subscription["id"]),
-                int(subscription["user_id"]),
-                local_date,
-                old_slot,
-                "skipped_superseded",
-            )
-            skipped += 1
+            payload = {
+                "title": "Journal de pression",
+                "body": "Une mesure est prévue.",
+                "url": "/?tab=pression&section=saisie",
+                "tag": f"jf-pressure-{local_date.isoformat()}-{selected['sort_order']}",
+            }
+            if _send_push_payload(subscription, payload, private_key, vapid_subject):
+                _record_delivery(
+                    int(subscription["id"]),
+                    int(subscription["user_id"]),
+                    local_date,
+                    selected,
+                    "sent",
+                )
+                sent += 1
+            else:
+                failed += 1
 
-        payload = json.dumps(
-            {
-                "title": (
-                    "Journal de pression"
-                ),
-                "body": (
-                    "Une mesure est prévue."
-                ),
-                "url": (
-                    "/?tab=pression&section=saisie"
-                ),
+        # Finances : un rappel distinct par transaction/récurrence prévue.
+        for item in sorted(
+            _finance_due_items_for_subscription(subscription, current_utc),
+            key=lambda value: (
+                value.get("reminder_time") or datetime.min.time(),
+                value["source_type"],
+                value["source_id"],
+            ),
+        ):
+            payload = {
+                "title": "Finances",
+                "body": "Une transaction prévue nécessite votre attention.",
+                "url": "/?tab=finances&section=historique",
                 "tag": (
-                    "jf-pressure-"
-                    f"{local_date.isoformat()}-"
-                    f"{selected['sort_order']}"
+                    "jf-finance-"
+                    f"{item['source_type']}-{item['source_id']}-"
+                    f"{item['occurrence_date'].isoformat()}"
                 ),
-            },
-            ensure_ascii=False,
-        )
-
-        try:
-            webpush(
-                subscription_info={
-                    "endpoint": subscription[
-                        "endpoint"
-                    ],
-                    "keys": {
-                        "p256dh": subscription[
-                            "p256dh"
-                        ],
-                        "auth": subscription[
-                            "auth"
-                        ],
-                    },
-                },
-                data=payload,
-                vapid_private_key=(
-                    private_key
-                ),
-                vapid_claims={
-                    "sub": vapid_subject,
-                },
-                ttl=3600,
-                timeout=15,
-            )
-        except WebPushException as error:
-            response = getattr(
-                error,
-                "response",
-                None,
-            )
-            status_code = getattr(
-                response,
-                "status_code",
-                None,
-            )
-            _mark_subscription_error(
-                int(subscription["id"]),
-                error,
-                deactivate=(
-                    status_code
-                    in {
-                        404,
-                        410,
-                    }
-                ),
-            )
-            failed += 1
-            continue
-        except Exception as error:
-            _mark_subscription_error(
-                int(subscription["id"]),
-                error,
-            )
-            failed += 1
-            continue
-
-        _record_delivery(
-            int(subscription["id"]),
-            int(subscription["user_id"]),
-            local_date,
-            selected,
-            "sent",
-        )
-        _mark_subscription_success(
-            int(subscription["id"])
-        )
-        sent += 1
+            }
+            if _send_push_payload(subscription, payload, private_key, vapid_subject):
+                _record_finance_delivery(
+                    int(subscription["id"]),
+                    int(subscription["user_id"]),
+                    item,
+                )
+                sent += 1
+            else:
+                failed += 1
+                break
 
     return {
         "sent": sent,
@@ -833,8 +1101,7 @@ async def _push_monitor_loop():
             raise
         except Exception as error:
             print(
-                "Journal de pression — "
-                "vérification des notifications interrompue :",
+                "JF Apps — vérification des notifications interrompue :",
                 error,
             )
 
@@ -844,9 +1111,10 @@ async def _push_monitor_loop():
 
 
 def start_blood_pressure_push_monitor():
-    """Démarre une seule boucle de vérification dans le processus NiceGUI."""
+    """Démarre une seule boucle de vérification Web Push JF Apps."""
 
     global _PUSH_TASK
+    _init_finance_push_schema()
 
     if (
         _PUSH_TASK is not None

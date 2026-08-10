@@ -4,11 +4,18 @@ from collections import defaultdict
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+import json
 import tempfile
 
 from nicegui import ui
 
 from app_versions import version_label
+from blood_pressure_push import (
+    count_active_push_subscriptions,
+    get_vapid_public_key,
+    save_push_subscription,
+    set_push_channel_enabled,
+)
 from finances_data import (
     BUDGET_INPUT_FREQUENCIES,
     CARRY_POLICIES,
@@ -879,6 +886,22 @@ def _payment_options(
 
 
 
+def _recurrence_options(user_id):
+    options = {None: "Aucune récurrence"}
+    for row in list_recurrences(user_id):
+        unit = FREQUENCY_UNITS.get(
+            row.get("frequency_unit"),
+            str(row.get("frequency_unit") or ""),
+        ).lower()
+        interval = int(row.get("frequency_interval") or 1)
+        rhythm = unit if interval == 1 else f"{interval} {unit}s"
+        inactive = " — inactive" if not row.get("is_active") else ""
+        options[int(row["id"])] = (
+            f"{row['description']} — {_money(row['amount'])} / {rhythm}{inactive}"
+        )
+    return options
+
+
 def _transaction_dialog(
     user_id,
     on_saved,
@@ -1062,6 +1085,30 @@ def _transaction_dialog(
                     "w-full"
                 )
 
+                bank_programmed = ui.checkbox(
+                    "Programmée dans le compte bancaire",
+                    value=bool(transaction.get("bank_programmed")) if transaction else False,
+                )
+                ui.label(
+                    "Indique qu’une transaction prévue a déjà été programmée auprès de la banque. Elle reste visible comme Prévue jusqu’à sa confirmation dans JF Apps."
+                ).classes("text-xs jf-muted")
+
+                reminder_enabled = ui.checkbox(
+                    "Me rappeler cette transaction le jour prévu",
+                    value=bool(transaction.get("reminder_enabled")) if transaction else False,
+                )
+                reminder_time = ui.input(
+                    label="Heure du rappel",
+                    value=(
+                        str(transaction.get("reminder_time") or "09:00")[:5]
+                        if transaction
+                        else "09:00"
+                    ),
+                ).props("type=time dense outlined").classes("w-full")
+                ui.label(
+                    "Le rappel Web Push est envoyé le jour de la transaction si elle est encore Prévue. Active les notifications sur l’appareil dans l’onglet Compte."
+                ).classes("text-xs jf-muted")
+
                 reconciled = ui.checkbox(
                     "Transaction conciliée",
                     value=(
@@ -1143,6 +1190,9 @@ def _transaction_dialog(
                             or None
                         ),
                         budget_excluded=budget_excluded.value,
+                        bank_programmed=bank_programmed.value,
+                        reminder_enabled=reminder_enabled.value,
+                        reminder_time=reminder_time.value or "09:00",
                     )
                 except Exception as error:
                     ui.notify(
@@ -2240,6 +2290,122 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                     account_selector = ui.select(bank_options, value=selected_bank, label="Compte bancaire").props("dense outlined options-dense").classes("min-w-56 grow")
                     ui.button("Configurer les comptes", icon="settings", on_click=lambda: tabs.set_value(organization_tab)).props("flat dense color=primary")
                 ui.label("Le solde utilise les transactions dont le mode de paiement est ce compte bancaire. Un paiement de carte ou un transfert peut être Hors budget tout en continuant d’affecter le solde.").classes("text-xs jf-muted")
+            with ui.card().classes("w-full p-4"):
+                with ui.row().classes("w-full items-start justify-between gap-2 flex-wrap"):
+                    with ui.column().classes("gap-0 min-w-0"):
+                        ui.label("Notifications de transactions").classes("font-bold")
+                        ui.label(
+                            "Les rappels sont envoyés sur les appareils autorisés pour une transaction ou une récurrence encore prévue."
+                        ).classes("text-sm jf-muted")
+                    finance_push_count = ui.label(
+                        f"{count_active_push_subscriptions(user_id, "finance")} appareil(s) actif(s)"
+                    ).classes("text-primary")
+                ui.label(
+                    "La notification reste discrète : « Finances — Une transaction prévue nécessite votre attention. »"
+                ).classes("text-xs jf-muted")
+
+                async def activate_finance_notifications():
+                    try:
+                        public_key = get_vapid_public_key()
+                        result = await ui.run_javascript(
+                            f"""
+                            const publicKey = {json.dumps(public_key)};
+                            function jfUrlBase64ToUint8Array(base64String) {{
+                                const padding = '='.repeat((4 - base64String.length % 4) % 4);
+                                const base64 = base64String.replace(/-/g, '+').replace(/_/g, '/') + padding;
+                                const rawData = window.atob(base64);
+                                return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+                            }}
+                            if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {{
+                                return {{status: 'unsupported'}};
+                            }}
+                            const permission = await Notification.requestPermission();
+                            if (permission !== 'granted') {{
+                                return {{status: permission || 'denied'}};
+                            }}
+                            const registration = await navigator.serviceWorker.ready;
+                            let subscription = await registration.pushManager.getSubscription();
+                            if (!subscription) {{
+                                subscription = await registration.pushManager.subscribe({{
+                                    userVisibleOnly: true,
+                                    applicationServerKey: jfUrlBase64ToUint8Array(publicKey),
+                                }});
+                            }}
+                            return {{
+                                status: 'subscribed',
+                                subscription: subscription.toJSON(),
+                                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+                                userAgent: navigator.userAgent || '',
+                            }};
+                            """,
+                            timeout=45.0,
+                        )
+                    except Exception as error:
+                        ui.notify(f"L’activation des notifications a échoué : {error}", type="negative", timeout=10000)
+                        return
+                    status_value = result.get("status") if isinstance(result, dict) else None
+                    if status_value == "subscribed":
+                        try:
+                            save_push_subscription(
+                                user_id,
+                                result.get("subscription") or {},
+                                timezone_name=result.get("timezone") or "UTC",
+                                user_agent=result.get("userAgent"),
+                                channel="finance",
+                            )
+                        except Exception as error:
+                            ui.notify(str(error), type="negative", timeout=10000)
+                            return
+                        finance_push_count.set_text(
+                            f"{count_active_push_subscriptions(user_id, "finance")} appareil(s) actif(s)"
+                        )
+                        ui.notify("Notifications activées sur cet appareil.", type="positive")
+                        return
+                    messages = {
+                        "denied": "Le navigateur a refusé l’autorisation de notification.",
+                        "default": "L’autorisation de notification n’a pas été accordée.",
+                        "unsupported": "Les notifications Web Push ne sont pas disponibles dans ce navigateur ou dans ce mode d’utilisation.",
+                    }
+                    ui.notify(messages.get(status_value, "Les notifications n’ont pas pu être activées."), type="warning", timeout=10000)
+
+                async def deactivate_finance_notifications():
+                    try:
+                        result = await ui.run_javascript(
+                            """
+                            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+                                return {status: 'unsupported'};
+                            }
+                            const registration = await navigator.serviceWorker.ready;
+                            const subscription = await registration.pushManager.getSubscription();
+                            if (!subscription) { return {status: 'none'}; }
+                            return {status: 'found', endpoint: subscription.endpoint};
+                            """,
+                            timeout=30.0,
+                        )
+                    except Exception as error:
+                        ui.notify(f"La désactivation des notifications a échoué : {error}", type="negative")
+                        return
+                    status_value = result.get("status") if isinstance(result, dict) else None
+                    if status_value == "found" and result.get("endpoint"):
+                        set_push_channel_enabled(
+                            user_id, result["endpoint"], "finance", False
+                        )
+                        finance_push_count.set_text(
+                            f"{count_active_push_subscriptions(user_id, 'finance')} appareil(s) actif(s)"
+                        )
+                        ui.notify(
+                            "Rappels Finances désactivés sur cet appareil. Les autres notifications JF Apps restent inchangées.",
+                            type="info",
+                        )
+                    elif status_value == "none":
+                        ui.notify("Aucun abonnement de notification n’était actif sur cet appareil.", type="info")
+                    else:
+                        ui.notify("La désactivation n’a pas été confirmée.", type="warning")
+
+                with ui.row().classes("gap-2 flex-wrap mt-2"):
+                    ui.button("Activer sur cet appareil", icon="notifications_active", on_click=activate_finance_notifications).props("color=primary dense")
+                    ui.button("Désactiver sur cet appareil", icon="notifications_off", on_click=deactivate_finance_notifications).props("flat dense")
+
             account_box = ui.column().classes("w-full gap-2")
 
             def change_account_month(offset):
@@ -2287,6 +2453,8 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                         if row.get("projected"): meta.append("Récurrence projetée")
                                         elif row.get("status") == "planned": meta.append("Prévue")
                                         if row.get("budget_excluded"): meta.append("Hors budget")
+                                        if row.get("bank_programmed"): meta.append("Programmée à la banque")
+                                        if row.get("reminder_enabled"): meta.append("Rappel " + str(row.get("reminder_time") or "09:00")[:5])
                                         if meta: ui.label(" • ".join(meta)).classes("text-xs jf-muted")
                                     ui.label(_money(row["amount"]) if row["transaction_type"] == "expense" else "").classes("jf-finance-cashflow-money jf-finance-expense")
                                     ui.label(_money(row["amount"]) if row["transaction_type"] == "income" else "").classes("jf-finance-cashflow-money jf-finance-income")
@@ -2326,6 +2494,18 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             amount_budget = ui.number(label="Montant", value=row["input_amount"] if row else None, min=.01, step=.01).props("dense outlined").classes("grow min-w-36")
                         biweekly_override = ui.number(label="Montant par paie personnalisé — facultatif", value=row.get("biweekly_override") if row else None, min=.01, step=.01).props("dense outlined clearable").classes("w-full")
                         ui.label("Si le montant est mensuel, l’application calcule l’équivalent sur 26 paies. Tu peux remplacer ce résultat par ton propre montant par paie pour conserver un coussin, comme dans ton Excel.").classes("text-xs jf-muted")
+                        recurrence_budget = ui.select(
+                            _recurrence_options(user_id),
+                            value=row.get("recurrence_id") if row else None,
+                            label="Récurrence associée — facultatif",
+                        ).props("dense outlined clearable options-dense").classes("w-full")
+                        sync_budget_recurrence = ui.checkbox(
+                            "Synchroniser automatiquement le montant avec la récurrence",
+                            value=bool(row.get("sync_from_recurrence", True)) if row else True,
+                        )
+                        ui.label(
+                            "Quand la synchronisation est active, une modification du montant ou de la fréquence de la récurrence met à jour ce poste Budget. Le montant par paie personnalisé reste conservé pour une récurrence mensuelle."
+                        ).classes("text-xs jf-muted")
                         note_budget = ui.textarea(label="Note facultative", value=row.get("note") if row else "").props("dense outlined autogrow maxlength=1000").classes("w-full")
                         def sync_override_visibility(_event=None):
                             biweekly_override.visible = frequency_budget.value == "monthly"
@@ -2333,7 +2513,18 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         sync_override_visibility()
                         def save_budget_now():
                             try:
-                                save_budget_item(user_id=user_id,budget_item_id=row["id"] if row else None,item_type=kind_budget.value,description=description_budget.value,input_frequency=frequency_budget.value,input_amount=amount_budget.value,biweekly_override=biweekly_override.value if frequency_budget.value == "monthly" else None,note=note_budget.value)
+                                save_budget_item(
+                                    user_id=user_id,
+                                    budget_item_id=row["id"] if row else None,
+                                    item_type=kind_budget.value,
+                                    description=description_budget.value,
+                                    input_frequency=frequency_budget.value,
+                                    input_amount=amount_budget.value,
+                                    biweekly_override=biweekly_override.value if frequency_budget.value == "monthly" else None,
+                                    note=note_budget.value,
+                                    recurrence_id=recurrence_budget.value,
+                                    sync_from_recurrence=sync_budget_recurrence.value,
+                                )
                             except Exception as error:
                                 ui.notify(str(error), type="warning"); return
                             dialog.close(); ui.notify("Poste budgétaire enregistré.", type="positive"); render_budget.refresh()
@@ -2377,6 +2568,13 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                         if row.get("biweekly_is_override"): detail += " • montant par paie personnalisé"
                                         if not row["is_active"]: detail += " • désactivé"
                                         ui.label(detail).classes("text-xs jf-muted")
+                                        if row.get("recurrence_id"):
+                                            link_text = "Lié à « " + str(row.get("recurrence_description") or "récurrence") + " »"
+                                            if row.get("sync_from_recurrence"):
+                                                link_text += " • synchronisé"
+                                            if row.get("recurrence_is_active") is False:
+                                                link_text += " • récurrence inactive"
+                                            ui.label(link_text).classes("text-xs text-primary")
                                     ui.label(_money(row["monthly_amount"])+" / mois").classes("jf-finance-budget-money")
                                     ui.label(_money(row["biweekly_amount"])+" / paie").classes("jf-finance-budget-money")
                                     with ui.row().classes("gap-0 shrink-0"):
@@ -2748,7 +2946,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                 )
 
                 with ui.expansion(
-                    "Note, statut, budget et conciliation",
+                    "Note, statut, rappel, budget et conciliation",
                     icon="tune",
                 ).classes(
                     "w-full"
@@ -2766,6 +2964,17 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                     ).classes(
                         "w-full"
                     )
+                    bank_programmed_quick = ui.checkbox(
+                        "Programmée dans le compte bancaire",
+                        value=False,
+                    )
+                    reminder_enabled_quick = ui.checkbox(
+                        "Me rappeler cette transaction le jour prévu",
+                        value=False,
+                    )
+                    reminder_time_quick = ui.input(
+                        label="Heure du rappel", value="09:00"
+                    ).props("type=time dense outlined").classes("w-full")
                     reconciled = ui.checkbox(
                         "Transaction conciliée",
                         value=False,
@@ -2835,6 +3044,9 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                 or None
                             ),
                             budget_excluded=budget_excluded_quick.value,
+                            bank_programmed=bank_programmed_quick.value,
+                            reminder_enabled=reminder_enabled_quick.value,
+                            reminder_time=reminder_time_quick.value or "09:00",
                         )
                     except Exception as error:
                         ui.notify(
@@ -2850,6 +3062,9 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                     reconciled.value = False
                     reconciliation_date.value = ""
                     budget_excluded_quick.value = False
+                    bank_programmed_quick.value = False
+                    reminder_enabled_quick.value = False
+                    reminder_time_quick.value = "09:00"
 
                     ui.notify(
                         "Transaction enregistrée.",
@@ -3203,6 +3418,10 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         )
                     if row.get("budget_excluded"):
                         meta.append("Hors budget")
+                    if row.get("bank_programmed"):
+                        meta.append("Programmée à la banque")
+                    if row.get("reminder_enabled"):
+                        meta.append("Rappel " + str(row.get("reminder_time") or "09:00")[:5])
                     meta.append(
                         RECONCILIATION_STATUSES.get(
                             row.get(
@@ -3681,6 +3900,21 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             value=bool(row.get("budget_excluded")) if row else False,
                         )
                         ui.label("Les occurrences sont exclues du budget, mais continuent d’affecter le solde du compte si un compte bancaire est choisi.").classes("text-xs jf-muted")
+                        bank_programmed_rec = ui.checkbox(
+                            "Programmée dans le compte bancaire",
+                            value=bool(row.get("bank_programmed")) if row else False,
+                        )
+                        reminder_enabled_rec = ui.checkbox(
+                            "Me rappeler chaque occurrence le jour prévu",
+                            value=bool(row.get("reminder_enabled")) if row else False,
+                        )
+                        reminder_time_rec = ui.input(
+                            label="Heure du rappel",
+                            value=str(row.get("reminder_time") or "09:00")[:5] if row else "09:00",
+                        ).props("type=time dense outlined").classes("w-full")
+                        ui.label(
+                            "Le rappel d’une récurrence est envoyé même si l’occurrence n’a pas encore été matérialisée dans l’Historique."
+                        ).classes("text-xs jf-muted")
                         mode = ui.select(
                             CONFIRMATION_MODES,
                             value=row["confirmation_mode"] if row else "confirm",
@@ -3713,6 +3947,9 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     end_date=end_date.value or None,
                                     confirmation_mode=mode.value,
                                     budget_excluded=budget_excluded_rec.value,
+                                    bank_programmed=bank_programmed_rec.value,
+                                    reminder_enabled=reminder_enabled_rec.value,
+                                    reminder_time=reminder_time_rec.value or "09:00",
                                 )
                                 generate_due_recurrences(user_id)
                             except Exception as error:
@@ -3786,6 +4023,10 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                         )
                                     if row.get("budget_excluded"):
                                         details.append("Hors budget")
+                                    if row.get("bank_programmed"):
+                                        details.append("Programmée à la banque")
+                                    if row.get("reminder_enabled"):
+                                        details.append("Rappel " + str(row.get("reminder_time") or "09:00")[:5])
                                     ui.label(
                                         " — ".join(
                                             details

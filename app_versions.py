@@ -15,12 +15,33 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.1",
     "blood_pressure": "1.2.1",
-    "finances": "1.6.0",
+    "finances": "1.6.1",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.6.1",
+        "date": "2026-08-10",
+        "title": "Finances — budget lié, transactions programmées et rappels",
+        "summary": (
+            "Les postes du Budget peuvent être liés aux récurrences et les transactions "
+            "prévues peuvent être identifiées comme programmées à la banque et rappelées par notification."
+        ),
+        "changes": [
+            "Lien facultatif entre un poste du Budget et une récurrence existante.",
+            "Synchronisation optionnelle du montant et de la fréquence du Budget avec la récurrence liée.",
+            "Nouvel indicateur Programmée à la banque pour les transactions prévues et les récurrences.",
+            "Rappel Web Push facultatif le jour prévu, avec heure configurable et 09:00 par défaut.",
+            "Les rappels de récurrence fonctionnent même si l’occurrence n’a pas encore été matérialisée dans l’Historique.",
+            "Activation et désactivation des notifications directement dans l’onglet Compte; les appareils déjà autorisés pour Journal de pression sont réutilisés.",
+            "Les transactions confirmées ne déclenchent plus leur rappel prévu.",
+            "Compte, Historique et Récurrences affichent les indicateurs Programmée à la banque et Rappel.",
+            "CSV et JSON conservent les nouveaux indicateurs des transactions; aucun script SQL manuel n’est requis.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.6.0",

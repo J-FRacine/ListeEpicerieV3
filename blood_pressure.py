@@ -31,9 +31,9 @@ from blood_pressure_pdf import (
 )
 from blood_pressure_push import (
     count_active_push_subscriptions,
-    deactivate_push_subscription,
     get_vapid_public_key,
     save_push_subscription,
+    set_push_channel_enabled,
 )
 
 
@@ -2927,6 +2927,7 @@ def blood_pressure_panel(
                                             "userAgent"
                                         )
                                     ),
+                                    channel="pressure",
                                 )
                             except Exception as error:
                                 ui.notify(
@@ -2999,17 +3000,9 @@ def blood_pressure_panel(
                                     return {status: 'none'};
                                 }
 
-                                const endpoint = subscription.endpoint;
-                                const success =
-                                    await subscription.unsubscribe();
-
                                 return {
-                                    status: (
-                                        success
-                                        ? 'unsubscribed'
-                                        : 'failed'
-                                    ),
-                                    endpoint: endpoint,
+                                    status: 'found',
+                                    endpoint: subscription.endpoint,
                                 };
                                 """,
                                 timeout=30.0,
@@ -3024,28 +3017,22 @@ def blood_pressure_panel(
                             )
                             return
 
-                        if (
-                            isinstance(result, dict)
-                            and result.get("endpoint")
-                        ):
-                            deactivate_push_subscription(
-                                user_id,
-                                result["endpoint"],
-                            )
-
                         status_value = (
                             result.get("status")
-                            if isinstance(
-                                result,
-                                dict,
-                            )
+                            if isinstance(result, dict)
                             else None
                         )
 
-                        if status_value in (
-                            "unsubscribed",
-                            "none",
+                        if (
+                            status_value == "found"
+                            and result.get("endpoint")
                         ):
+                            set_push_channel_enabled(
+                                user_id,
+                                result["endpoint"],
+                                "pressure",
+                                False,
+                            )
                             push_count_label.set_text(
                                 (
                                     f"{count_active_push_subscriptions(user_id)} "
@@ -3054,13 +3041,17 @@ def blood_pressure_panel(
                             )
                             ui.notify(
                                 (
-                                    "Notifications désactivées "
-                                    "sur cet appareil."
-                                    if status_value == "unsubscribed"
-                                    else (
-                                        "Aucun abonnement de notification "
-                                        "n’était actif sur cet appareil."
-                                    )
+                                    "Rappels du Journal de pression désactivés "
+                                    "sur cet appareil. Les autres notifications "
+                                    "JF Apps restent inchangées."
+                                ),
+                                type="info",
+                            )
+                        elif status_value == "none":
+                            ui.notify(
+                                (
+                                    "Aucun abonnement de notification "
+                                    "n’était actif sur cet appareil."
                                 ),
                                 type="info",
                             )

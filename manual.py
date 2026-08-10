@@ -154,7 +154,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.6.0",
+        "title": "Finances — V1.6.1",
         "icon": "account_balance_wallet",
         "caption": "Budget, trésorerie, dépenses, prévisions et conciliation",
         "keywords": (
@@ -165,12 +165,13 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "postdaté à venir total prévu projection "
             "cliquable détail transaction ajouter catégorie étiquette saisie rapide "
             "compte bancaire trésorerie budget mensuel aux deux semaines paie "
-            "solde minimum hors budget transfert paiement carte"
+            "solde minimum hors budget transfert paiement carte "
+            "récurrence liée budget synchronisé programmée banque rappel notification push"
         ),
         "content": """
 ### Objectif de Finances
 
-**Finances** sert au suivi personnel des dépenses, des revenus, des prévisions, du budget global et de la trésorerie. La V1.6 ajoute une vue de compte bancaire inspirée d’un suivi mensuel traditionnel et un budget global mensuel / aux deux semaines.
+**Finances** sert au suivi personnel des dépenses, des revenus, des prévisions, du budget global et de la trésorerie. La V1.6 ajoute une vue de compte bancaire inspirée d’un suivi mensuel traditionnel et un budget global mensuel / aux deux semaines. La V1.6.1 relie facultativement le Budget aux récurrences et ajoute les transactions programmées à la banque ainsi que les rappels Web Push.
 
 L’application demeure volontairement plus simple qu’une comptabilité complète : elle ne demande pas d’écritures comptables en partie double et ne transforme pas les mouvements personnels en système comptable professionnel.
 
@@ -192,7 +193,9 @@ La saisie permet d’enregistrer :
 - une note facultative;
 - un statut confirmé ou prévu;
 - un statut de conciliation;
-- l’option **Hors budget**.
+- l’option **Hors budget**;
+- l’indicateur **Programmée dans le compte bancaire** pour une transaction prévue;
+- un rappel facultatif le jour prévu, avec heure configurable.
 
 Les champs principaux sont compacts pour faciliter l’utilisation sur téléphone.
 
@@ -259,6 +262,18 @@ Les transactions confirmées déjà survenues alimentent le réalisé. Les trans
 
 Une transaction marquée **Hors budget** reste visible dans le Compte et modifie son solde si elle utilise ce compte bancaire. Elle n’est toutefois pas comptée comme nouvelle dépense ou nouveau revenu dans le budget et les KPI.
 
+Une transaction prévue peut aussi être marquée **Programmée à la banque**. Cet indicateur signifie que le paiement ou le mouvement a déjà été planifié auprès de l’institution bancaire, mais la transaction reste **Prévue** dans JF Apps jusqu’à ce qu’elle soit confirmée. Le libellé apparaît dans Compte et dans l’Historique.
+
+### Rappels de transactions
+
+Pour une transaction **Prévue**, activez **Me rappeler cette transaction le jour prévu** et choisissez une heure. L’heure proposée par défaut est **09:00**. Si la transaction a déjà été confirmée avant cette heure, aucun rappel n’est envoyé.
+
+Les récurrences peuvent utiliser la même option. Leur rappel est vérifié directement à partir de leur calendrier, même lorsque l’occurrence du jour n’a pas encore été créée dans l’Historique.
+
+Dans l’onglet **Compte**, la carte **Notifications de transactions** permet d’activer ou de désactiver les notifications sur l’appareil courant. Le même abonnement Web Push que Journal de pression est réutilisé lorsqu’il existe déjà, mais les canaux restent indépendants : désactiver les rappels Finances ne désactive pas les rappels du Journal de pression, et inversement. La notification demeure volontairement discrète : **« Finances — Une transaction prévue nécessite votre attention. »**
+
+Sur iPhone/iPad, les notifications Web Push nécessitent que JF Apps soit ajoutée à l’écran d’accueil et que l’autorisation de notification ait été accordée.
+
 La partie annuelle présente les **12 mois** avec le solde de fin et le minimum prévu de chacun. Un mois peut être ouvert directement pour consulter son détail. Les mois antérieurs à la date de référence du compte ne sont pas inventés et restent indisponibles.
 
 ### Budget mensuel global
@@ -284,7 +299,13 @@ Le résumé affiche :
 - le reste disponible mensuel;
 - le reste disponible par paie.
 
-Les lignes peuvent être activées, désactivées, réordonnées et modifiées. Le **Budget** représente la planification globale habituelle; les **Objectifs** demeurent disponibles séparément pour suivre des limites par catégorie ou par étiquette au fil des mois.
+Les lignes peuvent être activées, désactivées, réordonnées et modifiées.
+
+Un poste du Budget peut maintenant être associé à une **récurrence existante**. Lorsque **Synchroniser automatiquement le montant avec la récurrence** est activé, une modification du montant ou de la fréquence de cette récurrence met à jour le poste budgétaire lié. Une récurrence mensuelle est reprise comme montant mensuel; une récurrence toutes les deux semaines est reprise comme montant aux deux semaines. Les autres fréquences sont converties en moyenne mensuelle.
+
+Le montant par paie personnalisé demeure disponible pour un poste mensuel synchronisé. La liaison est facultative : les postes comme « Épicerie 600 $/mois » peuvent rester **Budget seulement** sans créer ni nécessiter une transaction. Une même récurrence ne peut être liée qu’à un seul poste budgétaire afin d’éviter les doublons.
+
+Le **Budget** représente la planification globale habituelle; les **Objectifs** demeurent disponibles séparément pour suivre des limites par catégorie ou par étiquette au fil des mois.
 
 ### Navigation dans Finances sur téléphone
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from calendar import monthrange
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 import csv
 import hashlib
@@ -100,6 +100,15 @@ def _text(value, label, maximum, required=False):
     if len(text) > maximum:
         raise ValueError(f"{label} ne peut pas dépasser {maximum} caractères.")
     return text or None
+
+
+def _normalize_reminder_time(value):
+    text = str(value or "09:00").strip()[:5]
+    try:
+        parsed = datetime.strptime(text, "%H:%M").time()
+    except ValueError as error:
+        raise ValueError("L’heure du rappel est invalide.") from error
+    return parsed
 
 
 def _month_start(value):
@@ -324,6 +333,21 @@ def init_finances_schema():
                 ADD COLUMN IF NOT EXISTS budget_excluded BOOLEAN
                 NOT NULL DEFAULT FALSE;
             """)
+            cur.execute("""
+                ALTER TABLE finance_recurrences
+                ADD COLUMN IF NOT EXISTS bank_programmed BOOLEAN
+                NOT NULL DEFAULT FALSE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_recurrences
+                ADD COLUMN IF NOT EXISTS reminder_enabled BOOLEAN
+                NOT NULL DEFAULT FALSE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_recurrences
+                ADD COLUMN IF NOT EXISTS reminder_time TIME
+                NOT NULL DEFAULT '09:00';
+            """)
 
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS finance_recurrence_tags (
@@ -428,6 +452,21 @@ def init_finances_schema():
                 ALTER TABLE finance_transactions
                 ADD COLUMN IF NOT EXISTS budget_excluded BOOLEAN
                 NOT NULL DEFAULT FALSE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS bank_programmed BOOLEAN
+                NOT NULL DEFAULT FALSE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS reminder_enabled BOOLEAN
+                NOT NULL DEFAULT FALSE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS reminder_time TIME
+                NOT NULL DEFAULT '09:00';
             """)
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS
@@ -562,6 +601,39 @@ def init_finances_schema():
                     CHECK (CHAR_LENGTH(description) BETWEEN 1 AND 160),
                     CHECK (note IS NULL OR CHAR_LENGTH(note) <= 1000)
                 );
+            """)
+            cur.execute("""
+                ALTER TABLE finance_budget_items
+                ADD COLUMN IF NOT EXISTS recurrence_id BIGINT;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_budget_items
+                ADD COLUMN IF NOT EXISTS sync_from_recurrence BOOLEAN
+                NOT NULL DEFAULT TRUE;
+            """)
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname =
+                            'finance_budget_items_recurrence_fk'
+                    ) THEN
+                        ALTER TABLE finance_budget_items
+                        ADD CONSTRAINT
+                            finance_budget_items_recurrence_fk
+                        FOREIGN KEY (recurrence_id)
+                        REFERENCES finance_recurrences(id)
+                        ON DELETE SET NULL;
+                    END IF;
+                END
+                $$;
+            """)
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                finance_budget_items_recurrence_uq
+                ON finance_budget_items (user_id, recurrence_id)
+                WHERE recurrence_id IS NOT NULL;
             """)
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS finance_budget_items_order_idx
@@ -1321,6 +1393,9 @@ def save_transaction(
     reconciliation_status="unreconciled",
     reconciliation_date=None,
     budget_excluded=False,
+    bank_programmed=False,
+    reminder_enabled=False,
+    reminder_time=None,
     transaction_id=None,
 ):
     if transaction_type not in TRANSACTION_TYPES:
@@ -1349,6 +1424,10 @@ def save_transaction(
         parsed_reconciliation_date = None
     elif reconciliation_status == "unreconciled":
         parsed_reconciliation_date = None
+
+    normalized_reminder_time = _normalize_reminder_time(reminder_time)
+    bank_programmed = bool(bank_programmed) if status == "planned" else False
+    reminder_enabled = bool(reminder_enabled) if status == "planned" else False
 
     amount = _money(amount)
     description = _text(
@@ -1416,6 +1495,9 @@ def save_transaction(
                         reconciliation_status = %s,
                         reconciliation_date = %s,
                         budget_excluded = %s,
+                        bank_programmed = %s,
+                        reminder_enabled = %s,
+                        reminder_time = %s,
                         updated_at = NOW()
                     WHERE id = %s
                       AND user_id = %s;
@@ -1432,6 +1514,9 @@ def save_transaction(
                         reconciliation_status,
                         parsed_reconciliation_date,
                         bool(budget_excluded),
+                        bank_programmed,
+                        reminder_enabled,
+                        normalized_reminder_time,
                         transaction_id,
                         user_id,
                     ),
@@ -1466,11 +1551,15 @@ def save_transaction(
                         payment_method_id,
                         reconciliation_status,
                         reconciliation_date,
-                        budget_excluded
+                        budget_excluded,
+                        bank_programmed,
+                        reminder_enabled,
+                        reminder_time
                     )
                     VALUES (
                         %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s
                     )
                     RETURNING id;
                     """,
@@ -1487,6 +1576,9 @@ def save_transaction(
                         reconciliation_status,
                         parsed_reconciliation_date,
                         bool(budget_excluded),
+                        bank_programmed,
+                        reminder_enabled,
+                        normalized_reminder_time,
                     ),
                 )
                 saved_id = int(
@@ -2028,6 +2120,9 @@ def _projection_row(
     status="planned",
     projected=False,
     budget_excluded=False,
+    bank_programmed=False,
+    reminder_enabled=False,
+    reminder_time=None,
 ):
     return {
         "id": None,
@@ -2046,6 +2141,9 @@ def _projection_row(
         "status": status,
         "projected": bool(projected),
         "budget_excluded": bool(budget_excluded),
+        "bank_programmed": bool(bank_programmed),
+        "reminder_enabled": bool(reminder_enabled),
+        "reminder_time": reminder_time,
     }
 
 
@@ -2241,6 +2339,9 @@ def dashboard_month_projection(
                             budget_excluded=bool(
                                 recurrence.get("budget_excluded")
                             ),
+                            bank_programmed=bool(recurrence.get("bank_programmed")),
+                            reminder_enabled=bool(recurrence.get("reminder_enabled")),
+                            reminder_time=recurrence.get("reminder_time"),
                         )
                     )
 
@@ -2492,6 +2593,9 @@ def save_recurrence(
     end_date=None,
     confirmation_mode="confirm",
     budget_excluded=False,
+    bank_programmed=False,
+    reminder_enabled=False,
+    reminder_time=None,
     recurrence_id=None,
 ):
     if transaction_type not in TRANSACTION_TYPES:
@@ -2542,6 +2646,7 @@ def save_recurrence(
         "La note",
         1000,
     )
+    normalized_reminder_time = _normalize_reminder_time(reminder_time)
 
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -2576,6 +2681,9 @@ def save_recurrence(
                         end_date = %s,
                         confirmation_mode = %s,
                         budget_excluded = %s,
+                        bank_programmed = %s,
+                        reminder_enabled = %s,
+                        reminder_time = %s,
                         is_active = TRUE,
                         updated_at = NOW()
                     WHERE id = %s
@@ -2594,6 +2702,9 @@ def save_recurrence(
                         parsed_end,
                         confirmation_mode,
                         bool(budget_excluded),
+                        bool(bank_programmed),
+                        bool(reminder_enabled),
+                        normalized_reminder_time,
                         recurrence_id,
                         user_id,
                     ),
@@ -2630,11 +2741,15 @@ def save_recurrence(
                         end_date,
                         next_date,
                         confirmation_mode,
-                        budget_excluded
+                        budget_excluded,
+                        bank_programmed,
+                        reminder_enabled,
+                        reminder_time
                     )
                     VALUES (
                         %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s
                     )
                     RETURNING id;
                     """,
@@ -2653,6 +2768,9 @@ def save_recurrence(
                         parsed_start,
                         confirmation_mode,
                         bool(budget_excluded),
+                        bool(bank_programmed),
+                        bool(reminder_enabled),
+                        normalized_reminder_time,
                     ),
                 )
                 saved_id = int(
@@ -2675,7 +2793,11 @@ def save_recurrence(
                     ),
                 )
 
+            _sync_budget_items_from_recurrence_cursor(
+                cur, user_id, saved_id
+            )
             conn.commit()
+            return saved_id
 
 
 def list_recurrences(user_id):
@@ -2835,12 +2957,15 @@ def generate_due_recurrences(
                             reconciliation_status,
                             recurrence_id,
                             occurrence_date,
-                            budget_excluded
+                            budget_excluded,
+                            bank_programmed,
+                            reminder_enabled,
+                            reminder_time
                         )
                         VALUES (
                             %s, %s, %s, %s, %s, %s,
                             %s, %s, %s, 'unreconciled',
-                            %s, %s, %s
+                            %s, %s, %s, %s, %s, %s
                         )
                         ON CONFLICT (
                             recurrence_id,
@@ -2870,6 +2995,9 @@ def generate_due_recurrences(
                             recurrence["id"],
                             occurrence,
                             bool(recurrence.get("budget_excluded")),
+                            bool(recurrence.get("bank_programmed")),
+                            bool(recurrence.get("reminder_enabled")),
+                            recurrence.get("reminder_time") or _normalize_reminder_time(None),
                         ),
                     )
                     inserted = cur.fetchone()
@@ -2958,6 +3086,56 @@ def _budget_amounts_from_values(
     return monthly, biweekly
 
 
+def _budget_values_from_recurrence(row):
+    amount = Decimal(row["amount"]).quantize(Decimal("0.01"))
+    unit = row["frequency_unit"]
+    interval = int(row["frequency_interval"] or 1)
+    if unit == "month" and interval == 1:
+        return "monthly", amount
+    if unit == "week" and interval == 2:
+        return "biweekly", amount
+    annual_factor = {
+        "day": Decimal("365"),
+        "week": Decimal("52"),
+        "month": Decimal("12"),
+        "year": Decimal("1"),
+    }[unit] / Decimal(interval)
+    monthly = (amount * annual_factor / Decimal("12")).quantize(Decimal("0.01"))
+    return "monthly", monthly
+
+
+def _sync_budget_items_from_recurrence_cursor(cur, user_id, recurrence_id):
+    cur.execute(
+        """
+        SELECT id, transaction_type, amount, frequency_unit, frequency_interval
+        FROM finance_recurrences
+        WHERE id=%s AND user_id=%s;
+        """,
+        (recurrence_id, user_id),
+    )
+    recurrence = cur.fetchone()
+    if not recurrence:
+        return
+    frequency, amount = _budget_values_from_recurrence(recurrence)
+    cur.execute(
+        """
+        UPDATE finance_budget_items
+        SET item_type=%s, input_frequency=%s, input_amount=%s,
+            biweekly_override=CASE
+                WHEN %s='biweekly' THEN NULL
+                ELSE biweekly_override
+            END,
+            updated_at=NOW()
+        WHERE user_id=%s AND recurrence_id=%s
+          AND sync_from_recurrence=TRUE;
+        """,
+        (
+            recurrence["transaction_type"], frequency, amount,
+            frequency, user_id, recurrence_id,
+        ),
+    )
+
+
 def save_budget_item(
     user_id,
     item_type,
@@ -2966,6 +3144,8 @@ def save_budget_item(
     input_amount,
     biweekly_override=None,
     note=None,
+    recurrence_id=None,
+    sync_from_recurrence=True,
     budget_item_id=None,
 ):
     if item_type not in TRANSACTION_TYPES:
@@ -2983,20 +3163,63 @@ def save_budget_item(
     if input_frequency == "biweekly":
         override = None
 
+    normalized_recurrence_id = (
+        int(recurrence_id)
+        if recurrence_id not in (None, "")
+        else None
+    )
+
     with get_connection() as conn:
         with conn.cursor() as cur:
+            if normalized_recurrence_id is not None:
+                cur.execute(
+                    """
+                    SELECT id, transaction_type, amount, frequency_unit, frequency_interval
+                    FROM finance_recurrences
+                    WHERE id=%s AND user_id=%s;
+                    """,
+                    (normalized_recurrence_id, user_id),
+                )
+                linked = cur.fetchone()
+                if not linked:
+                    raise ValueError("La récurrence sélectionnée est invalide.")
+                if sync_from_recurrence:
+                    item_type = linked["transaction_type"]
+                    input_frequency, amount = _budget_values_from_recurrence(linked)
+                    if input_frequency == "biweekly":
+                        override = None
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM finance_budget_items
+                    WHERE user_id=%s AND recurrence_id=%s
+                      AND (%s IS NULL OR id<>%s)
+                    LIMIT 1;
+                    """,
+                    (
+                        user_id, normalized_recurrence_id,
+                        budget_item_id, budget_item_id,
+                    ),
+                )
+                if cur.fetchone():
+                    raise ValueError(
+                        "Cette récurrence est déjà liée à un autre poste du Budget."
+                    )
+
             if budget_item_id:
                 cur.execute(
                     """
                     UPDATE finance_budget_items
                     SET item_type=%s, description=%s, input_frequency=%s,
                         input_amount=%s, biweekly_override=%s, note=%s,
+                        recurrence_id=%s, sync_from_recurrence=%s,
                         is_active=TRUE, updated_at=NOW()
                     WHERE id=%s AND user_id=%s;
                     """,
                     (
                         item_type, description, input_frequency, amount,
-                        override, note, budget_item_id, user_id,
+                        override, note, normalized_recurrence_id,
+                        bool(sync_from_recurrence), budget_item_id, user_id,
                     ),
                 )
                 if cur.rowcount == 0:
@@ -3015,13 +3238,15 @@ def save_budget_item(
                     """
                     INSERT INTO finance_budget_items (
                         user_id, item_type, description, input_frequency,
-                        input_amount, biweekly_override, note, sort_order
+                        input_amount, biweekly_override, note, sort_order,
+                        recurrence_id, sync_from_recurrence
                     )
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s);
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);
                     """,
                     (
                         user_id, item_type, description, input_frequency,
                         amount, override, note, next_order,
+                        normalized_recurrence_id, bool(sync_from_recurrence),
                     ),
                 )
             conn.commit()
@@ -3032,13 +3257,22 @@ def list_budget_items(user_id, include_inactive=False):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT *
-                FROM finance_budget_items
-                WHERE user_id=%s
-                  AND (%s OR is_active=TRUE)
+                SELECT
+                    budget.*,
+                    recurrence.description AS recurrence_description,
+                    recurrence.amount AS recurrence_amount,
+                    recurrence.frequency_unit AS recurrence_frequency_unit,
+                    recurrence.frequency_interval AS recurrence_frequency_interval,
+                    recurrence.is_active AS recurrence_is_active
+                FROM finance_budget_items AS budget
+                LEFT JOIN finance_recurrences AS recurrence
+                    ON recurrence.id=budget.recurrence_id
+                   AND recurrence.user_id=budget.user_id
+                WHERE budget.user_id=%s
+                  AND (%s OR budget.is_active=TRUE)
                 ORDER BY
-                    CASE WHEN item_type='income' THEN 0 ELSE 1 END,
-                    sort_order, LOWER(description), id;
+                    CASE WHEN budget.item_type='income' THEN 0 ELSE 1 END,
+                    budget.sort_order, LOWER(budget.description), budget.id;
                 """,
                 (user_id, include_inactive),
             )
@@ -3222,6 +3456,9 @@ def _bank_effective_rows(user_id, payment_method_id, end_date, today_value=None)
                             status="planned",
                             projected=True,
                             budget_excluded=bool(recurrence.get("budget_excluded")),
+                            bank_programmed=bool(recurrence.get("bank_programmed")),
+                            reminder_enabled=bool(recurrence.get("reminder_enabled")),
+                            reminder_time=recurrence.get("reminder_time"),
                         )
                     )
                 occurrence = _next_date(
@@ -3908,6 +4145,29 @@ def _parse_jf_csv_rows(rows):
                     "budget_excluded",
                 )
             )
+            bank_programmed = _parse_import_bool(
+                _pick(
+                    row,
+                    "Programmée à la banque",
+                    "Programmee a la banque",
+                    "bank_programmed",
+                )
+            )
+            reminder_enabled = _parse_import_bool(
+                _pick(
+                    row,
+                    "Rappel actif",
+                    "reminder_enabled",
+                )
+            )
+            reminder_time = _normalize_reminder_time(
+                _pick(
+                    row,
+                    "Heure du rappel",
+                    "reminder_time",
+                )
+                or "09:00"
+            )
 
             source = str(
                 _pick(
@@ -3987,6 +4247,9 @@ def _parse_jf_csv_rows(rows):
                     "reconciliation_status": reconciliation_status,
                     "reconciliation_date": reconciliation_date,
                     "budget_excluded": budget_excluded,
+                    "bank_programmed": bank_programmed,
+                    "reminder_enabled": reminder_enabled,
+                    "reminder_time": reminder_time,
                     "import_source": source,
                     "import_key": import_key[:180],
                     "original_row": row_number,
@@ -4035,6 +4298,7 @@ def _parse_jf_json(document):
                     else None
                 ),
                 "note": _text(item.get("note"), "La note", 1000),
+                "sync_from_recurrence": bool(item.get("sync_from_recurrence", True)),
                 "sort_order": int(item.get("sort_order") or index),
                 "is_active": bool(item.get("is_active", True)),
             })
@@ -4470,13 +4734,16 @@ def import_finance_rows(
                             reconciliation_status,
                             reconciliation_date,
                             budget_excluded,
+                            bank_programmed,
+                            reminder_enabled,
+                            reminder_time,
                             import_source,
                             import_key,
                             imported_at
                         )
                         VALUES (
                             %s, %s, %s, %s, %s, %s, %s,
-                            %s, %s, %s, %s, %s, %s, %s, NOW()
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
                         )
                         ON CONFLICT DO NOTHING
                         RETURNING id;
@@ -4500,6 +4767,9 @@ def import_finance_rows(
                             reconciliation_status,
                             reconciliation_date,
                             bool(row.get("budget_excluded")),
+                            bool(row.get("bank_programmed")) if row["status"] == "planned" else False,
+                            bool(row.get("reminder_enabled")) if row["status"] == "planned" else False,
+                            row.get("reminder_time") or _normalize_reminder_time(None),
                             row[
                                 "import_source"
                             ],
@@ -4602,12 +4872,14 @@ def import_finance_rows(
                             """
                             UPDATE finance_budget_items
                             SET input_frequency=%s,input_amount=%s,biweekly_override=%s,
-                                note=%s,sort_order=%s,is_active=%s,updated_at=NOW()
+                                note=%s,recurrence_id=NULL,sync_from_recurrence=%s,
+                                sort_order=%s,is_active=%s,updated_at=NOW()
                             WHERE id=%s AND user_id=%s;
                             """,
                             (
                                 item["input_frequency"], item["input_amount"],
                                 item.get("biweekly_override"), item.get("note"),
+                                bool(item.get("sync_from_recurrence", True)),
                                 item.get("sort_order") or 0, bool(item.get("is_active", True)),
                                 existing["id"], user_id,
                             ),
@@ -4617,15 +4889,17 @@ def import_finance_rows(
                             """
                             INSERT INTO finance_budget_items (
                                 user_id,item_type,description,input_frequency,input_amount,
-                                biweekly_override,note,sort_order,is_active
+                                biweekly_override,note,sort_order,is_active,
+                                recurrence_id,sync_from_recurrence
                             )
-                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s);
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL,%s);
                             """,
                             (
                                 user_id,item["item_type"],item["description"],
                                 item["input_frequency"],item["input_amount"],
                                 item.get("biweekly_override"),item.get("note"),
                                 item.get("sort_order") or 0,bool(item.get("is_active", True)),
+                                bool(item.get("sync_from_recurrence", True)),
                             ),
                         )
                     budget_items_imported += 1
@@ -5350,6 +5624,9 @@ def export_finances(user_id):
             "Conciliation",
             "Date de conciliation",
             "Hors budget",
+            "Programmée à la banque",
+            "Rappel actif",
+            "Heure du rappel",
             "Récurrence",
             "Source importation",
             "Clé importation",
@@ -5414,6 +5691,17 @@ def export_finances(user_id):
                 ),
                 (
                     "Oui"
+                    if row.get("bank_programmed")
+                    else "Non"
+                ),
+                (
+                    "Oui"
+                    if row.get("reminder_enabled")
+                    else "Non"
+                ),
+                str(row.get("reminder_time") or "")[:5],
+                (
+                    "Oui"
                     if row[
                         "recurrence_id"
                     ]
@@ -5440,6 +5728,7 @@ def export_finances(user_id):
             (
                 date,
                 datetime,
+                time,
                 Decimal,
             ),
         ):
@@ -5467,7 +5756,7 @@ def export_finances(user_id):
 
     payload = {
         "format": "JF Apps Finances",
-        "version": "1.6.0",
+        "version": "1.6.1",
         "categories": [
             serial(
                 dict(row)

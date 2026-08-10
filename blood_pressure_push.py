@@ -1111,10 +1111,14 @@ async def _push_monitor_loop():
 
 
 def start_blood_pressure_push_monitor():
-    """Démarre une seule boucle de vérification Web Push JF Apps."""
+    """Démarre une seule boucle de vérification Web Push JF Apps.
+
+    L’initialisation Finances est volontairement faite dans la boucle de fond
+    afin qu’une erreur de notification ne puisse jamais empêcher le Portail
+    d’écouter sur son port HTTP.
+    """
 
     global _PUSH_TASK
-    _init_finance_push_schema()
 
     if (
         _PUSH_TASK is not None

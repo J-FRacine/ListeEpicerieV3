@@ -2709,10 +2709,25 @@ init_db()
 init_grocery_preferences_schema()
 init_app_access_schema()
 init_blood_pressure_schema()
-init_blood_pressure_push_schema()
+
+# Les deux initialisations modifiées récemment sont non bloquantes :
+# si PostgreSQL refuse une migration facultative, le Portail doit quand même
+# démarrer. L’erreur complète est imprimée et Finances réessaie son schéma
+# lorsqu’on ouvre l’application.
+try:
+    init_blood_pressure_push_schema()
+except Exception:
+    print("JF Apps — erreur d’initialisation Web Push :")
+    traceback.print_exc()
+
 init_rpg_character_schema()
 init_feedback_schema()
-init_finances_schema()
+
+try:
+    init_finances_schema()
+except Exception:
+    print("JF Apps — erreur d’initialisation Finances :")
+    traceback.print_exc()
 
 app.on_startup(
     start_blood_pressure_push_monitor

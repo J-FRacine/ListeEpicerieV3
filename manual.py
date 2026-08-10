@@ -154,7 +154,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.6.1",
+        "title": "Finances — V1.6.2",
         "icon": "account_balance_wallet",
         "caption": "Budget, trésorerie, dépenses, prévisions et conciliation",
         "keywords": (
@@ -170,6 +170,8 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
         ),
         "content": """
 ### Objectif de Finances
+
+**V1.6.2** ajoute un correctif de démarrage : une erreur propre à la mise à niveau Finances ou aux rappels Web Push ne doit plus empêcher le Portail JF Apps complet de démarrer. Si la base refuse encore une migration, l’écran Finances affiche l’erreur technique exacte afin de faciliter le diagnostic.
 
 **Finances** sert au suivi personnel des dépenses, des revenus, des prévisions, du budget global et de la trésorerie. La V1.6 ajoute une vue de compte bancaire inspirée d’un suivi mensuel traditionnel et un budget global mensuel / aux deux semaines. La V1.6.1 relie facultativement le Budget aux récurrences et ajoute les transactions programmées à la banque ainsi que les rappels Web Push.
 

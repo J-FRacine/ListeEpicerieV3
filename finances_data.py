@@ -611,30 +611,9 @@ def init_finances_schema():
                 ADD COLUMN IF NOT EXISTS sync_from_recurrence BOOLEAN
                 NOT NULL DEFAULT TRUE;
             """)
-            cur.execute("""
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM pg_constraint
-                        WHERE conname =
-                            'finance_budget_items_recurrence_fk'
-                    ) THEN
-                        ALTER TABLE finance_budget_items
-                        ADD CONSTRAINT
-                            finance_budget_items_recurrence_fk
-                        FOREIGN KEY (recurrence_id)
-                        REFERENCES finance_recurrences(id)
-                        ON DELETE SET NULL;
-                    END IF;
-                END
-                $$;
-            """)
-            cur.execute("""
-                CREATE UNIQUE INDEX IF NOT EXISTS
-                finance_budget_items_recurrence_uq
-                ON finance_budget_items (user_id, recurrence_id)
-                WHERE recurrence_id IS NOT NULL;
-            """)
+            # Le lien Budget -> Récurrence est volontairement validé par
+            # l’application plutôt que par une nouvelle contrainte au démarrage.
+            # Cela rend la mise à niveau sûre même sur une base déjà utilisée.
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS finance_budget_items_order_idx
                 ON finance_budget_items (

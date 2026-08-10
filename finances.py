@@ -46,6 +46,7 @@ from finances_data import (
     get_transaction,
     goal_progress,
     import_finance_rows,
+    init_finances_schema,
     list_bank_accounts,
     list_budget_items,
     list_categories,
@@ -1230,6 +1231,29 @@ def _transaction_dialog(
 
 def finances_panel(current_user, initial_section=None, show_heading=True):
     user_id = current_user["id"]
+
+    # Réessayer ici la mise à niveau du schéma. Au démarrage du Portail,
+    # cette initialisation est maintenant non bloquante afin qu’un problème
+    # de migration Finances ne puisse plus rendre toutes les applications
+    # indisponibles.
+    try:
+        init_finances_schema()
+    except Exception as error:
+        with ui.card().classes("w-full max-w-3xl mx-auto jf-finance-card"):
+            ui.label("Finances — mise à niveau de la base impossible").classes(
+                "text-xl font-bold"
+            )
+            ui.label(
+                "Le Portail peut continuer de fonctionner, mais Finances ne peut "
+                "pas s’ouvrir tant que cette erreur n’est pas corrigée."
+            ).classes("text-sm jf-muted")
+            ui.label(
+                f"{type(error).__name__}: {error}"
+            ).classes("text-sm font-mono break-all")
+        print("Finances — erreur d’initialisation du schéma :")
+        import traceback as _traceback
+        _traceback.print_exc()
+        return
     ensure_default_finance_categories(
         user_id
     )

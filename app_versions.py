@@ -15,12 +15,29 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.1",
     "blood_pressure": "1.2.1",
-    "finances": "1.6.1",
+    "finances": "1.6.2",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.6.2",
+        "date": "2026-08-10",
+        "title": "Finances — correctif de démarrage V1.6",
+        "summary": (
+            "Le démarrage du Portail est maintenant protégé contre une erreur "
+            "de migration ou de notification Finances."
+        ),
+        "changes": [
+            "Les migrations Finances ne peuvent plus empêcher le Portail entier de démarrer.",
+            "L’initialisation des rappels Finances est déplacée dans la tâche de fond après le démarrage HTTP.",
+            "Le lien Budget–Récurrence conserve sa validation applicative sans imposer de nouvelle contrainte SQL au démarrage.",
+            "Si une migration Finances échoue encore, l’erreur exacte est affichée dans l’écran Finances et imprimée dans le journal.",
+            "Toutes les fonctions de V1.6.1 sont conservées.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.6.1",

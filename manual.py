@@ -154,23 +154,25 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.5.0",
+        "title": "Finances — V1.6.0",
         "icon": "account_balance_wallet",
-        "caption": "Dépenses, prévisions mensuelles et conciliation",
+        "caption": "Budget, trésorerie, dépenses, prévisions et conciliation",
         "keywords": (
             "finances dépenses revenus récurrences catégories "
             "sous-catégories étiquettes objectifs report csv json "
             "paiement conciliation carte crédit KPI relevé "
             "solde prévu cumulatif séance historique ajustement "
             "postdaté à venir total prévu projection "
-            "cliquable détail transaction ajouter catégorie étiquette saisie rapide"
+            "cliquable détail transaction ajouter catégorie étiquette saisie rapide "
+            "compte bancaire trésorerie budget mensuel aux deux semaines paie "
+            "solde minimum hors budget transfert paiement carte"
         ),
         "content": """
-### Objectif de la V1
+### Objectif de Finances
 
-La V1 de **Finances** sert au suivi manuel des dépenses variables et des revenus. Elle ne constitue pas encore une comptabilité complète.
+**Finances** sert au suivi personnel des dépenses, des revenus, des prévisions, du budget global et de la trésorerie. La V1.6 ajoute une vue de compte bancaire inspirée d’un suivi mensuel traditionnel et un budget global mensuel / aux deux semaines.
 
-Les comptes bancaires, rapprochements comptables, transferts et écritures comptables sont prévus seulement pour une version future, probablement V3 ou V4. Les modes de paiement et la conciliation de la V1 préparent cette évolution sans imposer une comptabilité complète.
+L’application demeure volontairement plus simple qu’une comptabilité complète : elle ne demande pas d’écritures comptables en partie double et ne transforme pas les mouvements personnels en système comptable professionnel.
 
 ### Confidentialité
 
@@ -189,9 +191,12 @@ La saisie permet d’enregistrer :
 - un mode de paiement;
 - une note facultative;
 - un statut confirmé ou prévu;
-- un statut de conciliation.
+- un statut de conciliation;
+- l’option **Hors budget**.
 
 Les champs principaux sont compacts pour faciliter l’utilisation sur téléphone.
+
+L’option **Hors budget** sert surtout aux transferts entre comptes, aux paiements de cartes de crédit et aux déplacements d’épargne. Le mouvement peut continuer à modifier le solde du compte bancaire associé, mais il est exclu des dépenses, revenus, KPI et objectifs afin d’éviter de compter deux fois la même dépense.
 
 La **Saisie rapide** permet aussi de créer une catégorie ou une étiquette sans quitter la transaction en cours.
 
@@ -207,7 +212,7 @@ Une transaction peut avoir une catégorie ou une sous-catégorie, ainsi que plus
 
 Une même dépense peut compter dans plusieurs objectifs par étiquette. Les objectifs par étiquette ne doivent donc pas être additionnés pour calculer le total général.
 
-### Modes de paiement
+### Modes de paiement et comptes bancaires
 
 L’onglet **Organisation** contient une section **Modes de paiement**.
 
@@ -225,13 +230,61 @@ Pour chaque mode, il peut aussi préciser :
 - le type : carte de crédit, compte bancaire, argent comptant ou autre;
 - le jour habituel de fermeture du relevé;
 - le jour habituel de paiement;
-- un solde initial ou ajustement;
-- la date de référence de cet ajustement;
+- un solde initial ou de référence;
+- la date de référence de ce solde;
 - une note.
 
-Le solde initial reste à concilier jusqu’à son inclusion dans une séance de conciliation.
+Pour une **carte de crédit**, le solde initial demeure disponible pour la conciliation. Pour un **compte bancaire**, le solde et sa date de référence servent de point de départ à l’onglet **Compte** et au résumé de trésorerie du Tableau.
 
 Une transaction utilise un seul mode de paiement. Une transaction récurrente peut mémoriser son mode de paiement par défaut.
+
+### Compte bancaire et trésorerie
+
+L’onglet **Compte** reproduit la logique d’un suivi bancaire mensuel : un solde de départ est repris, les entrées et sorties sont placées dans l’ordre chronologique, puis le solde est recalculé après chaque mouvement.
+
+Pour utiliser cette vue, créez ou modifiez un mode de paiement de type **Compte bancaire**, puis indiquez son **solde de référence** et la **date de référence** correspondante.
+
+Pour le mois choisi, l’écran présente :
+
+- le **Solde de départ**;
+- le **Solde actuel**;
+- le **Plus bas prévu**;
+- le **Solde fin de mois**;
+- la liste chronologique des entrées et sorties;
+- le solde obtenu après chaque mouvement.
+
+Le **Plus bas prévu** est particulièrement utile : un mois peut terminer avec un bon solde tout en passant temporairement très près de zéro avant une paie ou un dépôt.
+
+Les transactions confirmées déjà survenues alimentent le réalisé. Les transactions prévues, postdatées et les récurrences futures peuvent alimenter la prévision jusqu’à la fin du mois.
+
+Une transaction marquée **Hors budget** reste visible dans le Compte et modifie son solde si elle utilise ce compte bancaire. Elle n’est toutefois pas comptée comme nouvelle dépense ou nouveau revenu dans le budget et les KPI.
+
+La partie annuelle présente les **12 mois** avec le solde de fin et le minimum prévu de chacun. Un mois peut être ouvert directement pour consulter son détail. Les mois antérieurs à la date de référence du compte ne sont pas inventés et restent indisponibles.
+
+### Budget mensuel global
+
+L’onglet **Budget** sert à planifier le budget habituel indépendamment des transactions d’un mois précis.
+
+Chaque ligne est un **revenu** ou une **dépense** et peut être saisie :
+
+- en montant **mensuel**;
+- ou en montant **aux deux semaines**.
+
+L’application convertit automatiquement les deux vues sur une base de **26 paies par année** :
+
+- montant aux deux semaines × 26 ÷ 12 = montant mensuel;
+- montant mensuel × 12 ÷ 26 = montant aux deux semaines.
+
+Pour une dépense saisie mensuellement, un **montant par paie personnalisé** peut remplacer le calcul automatique. Cela permet par exemple de mettre volontairement un peu plus d’argent de côté à chaque paie pour conserver un coussin de sécurité.
+
+Le résumé affiche :
+
+- les revenus mensuels;
+- les dépenses mensuelles;
+- le reste disponible mensuel;
+- le reste disponible par paie.
+
+Les lignes peuvent être activées, désactivées, réordonnées et modifiées. Le **Budget** représente la planification globale habituelle; les **Objectifs** demeurent disponibles séparément pour suivre des limites par catégorie ou par étiquette au fil des mois.
 
 ### Navigation dans Finances sur téléphone
 
@@ -240,6 +293,8 @@ Le sous-menu de Finances contient plusieurs sections. Sur téléphone, il se pr�
 Les onglets ne sont pas réduits les uns sur les autres. Il est possible de glisser la barre vers la gauche ou la droite pour atteindre :
 
 - Tableau;
+- Compte;
+- Budget;
 - Saisie;
 - Historique;
 - Récurrences;
@@ -252,11 +307,13 @@ Des flèches peuvent aussi apparaître lorsque tous les onglets ne tiennent pas 
 
 ### Tableau mensuel : réalisé et à venir
 
-Le Tableau distingue maintenant trois niveaux pour le mois affiché :
+Le Tableau distingue trois niveaux pour le mois affiché :
 
 - **Réalisé** : transactions confirmées dont la date est atteinte;
 - **À venir** : transactions prévues, postdatées ou issues d’une récurrence future;
 - **Total prévu** : Réalisé + À venir.
+
+Lorsque l’utilisateur possède un compte bancaire avec un solde de référence, une bande de trésorerie affiche aussi **Solde de départ**, **Solde actuel**, **Plus bas prévu** et **Fin de mois prévue**, avec accès direct à l’onglet Compte.
 
 Les récurrences actives sont projetées jusqu’à la fin du mois affiché sans créer immédiatement de transactions confirmées. Un revenu récurrent futur apparaît donc dans les prévisions dès qu’il appartient au mois consulté.
 
@@ -276,6 +333,8 @@ Les KPI par catégorie et par étiquette utilisent les colonnes :
 - À venir;
 - Total prévu.
 
+Les transactions **Hors budget** sont exclues de ces montants.
+
 Les dépenses et les revenus sont présentés dans des blocs distincts. Les noms trop longs sont tronqués, mais le nom complet demeure disponible au survol.
 
 Le nom d’une **catégorie** ou d’une **étiquette** est cliquable. La fenêtre de détail affiche les transactions du mois correspondant à cette ligne, séparées en **Réalisé** et **À venir**, avec les trois totaux.
@@ -284,9 +343,9 @@ Une transaction réelle peut être ouverte depuis cette fenêtre pour consulter 
 
 Une transaction portant plusieurs étiquettes peut apparaître dans plusieurs lignes. Les montants par étiquette ne doivent pas être additionnés pour obtenir le total général.
 
-### Solde prévu cumulatif
+### Solde prévu cumulatif des modes de paiement
 
-Le **Tableau** affiche un solde prévu pour chaque mode de paiement.
+Le **Tableau** conserve le solde prévu pour chaque mode de paiement utilisé pour la conciliation.
 
 Ce calcul ne recommence jamais à zéro au début d’un mois. Il traverse les mois jusqu’à ce que les transactions soient conciliées.
 
@@ -297,6 +356,8 @@ Le solde confirmé non concilié est calculé ainsi :
 - plus l’ajustement initial non concilié.
 
 Les transactions prévues sont présentées séparément et ajoutées au **solde prévu**.
+
+Cette vue de conciliation est distincte du **solde bancaire courant** présenté dans l’onglet Compte.
 
 ### Conciliation par relevé
 
@@ -352,7 +413,7 @@ Deux modes sont disponibles :
 - **À confirmer** : l’occurrence devient une transaction prévue;
 - **Création automatique** : l’occurrence est immédiatement confirmée.
 
-La récurrence peut aussi mémoriser une catégorie, des étiquettes et un mode de paiement par défaut.
+La récurrence peut aussi mémoriser une catégorie, des étiquettes, un mode de paiement par défaut et l’option **Hors budget**. Lorsqu’une occurrence est créée, elle conserve ce choix.
 
 ### Objectifs mensuels
 
@@ -367,6 +428,8 @@ Chaque objectif possède une politique de report :
 
 Un plafond de report facultatif peut être défini. Les mois déjà créés conservent leur montant de base et leur politique même si l’objectif est modifié plus tard.
 
+Les transactions **Hors budget** sont exclues de la progression des objectifs.
+
 ### Tableau de bord
 
 Le tableau de bord affiche :
@@ -375,6 +438,7 @@ Le tableau de bord affiche :
 - les revenus;
 - la différence;
 - les transactions prévues;
+- le résumé du compte bancaire lorsqu’il est configuré;
 - la progression des objectifs;
 - des KPI mensuels par catégorie;
 - des KPI mensuels par étiquette;
@@ -390,7 +454,7 @@ L’historique regroupe les transactions par date.
 
 Sur grand écran, les dépenses apparaissent dans la colonne de gauche et les revenus dans la colonne de droite. Sur téléphone, les deux sections sont empilées afin de préserver la lisibilité.
 
-Tous les montants sont alignés à droite. Les descriptions, catégories, étiquettes et modes de paiement restent alignés à gauche.
+Tous les montants sont alignés à droite. Les descriptions, catégories, étiquettes et modes de paiement restent alignés à gauche. La mention **Hors budget** apparaît lorsque l’option est activée.
 
 Les filtres permettent de chercher par :
 
@@ -411,22 +475,25 @@ L’onglet **Exporter** contient aussi la zone d’importation. Les formats reco
 - le CSV exporté par JF Apps;
 - le JSON exporté par JF Apps.
 
-Avant l’importation, l’application présente le nombre de transactions valides, les transactions déjà importées, les doublons possibles, les catégories, les étiquettes et les modes de paiement détectés.
+Avant l’importation, l’application présente le nombre de transactions valides, les transactions déjà importées, les doublons possibles, les catégories, les étiquettes, les modes de paiement et, pour un JSON V1.6, les lignes du budget global détectées.
 
-Les catégories, étiquettes et modes de paiement absents sont créés automatiquement.
+Les catégories, étiquettes et modes de paiement absents sont créés automatiquement. Les lignes de budget présentes dans une sauvegarde JSON V1.6 peuvent être restaurées.
 
 Pour les exports Spendee contenant un horodatage UTC, la date est convertie selon le fuseau **America/Toronto**, adapté au Québec.
 
 ### Exporter
 
-L’onglet **Exporter** produit un fichier CSV pour Excel et un fichier JSON complet de sécurité.
+L’onglet **Exporter** produit un fichier CSV pour Excel et un fichier JSON de sécurité.
 
-Les exportations contiennent maintenant :
+Les exportations contiennent notamment :
 
 - le mode de paiement;
 - le statut de conciliation;
 - la date de conciliation;
+- l’indicateur **Hors budget**;
 - la source et la clé d’importation.
+
+La sauvegarde JSON comprend aussi les lignes du **Budget global** afin de pouvoir les restaurer lors d’une importation ultérieure.
 
 ### Versions
 

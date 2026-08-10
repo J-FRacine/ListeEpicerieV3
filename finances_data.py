@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from calendar import monthrange
+from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 import csv
@@ -60,6 +61,11 @@ PAYMENT_METHOD_TYPES = {
 RECONCILIATION_SESSION_STATUSES = {
     "completed": "Complétée",
     "cancelled": "Annulée",
+}
+
+BUDGET_INPUT_FREQUENCIES = {
+    "monthly": "Mensuel",
+    "biweekly": "Aux 2 semaines",
 }
 
 
@@ -314,6 +320,12 @@ def init_finances_schema():
             """)
 
             cur.execute("""
+                ALTER TABLE finance_recurrences
+                ADD COLUMN IF NOT EXISTS budget_excluded BOOLEAN
+                NOT NULL DEFAULT FALSE;
+            """)
+
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS finance_recurrence_tags (
                     recurrence_id BIGINT NOT NULL
                         REFERENCES finance_recurrences(id) ON DELETE CASCADE,
@@ -411,6 +423,11 @@ def init_finances_schema():
                     END IF;
                 END
                 $$;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS budget_excluded BOOLEAN
+                NOT NULL DEFAULT FALSE;
             """)
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS
@@ -520,6 +537,36 @@ def init_finances_schema():
                 ON finance_reconciliation_session_transactions (
                     transaction_id,
                     is_active
+                );
+            """)
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS finance_budget_items (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL
+                        REFERENCES users(id) ON DELETE CASCADE,
+                    item_type TEXT NOT NULL
+                        CHECK (item_type IN ('expense', 'income')),
+                    description TEXT NOT NULL,
+                    input_frequency TEXT NOT NULL DEFAULT 'monthly'
+                        CHECK (input_frequency IN ('monthly', 'biweekly')),
+                    input_amount NUMERIC(14,2) NOT NULL
+                        CHECK (input_amount > 0),
+                    biweekly_override NUMERIC(14,2),
+                    note TEXT,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CHECK (biweekly_override IS NULL OR biweekly_override > 0),
+                    CHECK (CHAR_LENGTH(description) BETWEEN 1 AND 160),
+                    CHECK (note IS NULL OR CHAR_LENGTH(note) <= 1000)
+                );
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS finance_budget_items_order_idx
+                ON finance_budget_items (
+                    user_id, is_active DESC, item_type, sort_order, id
                 );
             """)
 
@@ -1273,6 +1320,7 @@ def save_transaction(
     payment_method_id=None,
     reconciliation_status="unreconciled",
     reconciliation_date=None,
+    budget_excluded=False,
     transaction_id=None,
 ):
     if transaction_type not in TRANSACTION_TYPES:
@@ -1367,6 +1415,7 @@ def save_transaction(
                         payment_method_id = %s,
                         reconciliation_status = %s,
                         reconciliation_date = %s,
+                        budget_excluded = %s,
                         updated_at = NOW()
                     WHERE id = %s
                       AND user_id = %s;
@@ -1382,6 +1431,7 @@ def save_transaction(
                         validated_payment_method,
                         reconciliation_status,
                         parsed_reconciliation_date,
+                        bool(budget_excluded),
                         transaction_id,
                         user_id,
                     ),
@@ -1415,11 +1465,12 @@ def save_transaction(
                         status,
                         payment_method_id,
                         reconciliation_status,
-                        reconciliation_date
+                        reconciliation_date,
+                        budget_excluded
                     )
                     VALUES (
                         %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s
                     )
                     RETURNING id;
                     """,
@@ -1435,6 +1486,7 @@ def save_transaction(
                         validated_payment_method,
                         reconciliation_status,
                         parsed_reconciliation_date,
+                        bool(budget_excluded),
                     ),
                 )
                 saved_id = int(
@@ -1841,7 +1893,8 @@ def dashboard_summary(user_id, month_value):
                     ),0) AS incomes,
                     COUNT(*) FILTER (WHERE status='planned') AS planned_count
                 FROM finance_transactions
-                WHERE user_id=%s AND transaction_date>=%s AND transaction_date<%s;
+                WHERE user_id=%s AND transaction_date>=%s AND transaction_date<%s
+                  AND COALESCE(budget_excluded, FALSE) = FALSE;
             """, (user_id, month, next_month))
             row = cur.fetchone()
     expenses = Decimal(row["expenses"])
@@ -1891,6 +1944,7 @@ def dashboard_expense_kpis(
                 WHERE transaction.user_id = %s
                   AND transaction.transaction_type = 'expense'
                   AND transaction.status = 'confirmed'
+                  AND COALESCE(transaction.budget_excluded, FALSE) = FALSE
                   AND transaction.transaction_date >= %s
                   AND transaction.transaction_date < %s
                 GROUP BY
@@ -1929,6 +1983,7 @@ def dashboard_expense_kpis(
                 WHERE transaction.user_id = %s
                   AND transaction.transaction_type = 'expense'
                   AND transaction.status = 'confirmed'
+                  AND COALESCE(transaction.budget_excluded, FALSE) = FALSE
                   AND transaction.transaction_date >= %s
                   AND transaction.transaction_date < %s
                 GROUP BY
@@ -1972,6 +2027,7 @@ def _projection_row(
     occurrence_date=None,
     status="planned",
     projected=False,
+    budget_excluded=False,
 ):
     return {
         "id": None,
@@ -1989,6 +2045,7 @@ def _projection_row(
         "occurrence_date": occurrence_date,
         "status": status,
         "projected": bool(projected),
+        "budget_excluded": bool(budget_excluded),
     }
 
 
@@ -1998,6 +2055,8 @@ def _projection_kpis(rows, transaction_type, limit=12):
 
     for row in rows:
         if row["transaction_type"] != transaction_type:
+            continue
+        if bool(row.get("budget_excluded")):
             continue
 
         amount = Decimal(row["amount"])
@@ -2179,6 +2238,9 @@ def dashboard_month_projection(
                             occurrence_date=occurrence,
                             status="planned",
                             projected=True,
+                            budget_excluded=bool(
+                                recurrence.get("budget_excluded")
+                            ),
                         )
                     )
 
@@ -2212,6 +2274,7 @@ def dashboard_month_projection(
             for row in combined
             if row["projection_bucket"] == "realized"
             and row["transaction_type"] == "expense"
+            and not bool(row.get("budget_excluded"))
         ),
         Decimal("0.00"),
     )
@@ -2221,6 +2284,7 @@ def dashboard_month_projection(
             for row in combined
             if row["projection_bucket"] == "realized"
             and row["transaction_type"] == "income"
+            and not bool(row.get("budget_excluded"))
         ),
         Decimal("0.00"),
     )
@@ -2230,6 +2294,7 @@ def dashboard_month_projection(
             for row in combined
             if row["projection_bucket"] == "upcoming"
             and row["transaction_type"] == "expense"
+            and not bool(row.get("budget_excluded"))
         ),
         Decimal("0.00"),
     )
@@ -2239,6 +2304,7 @@ def dashboard_month_projection(
             for row in combined
             if row["projection_bucket"] == "upcoming"
             and row["transaction_type"] == "income"
+            and not bool(row.get("budget_excluded"))
         ),
         Decimal("0.00"),
     )
@@ -2425,6 +2491,7 @@ def save_recurrence(
     note=None,
     end_date=None,
     confirmation_mode="confirm",
+    budget_excluded=False,
     recurrence_id=None,
 ):
     if transaction_type not in TRANSACTION_TYPES:
@@ -2508,6 +2575,7 @@ def save_recurrence(
                         start_date = %s,
                         end_date = %s,
                         confirmation_mode = %s,
+                        budget_excluded = %s,
                         is_active = TRUE,
                         updated_at = NOW()
                     WHERE id = %s
@@ -2525,6 +2593,7 @@ def save_recurrence(
                         parsed_start,
                         parsed_end,
                         confirmation_mode,
+                        bool(budget_excluded),
                         recurrence_id,
                         user_id,
                     ),
@@ -2560,11 +2629,12 @@ def save_recurrence(
                         start_date,
                         end_date,
                         next_date,
-                        confirmation_mode
+                        confirmation_mode,
+                        budget_excluded
                     )
                     VALUES (
                         %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s, %s
                     )
                     RETURNING id;
                     """,
@@ -2582,6 +2652,7 @@ def save_recurrence(
                         parsed_end,
                         parsed_start,
                         confirmation_mode,
+                        bool(budget_excluded),
                     ),
                 )
                 saved_id = int(
@@ -2763,12 +2834,13 @@ def generate_due_recurrences(
                             status,
                             reconciliation_status,
                             recurrence_id,
-                            occurrence_date
+                            occurrence_date,
+                            budget_excluded
                         )
                         VALUES (
                             %s, %s, %s, %s, %s, %s,
                             %s, %s, %s, 'unreconciled',
-                            %s, %s
+                            %s, %s, %s
                         )
                         ON CONFLICT (
                             recurrence_id,
@@ -2797,6 +2869,7 @@ def generate_due_recurrences(
                             status,
                             recurrence["id"],
                             occurrence,
+                            bool(recurrence.get("budget_excluded")),
                         ),
                     )
                     inserted = cur.fetchone()
@@ -2854,6 +2927,434 @@ def generate_due_recurrences(
             conn.commit()
 
     return created
+
+
+
+def _budget_amounts_from_values(
+    input_frequency,
+    input_amount,
+    biweekly_override=None,
+):
+    amount = Decimal(input_amount).quantize(Decimal("0.01"))
+    override = (
+        Decimal(biweekly_override).quantize(Decimal("0.01"))
+        if biweekly_override not in (None, "")
+        else None
+    )
+    if input_frequency == "biweekly":
+        biweekly = amount
+        monthly = (amount * Decimal("26") / Decimal("12")).quantize(
+            Decimal("0.01")
+        )
+    else:
+        monthly = amount
+        biweekly = (
+            override
+            if override is not None
+            else (amount * Decimal("12") / Decimal("26")).quantize(
+                Decimal("0.01")
+            )
+        )
+    return monthly, biweekly
+
+
+def save_budget_item(
+    user_id,
+    item_type,
+    description,
+    input_frequency,
+    input_amount,
+    biweekly_override=None,
+    note=None,
+    budget_item_id=None,
+):
+    if item_type not in TRANSACTION_TYPES:
+        raise ValueError("Type de poste budgétaire invalide.")
+    if input_frequency not in BUDGET_INPUT_FREQUENCIES:
+        raise ValueError("Fréquence budgétaire invalide.")
+    description = _text(description, "La description", 160, True)
+    amount = _money(input_amount)
+    override = (
+        _money(biweekly_override)
+        if biweekly_override not in (None, "")
+        else None
+    )
+    note = _text(note, "La note", 1000)
+    if input_frequency == "biweekly":
+        override = None
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            if budget_item_id:
+                cur.execute(
+                    """
+                    UPDATE finance_budget_items
+                    SET item_type=%s, description=%s, input_frequency=%s,
+                        input_amount=%s, biweekly_override=%s, note=%s,
+                        is_active=TRUE, updated_at=NOW()
+                    WHERE id=%s AND user_id=%s;
+                    """,
+                    (
+                        item_type, description, input_frequency, amount,
+                        override, note, budget_item_id, user_id,
+                    ),
+                )
+                if cur.rowcount == 0:
+                    raise ValueError("Poste budgétaire introuvable.")
+            else:
+                cur.execute(
+                    """
+                    SELECT COALESCE(MAX(sort_order),0)+1 AS next_order
+                    FROM finance_budget_items
+                    WHERE user_id=%s AND item_type=%s;
+                    """,
+                    (user_id, item_type),
+                )
+                next_order = int(cur.fetchone()["next_order"])
+                cur.execute(
+                    """
+                    INSERT INTO finance_budget_items (
+                        user_id, item_type, description, input_frequency,
+                        input_amount, biweekly_override, note, sort_order
+                    )
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s);
+                    """,
+                    (
+                        user_id, item_type, description, input_frequency,
+                        amount, override, note, next_order,
+                    ),
+                )
+            conn.commit()
+
+
+def list_budget_items(user_id, include_inactive=False):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM finance_budget_items
+                WHERE user_id=%s
+                  AND (%s OR is_active=TRUE)
+                ORDER BY
+                    CASE WHEN item_type='income' THEN 0 ELSE 1 END,
+                    sort_order, LOWER(description), id;
+                """,
+                (user_id, include_inactive),
+            )
+            rows = []
+            for raw in cur.fetchall():
+                row = dict(raw)
+                monthly, biweekly = _budget_amounts_from_values(
+                    row["input_frequency"],
+                    row["input_amount"],
+                    row.get("biweekly_override"),
+                )
+                row["monthly_amount"] = monthly
+                row["biweekly_amount"] = biweekly
+                row["biweekly_is_override"] = (
+                    row["input_frequency"] == "monthly"
+                    and row.get("biweekly_override") is not None
+                )
+                rows.append(row)
+            return rows
+
+
+def toggle_budget_item(user_id, budget_item_id, is_active):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE finance_budget_items
+                SET is_active=%s, updated_at=NOW()
+                WHERE id=%s AND user_id=%s;
+                """,
+                (bool(is_active), budget_item_id, user_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError("Poste budgétaire introuvable.")
+            conn.commit()
+
+
+def move_budget_item(user_id, budget_item_id, direction):
+    if direction not in {"up", "down"}:
+        raise ValueError("Direction invalide.")
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, item_type, sort_order
+                FROM finance_budget_items
+                WHERE user_id=%s
+                ORDER BY item_type, sort_order, id
+                FOR UPDATE;
+                """,
+                (user_id,),
+            )
+            rows = cur.fetchall()
+            current = next(
+                (row for row in rows if int(row["id"]) == int(budget_item_id)),
+                None,
+            )
+            if not current:
+                raise ValueError("Poste budgétaire introuvable.")
+            same_type = [row for row in rows if row["item_type"] == current["item_type"]]
+            ids = [int(row["id"]) for row in same_type]
+            index = ids.index(int(budget_item_id))
+            target_index = index - 1 if direction == "up" else index + 1
+            if target_index < 0 or target_index >= len(same_type):
+                return
+            target = same_type[target_index]
+            current_order = int(current["sort_order"])
+            target_order = int(target["sort_order"])
+            if current_order == target_order:
+                current_order = index + 1
+                target_order = target_index + 1
+            cur.execute(
+                "UPDATE finance_budget_items SET sort_order=%s,updated_at=NOW() WHERE id=%s;",
+                (target_order, current["id"]),
+            )
+            cur.execute(
+                "UPDATE finance_budget_items SET sort_order=%s,updated_at=NOW() WHERE id=%s;",
+                (current_order, target["id"]),
+            )
+            conn.commit()
+
+
+def budget_summary(user_id):
+    rows = list_budget_items(user_id)
+    totals = {
+        "monthly_income": Decimal("0.00"),
+        "monthly_expense": Decimal("0.00"),
+        "biweekly_income": Decimal("0.00"),
+        "biweekly_expense": Decimal("0.00"),
+    }
+    for row in rows:
+        key = "income" if row["item_type"] == "income" else "expense"
+        totals[f"monthly_{key}"] += Decimal(row["monthly_amount"])
+        totals[f"biweekly_{key}"] += Decimal(row["biweekly_amount"])
+    totals["monthly_remaining"] = totals["monthly_income"] - totals["monthly_expense"]
+    totals["biweekly_remaining"] = totals["biweekly_income"] - totals["biweekly_expense"]
+    totals["rows"] = rows
+    return totals
+
+
+def list_bank_accounts(user_id, include_inactive=False):
+    return [
+        row for row in list_payment_methods(user_id, include_inactive=include_inactive)
+        if row.get("method_type") == "bank"
+    ]
+
+
+def _bank_effective_rows(user_id, payment_method_id, end_date, today_value=None):
+    today = (
+        today_value if isinstance(today_value, date)
+        else date.fromisoformat(str(today_value)) if today_value
+        else date.today()
+    )
+    accounts = list_bank_accounts(user_id, include_inactive=True)
+    account = next(
+        (row for row in accounts if int(row["id"]) == int(payment_method_id)),
+        None,
+    )
+    if not account:
+        raise ValueError("Compte bancaire introuvable.")
+    opening_date = account.get("opening_balance_date")
+    if not opening_date:
+        return account, [], None
+    if opening_date > end_date:
+        return account, [], opening_date
+
+    existing = [
+        dict(row)
+        for row in list_transactions(
+            user_id,
+            start_date=opening_date,
+            end_date=end_date,
+            payment_method_id=payment_method_id,
+            limit=100000,
+        )
+    ]
+    existing_occurrences = {
+        (int(row["recurrence_id"]), row.get("occurrence_date") or row["transaction_date"])
+        for row in existing if row.get("recurrence_id")
+    }
+    rows = []
+    for row in existing:
+        tx_date = row["transaction_date"]
+        if tx_date <= today and row["status"] != "confirmed":
+            continue
+        row["projected"] = False
+        rows.append(row)
+
+    if end_date > today:
+        for recurrence in list_recurrences(user_id):
+            if not recurrence["is_active"]:
+                continue
+            if int(recurrence.get("payment_method_id") or 0) != int(payment_method_id):
+                continue
+            occurrence = recurrence.get("next_date") or recurrence["start_date"]
+            while occurrence <= today:
+                occurrence = _next_date(
+                    occurrence,
+                    recurrence["frequency_unit"],
+                    recurrence["frequency_interval"],
+                )
+            while occurrence <= end_date:
+                if recurrence.get("end_date") and occurrence > recurrence["end_date"]:
+                    break
+                key = (int(recurrence["id"]), occurrence)
+                if key not in existing_occurrences and occurrence >= opening_date:
+                    rows.append(
+                        _projection_row(
+                            transaction_date=occurrence,
+                            transaction_type=recurrence["transaction_type"],
+                            amount=recurrence["amount"],
+                            description=recurrence["description"],
+                            category_id=recurrence.get("category_id"),
+                            category_full_name=recurrence.get("category_full_name"),
+                            tag_ids=recurrence.get("tag_ids"),
+                            tag_names=recurrence.get("tag_names"),
+                            payment_method_id=payment_method_id,
+                            payment_method_name=account["name"],
+                            recurrence_id=recurrence["id"],
+                            occurrence_date=occurrence,
+                            status="planned",
+                            projected=True,
+                            budget_excluded=bool(recurrence.get("budget_excluded")),
+                        )
+                    )
+                occurrence = _next_date(
+                    occurrence,
+                    recurrence["frequency_unit"],
+                    recurrence["frequency_interval"],
+                )
+    rows.sort(
+        key=lambda row: (
+            row["transaction_date"],
+            0 if row["transaction_type"] == "income" else 1,
+            int(row.get("id") or 0),
+            str(row["description"]).casefold(),
+        )
+    )
+    return account, rows, opening_date
+
+
+def _signed_transaction_amount(row):
+    amount = Decimal(row["amount"])
+    return amount if row["transaction_type"] == "income" else -amount
+
+
+def bank_cashflow_month(user_id, payment_method_id, month_value, today_value=None):
+    month = _month_start(month_value)
+    next_month = _add_months(month, 1)
+    month_end = next_month - timedelta(days=1)
+    today = (
+        today_value if isinstance(today_value, date)
+        else date.fromisoformat(str(today_value)) if today_value
+        else date.today()
+    )
+    account, rows, opening_date = _bank_effective_rows(
+        user_id, payment_method_id, month_end, today_value=today
+    )
+    if not opening_date or opening_date > month_end:
+        return {
+            "account": account, "month": month, "month_end": month_end,
+            "available": False, "opening_date": opening_date, "rows": [],
+        }
+    balance = Decimal(account.get("opening_balance") or 0)
+    start_balance = balance
+    display_rows = []
+    minimum_balance = None
+    current_balance = balance if opening_date <= today else None
+
+    for row in rows:
+        tx_date = row["transaction_date"]
+        if tx_date < month:
+            balance += _signed_transaction_amount(row)
+            start_balance = balance
+            if tx_date <= today:
+                current_balance = balance
+            continue
+        if tx_date > month_end:
+            continue
+        balance += _signed_transaction_amount(row)
+        display = dict(row)
+        display["running_balance"] = balance
+        display_rows.append(display)
+        if minimum_balance is None or balance < minimum_balance:
+            minimum_balance = balance
+        if tx_date <= today:
+            current_balance = balance
+
+    if minimum_balance is None:
+        minimum_balance = start_balance
+    else:
+        minimum_balance = min(start_balance, minimum_balance)
+    return {
+        "account": account,
+        "month": month,
+        "month_end": month_end,
+        "available": True,
+        "opening_date": opening_date,
+        "start_balance": start_balance,
+        "current_balance": current_balance,
+        "minimum_balance": minimum_balance,
+        "end_balance": balance,
+        "rows": display_rows,
+    }
+
+
+def bank_cashflow_year_summary(user_id, payment_method_id, year, today_value=None):
+    year = int(year)
+    start = date(year, 1, 1)
+    end = date(year, 12, 31)
+    today = (
+        today_value if isinstance(today_value, date)
+        else date.fromisoformat(str(today_value)) if today_value
+        else date.today()
+    )
+    account, rows, opening_date = _bank_effective_rows(
+        user_id, payment_method_id, end, today_value=today
+    )
+    if not opening_date or opening_date > end:
+        return {"account": account, "year": year, "available": False, "months": []}
+    balance = Decimal(account.get("opening_balance") or 0)
+    for row in rows:
+        if row["transaction_date"] < start:
+            balance += _signed_transaction_amount(row)
+    by_month = defaultdict(list)
+    for row in rows:
+        if start <= row["transaction_date"] <= end:
+            by_month[row["transaction_date"].month].append(row)
+    months = []
+    for month_number in range(1, 13):
+        month_start = date(year, month_number, 1)
+        month_end = date(year, month_number, monthrange(year, month_number)[1])
+        if month_end < opening_date:
+            months.append({
+                "month": month_start,
+                "month_end": month_end,
+                "available": False,
+                "start_balance": None,
+                "minimum_balance": None,
+                "end_balance": None,
+            })
+            continue
+        start_balance = balance
+        minimum = balance
+        for row in by_month.get(month_number, []):
+            balance += _signed_transaction_amount(row)
+            minimum = min(minimum, balance)
+        months.append({
+            "month": month_start,
+            "month_end": month_end,
+            "available": True,
+            "start_balance": start_balance,
+            "minimum_balance": minimum,
+            "end_balance": balance,
+        })
+    return {"account": account, "year": year, "available": True, "months": months}
 
 
 def save_goal(
@@ -2961,6 +3462,7 @@ def _goal_spent(cur, goal, month):
             JOIN finance_transaction_tags tt ON tt.transaction_id=t.id
             WHERE t.user_id=%s AND t.transaction_type='expense'
               AND t.status='confirmed'
+              AND COALESCE(t.budget_excluded, FALSE) = FALSE
               AND t.transaction_date>=%s AND t.transaction_date<%s
               AND tt.tag_id=%s;
         """, (
@@ -2976,6 +3478,7 @@ def _goal_spent(cur, goal, month):
             LEFT JOIN finance_categories c ON c.id=t.category_id
             WHERE t.user_id=%s AND t.transaction_type='expense'
               AND t.status='confirmed'
+              AND COALESCE(t.budget_excluded, FALSE) = FALSE
               AND t.transaction_date>=%s AND t.transaction_date<%s
               AND (t.category_id=%s OR c.parent_id=%s);
         """, (
@@ -3151,6 +3654,15 @@ def _parse_reconciliation_status(value):
 
 
 
+def _parse_import_bool(value):
+    if isinstance(value, bool):
+        return value
+    normalized = _normalized_header(value)
+    return normalized in {
+        "1", "true", "vrai", "oui", "yes", "hors budget", "exclue", "exclu"
+    }
+
+
 def _split_import_tags(value):
     if isinstance(value, list):
         candidates = value
@@ -3234,6 +3746,7 @@ def _parse_spendee_rows(rows):
                     "payment_method_name": None,
                     "reconciliation_status": "unreconciled",
                     "reconciliation_date": None,
+                    "budget_excluded": False,
                     "import_source": "spendee",
                     "import_key": _stable_import_key(
                         "spendee", payload, occurrence_counts[base]
@@ -3386,6 +3899,16 @@ def _parse_jf_csv_rows(rows):
             if reconciliation_status == "unreconciled":
                 reconciliation_date = None
 
+            budget_excluded = _parse_import_bool(
+                _pick(
+                    row,
+                    "Hors budget",
+                    "Exclue du budget",
+                    "Exclu du budget",
+                    "budget_excluded",
+                )
+            )
+
             source = str(
                 _pick(
                     row,
@@ -3463,6 +3986,7 @@ def _parse_jf_csv_rows(rows):
                     ),
                     "reconciliation_status": reconciliation_status,
                     "reconciliation_date": reconciliation_date,
+                    "budget_excluded": budget_excluded,
                     "import_source": source,
                     "import_key": import_key[:180],
                     "original_row": row_number,
@@ -3488,7 +4012,35 @@ def _parse_jf_json(document):
         if isinstance(item, dict):
             rows.append(item)
     parsed, errors, _ = _parse_jf_csv_rows(rows)
-    return parsed, errors, "JF Apps JSON"
+
+    budget_items = []
+    for index, item in enumerate(document.get("budget_items") or [], start=1):
+        if not isinstance(item, dict):
+            continue
+        try:
+            item_type = str(item.get("item_type") or "").strip()
+            if item_type not in TRANSACTION_TYPES:
+                raise ValueError("type invalide")
+            input_frequency = str(item.get("input_frequency") or "monthly").strip()
+            if input_frequency not in BUDGET_INPUT_FREQUENCIES:
+                raise ValueError("fréquence invalide")
+            budget_items.append({
+                "item_type": item_type,
+                "description": _text(item.get("description"), "La description", 160, True),
+                "input_frequency": input_frequency,
+                "input_amount": _money(item.get("input_amount")),
+                "biweekly_override": (
+                    _money(item.get("biweekly_override"))
+                    if item.get("biweekly_override") not in (None, "")
+                    else None
+                ),
+                "note": _text(item.get("note"), "La note", 1000),
+                "sort_order": int(item.get("sort_order") or index),
+                "is_active": bool(item.get("is_active", True)),
+            })
+        except Exception as error:
+            errors.append(f"Budget {index} : {error}")
+    return parsed, errors, "JF Apps JSON", budget_items
 
 
 def _csv_rows(text):
@@ -3571,8 +4123,9 @@ def prepare_finance_import(user_id, filename, text):
         raise ValueError("Le fichier est vide.")
 
     lower_name = str(filename or "").lower()
+    budget_items = []
     if lower_name.endswith(".json") or str(text).lstrip().startswith("{"):
-        rows, errors, format_name = _parse_jf_json(json.loads(text))
+        rows, errors, format_name, budget_items = _parse_jf_json(json.loads(text))
     else:
         csv_rows = _csv_rows(text)
         if not csv_rows:
@@ -3638,6 +4191,7 @@ def prepare_finance_import(user_id, filename, text):
             },
             key=str.casefold,
         ),
+        "budget_items": budget_items,
     }
 
 
@@ -3809,12 +4363,14 @@ def import_finance_rows(
     user_id,
     rows,
     skip_possible_duplicates=True,
+    budget_items=None,
 ):
     imported_count = 0
     skipped_count = 0
     categories_created = 0
     tags_created = 0
     payment_methods_created = 0
+    budget_items_imported = 0
     failures = []
 
     with get_connection() as conn:
@@ -3913,13 +4469,14 @@ def import_finance_rows(
                             status,
                             reconciliation_status,
                             reconciliation_date,
+                            budget_excluded,
                             import_source,
                             import_key,
                             imported_at
                         )
                         VALUES (
                             %s, %s, %s, %s, %s, %s, %s,
-                            %s, %s, %s, %s, %s, %s, NOW()
+                            %s, %s, %s, %s, %s, %s, %s, NOW()
                         )
                         ON CONFLICT DO NOTHING
                         RETURNING id;
@@ -3942,6 +4499,7 @@ def import_finance_rows(
                             row["status"],
                             reconciliation_status,
                             reconciliation_date,
+                            bool(row.get("budget_excluded")),
                             row[
                                 "import_source"
                             ],
@@ -4024,6 +4582,56 @@ def import_finance_rows(
                     )
                     continue
 
+            for item in budget_items or []:
+                try:
+                    cur.execute(
+                        """
+                        SELECT id
+                        FROM finance_budget_items
+                        WHERE user_id=%s
+                          AND item_type=%s
+                          AND LOWER(TRIM(description))=LOWER(TRIM(%s))
+                        ORDER BY id
+                        LIMIT 1;
+                        """,
+                        (user_id, item["item_type"], item["description"]),
+                    )
+                    existing = cur.fetchone()
+                    if existing:
+                        cur.execute(
+                            """
+                            UPDATE finance_budget_items
+                            SET input_frequency=%s,input_amount=%s,biweekly_override=%s,
+                                note=%s,sort_order=%s,is_active=%s,updated_at=NOW()
+                            WHERE id=%s AND user_id=%s;
+                            """,
+                            (
+                                item["input_frequency"], item["input_amount"],
+                                item.get("biweekly_override"), item.get("note"),
+                                item.get("sort_order") or 0, bool(item.get("is_active", True)),
+                                existing["id"], user_id,
+                            ),
+                        )
+                    else:
+                        cur.execute(
+                            """
+                            INSERT INTO finance_budget_items (
+                                user_id,item_type,description,input_frequency,input_amount,
+                                biweekly_override,note,sort_order,is_active
+                            )
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s);
+                            """,
+                            (
+                                user_id,item["item_type"],item["description"],
+                                item["input_frequency"],item["input_amount"],
+                                item.get("biweekly_override"),item.get("note"),
+                                item.get("sort_order") or 0,bool(item.get("is_active", True)),
+                            ),
+                        )
+                    budget_items_imported += 1
+                except Exception as error:
+                    failures.append(f"Budget : {item.get('description', '?')} : {error}")
+
             conn.commit()
 
     return {
@@ -4032,6 +4640,7 @@ def import_finance_rows(
         "categories_created": categories_created,
         "tags_created": tags_created,
         "payment_methods_created": payment_methods_created,
+        "budget_items_imported": budget_items_imported,
         "failures": failures,
     }
 
@@ -4710,6 +5319,10 @@ def export_finances(user_id):
     goals = list_goals(
         user_id
     )
+    budget_items = list_budget_items(
+        user_id,
+        include_inactive=True,
+    )
     reconciliation_sessions = list_reconciliation_sessions(
         user_id,
         include_cancelled=True,
@@ -4736,6 +5349,7 @@ def export_finances(user_id):
             "Statut",
             "Conciliation",
             "Date de conciliation",
+            "Hors budget",
             "Récurrence",
             "Source importation",
             "Clé importation",
@@ -4795,6 +5409,11 @@ def export_finances(user_id):
                 ),
                 (
                     "Oui"
+                    if row.get("budget_excluded")
+                    else "Non"
+                ),
+                (
+                    "Oui"
                     if row[
                         "recurrence_id"
                     ]
@@ -4848,7 +5467,7 @@ def export_finances(user_id):
 
     payload = {
         "format": "JF Apps Finances",
-        "version": "1.5.0",
+        "version": "1.6.0",
         "categories": [
             serial(
                 dict(row)
@@ -4884,6 +5503,10 @@ def export_finances(user_id):
                 dict(row)
             )
             for row in goals
+        ],
+        "budget_items": [
+            serial(dict(row))
+            for row in budget_items
         ],
         "reconciliation_sessions": [
             serial(dict(row))

@@ -15,12 +15,34 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.1",
     "blood_pressure": "1.2.1",
-    "finances": "1.5.0",
+    "finances": "1.6.0",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.6.0",
+        "date": "2026-08-10",
+        "title": "Finances — compte bancaire et budget global",
+        "summary": (
+            "Ajout d’une vue de trésorerie avec solde courant et prévisionnel, "
+            "d’un aperçu annuel et d’un budget mensuel / aux deux semaines."
+        ),
+        "changes": [
+            "Nouvel onglet Compte avec solde de départ, solde actuel, plus bas prévu et solde de fin de mois.",
+            "Liste chronologique des entrées et sorties avec recalcul du solde après chaque mouvement.",
+            "Aperçu annuel des douze mois avec solde de fin et minimum prévu, chaque mois étant accessible directement.",
+            "Réutilisation des modes de paiement de type Compte bancaire avec solde et date de référence comme point de départ.",
+            "Nouvel onglet Budget pour planifier revenus et dépenses en montant mensuel ou aux deux semaines sur une base de 26 paies.",
+            "Possibilité de remplacer le montant par paie calculé automatiquement par un montant personnalisé afin de conserver un coussin volontaire.",
+            "Nouvelle option Hors budget pour les transferts, paiements de cartes et déplacements d’épargne : le mouvement peut affecter le compte sans être recompté dans les dépenses, revenus, KPI ou objectifs.",
+            "Les récurrences peuvent mémoriser l’option Hors budget et la transmettre aux occurrences créées.",
+            "Le Tableau affiche un résumé du compte bancaire lorsque celui-ci possède un solde de référence.",
+            "CSV et JSON enrichis de l’indicateur Hors budget; la sauvegarde JSON comprend aussi les lignes du budget global.",
+        ],
+    },
     {
         "app_key": "blood_pressure",
         "version": "1.2.1",

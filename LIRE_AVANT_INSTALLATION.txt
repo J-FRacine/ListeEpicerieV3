@@ -1,48 +1,96 @@
-JF APPS — JOURNAL DE PRESSION V1.2.1
+JF APPS — FINANCES V1.6.0
+=========================
 
-OPTION RAPPORT PDF — MATIN / SOIR
+BASE UTILISÉE
+- Finances V1.5.0, confirmée fonctionnelle en usage réel.
+- Les fichiers communs conservent Journal de pression V1.2.1.
 
-FICHIERS COMPLETS À DÉPOSER ENSEMBLE À LA RACINE DE GITHUB
-- blood_pressure.py
-- blood_pressure_pdf.py
+FICHIERS COMPLETS À REMPLACER À LA RACINE DU DÉPÔT GITHUB
+- finances.py
+- finances_data.py
 - app_versions.py
 - manual.py
 
-Aucun script SQL manuel n’est requis.
-Aucune nouvelle dépendance Python n’est requise.
-Aucune donnée existante n’est modifiée.
+Aucun script SQL manuel n'est requis.
+Aucune nouvelle dépendance Python n'est requise.
+Les nouvelles colonnes et la table de budget sont créées automatiquement au démarrage.
 
-NOUVELLE OPTION
-Dans Journal de pression > Rapport PDF, une case permet maintenant de choisir :
-- désactivée (par défaut) : l’heure exacte demeure affichée;
-- activée : l’heure est remplacée par « Matin » ou « Soir ».
+NOUVEAUTÉS — ONGLET COMPTE
+- Utilise les modes de paiement de type « Compte bancaire ».
+- Le solde de référence et sa date servent de point de départ.
+- Affiche pour le mois choisi :
+  * Solde de départ
+  * Solde actuel
+  * Plus bas prévu
+  * Solde fin de mois
+- Affiche les entrées/sorties chronologiquement et le solde après chaque mouvement.
+- Projette les transactions prévues, postdatées et les récurrences futures.
+- Vue annuelle des 12 mois avec solde de fin et minimum prévu.
+- Les mois antérieurs à la date de référence du compte restent indisponibles plutôt que d'inventer un solde.
 
-RÈGLE UTILISÉE
-- avant 12:00 : Matin;
-- à partir de 12:00 : Soir.
+NOUVEAUTÉS — ONGLET BUDGET
+- Budget global séparé des Objectifs mensuels.
+- Ligne de revenu ou de dépense.
+- Saisie mensuelle ou aux deux semaines.
+- Conversion sur 26 paies par année :
+  * Aux 2 semaines x 26 / 12 = mensuel
+  * Mensuel x 12 / 26 = aux 2 semaines
+- Montant par paie personnalisé facultatif lorsqu'une ligne est saisie mensuellement.
+- Totaux : revenus, dépenses, reste mensuel et reste par paie.
+- Activation/désactivation, réorganisation et modification des lignes.
 
-L’heure exacte reste enregistrée dans PostgreSQL et continue d’apparaître dans l’historique, le CSV et le JSON. Seule la présentation du PDF change.
+NOUVEAUTÉ — HORS BUDGET
+- Disponible dans les transactions et les récurrences.
+- À utiliser notamment pour :
+  * paiement d'une carte de crédit;
+  * transfert entre comptes;
+  * déplacement vers ou depuis l'épargne.
+- Le mouvement continue d'affecter le solde du compte bancaire associé.
+- Il est exclu des dépenses/revenus budgétaires, KPI et objectifs pour éviter le double comptage.
+- La mention apparaît dans l'Historique, les prévisions et les récurrences.
 
-Les notes du PDF utilisent le même libellé lorsque l’option Matin / Soir est activée.
+TABLEAU
+- Lorsqu'un compte bancaire est configuré avec un solde et une date de référence,
+  le Tableau montre aussi : Solde de départ, Solde actuel, Plus bas prévu et Fin de mois prévue.
+- Un bouton mène directement à l'onglet Compte.
 
-VERSION
-Journal de pression : V1.2.1
+EXPORT / IMPORT
+- Le CSV et le JSON incluent l'indicateur « Hors budget ».
+- Le JSON V1.6.0 inclut les lignes du Budget global.
+- Une sauvegarde JSON V1.6.0 peut restaurer ces lignes de budget.
+
+COMPATIBILITÉ V1.5.0
+- Toutes les transactions et récurrences existantes reçoivent implicitement Hors budget = Non.
+- Les fonctions existantes (KPI cliquables, création rapide de catégories/étiquettes,
+  conciliation, objectifs, récurrences, import Spendee, CSV/JSON) sont conservées.
 
 INSTALLATION
 1. Ouvrir le dépôt GitHub JF Apps.
 2. Choisir Add file > Upload files.
-3. Déposer les 4 fichiers Python ensemble.
+3. Déposer les quatre fichiers .py ensemble à la racine.
 4. Faire Commit changes.
-5. Attendre le redéploiement complet de Canner.
-6. Sur ordinateur : Ctrl+F5.
+5. Laisser Canner redéployer l'application.
+6. Sur ordinateur : faire un rechargement complet (Ctrl+F5).
 7. Sur téléphone/PWA : fermer complètement JF Apps puis la rouvrir.
-8. Vérifier que Journal de pression affiche V1.2.1.
+8. Vérifier que Finances affiche V1.6.0.
+9. Vérifier que Journal de pression affiche toujours V1.2.1.
 
-TEST RAPIDE
-1. Ouvrir Journal de pression > Rapport PDF.
-2. Générer un PDF sans cocher l’option : les heures exactes doivent apparaître.
-3. Cocher « Afficher Matin / Soir plutôt que l’heure exacte ».
-4. Générer de nouveau le PDF.
-5. Une mesure avant midi doit afficher « Matin ».
-6. Une mesure à midi ou après doit afficher « Soir ».
-7. Vérifier qu’une note éventuelle utilise aussi Matin / Soir.
+CONFIGURATION DU COMPTE BANCAIRE
+1. Finances > Organisation > Modes de paiement.
+2. Modifier « Direct » ou créer un nouveau mode.
+3. Type : Compte bancaire.
+4. Inscrire le solde réel à une date connue.
+5. Inscrire cette date comme date de référence.
+6. Enregistrer.
+7. Utiliser ensuite ce mode de paiement pour les mouvements qui passent réellement par ce compte.
+
+TESTS CONSEILLÉS APRÈS DÉPLOIEMENT
+1. Ouvrir Compte et vérifier le solde de référence.
+2. Ajouter une petite dépense sur le compte et confirmer que le solde baisse.
+3. Ajouter un revenu et confirmer que le solde augmente.
+4. Créer une transaction « Paiement carte » sur le compte avec Hors budget activé :
+   elle doit affecter le solde du compte mais ne pas augmenter les dépenses du Tableau/KPI.
+5. Budget : créer un revenu de 2 412 $ aux deux semaines : le mensuel doit être 5 226 $.
+6. Budget : créer une dépense de 1 015 $/mois et inscrire 515 $ comme montant par paie personnalisé.
+7. Vérifier la vue annuelle du Compte et ouvrir un mois en cliquant dessus.
+8. Vérifier une récurrence future associée au compte : elle doit apparaître dans la prévision.

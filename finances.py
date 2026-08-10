@@ -10,6 +10,7 @@ from nicegui import ui
 
 from app_versions import version_label
 from finances_data import (
+    BUDGET_INPUT_FREQUENCIES,
     CARRY_POLICIES,
     CONFIRMATION_MODES,
     FREQUENCY_UNITS,
@@ -18,6 +19,9 @@ from finances_data import (
     RECONCILIATION_STATUSES,
     TRANSACTION_STATUSES,
     TRANSACTION_TYPES,
+    bank_cashflow_month,
+    bank_cashflow_year_summary,
+    budget_summary,
     bulk_assign_payment_method,
     cancel_reconciliation_session,
     count_unassigned_confirmed_transactions,
@@ -35,6 +39,8 @@ from finances_data import (
     get_transaction,
     goal_progress,
     import_finance_rows,
+    list_bank_accounts,
+    list_budget_items,
     list_categories,
     list_goals,
     list_payment_methods,
@@ -44,10 +50,12 @@ from finances_data import (
     list_transactions,
     list_unassigned_transactions,
     list_unreconciled_transactions,
+    move_budget_item,
     move_payment_method,
     payment_predicted_balance_summary,
     prepare_finance_import,
     remove_transaction_from_reconciliation_session,
+    save_budget_item,
     save_category,
     save_goal,
     save_payment_method,
@@ -56,6 +64,7 @@ from finances_data import (
     save_transaction,
     set_transaction_reconciliation,
     set_transaction_status,
+    toggle_budget_item,
     toggle_category,
     toggle_goal,
     toggle_payment_method,
@@ -747,6 +756,37 @@ ui.add_css(
 )
 
 
+ui.add_css(
+    r"""
+    .jf-finance-bank-strip {
+        width: 100%; padding: .85rem 1rem;
+        border: 1px solid color-mix(in srgb, var(--jf-blue) 24%, var(--jf-border));
+        border-radius: 16px;
+        background: color-mix(in srgb, var(--jf-blue-soft) 70%, var(--jf-surface));
+    }
+    .jf-finance-cashflow-head,.jf-finance-cashflow-row {
+        display:grid; grid-template-columns:5.5rem minmax(12rem,1fr) 7rem 7rem 8rem;
+        gap:.6rem; align-items:center; width:100%;
+    }
+    .jf-finance-cashflow-head {padding:.45rem .7rem;font-size:.72rem;font-weight:800;color:var(--jf-muted);}
+    .jf-finance-cashflow-row {padding:.65rem .7rem;border-top:1px solid var(--jf-border);font-size:.82rem;}
+    .jf-finance-cashflow-money {text-align:right;font-variant-numeric:tabular-nums;}
+    .jf-finance-year-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.55rem;width:100%;}
+    .jf-finance-year-card {border:1px solid var(--jf-border);border-radius:12px;padding:.65rem .75rem;background:var(--jf-surface);cursor:pointer;}
+    .jf-finance-year-card:hover {border-color:var(--jf-blue);}
+    .jf-finance-budget-row {display:grid;grid-template-columns:minmax(12rem,1fr) 8.5rem 8.5rem auto;gap:.65rem;align-items:center;width:100%;padding:.7rem .8rem;border-top:1px solid var(--jf-border);}
+    .jf-finance-budget-money {text-align:right;font-variant-numeric:tabular-nums;font-weight:700;}
+    @media(max-width:700px){
+        .jf-finance-cashflow-head{display:none;}
+        .jf-finance-cashflow-row{grid-template-columns:4.5rem minmax(0,1fr) 7.3rem;gap:.35rem .55rem;}
+        .jf-finance-cashflow-row>:nth-child(3),.jf-finance-cashflow-row>:nth-child(4){display:none;}
+        .jf-finance-budget-row{grid-template-columns:minmax(0,1fr) 7.2rem auto;}
+        .jf-finance-budget-row>:nth-child(3){display:none;}
+    }
+    """,
+    shared=True,
+)
+
 def _money(value):
     amount = Decimal(value or 0)
     return f"{abs(amount):,.2f}".replace(",", " ").replace(".", ",") + " $"
@@ -807,6 +847,13 @@ def _quick_tag_options(user_id):
     return {
         **_tag_options(user_id),
         ADD_TAG_OPTION: "+ Ajouter une étiquette…",
+    }
+
+
+def _bank_account_options(user_id):
+    return {
+        int(row["id"]): row["name"]
+        for row in list_bank_accounts(user_id)
     }
 
 
@@ -994,6 +1041,13 @@ def _transaction_dialog(
             ).classes(
                 "w-full"
             ):
+                budget_excluded = ui.checkbox(
+                    "Hors budget — transfert, paiement de carte ou déplacement d’épargne",
+                    value=bool(transaction.get("budget_excluded")) if transaction else False,
+                )
+                ui.label(
+                    "La transaction affecte toujours le solde du compte, mais elle n’est pas comptée dans les dépenses, revenus, KPI ou objectifs du budget."
+                ).classes("text-xs jf-muted")
                 status = ui.select(
                     TRANSACTION_STATUSES,
                     value=(
@@ -1088,6 +1142,7 @@ def _transaction_dialog(
                             reconciliation_date.value
                             or None
                         ),
+                        budget_excluded=budget_excluded.value,
                     )
                 except Exception as error:
                     ui.notify(
@@ -1174,6 +1229,8 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
         "jf-finance-main-tabs"
     ) as tabs:
         dashboard_tab = ui.tab("Tableau", icon="dashboard")
+        account_tab = ui.tab("Compte", icon="account_balance")
+        budget_tab = ui.tab("Budget", icon="savings")
         entry_tab = ui.tab("Saisie", icon="add_circle")
         history_tab = ui.tab("Historique", icon="history")
         recurring_tab = ui.tab("Récurrences", icon="repeat")
@@ -1184,6 +1241,10 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
 
     tab_map = {
         "tableau": dashboard_tab,
+        "compte": account_tab,
+        "tresorerie": account_tab,
+        "trésorerie": account_tab,
+        "budget": budget_tab,
         "saisie": entry_tab,
         "historique": history_tab,
         "recurrences": recurring_tab,
@@ -1240,6 +1301,15 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                 unassigned_count = count_unassigned_confirmed_transactions(
                     user_id
                 )
+                bank_accounts = list_bank_accounts(user_id)
+                cash_summary = None
+                if bank_accounts:
+                    try:
+                        cash_summary = bank_cashflow_month(
+                            user_id, int(bank_accounts[0]["id"]), month_state["value"]
+                        )
+                    except Exception:
+                        cash_summary = None
 
                 def open_kpi_detail(
                     dimension,
@@ -1251,6 +1321,8 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
 
                     def matches(row):
                         if row["transaction_type"] != transaction_type:
+                            return False
+                        if bool(row.get("budget_excluded")):
                             return False
 
                         if dimension == "category":
@@ -1579,6 +1651,28 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             "flat dense round"
                         )
 
+                    if cash_summary and cash_summary.get("available"):
+                        with ui.element("div").classes("jf-finance-bank-strip"):
+                            with ui.row().classes("w-full items-center justify-between gap-2 flex-wrap"):
+                                with ui.column().classes("gap-0"):
+                                    ui.label("Compte bancaire — " + cash_summary["account"]["name"]).classes("font-bold")
+                                    ui.label("Projection de trésorerie incluant les mouvements hors budget.").classes("text-xs jf-muted")
+                                ui.button("Voir le compte", icon="account_balance", on_click=lambda: tabs.set_value(account_tab)).props("flat dense color=primary")
+                            with ui.element("div").classes("jf-finance-summary-grid mt-2"):
+                                bank_values = (
+                                    ("Solde début", cash_summary["start_balance"]),
+                                    ("Solde actuel", cash_summary.get("current_balance") if cash_summary.get("current_balance") is not None else cash_summary["start_balance"]),
+                                    ("Plus bas prévu", cash_summary["minimum_balance"]),
+                                    ("Fin de mois prévue", cash_summary["end_balance"]),
+                                )
+                                for bank_label, bank_value in bank_values:
+                                    with ui.element("div").classes("jf-finance-summary"):
+                                        ui.label(bank_label).classes("jf-finance-summary-label")
+                                        ui.label(_balance_money(bank_value)).classes("jf-finance-summary-value " + ("jf-finance-expense" if Decimal(bank_value) < 0 else "jf-finance-income"))
+                    elif bank_accounts:
+                        with ui.element("div").classes("jf-finance-report-note"):
+                            ui.label("Compte bancaire : indique un solde initial et sa date dans Organisation > Modes de paiement pour activer la projection.").classes("text-sm")
+
                     with ui.element(
                         "div"
                     ).classes(
@@ -1759,6 +1853,8 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                                     meta.append(
                                                         "À confirmer"
                                                     )
+                                                if row.get("budget_excluded"):
+                                                    meta.append("Hors budget")
                                                 ui.label(
                                                     " — ".join(meta)
                                                     or "Transaction postdatée"
@@ -2134,6 +2230,163 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
             render_dashboard()
 
 
+        # COMPTE / TRÉSORERIE
+        with ui.tab_panel(account_tab).classes("px-0"):
+            account_state = {"month": date.today().replace(day=1)}
+            bank_options = _bank_account_options(user_id)
+            selected_bank = next(iter(bank_options), None)
+            with ui.card().classes("w-full p-4"):
+                with ui.row().classes("w-full items-end gap-2 flex-wrap"):
+                    account_selector = ui.select(bank_options, value=selected_bank, label="Compte bancaire").props("dense outlined options-dense").classes("min-w-56 grow")
+                    ui.button("Configurer les comptes", icon="settings", on_click=lambda: tabs.set_value(organization_tab)).props("flat dense color=primary")
+                ui.label("Le solde utilise les transactions dont le mode de paiement est ce compte bancaire. Un paiement de carte ou un transfert peut être Hors budget tout en continuant d’affecter le solde.").classes("text-xs jf-muted")
+            account_box = ui.column().classes("w-full gap-2")
+
+            def change_account_month(offset):
+                account_state["month"] = _shift_month(account_state["month"], offset)
+                render_account.refresh()
+
+            @ui.refreshable
+            def render_account():
+                account_box.clear()
+                with account_box:
+                    if not account_selector.value:
+                        with ui.element("div").classes("jf-finance-report-note"):
+                            ui.label("Aucun mode de paiement de type Compte bancaire n’est configuré. Crée-en un dans Organisation > Modes de paiement.").classes("text-sm")
+                        return
+                    try:
+                        month_data = bank_cashflow_month(user_id, account_selector.value, account_state["month"])
+                        year_data = bank_cashflow_year_summary(user_id, account_selector.value, account_state["month"].year)
+                    except Exception as error:
+                        ui.label(str(error)).classes("text-sm jf-finance-expense")
+                        return
+                    with ui.row().classes("w-full items-center justify-center gap-1"):
+                        ui.button(icon="chevron_left", on_click=lambda: change_account_month(-1)).props("flat dense round")
+                        ui.label(_month_label(account_state["month"])).classes("font-bold min-w-40 text-center")
+                        ui.button(icon="chevron_right", on_click=lambda: change_account_month(1)).props("flat dense round")
+                    if not month_data.get("available"):
+                        with ui.element("div").classes("jf-finance-report-note"):
+                            ui.label("Pour calculer le solde, indique un Solde initial et une Date du solde initial dans Organisation > Modes de paiement.").classes("text-sm")
+                        return
+                    with ui.element("div").classes("jf-finance-summary-grid"):
+                        for label, value in (("Solde de départ", month_data["start_balance"]),("Solde actuel", month_data.get("current_balance") if month_data.get("current_balance") is not None else month_data["start_balance"]),("Plus bas prévu", month_data["minimum_balance"]),("Solde fin de mois", month_data["end_balance"])):
+                            with ui.element("div").classes("jf-finance-summary"):
+                                ui.label(label).classes("jf-finance-summary-label")
+                                ui.label(_balance_money(value)).classes("jf-finance-summary-value " + ("jf-finance-expense" if Decimal(value) < 0 else "jf-finance-income"))
+                    with ui.card().classes("w-full p-0 overflow-hidden"):
+                        with ui.element("div").classes("jf-finance-cashflow-head"):
+                            for text in ("Date","Description","Sortie","Entrée","Solde"):
+                                ui.label(text).classes("text-right" if text in {"Sortie","Entrée","Solde"} else "")
+                        if month_data["rows"]:
+                            for row in month_data["rows"]:
+                                with ui.element("div").classes("jf-finance-cashflow-row"):
+                                    ui.label(row["transaction_date"].strftime("%d/%m"))
+                                    with ui.column().classes("gap-0 min-w-0"):
+                                        ui.label(row["description"]).classes("font-semibold truncate").tooltip(row["description"])
+                                        meta=[]
+                                        if row.get("projected"): meta.append("Récurrence projetée")
+                                        elif row.get("status") == "planned": meta.append("Prévue")
+                                        if row.get("budget_excluded"): meta.append("Hors budget")
+                                        if meta: ui.label(" • ".join(meta)).classes("text-xs jf-muted")
+                                    ui.label(_money(row["amount"]) if row["transaction_type"] == "expense" else "").classes("jf-finance-cashflow-money jf-finance-expense")
+                                    ui.label(_money(row["amount"]) if row["transaction_type"] == "income" else "").classes("jf-finance-cashflow-money jf-finance-income")
+                                    ui.label(_balance_money(row["running_balance"])).classes("jf-finance-cashflow-money font-bold " + ("jf-finance-expense" if Decimal(row["running_balance"]) < 0 else ""))
+                        else:
+                            ui.label("Aucun mouvement pour ce mois.").classes("p-4 text-sm jf-muted")
+                    if year_data.get("available"):
+                        with ui.row().classes("w-full items-center justify-between mt-2"):
+                            ui.label(f"Vue annuelle {account_state['month'].year}").classes("text-lg font-bold")
+                            ui.label("Solde prévu à la fin de chaque mois").classes("text-xs jf-muted")
+                        with ui.element("div").classes("jf-finance-year-grid"):
+                            for month_row in year_data["months"]:
+                                month_value = month_row["month"]
+                                with ui.element("div").classes("jf-finance-year-card").on("click", lambda _event=None, selected=month_value: (account_state.__setitem__("month", selected), render_account.refresh())):
+                                    ui.label(_month_label(month_value).split()[0]).classes("text-xs jf-muted")
+                                    if not month_row.get("available", True):
+                                        ui.label("—").classes("font-bold jf-muted")
+                                        ui.label("avant le solde de référence").classes("text-xs jf-muted")
+                                    else:
+                                        ui.label(_balance_money(month_row["end_balance"])).classes("font-bold " + ("jf-finance-expense" if Decimal(month_row["end_balance"]) < 0 else "jf-finance-income"))
+                                        ui.label("min. " + _balance_money(month_row["minimum_balance"])).classes("text-xs jf-muted")
+            account_selector.on_value_change(lambda _event: render_account.refresh())
+            render_account()
+
+        # BUDGET GLOBAL
+        with ui.tab_panel(budget_tab).classes("px-0"):
+            budget_box = ui.column().classes("w-full gap-2")
+
+            def budget_item_dialog(row=None):
+                with ui.dialog() as dialog:
+                    with ui.card().classes("w-full max-w-2xl p-4"):
+                        ui.label("Modifier le poste" if row else "Nouveau poste budgétaire").classes("text-xl font-bold")
+                        kind_budget = ui.toggle(TRANSACTION_TYPES, value=row["item_type"] if row else "expense").props("dense spread no-caps").classes("w-full")
+                        description_budget = ui.input(label="Description", value=row["description"] if row else "").props("dense outlined maxlength=160").classes("w-full")
+                        with ui.row().classes("w-full gap-2 flex-wrap"):
+                            frequency_budget = ui.select(BUDGET_INPUT_FREQUENCIES, value=row["input_frequency"] if row else "monthly", label="Montant saisi en").props("dense outlined options-dense").classes("grow min-w-44")
+                            amount_budget = ui.number(label="Montant", value=row["input_amount"] if row else None, min=.01, step=.01).props("dense outlined").classes("grow min-w-36")
+                        biweekly_override = ui.number(label="Montant par paie personnalisé — facultatif", value=row.get("biweekly_override") if row else None, min=.01, step=.01).props("dense outlined clearable").classes("w-full")
+                        ui.label("Si le montant est mensuel, l’application calcule l’équivalent sur 26 paies. Tu peux remplacer ce résultat par ton propre montant par paie pour conserver un coussin, comme dans ton Excel.").classes("text-xs jf-muted")
+                        note_budget = ui.textarea(label="Note facultative", value=row.get("note") if row else "").props("dense outlined autogrow maxlength=1000").classes("w-full")
+                        def sync_override_visibility(_event=None):
+                            biweekly_override.visible = frequency_budget.value == "monthly"
+                        frequency_budget.on_value_change(sync_override_visibility)
+                        sync_override_visibility()
+                        def save_budget_now():
+                            try:
+                                save_budget_item(user_id=user_id,budget_item_id=row["id"] if row else None,item_type=kind_budget.value,description=description_budget.value,input_frequency=frequency_budget.value,input_amount=amount_budget.value,biweekly_override=biweekly_override.value if frequency_budget.value == "monthly" else None,note=note_budget.value)
+                            except Exception as error:
+                                ui.notify(str(error), type="warning"); return
+                            dialog.close(); ui.notify("Poste budgétaire enregistré.", type="positive"); render_budget.refresh()
+                        with ui.row().classes("w-full justify-end gap-2"):
+                            ui.button("Annuler", on_click=dialog.close).props("flat")
+                            ui.button("Enregistrer", icon="save", on_click=save_budget_now).props("color=primary")
+                dialog.open()
+
+            def change_budget_state(item_id, value):
+                try: toggle_budget_item(user_id, item_id, value)
+                except Exception as error: ui.notify(str(error), type="warning")
+                render_budget.refresh()
+            def change_budget_order(item_id, direction):
+                try: move_budget_item(user_id, item_id, direction)
+                except Exception as error: ui.notify(str(error), type="warning")
+                render_budget.refresh()
+
+            @ui.refreshable
+            def render_budget():
+                budget_box.clear(); summary_budget = budget_summary(user_id); rows = list_budget_items(user_id, include_inactive=True)
+                with budget_box:
+                    with ui.row().classes("w-full items-start justify-between gap-2 flex-wrap"):
+                        with ui.column().classes("gap-0"):
+                            ui.label("Budget mensuel global").classes("text-xl font-bold")
+                            ui.label("Planification générale indépendante des objectifs mensuels par catégorie ou étiquette.").classes("text-xs jf-muted")
+                        ui.button("Ajouter un poste", icon="add", on_click=lambda: budget_item_dialog()).props("color=primary dense")
+                    with ui.element("div").classes("jf-finance-summary-grid"):
+                        for label,value,css in (("Revenus mensuels",summary_budget["monthly_income"],"jf-finance-income"),("Dépenses mensuelles",summary_budget["monthly_expense"],"jf-finance-expense"),("Reste mensuel",summary_budget["monthly_remaining"],"jf-finance-income" if summary_budget["monthly_remaining"]>=0 else "jf-finance-expense"),("Reste par paie",summary_budget["biweekly_remaining"],"jf-finance-income" if summary_budget["biweekly_remaining"]>=0 else "jf-finance-expense")):
+                            with ui.element("div").classes("jf-finance-summary"):
+                                ui.label(label).classes("jf-finance-summary-label"); ui.label(_balance_money(value)).classes("jf-finance-summary-value "+css)
+                    for section_type,section_label in (("income","Revenus"),("expense","Dépenses")):
+                        ui.label(section_label).classes("text-lg font-bold mt-2")
+                        section_rows=[row for row in rows if row["item_type"]==section_type]
+                        with ui.card().classes("w-full p-0 overflow-hidden"):
+                            if not section_rows: ui.label("Aucun poste.").classes("p-4 text-sm jf-muted")
+                            for row in section_rows:
+                                with ui.element("div").classes("jf-finance-budget-row"):
+                                    with ui.column().classes("gap-0 min-w-0"):
+                                        ui.label(row["description"]).classes("font-semibold truncate").tooltip(row["description"])
+                                        detail=BUDGET_INPUT_FREQUENCIES.get(row["input_frequency"],row["input_frequency"])
+                                        if row.get("biweekly_is_override"): detail += " • montant par paie personnalisé"
+                                        if not row["is_active"]: detail += " • désactivé"
+                                        ui.label(detail).classes("text-xs jf-muted")
+                                    ui.label(_money(row["monthly_amount"])+" / mois").classes("jf-finance-budget-money")
+                                    ui.label(_money(row["biweekly_amount"])+" / paie").classes("jf-finance-budget-money")
+                                    with ui.row().classes("gap-0 shrink-0"):
+                                        ui.button(icon="keyboard_arrow_up",on_click=lambda _event=None,selected=row["id"]:change_budget_order(selected,"up")).props("flat dense round size=sm")
+                                        ui.button(icon="keyboard_arrow_down",on_click=lambda _event=None,selected=row["id"]:change_budget_order(selected,"down")).props("flat dense round size=sm")
+                                        ui.switch(value=row["is_active"],on_change=lambda event,selected=row["id"]:change_budget_state(selected,event.value)).props("dense")
+                                        ui.button(icon="edit",on_click=lambda _event=None,selected=row:budget_item_dialog(selected)).props("flat dense round size=sm color=primary")
+            render_budget()
+
+
         # SAISIE
         with ui.tab_panel(
             entry_tab
@@ -2495,11 +2748,15 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                 )
 
                 with ui.expansion(
-                    "Note, statut et conciliation",
+                    "Note, statut, budget et conciliation",
                     icon="tune",
                 ).classes(
                     "w-full"
                 ):
+                    budget_excluded_quick = ui.checkbox(
+                        "Hors budget — transfert, paiement de carte ou déplacement d’épargne", value=False
+                    )
+                    ui.label("Le mouvement reste visible dans le Compte bancaire mais est exclu du budget et des KPI.").classes("text-xs jf-muted")
                     status = ui.select(
                         TRANSACTION_STATUSES,
                         value="confirmed",
@@ -2577,6 +2834,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                 reconciliation_date.value
                                 or None
                             ),
+                            budget_excluded=budget_excluded_quick.value,
                         )
                     except Exception as error:
                         ui.notify(
@@ -2591,6 +2849,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                     tags.value = []
                     reconciled.value = False
                     reconciliation_date.value = ""
+                    budget_excluded_quick.value = False
 
                     ui.notify(
                         "Transaction enregistrée.",
@@ -2942,6 +3201,8 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         meta.append(
                             "À confirmer"
                         )
+                    if row.get("budget_excluded"):
+                        meta.append("Hors budget")
                     meta.append(
                         RECONCILIATION_STATUSES.get(
                             row.get(
@@ -3415,6 +3676,11 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         ).props(
                             "dense outlined use-chips clearable options-dense"
                         ).classes("w-full")
+                        budget_excluded_rec = ui.checkbox(
+                            "Hors budget — transfert, paiement de carte ou déplacement d’épargne",
+                            value=bool(row.get("budget_excluded")) if row else False,
+                        )
+                        ui.label("Les occurrences sont exclues du budget, mais continuent d’affecter le solde du compte si un compte bancaire est choisi.").classes("text-xs jf-muted")
                         mode = ui.select(
                             CONFIRMATION_MODES,
                             value=row["confirmation_mode"] if row else "confirm",
@@ -3446,6 +3712,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     start_date=start_date.value,
                                     end_date=end_date.value or None,
                                     confirmation_mode=mode.value,
+                                    budget_excluded=budget_excluded_rec.value,
                                 )
                                 generate_due_recurrences(user_id)
                             except Exception as error:
@@ -3517,6 +3784,8 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                                 "payment_method_name"
                                             ]
                                         )
+                                    if row.get("budget_excluded"):
+                                        details.append("Hors budget")
                                     ui.label(
                                         " — ".join(
                                             details
@@ -5066,9 +5335,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                 ).classes("w-full")
 
                                 ui.label(
-                                    "Le solde initial reste dans le solde "
-                                    "prévu jusqu’à son inclusion dans une "
-                                    "séance de conciliation."
+                                    "Pour une carte, le solde initial sert à la conciliation. Pour un Compte bancaire, il devient le solde de référence utilisé par l’onglet Compte et le Tableau; indique aussi la date de référence."
                                 ).classes("text-xs jf-muted")
 
                                 note = ui.textarea(
@@ -5413,7 +5680,9 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     "Étiquettes détectées : "
                                     f"{len(preview['tags'])} — "
                                     "Modes de paiement détectés : "
-                                    f"{len(preview['payment_methods'])}"
+                                    f"{len(preview['payment_methods'])} — "
+                                    "Postes de budget détectés : "
+                                    f"{len(preview.get('budget_items') or [])}"
                                 )
                             ).classes(
                                 "text-xs jf-muted"
@@ -5492,6 +5761,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                         skip_possible_duplicates=(
                                             skip_possible.value
                                         ),
+                                        budget_items=preview.get("budget_items") or [],
                                     )
                                 except Exception as error:
                                     ui.notify(str(error), type="negative")
@@ -5504,7 +5774,9 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     f"{result['categories_created']} catégorie(s) créée(s), "
                                     f"{result['tags_created']} étiquette(s) créée(s), "
                                     f"{result['payment_methods_created']} "
-                                    "mode(s) de paiement créé(s)."
+                                    "mode(s) de paiement créé(s), "
+                                    f"{result.get('budget_items_imported', 0)} "
+                                    "poste(s) de budget restauré(s)."
                                 )
                                 ui.notify(message, type="positive", timeout=10000)
                                 if result["failures"]:
@@ -5543,8 +5815,8 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                 ui.label(
                     "Le CSV convient à Excel. Le JSON constitue "
                     "une sauvegarde complète de sécurité. Les modes "
-                    "de paiement, les statuts de conciliation et les clés "
-                    "d’importation sont conservés."
+                    "de paiement, les statuts de conciliation, l’indicateur Hors budget, "
+                    "les postes du budget global et les clés d’importation sont conservés."
                 ).classes("text-sm jf-muted")
 
                 def do_export(kind):
@@ -5627,6 +5899,12 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
         render_categories.refresh()
         render_tags.refresh()
         render_payment_methods.refresh()
+        account_selector.options = _bank_account_options(user_id)
+        if account_selector.value not in account_selector.options:
+            account_selector.value = next(iter(account_selector.options), None)
+        account_selector.update()
+        render_account.refresh()
+        render_budget.refresh()
 
         reconciliation_payment.options = _payment_options(
             user_id,

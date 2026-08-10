@@ -56,3 +56,14 @@ IMPORTANT
 Ne pas supprimer la base de données et ne pas effacer les transactions.
 Le correctif est conçu pour fonctionner même si le déploiement V1.6.1 a
 réussi à créer certaines colonnes avant de s’arrêter.
+
+CORRECTION DU 10 AOÛT 2026 — ERREUR DE SYNTAXE
+------------------------------------------------
+Le journal Canner a ensuite permis d'identifier précisément l'erreur :
+finances.py, ligne 2325 — SyntaxError: f-string: unmatched '('.
+
+La ligne d'affichage du nombre d'appareils Finances utilisait des guillemets
+imbriqués incorrectement. Elle est maintenant corrigée.
+
+Validation effectuée : les 7 fichiers Python du paquet ont été recompilés
+avec py_compile sans erreur de syntaxe.

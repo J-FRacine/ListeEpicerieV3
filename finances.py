@@ -2322,7 +2322,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             "Les rappels sont envoyés sur les appareils autorisés pour une transaction ou une récurrence encore prévue."
                         ).classes("text-sm jf-muted")
                     finance_push_count = ui.label(
-                        f"{count_active_push_subscriptions(user_id, "finance")} appareil(s) actif(s)"
+                        f"{count_active_push_subscriptions(user_id, 'finance')} appareil(s) actif(s)"
                     ).classes("text-primary")
                 ui.label(
                     "La notification reste discrète : « Finances — Une transaction prévue nécessite votre attention. »"
@@ -2381,7 +2381,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             ui.notify(str(error), type="negative", timeout=10000)
                             return
                         finance_push_count.set_text(
-                            f"{count_active_push_subscriptions(user_id, "finance")} appareil(s) actif(s)"
+                            f"{count_active_push_subscriptions(user_id, 'finance')} appareil(s) actif(s)"
                         )
                         ui.notify("Notifications activées sur cet appareil.", type="positive")
                         return

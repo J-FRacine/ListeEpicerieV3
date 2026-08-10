@@ -14,13 +14,30 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.1",
-    "blood_pressure": "1.2.0",
+    "blood_pressure": "1.2.1",
     "finances": "1.5.0",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "blood_pressure",
+        "version": "1.2.1",
+        "date": "2026-08-10",
+        "title": "Journal de pression — rapport Matin / Soir",
+        "summary": (
+            "Le rapport PDF peut maintenant remplacer les heures exactes "
+            "par les libellés Matin et Soir, sans modifier les mesures enregistrées."
+        ),
+        "changes": [
+            "Nouvelle option dans Rapport PDF pour afficher Matin / Soir plutôt que l’heure exacte.",
+            "Mode Heure exacte conservé par défaut pour préserver le comportement actuel.",
+            "En mode Matin / Soir, une mesure avant 12 h est libellée Matin et une mesure à partir de 12 h est libellée Soir.",
+            "Les notes du rapport utilisent le même libellé Matin / Soir lorsque l’option est activée.",
+            "Les heures originales demeurent enregistrées et restent visibles dans l’historique et les exportations.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.5.0",

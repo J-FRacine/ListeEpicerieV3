@@ -434,7 +434,7 @@ La version de l’application apparaît près de son nom. Le Portail contient au
 """,
     },
     {
-        "title": "Journal de pression — V1.2.0",
+        "title": "Journal de pression — V1.2.1",
         "icon": "monitor_heart",
         "caption": "Saisie, moyennes, rappels et notifications privées",
         "keywords": (
@@ -442,7 +442,7 @@ La version de l’application apparaît près de son nom. Le Portail contient au
             "date heure appareil privé note historique pdf rapport "
             "aucune donnée courriel csv json import export "
             "sauvegarde doublon données moyenne intervalle "
-            "notification push appareil heure limite rappel"
+            "notification push appareil heure limite rappel matin soir rapport"
         ),
         "content": """
 ### Données privées
@@ -585,6 +585,13 @@ Avec une sauvegarde JSON, une option permet aussi de remplacer les plages et ré
 ### Rapport PDF
 
 Dans **Rapport PDF**, inscrivez le **nom complet à imprimer**, puis choisissez la date de début et la date de fin.
+
+Par défaut, le rapport affiche l’heure exacte de chaque mesure. L’option **Afficher « Matin / Soir » plutôt que l’heure exacte** permet de produire un rapport plus simple :
+
+- une mesure prise avant 12 h est affichée **Matin**;
+- une mesure prise à partir de 12 h est affichée **Soir**.
+
+Cette option modifie uniquement la présentation du PDF. L’heure exacte demeure enregistrée dans le Journal et reste disponible dans l’historique, le CSV et la sauvegarde JSON. Les notes du rapport utilisent elles aussi **Matin** ou **Soir** lorsque cette option est activée.
 
 Le rapport contient :
 

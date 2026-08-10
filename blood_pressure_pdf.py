@@ -68,11 +68,37 @@ def _format_time(value) -> str:
     return text[:5]
 
 
+def _period_text(value) -> str:
+    time_text = _format_time(value)
+
+    try:
+        hour = int(time_text[:2])
+    except (TypeError, ValueError):
+        return ""
+
+    return (
+        "Matin"
+        if hour < 12
+        else "Soir"
+    )
+
+
+def _display_time_text(
+    value,
+    time_display_mode,
+) -> str:
+    if time_display_mode == "period":
+        return _period_text(value)
+
+    return _format_time(value)
+
+
 def _measurement_text(
     reading,
+    time_display_mode,
 ) -> str:
     return (
-        f"{_format_time(reading['measured_time'])}"
+        f"{_display_time_text(reading['measured_time'], time_display_mode)}"
         f"  |  {reading['systolic']}/"
         f"{reading['diastolic']}"
         f"  |  Pouls {reading['pulse']}"
@@ -81,6 +107,7 @@ def _measurement_text(
 
 def _note_text(
     readings,
+    time_display_mode,
 ) -> str:
     notes = []
 
@@ -93,7 +120,7 @@ def _note_text(
         if note:
             notes.append(
                 (
-                    f"<b>{escape(_format_time(reading['measured_time']))}"
+                    f"<b>{escape(_display_time_text(reading['measured_time'], time_display_mode))}"
                     f"</b> : {escape(note)}"
                 )
             )
@@ -110,6 +137,7 @@ def build_blood_pressure_pdf(
     end_date,
     readings,
     output_path,
+    time_display_mode="exact",
 ):
     """Crée le rapport PDF du journal de pression."""
 
@@ -135,6 +163,12 @@ def build_blood_pressure_pdf(
             "égale ou postérieure à "
             "la date de début."
         )
+
+    normalized_time_display_mode = (
+        "period"
+        if str(time_display_mode or "").strip().lower() == "period"
+        else "exact"
+    )
 
     output = Path(
         output_path
@@ -261,11 +295,28 @@ def build_blood_pressure_pdf(
             ),
             header_style,
         ),
+    ]
+
+    if normalized_time_display_mode == "period":
+        story.append(
+            Paragraph(
+                "<b>Affichage des prises :</b> Matin / Soir",
+                header_style,
+            )
+        )
+
+    story.append(
         Spacer(
             1,
             6 * mm,
-        ),
-    ]
+        )
+    )
+
+    time_column_label = (
+        "Période"
+        if normalized_time_display_mode == "period"
+        else "Heure"
+    )
 
     rows = [
         [
@@ -275,12 +326,12 @@ def build_blood_pressure_pdf(
             ),
             Paragraph(
                 "Mesure 1<br/>"
-                "Heure | SYS/DIA | Pouls",
+                f"{time_column_label} | SYS/DIA | Pouls",
                 header_cell_style,
             ),
             Paragraph(
                 "Mesure 2<br/>"
-                "Heure | SYS/DIA | Pouls",
+                f"{time_column_label} | SYS/DIA | Pouls",
                 header_cell_style,
             ),
             Paragraph(
@@ -356,7 +407,8 @@ def build_blood_pressure_pdf(
                     Paragraph(
                         escape(
                             _measurement_text(
-                                first
+                                first,
+                                normalized_time_display_mode,
                             )
                         ),
                         small_style,
@@ -365,7 +417,8 @@ def build_blood_pressure_pdf(
                         Paragraph(
                             escape(
                                 _measurement_text(
-                                    second
+                                    second,
+                                    normalized_time_display_mode,
                                 )
                             ),
                             small_style,
@@ -374,7 +427,10 @@ def build_blood_pressure_pdf(
                         else ""
                     ),
                     Paragraph(
-                        _note_text(pair),
+                        _note_text(
+                            pair,
+                            normalized_time_display_mode,
+                        ),
                         small_style,
                     ),
                 ]

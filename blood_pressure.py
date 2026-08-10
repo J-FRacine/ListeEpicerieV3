@@ -1931,6 +1931,19 @@ def blood_pressure_panel(
                         "grow min-w-[180px]"
                     )
 
+                report_period_labels_input = ui.checkbox(
+                    "Afficher « Matin / Soir » plutôt que l’heure exacte"
+                ).classes(
+                    "w-full"
+                )
+                ui.label(
+                    "Dans ce mode, une mesure prise avant 12 h est affichée "
+                    "« Matin » et une mesure prise à partir de 12 h est affichée "
+                    "« Soir ». L’heure originale reste enregistrée et inchangée."
+                ).classes(
+                    "text-xs jf-muted -mt-2"
+                )
+
                 recipient_input = ui.input(
                     label=(
                         "Courriel du destinataire "
@@ -2033,6 +2046,13 @@ def blood_pressure_panel(
                             end_date=end_value,
                             readings=readings,
                             output_path=output_path,
+                            time_display_mode=(
+                                "period"
+                                if bool(
+                                    report_period_labels_input.value
+                                )
+                                else "exact"
+                            ),
                         )
 
                         ui.download(

@@ -1,200 +1,48 @@
-JF APPS — FINANCES V1.5.0 + JOURNAL DE PRESSION V1.2.0
+JF APPS — JOURNAL DE PRESSION V1.2.1
+
+OPTION RAPPORT PDF — MATIN / SOIR
 
 FICHIERS COMPLETS À DÉPOSER ENSEMBLE À LA RACINE DE GITHUB
-- finances.py
-- finances_data.py
 - blood_pressure.py
-- blood_pressure_data.py
-- blood_pressure_push.py   [NOUVEAU]
-- app.py
+- blood_pressure_pdf.py
 - app_versions.py
 - manual.py
-- service-worker.js
-- requirements.txt
 
 Aucun script SQL manuel n’est requis.
-requirements.txt ajoute pywebpush : Canner devra donc refaire l’installation
-des dépendances pendant le redéploiement.
+Aucune nouvelle dépendance Python n’est requise.
+Aucune donnée existante n’est modifiée.
 
-============================================================
-FINANCES V1.5.0
-============================================================
+NOUVELLE OPTION
+Dans Journal de pression > Rapport PDF, une case permet maintenant de choisir :
+- désactivée (par défaut) : l’heure exacte demeure affichée;
+- activée : l’heure est remplacée par « Matin » ou « Soir ».
 
-TABLEAU — KPI CLIQUABLES
-- Le nom d’une catégorie ou d’une étiquette est maintenant cliquable.
-- La fenêtre de détail montre les transactions du mois affiché.
-- Réalisé, À venir et Total prévu sont séparés.
-- Une transaction réelle peut ouvrir sa fiche.
-- Une récurrence seulement projetée demeure consultative.
+RÈGLE UTILISÉE
+- avant 12:00 : Matin;
+- à partir de 12:00 : Soir.
 
-SAISIE RAPIDE — NOUVELLE CATÉGORIE
-- La liste Catégorie contient « + Ajouter une catégorie… ».
-- On peut créer une catégorie principale.
-- On peut choisir une catégorie principale existante afin de créer une
-  sous-catégorie.
-- La nouvelle catégorie est automatiquement sélectionnée.
+L’heure exacte reste enregistrée dans PostgreSQL et continue d’apparaître dans l’historique, le CSV et le JSON. Seule la présentation du PDF change.
 
-SAISIE RAPIDE — NOUVELLE ÉTIQUETTE
-- La liste Étiquettes contient « + Ajouter une étiquette… ».
-- Les étiquettes déjà sélectionnées sont conservées.
-- La nouvelle étiquette est automatiquement ajoutée à la transaction.
+Les notes du PDF utilisent le même libellé lorsque l’option Matin / Soir est activée.
 
-DOUBLONS
-- La vérification ignore la casse, les accents et les espaces superflus.
-- Un élément existant est réutilisé plutôt que dupliqué.
-- Un élément correspondant mais désactivé est réactivé.
+VERSION
+Journal de pression : V1.2.1
 
-============================================================
-JOURNAL DE PRESSION V1.2.0
-============================================================
-
-MOYENNES
-Dans Historique, la plage de dates choisie sert aussi au calcul :
-- moyenne systolique;
-- moyenne diastolique;
-- moyenne du pouls;
-- nombre de mesures utilisées.
-
-Toutes les mesures réellement enregistrées dans l’intervalle sont utilisées.
-Une journée sans mesure n’ajoute aucune valeur fictive.
-
-RAPPELS PAR PRISE
-Chaque prise possède maintenant :
-- Nom;
-- Début;
-- Fin;
-- Avis appareil à;
-- Notification sur l’appareil activée/désactivée.
-
-La règle actuelle est conservée :
-les mesures de la journée sont associées chronologiquement aux prises prévues.
-
-NOTIFICATIONS WEB PUSH
-Dans Rappel :
-- « Activer sur cet appareil »;
-- « Désactiver sur cet appareil ».
-
-Le navigateur demande l’autorisation de notification.
-Le fuseau horaire est enregistré par appareil.
-Avant tout envoi, le serveur revérifie les mesures de la journée.
-Le contrôle s’effectue environ toutes les 5 minutes.
-
-Le texte envoyé reste volontairement générique :
-Journal de pression
-Une mesure est prévue.
-
-Aucune valeur de pression ou de pouls n’apparaît dans la notification.
-
-Si plusieurs anciens rappels deviennent dus à la fois après une interruption,
-seul le rappel dû le plus récent est envoyé.
-
-Sur iPhone/iPad, tester depuis JF Apps ajoutée à l’écran d’accueil et après
-avoir autorisé les notifications.
-
-SAUVEGARDE JSON
-Les réglages de notification de chaque prise sont maintenant inclus :
-- activation;
-- heure de notification.
-
-============================================================
-NOUVEAUX ÉLÉMENTS POSTGRESQL
-============================================================
-
-Colonnes ajoutées à blood_pressure_reminder_slots :
-- notify_enabled
-- notify_time
-
-Nouvelles tables :
-- blood_pressure_push_config
-- blood_pressure_push_subscriptions
-- blood_pressure_push_deliveries
-
-La paire VAPID de cette installation JF Apps est conservée dans PostgreSQL.
-Aucune mesure de pression existante n’est supprimée ou remplacée.
-
-============================================================
 INSTALLATION
-============================================================
-
 1. Ouvrir le dépôt GitHub JF Apps.
 2. Choisir Add file > Upload files.
-3. Déposer les 10 fichiers ensemble.
-4. Vérifier que le NOUVEAU fichier blood_pressure_push.py est présent.
-5. Faire Commit changes.
-6. Attendre le redéploiement complet de Canner.
-7. Attendre aussi l’installation de pywebpush.
-8. Sur ordinateur : Ctrl+F5.
-9. Sur téléphone/PWA : fermer complètement JF Apps puis la rouvrir.
-10. Vérifier les versions :
-    - Finances V1.5.0
-    - Journal de pression V1.2.0
+3. Déposer les 4 fichiers Python ensemble.
+4. Faire Commit changes.
+5. Attendre le redéploiement complet de Canner.
+6. Sur ordinateur : Ctrl+F5.
+7. Sur téléphone/PWA : fermer complètement JF Apps puis la rouvrir.
+8. Vérifier que Journal de pression affiche V1.2.1.
 
-============================================================
-TESTS — FINANCES
-============================================================
-
-1. Tableau : cliquer sur une catégorie.
-2. Vérifier Réalisé / À venir / Total prévu.
-3. Ouvrir une transaction réelle depuis le détail.
-4. Refaire le test avec une étiquette.
-5. Vérifier qu’une récurrence projetée n’est pas modifiable.
-6. Saisie rapide : créer « Test rapide » avec + Ajouter une catégorie…
-7. Refaire avec « test rapide » : aucun doublon ne doit être créé.
-8. Créer une sous-catégorie sous une catégorie principale.
-9. Sélectionner une étiquette, puis utiliser + Ajouter une étiquette…
-10. Vérifier que l’étiquette déjà sélectionnée est conservée.
-
-============================================================
-TESTS — JOURNAL DE PRESSION
-============================================================
-
-MOYENNES
-1. Historique : choisir une plage contenant plusieurs mesures.
-2. Vérifier les trois moyennes et le nombre de mesures.
-3. Tester une plage sans mesure.
-
-NOTIFICATION
-1. Rappel : conserver les rappels généraux actifs.
-2. Pour une prise de test, activer Notification sur l’appareil.
-3. Mettre Avis appareil à une heure déjà atteinte ou très proche.
-4. Enregistrer les réglages.
-5. Cliquer Activer sur cet appareil.
-6. Autoriser les notifications.
-7. Ne pas enregistrer la mesure correspondante.
-8. Attendre le prochain contrôle serveur (normalement au plus quelques minutes).
-9. Vérifier la notification « Journal de pression — Une mesure est prévue. »
-10. Toucher la notification et vérifier l’ouverture de JF Apps.
-
-ANTI-NOTIFICATION INUTILE
-1. Configurer une autre heure de test.
-2. Saisir la mesure avant cette heure.
-3. Vérifier qu’aucune notification n’est envoyée pour cette prise.
-
-DÉSACTIVATION
-1. Cliquer Désactiver sur cet appareil.
-2. Vérifier la confirmation.
-
-============================================================
-VÉRIFICATIONS EFFECTUÉES AVANT LIVRAISON
-============================================================
-
-- syntaxe Python;
-- cohérence des imports internes;
-- paramètres SQL littéraux;
-- JavaScript du service worker validé avec Node;
-- route principale / du Portail conservée;
-- aucune minuterie ui.timer réintroduite dans le Journal;
-- versions Portail, Épicerie, JDR et Commentaires conservées;
-- projection Finances testée avec réalisé, futur et récurrence projetée;
-- identifiants des catégories/étiquettes conservés dans les KPI;
-- détection de doublons testée avec casse et accents;
-- calcul de moyennes simulé;
-- export/import JSON avec les heures de notification testé;
-- génération VAPID testée;
-- logique Matin/Soir testée selon le nombre de mesures;
-- envoi Push simulé et protection contre une rafale d’anciens avis.
-
-À VALIDER APRÈS DÉPLOIEMENT
-L’envoi Web Push réel nécessite un abonnement créé par un vrai navigateur et
-un accès au service Push du navigateur. Le rendu NiceGUI et l’envoi réel
-doivent donc être confirmés sur Canner après le redéploiement.
+TEST RAPIDE
+1. Ouvrir Journal de pression > Rapport PDF.
+2. Générer un PDF sans cocher l’option : les heures exactes doivent apparaître.
+3. Cocher « Afficher Matin / Soir plutôt que l’heure exacte ».
+4. Générer de nouveau le PDF.
+5. Une mesure avant midi doit afficher « Matin ».
+6. Une mesure à midi ou après doit afficher « Soir ».
+7. Vérifier qu’une note éventuelle utilise aussi Matin / Soir.

@@ -54,6 +54,7 @@ DEFAULT_PAYMENT_METHOD_TYPES = {
 PAYMENT_METHOD_TYPES = {
     "credit_card": "Carte de crédit",
     "bank": "Compte bancaire",
+    "credit_line": "Marge de crédit",
     "cash": "Argent comptant",
     "other": "Autre",
 }
@@ -158,6 +159,11 @@ def init_finances_schema():
                 );
             """)
             cur.execute("""
+                ALTER TABLE finance_categories
+                ADD COLUMN IF NOT EXISTS dashboard_visible BOOLEAN
+                NOT NULL DEFAULT TRUE;
+            """)
+            cur.execute("""
                 CREATE UNIQUE INDEX IF NOT EXISTS finance_categories_root_uq
                 ON finance_categories (user_id, LOWER(name))
                 WHERE parent_id IS NULL;
@@ -178,6 +184,11 @@ def init_finances_schema():
                     CHECK (CHAR_LENGTH(name) BETWEEN 1 AND 80),
                     UNIQUE (user_id, name)
                 );
+            """)
+            cur.execute("""
+                ALTER TABLE finance_tags
+                ADD COLUMN IF NOT EXISTS dashboard_visible BOOLEAN
+                NOT NULL DEFAULT TRUE;
             """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS finance_payment_methods (
@@ -236,23 +247,45 @@ def init_finances_schema():
                 ADD COLUMN IF NOT EXISTS note TEXT;
             """)
             cur.execute("""
+                ALTER TABLE finance_payment_methods
+                ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(14,2);
+            """)
+            cur.execute("""
                 DO $$
+                DECLARE
+                    current_definition TEXT;
                 BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM pg_constraint
-                        WHERE conname = 'finance_payment_methods_type_ck'
-                    ) THEN
+                    SELECT pg_get_constraintdef(oid)
+                    INTO current_definition
+                    FROM pg_constraint
+                    WHERE conname = 'finance_payment_methods_type_ck'
+                      AND conrelid = 'finance_payment_methods'::regclass;
+
+                    IF current_definition IS NOT NULL
+                       AND POSITION('credit_line' IN current_definition) = 0 THEN
+                        ALTER TABLE finance_payment_methods
+                        DROP CONSTRAINT finance_payment_methods_type_ck;
+                        current_definition := NULL;
+                    END IF;
+
+                    IF current_definition IS NULL THEN
                         ALTER TABLE finance_payment_methods
                         ADD CONSTRAINT finance_payment_methods_type_ck
                         CHECK (
                             method_type IN (
                                 'credit_card',
                                 'bank',
+                                'credit_line',
                                 'cash',
                                 'other'
                             )
                         );
                     END IF;
+                END $$;
+            """)
+            cur.execute("""
+                DO $$
+                BEGIN
                     IF NOT EXISTS (
                         SELECT 1 FROM pg_constraint
                         WHERE conname = 'finance_payment_methods_statement_day_ck'
@@ -748,6 +781,22 @@ def toggle_category(user_id, category_id, is_active):
             conn.commit()
 
 
+def set_category_dashboard_visible(user_id, category_id, is_visible):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE finance_categories
+                SET dashboard_visible=%s, updated_at=NOW()
+                WHERE id=%s AND user_id=%s;
+                """,
+                (bool(is_visible), category_id, user_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError("Catégorie introuvable.")
+            conn.commit()
+
+
 def list_tags(user_id, include_inactive=False):
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -931,6 +980,23 @@ def toggle_tag(user_id, tag_id, is_active):
             """, (bool(is_active), tag_id, user_id))
             conn.commit()
 
+
+def set_tag_dashboard_visible(user_id, tag_id, is_visible):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE finance_tags
+                SET dashboard_visible=%s, updated_at=NOW()
+                WHERE id=%s AND user_id=%s;
+                """,
+                (bool(is_visible), tag_id, user_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError("Étiquette introuvable.")
+            conn.commit()
+
+
 def ensure_default_finance_payment_methods(user_id):
     """Crée les modes de paiement initiaux pour un nouvel utilisateur."""
 
@@ -1004,6 +1070,7 @@ def list_payment_methods(
                     method.opening_balance,
                     method.opening_balance_date,
                     method.opening_balance_reconciled,
+                    method.credit_limit,
                     method.note,
                     COUNT(transaction.id) AS transaction_count
                 FROM finance_payment_methods AS method
@@ -1033,6 +1100,7 @@ def save_payment_method(
     payment_day=None,
     opening_balance=0,
     opening_balance_date=None,
+    credit_limit=None,
     note=None,
 ):
     cleaned_name = _text(
@@ -1065,6 +1133,17 @@ def save_payment_method(
             else None
         )
     )
+    parsed_credit_limit = _decimal_value(
+        credit_limit,
+        "La limite de crédit",
+        allow_blank=True,
+    )
+    if parsed_credit_limit is not None and parsed_credit_limit < 0:
+        raise ValueError("La limite de crédit ne peut pas être négative.")
+    if method_type != "credit_line":
+        parsed_credit_limit = None
+    if method_type == "credit_line" and parsed_opening_balance < 0:
+        raise ValueError("Le solde utilisé d’une marge ne peut pas être négatif.")
     cleaned_note = _text(
         note,
         "La note",
@@ -1107,6 +1186,7 @@ def save_payment_method(
                         END,
                         opening_balance = %s,
                         opening_balance_date = %s,
+                        credit_limit = %s,
                         note = %s,
                         updated_at = NOW()
                     WHERE id = %s
@@ -1121,6 +1201,7 @@ def save_payment_method(
                         parsed_opening_date,
                         parsed_opening_balance,
                         parsed_opening_date,
+                        parsed_credit_limit,
                         cleaned_note,
                         payment_method_id,
                         user_id,
@@ -1151,9 +1232,10 @@ def save_payment_method(
                         payment_day,
                         opening_balance,
                         opening_balance_date,
+                        credit_limit,
                         note
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
                     """,
                     (
                         user_id,
@@ -1164,6 +1246,7 @@ def save_payment_method(
                         parsed_payment_day,
                         parsed_opening_balance,
                         parsed_opening_date,
+                        parsed_credit_limit,
                         cleaned_note,
                     ),
                 )
@@ -2126,7 +2209,13 @@ def _projection_row(
     }
 
 
-def _projection_kpis(rows, transaction_type, limit=12):
+def _projection_kpis(
+    rows,
+    transaction_type,
+    limit=12,
+    visible_category_ids=None,
+    visible_tag_ids=None,
+):
     category_values = {}
     tag_values = {}
 
@@ -2153,18 +2242,24 @@ def _projection_kpis(rows, transaction_type, limit=12):
             if category_id is not None
             else None
         )
-        category = category_values.setdefault(
-            category_key,
-            {
-                "id": category_key,
-                "name": category_name,
-                "realized": Decimal("0.00"),
-                "upcoming": Decimal("0.00"),
-                "transaction_count": 0,
-            },
+        category_is_visible = (
+            category_key is None
+            or visible_category_ids is None
+            or category_key in visible_category_ids
         )
-        category[bucket] += amount
-        category["transaction_count"] += 1
+        if category_is_visible:
+            category = category_values.setdefault(
+                category_key,
+                {
+                    "id": category_key,
+                    "name": category_name,
+                    "realized": Decimal("0.00"),
+                    "upcoming": Decimal("0.00"),
+                    "transaction_count": 0,
+                },
+            )
+            category[bucket] += amount
+            category["transaction_count"] += 1
 
         tag_ids = list(row.get("tag_ids") or [])
         tag_names = list(row.get("tag_names") or [])
@@ -2175,6 +2270,12 @@ def _projection_kpis(rows, transaction_type, limit=12):
                 and tag_ids[index] is not None
                 else None
             )
+            if (
+                tag_id is not None
+                and visible_tag_ids is not None
+                and tag_id not in visible_tag_ids
+            ):
+                continue
             tag_key = (
                 ("id", tag_id)
                 if tag_id is not None
@@ -2402,6 +2503,17 @@ def dashboard_month_projection(
         ),
     )
 
+    visible_category_ids = {
+        int(row["id"])
+        for row in list_categories(user_id, include_inactive=True)
+        if bool(row.get("dashboard_visible", True))
+    }
+    visible_tag_ids = {
+        int(row["id"])
+        for row in list_tags(user_id, include_inactive=True)
+        if bool(row.get("dashboard_visible", True))
+    }
+
     return {
         "month": month,
         "month_end": month_end,
@@ -2445,11 +2557,15 @@ def dashboard_month_projection(
                 combined,
                 "expense",
                 limit=kpi_limit,
+                visible_category_ids=visible_category_ids,
+                visible_tag_ids=visible_tag_ids,
             ),
             "income": _projection_kpis(
                 combined,
                 "income",
                 limit=kpi_limit,
+                visible_category_ids=visible_category_ids,
+                visible_tag_ids=visible_tag_ids,
             ),
         },
     }
@@ -2644,6 +2760,19 @@ def save_recurrence(
             )
 
             if recurrence_id:
+                # Les occurrences prévues sont des projections de la règle.
+                # Lorsqu'on modifie la récurrence, elles sont reconstruites à
+                # partir des nouvelles valeurs. Les transactions confirmées
+                # restent intactes afin de préserver l'historique réel.
+                cur.execute(
+                    """
+                    DELETE FROM finance_transactions
+                    WHERE user_id=%s
+                      AND recurrence_id=%s
+                      AND status='planned';
+                    """,
+                    (user_id, recurrence_id),
+                )
                 cur.execute(
                     """
                     UPDATE finance_recurrences
@@ -2658,6 +2787,7 @@ def save_recurrence(
                         frequency_interval = %s,
                         start_date = %s,
                         end_date = %s,
+                        next_date = %s,
                         confirmation_mode = %s,
                         budget_excluded = %s,
                         bank_programmed = %s,
@@ -2679,6 +2809,7 @@ def save_recurrence(
                         interval,
                         parsed_start,
                         parsed_end,
+                        parsed_start,
                         confirmation_mode,
                         bool(budget_excluded),
                         bool(bank_programmed),
@@ -2859,9 +2990,67 @@ def toggle_recurrence(user_id, recurrence_id, is_active):
             conn.commit()
 
 
+def delete_recurrence(
+    user_id,
+    recurrence_id,
+    *,
+    delete_planned=True,
+):
+    """Supprime une règle sans réécrire l'historique confirmé."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id
+                FROM finance_recurrences
+                WHERE id=%s AND user_id=%s
+                FOR UPDATE;
+                """,
+                (recurrence_id, user_id),
+            )
+            if not cur.fetchone():
+                raise ValueError("Récurrence introuvable.")
+
+            if delete_planned:
+                cur.execute(
+                    """
+                    DELETE FROM finance_transactions
+                    WHERE user_id=%s
+                      AND recurrence_id=%s
+                      AND status='planned';
+                    """,
+                    (user_id, recurrence_id),
+                )
+
+            # Un poste Budget lié devient indépendant plutôt que d'être supprimé.
+            cur.execute(
+                """
+                UPDATE finance_budget_items
+                SET recurrence_id=NULL,
+                    sync_from_recurrence=FALSE,
+                    updated_at=NOW()
+                WHERE user_id=%s AND recurrence_id=%s;
+                """,
+                (user_id, recurrence_id),
+            )
+
+            # La FK des transactions confirmées est ON DELETE SET NULL :
+            # elles restent donc dans l'historique avec leur date et montant.
+            cur.execute(
+                """
+                DELETE FROM finance_recurrences
+                WHERE id=%s AND user_id=%s;
+                """,
+                (recurrence_id, user_id),
+            )
+            conn.commit()
+
+
 def generate_due_recurrences(
     user_id,
     through_date=None,
+    *,
+    force_planned=False,
 ):
     through = (
         through_date
@@ -2913,12 +3102,16 @@ def generate_due_recurrences(
                         break
 
                     status = (
-                        "confirmed"
-                        if recurrence[
-                            "confirmation_mode"
-                        ]
-                        == "automatic"
-                        else "planned"
+                        "planned"
+                        if force_planned
+                        else (
+                            "confirmed"
+                            if recurrence[
+                                "confirmation_mode"
+                            ]
+                            == "automatic"
+                            else "planned"
+                        )
                     )
 
                     cur.execute(
@@ -3353,9 +3546,10 @@ def budget_summary(user_id):
 
 
 def list_bank_accounts(user_id, include_inactive=False):
+    """Retourne les comptes suivis dans la vue Compte : banque et marge de crédit."""
     return [
         row for row in list_payment_methods(user_id, include_inactive=include_inactive)
-        if row.get("method_type") == "bank"
+        if row.get("method_type") in {"bank", "credit_line"}
     ]
 
 
@@ -3371,7 +3565,7 @@ def _bank_effective_rows(user_id, payment_method_id, end_date, today_value=None)
         None,
     )
     if not account:
-        raise ValueError("Compte bancaire introuvable.")
+        raise ValueError("Compte bancaire ou marge de crédit introuvable.")
     opening_date = account.get("opening_balance_date")
     if not opening_date:
         return account, [], None
@@ -3394,9 +3588,9 @@ def _bank_effective_rows(user_id, payment_method_id, end_date, today_value=None)
     }
     rows = []
     for row in existing:
-        tx_date = row["transaction_date"]
-        if tx_date <= today and row["status"] != "confirmed":
-            continue
+        # Les transactions prévues dont la date est passée demeurent visibles.
+        # Elles représentent un mouvement encore attendu, mais ne sont pas
+        # incluses dans le solde ACTUEL tant qu'elles ne sont pas confirmées.
         row["projected"] = False
         rows.append(row)
 
@@ -3456,8 +3650,12 @@ def _bank_effective_rows(user_id, payment_method_id, end_date, today_value=None)
     return account, rows, opening_date
 
 
-def _signed_transaction_amount(row):
+def _signed_transaction_amount(row, method_type="bank"):
     amount = Decimal(row["amount"])
+    if method_type == "credit_line":
+        # Sur une marge, une dépense augmente la dette et un revenu/remboursement
+        # la réduit. Le solde affiché représente donc le montant utilisé.
+        return amount if row["transaction_type"] == "expense" else -amount
     return amount if row["transaction_type"] == "income" else -amount
 
 
@@ -3478,36 +3676,53 @@ def bank_cashflow_month(user_id, payment_method_id, month_value, today_value=Non
             "account": account, "month": month, "month_end": month_end,
             "available": False, "opening_date": opening_date, "rows": [],
         }
-    balance = Decimal(account.get("opening_balance") or 0)
+
+    method_type = account.get("method_type") or "bank"
+    opening_balance = Decimal(account.get("opening_balance") or 0)
+    balance = opening_balance
+
+    # Solde actuel = uniquement les mouvements confirmés jusqu'à aujourd'hui.
+    current_balance = opening_balance if opening_date <= today else None
+    if current_balance is not None:
+        for row in rows:
+            tx_date = row["transaction_date"]
+            if tx_date > today:
+                break
+            if row.get("status") == "confirmed" and not row.get("projected"):
+                current_balance += _signed_transaction_amount(row, method_type)
+
     start_balance = balance
     display_rows = []
     minimum_balance = None
-    current_balance = balance if opening_date <= today else None
+    maximum_balance = None
 
     for row in rows:
         tx_date = row["transaction_date"]
         if tx_date < month:
-            balance += _signed_transaction_amount(row)
+            balance += _signed_transaction_amount(row, method_type)
             start_balance = balance
-            if tx_date <= today:
-                current_balance = balance
             continue
         if tx_date > month_end:
             continue
-        balance += _signed_transaction_amount(row)
+        balance += _signed_transaction_amount(row, method_type)
         display = dict(row)
         display["running_balance"] = balance
         display_rows.append(display)
         if minimum_balance is None or balance < minimum_balance:
             minimum_balance = balance
-        if tx_date <= today:
-            current_balance = balance
+        if maximum_balance is None or balance > maximum_balance:
+            maximum_balance = balance
 
     if minimum_balance is None:
         minimum_balance = start_balance
     else:
         minimum_balance = min(start_balance, minimum_balance)
-    return {
+    if maximum_balance is None:
+        maximum_balance = start_balance
+    else:
+        maximum_balance = max(start_balance, maximum_balance)
+
+    result = {
         "account": account,
         "month": month,
         "month_end": month_end,
@@ -3516,9 +3731,27 @@ def bank_cashflow_month(user_id, payment_method_id, month_value, today_value=Non
         "start_balance": start_balance,
         "current_balance": current_balance,
         "minimum_balance": minimum_balance,
+        "maximum_balance": maximum_balance,
         "end_balance": balance,
         "rows": display_rows,
+        "is_credit_line": method_type == "credit_line",
     }
+    if method_type == "credit_line":
+        limit = account.get("credit_limit")
+        limit = Decimal(limit) if limit is not None else None
+        result["credit_limit"] = limit
+        result["current_available_credit"] = (
+            limit - current_balance
+            if limit is not None and current_balance is not None
+            else None
+        )
+        result["minimum_available_credit"] = (
+            limit - maximum_balance if limit is not None else None
+        )
+        result["end_available_credit"] = (
+            limit - balance if limit is not None else None
+        )
+    return result
 
 
 def bank_cashflow_year_summary(user_id, payment_method_id, year, today_value=None):
@@ -3535,10 +3768,11 @@ def bank_cashflow_year_summary(user_id, payment_method_id, year, today_value=Non
     )
     if not opening_date or opening_date > end:
         return {"account": account, "year": year, "available": False, "months": []}
+    method_type = account.get("method_type") or "bank"
     balance = Decimal(account.get("opening_balance") or 0)
     for row in rows:
         if row["transaction_date"] < start:
-            balance += _signed_transaction_amount(row)
+            balance += _signed_transaction_amount(row, method_type)
     by_month = defaultdict(list)
     for row in rows:
         if start <= row["transaction_date"] <= end:
@@ -3554,24 +3788,38 @@ def bank_cashflow_year_summary(user_id, payment_method_id, year, today_value=Non
                 "available": False,
                 "start_balance": None,
                 "minimum_balance": None,
+                "maximum_balance": None,
                 "end_balance": None,
             })
             continue
         start_balance = balance
         minimum = balance
+        maximum = balance
         for row in by_month.get(month_number, []):
-            balance += _signed_transaction_amount(row)
+            balance += _signed_transaction_amount(row, method_type)
             minimum = min(minimum, balance)
-        months.append({
+            maximum = max(maximum, balance)
+        month_row = {
             "month": month_start,
             "month_end": month_end,
             "available": True,
             "start_balance": start_balance,
             "minimum_balance": minimum,
+            "maximum_balance": maximum,
             "end_balance": balance,
-        })
-    return {"account": account, "year": year, "available": True, "months": months}
-
+        }
+        if method_type == "credit_line" and account.get("credit_limit") is not None:
+            limit = Decimal(account["credit_limit"])
+            month_row["end_available_credit"] = limit - balance
+            month_row["minimum_available_credit"] = limit - maximum
+        months.append(month_row)
+    return {
+        "account": account,
+        "year": year,
+        "available": True,
+        "months": months,
+        "is_credit_line": method_type == "credit_line",
+    }
 
 def save_goal(
     user_id,
@@ -5735,7 +5983,7 @@ def export_finances(user_id):
 
     payload = {
         "format": "JF Apps Finances",
-        "version": "1.6.1",
+        "version": "1.7.0",
         "categories": [
             serial(
                 dict(row)

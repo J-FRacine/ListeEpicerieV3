@@ -15,12 +15,36 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.1",
     "blood_pressure": "1.2.1",
-    "finances": "1.6.2",
+    "finances": "1.7.0",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.7.0",
+        "date": "2026-08-10",
+        "title": "Finances — récurrences dynamiques, KPI configurables et marge de crédit",
+        "summary": (
+            "Les récurrences recalculent maintenant leurs prévisions, le Tableau peut être allégé "
+            "par catégorie ou étiquette et la vue Compte prend en charge les marges de crédit."
+        ),
+        "changes": [
+            "Une modification de date, montant ou fréquence d’une récurrence supprime et reconstruit ses occurrences prévues non confirmées.",
+            "Lorsqu’une correction de récurrence crée une occurrence déjà passée, cette occurrence est remise À confirmer plutôt que d’être silencieusement inscrite comme transaction réalisée.",
+            "Les transactions confirmées restent intactes afin de préserver l’historique réel.",
+            "Une récurrence peut être supprimée en choisissant de supprimer ses transactions prévues ou de les conserver comme transactions indépendantes.",
+            "Les postes Budget liés à une récurrence supprimée deviennent automatiquement indépendants.",
+            "Dans Organisation, chaque catégorie et étiquette possède une case Tableau pour choisir si elle apparaît dans les KPI du Tableau de bord.",
+            "Les réglages KPI existants sont activés par défaut après la mise à jour afin de ne rien masquer sans choix de l’utilisateur.",
+            "Nouveau type de mode de paiement Marge de crédit avec solde utilisé de référence, limite facultative et crédit disponible.",
+            "Dans une marge de crédit, une dépense augmente la dette et un remboursement la réduit; les transactions, récurrences et projections utilisent cette logique.",
+            "La vue Compte affiche dette actuelle, plus haut prévu, dette de fin de mois et crédit disponible lorsque la limite est renseignée.",
+            "Les transactions prévues dont la date est passée restent visibles dans la projection jusqu’à confirmation ou correction.",
+            "Aucun script SQL manuel ni nouvelle dépendance n’est requis.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.6.2",

@@ -154,7 +154,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.6.2",
+        "title": "Finances — V1.7.0",
         "icon": "account_balance_wallet",
         "caption": "Budget, trésorerie, dépenses, prévisions et conciliation",
         "keywords": (
@@ -166,14 +166,18 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "cliquable détail transaction ajouter catégorie étiquette saisie rapide "
             "compte bancaire trésorerie budget mensuel aux deux semaines paie "
             "solde minimum hors budget transfert paiement carte "
-            "récurrence liée budget synchronisé programmée banque rappel notification push"
+            "récurrence liée budget synchronisé programmée banque rappel notification push "
+            "kpi configurable tableau catégorie étiquette marge crédit limite disponible "
+            "supprimer récurrence recalcul projection historique confirmé"
         ),
         "content": """
 ### Objectif de Finances
 
-**V1.6.2** ajoute un correctif de démarrage : une erreur propre à la mise à niveau Finances ou aux rappels Web Push ne doit plus empêcher le Portail JF Apps complet de démarrer. Si la base refuse encore une migration, l’écran Finances affiche l’erreur technique exacte afin de faciliter le diagnostic.
+**Finances V1.7.0** ajoute trois évolutions principales : les récurrences recalculent leurs occurrences prévues lorsqu’elles sont modifiées, les KPI du Tableau peuvent être choisis par catégorie et par étiquette, et la vue **Compte** prend maintenant en charge les **marges de crédit**.
 
-**Finances** sert au suivi personnel des dépenses, des revenus, des prévisions, du budget global et de la trésorerie. La V1.6 ajoute une vue de compte bancaire inspirée d’un suivi mensuel traditionnel et un budget global mensuel / aux deux semaines. La V1.6.1 relie facultativement le Budget aux récurrences et ajoute les transactions programmées à la banque ainsi que les rappels Web Push.
+Le correctif de démarrage introduit en V1.6.2 est conservé : une erreur propre à la mise à niveau Finances ou aux rappels Web Push ne doit pas empêcher le Portail JF Apps complet de démarrer.
+
+**Finances** sert au suivi personnel des dépenses, des revenus, des prévisions, du budget global et de la trésorerie. La V1.6 a ajouté la vue de compte bancaire et le budget global; la V1.6.1 a ajouté le lien Budget–Récurrence, les transactions programmées à la banque et les rappels Web Push.
 
 L’application demeure volontairement plus simple qu’une comptabilité complète : elle ne demande pas d’écritures comptables en partie double et ne transforme pas les mouvements personnels en système comptable professionnel.
 
@@ -232,22 +236,27 @@ L’utilisateur peut ajouter, renommer, désactiver et réordonner ses propres m
 
 Pour chaque mode, il peut aussi préciser :
 
-- le type : carte de crédit, compte bancaire, argent comptant ou autre;
+- le type : carte de crédit, compte bancaire, **marge de crédit**, argent comptant ou autre;
 - le jour habituel de fermeture du relevé;
 - le jour habituel de paiement;
 - un solde initial ou de référence;
 - la date de référence de ce solde;
+- une **limite de crédit facultative** lorsqu’il s’agit d’une marge;
 - une note.
 
 Pour une **carte de crédit**, le solde initial demeure disponible pour la conciliation. Pour un **compte bancaire**, le solde et sa date de référence servent de point de départ à l’onglet **Compte** et au résumé de trésorerie du Tableau.
 
+Pour une **marge de crédit**, le solde de référence représente la dette déjà utilisée à cette date. Une dépense affectée à la marge **augmente la dette**; un revenu ou remboursement affecté à la marge **réduit la dette**. Si une limite est indiquée, l’application calcule aussi le crédit disponible.
+
 Une transaction utilise un seul mode de paiement. Une transaction récurrente peut mémoriser son mode de paiement par défaut.
 
-### Compte bancaire et trésorerie
+### Compte bancaire, marge de crédit et trésorerie
 
-L’onglet **Compte** reproduit la logique d’un suivi bancaire mensuel : un solde de départ est repris, les entrées et sorties sont placées dans l’ordre chronologique, puis le solde est recalculé après chaque mouvement.
+L’onglet **Compte** reproduit la logique d’un suivi mensuel. Pour un compte bancaire, un solde de départ est repris, les entrées et sorties sont placées dans l’ordre chronologique, puis le solde est recalculé après chaque mouvement.
 
-Pour utiliser cette vue, créez ou modifiez un mode de paiement de type **Compte bancaire**, puis indiquez son **solde de référence** et la **date de référence** correspondante.
+La même vue peut maintenant suivre une **Marge de crédit**. Dans ce cas, le montant affiché est la dette utilisée : une utilisation de la marge augmente ce montant et un remboursement le réduit.
+
+Pour utiliser cette vue, créez ou modifiez un mode de paiement de type **Compte bancaire** ou **Marge de crédit**, puis indiquez son **solde de référence** et la **date de référence** correspondante. Pour une marge, vous pouvez aussi inscrire sa limite.
 
 Pour le mois choisi, l’écran présente :
 
@@ -258,9 +267,11 @@ Pour le mois choisi, l’écran présente :
 - la liste chronologique des entrées et sorties;
 - le solde obtenu après chaque mouvement.
 
-Le **Plus bas prévu** est particulièrement utile : un mois peut terminer avec un bon solde tout en passant temporairement très près de zéro avant une paie ou un dépôt.
+Le **Plus bas prévu** est particulièrement utile pour un compte bancaire : un mois peut terminer avec un bon solde tout en passant temporairement très près de zéro avant une paie ou un dépôt.
 
-Les transactions confirmées déjà survenues alimentent le réalisé. Les transactions prévues, postdatées et les récurrences futures peuvent alimenter la prévision jusqu’à la fin du mois.
+Pour une **marge de crédit**, l’écran remplace cette logique par **Plus haut prévu**, c’est-à-dire le niveau maximal de dette prévu pendant le mois. Il affiche aussi la dette de fin de mois et, lorsqu’une limite est configurée, le **crédit disponible**.
+
+Les transactions confirmées déjà survenues alimentent le solde actuel. Les transactions prévues, postdatées et les récurrences futures alimentent la projection jusqu’à la fin du mois. Une transaction prévue dont la date est déjà passée reste maintenant visible comme mouvement attendu jusqu’à ce qu’elle soit confirmée, modifiée ou supprimée.
 
 Une transaction marquée **Hors budget** reste visible dans le Compte et modifie son solde si elle utilise ce compte bancaire. Elle n’est toutefois pas comptée comme nouvelle dépense ou nouveau revenu dans le budget et les KPI.
 
@@ -356,6 +367,8 @@ Les KPI par catégorie et par étiquette utilisent les colonnes :
 - À venir;
 - Total prévu.
 
+Dans **Organisation > Catégories** et **Organisation > Étiquettes**, la case **Tableau** permet de choisir individuellement les éléments qui apparaissent dans ces KPI. Décochez une catégorie ou une étiquette pour alléger le Tableau : elle reste entièrement disponible dans les transactions, les filtres, l’historique et les objectifs. Après la mise à jour vers V1.7.0, les éléments existants restent cochés par défaut afin de ne rien masquer automatiquement.
+
 Les transactions **Hors budget** sont exclues de ces montants.
 
 Les dépenses et les revenus sont présentés dans des blocs distincts. Les noms trop longs sont tronqués, mais le nom complet demeure disponible au survol.
@@ -436,7 +449,24 @@ Deux modes sont disponibles :
 - **À confirmer** : l’occurrence devient une transaction prévue;
 - **Création automatique** : l’occurrence est immédiatement confirmée.
 
-La récurrence peut aussi mémoriser une catégorie, des étiquettes, un mode de paiement par défaut et l’option **Hors budget**. Lorsqu’une occurrence est créée, elle conserve ce choix.
+La récurrence peut aussi mémoriser une catégorie, des étiquettes, un mode de paiement par défaut, l’option **Hors budget**, l’indicateur **Programmée à la banque** et un rappel. Lorsqu’une occurrence est créée, elle conserve ces choix.
+
+#### Modifier une récurrence
+
+En V1.7.0, modifier la **date de début**, le **montant**, la **fréquence** ou les autres paramètres d’une récurrence recalcule automatiquement ses occurrences **prévues et non confirmées**. Les anciennes occurrences prévues sont retirées puis reconstruites à partir de la nouvelle règle.
+
+Si cette correction fait apparaître une occurrence à une date déjà passée — par exemple déplacer le début du 20 août au 6 août — l’occurrence rétroactive est créée **À confirmer**, même pour une récurrence normalement automatique. Elle ne devient donc pas silencieusement une transaction déjà réalisée.
+
+Les transactions déjà **confirmées** ne sont jamais réécrites automatiquement : elles représentent l’historique réel. Ainsi, corriger une récurrence du 20 au 6 du mois fait apparaître l’occurrence prévue du 6, mais une transaction déjà confirmée le 20 reste dans l’historique jusqu’à ce que l’utilisateur décide lui-même de la corriger.
+
+#### Supprimer une récurrence
+
+Le bouton **Supprimer** offre deux choix :
+
+- supprimer la récurrence **et ses transactions prévues non confirmées**;
+- supprimer seulement la règle et **conserver les transactions prévues comme transactions indépendantes**.
+
+Dans les deux cas, les transactions confirmées sont conservées. Si un poste du Budget était lié à la récurrence supprimée, il devient un poste Budget indépendant au lieu d’être supprimé.
 
 ### Objectifs mensuels
 
@@ -461,7 +491,7 @@ Le tableau de bord affiche :
 - les revenus;
 - la différence;
 - les transactions prévues;
-- le résumé du compte bancaire lorsqu’il est configuré;
+- le résumé du compte bancaire principal lorsqu’il est configuré;
 - la progression des objectifs;
 - des KPI mensuels par catégorie;
 - des KPI mensuels par étiquette;
@@ -516,7 +546,7 @@ Les exportations contiennent notamment :
 - l’indicateur **Hors budget**;
 - la source et la clé d’importation.
 
-La sauvegarde JSON comprend aussi les lignes du **Budget global** afin de pouvoir les restaurer lors d’une importation ultérieure.
+La sauvegarde JSON comprend aussi les lignes du **Budget global**, les réglages de visibilité des KPI et les paramètres des modes de paiement, y compris la limite d’une marge de crédit.
 
 ### Versions
 

@@ -1,69 +1,101 @@
-JF APPS — FINANCES V1.6.2 — CORRECTIF DE DÉMARRAGE
-===================================================
+JF APPS — FINANCES V1.7.0
+=========================
 
-POURQUOI CE CORRECTIF
----------------------
-La V1.6.1 a pu faire échouer l’activation Canner avant que le serveur HTTP
-commence à écouter. Le message Canner ne contenait pas le traceback Python.
+BASE UTILISÉE
+-------------
+Cette version part de Finances V1.6.2 corrigée (correctif de syntaxe inclus).
+Journal de pression demeure en V1.2.1.
 
-Ce correctif rend les nouvelles initialisations Finances/Web Push non
-bloquantes pour le Portail :
-- le Portail peut démarrer même si une migration Finances rencontre un problème;
-- Finances réessaie automatiquement sa mise à niveau lors de son ouverture;
-- si cette seconde tentative échoue, l’erreur technique exacte est affichée
-  dans l’écran Finances et imprimée dans le journal;
-- la création de la table de suivi des rappels Finances est faite dans la
-  tâche de fond après le démarrage HTTP;
-- le lien Budget–Récurrence reste validé dans l’application et n’ajoute plus
-  une contrainte SQL facultative susceptible de bloquer le démarrage.
-
-FONCTIONS CONSERVÉES
---------------------
-Toutes les fonctions V1.6.1 restent présentes :
-- Compte et vue annuelle;
-- Budget mensuel / aux deux semaines;
-- Hors budget;
-- lien Budget ↔ Récurrence;
-- Programmée dans le compte bancaire;
-- rappel Web Push le jour prévu;
-- canaux Finances et Journal de pression indépendants.
-
-FICHIERS COMPLETS À REMPLACER ENSEMBLE
---------------------------------------
-- app.py
+FICHIERS COMPLETS À REMPLACER
+-----------------------------
 - finances.py
 - finances_data.py
-- blood_pressure_push.py
-- blood_pressure.py
 - app_versions.py
 - manual.py
 
-Aucun script SQL manuel.
-Aucune nouvelle dépendance.
+Aucun script SQL manuel n'est requis.
+Aucune nouvelle dépendance Python n'est requise.
+Les nouvelles colonnes et contraintes sont adaptées automatiquement au démarrage de Finances.
+
+NOUVEAUTÉS V1.7.0
+-----------------
+
+1) RÉCURRENCES DYNAMIQUES
+- Une récurrence peut maintenant être supprimée.
+- À la suppression, deux choix sont proposés :
+  a) supprimer aussi les transactions prévues non confirmées;
+  b) conserver ces transactions prévues comme transactions indépendantes.
+- Les transactions déjà confirmées sont toujours conservées.
+- Si un poste Budget était lié à la récurrence supprimée, il devient indépendant.
+- Modifier la date de début, le montant ou la fréquence retire les anciennes occurrences prévues non confirmées et recalcule la projection à partir de la nouvelle règle.
+- Une occurrence rétroactive créée par une correction de date reste « À confirmer », même si la récurrence est habituellement automatique. Une correction ne transforme donc pas silencieusement une date passée en transaction réalisée.
+- Les transactions prévues dont la date est passée restent visibles dans Compte jusqu'à confirmation, modification ou suppression.
+
+2) KPI CONFIGURABLES
+- Organisation > Catégories : nouvelle case « Tableau » sur chaque catégorie.
+- Organisation > Étiquettes : nouvelle case « Tableau » sur chaque étiquette.
+- Décochez un élément pour le masquer des KPI détaillés du Tableau de bord.
+- La catégorie ou l'étiquette demeure utilisable partout ailleurs : saisie, historique, filtres, objectifs, etc.
+- Tous les éléments existants sont visibles par défaut après la mise à jour.
+
+3) MARGE DE CRÉDIT
+- Nouveau type de mode de paiement : « Marge de crédit ».
+- Réglages : solde utilisé de référence, date de référence et limite de crédit facultative.
+- Le crédit disponible est calculé automatiquement lorsque la limite est renseignée.
+- Une dépense augmente la dette utilisée.
+- Un revenu/remboursement réduit la dette utilisée.
+- La vue Compte affiche : dette de départ, dette actuelle, plus haut prévu, dette de fin de mois et crédit disponible.
+- Les transactions, récurrences et projections utilisent la même logique.
 
 INSTALLATION
 ------------
-1. Dans GitHub, remplacer les 7 fichiers ci-dessus par ceux du paquet.
-2. Commit changes.
-3. Laisser Canner redéployer.
-4. Vérifier d’abord que le Portail s’ouvre.
-5. Ouvrir ensuite Finances.
-6. Si Finances montre une carte « mise à niveau de la base impossible »,
-   copier exactement l’erreur affichée et la transmettre à ChatGPT.
+1. Dans GitHub, remplacer les quatre fichiers .py listés plus haut.
+2. Faire Commit changes.
+3. Attendre le redéploiement complet de Canner.
+4. Sur ordinateur : Ctrl+F5.
+5. Sur téléphone/PWA : fermer complètement JF Apps puis la rouvrir.
+6. Vérifier que Finances affiche V1.7.0.
+
+TESTS RECOMMANDÉS APRÈS DÉPLOIEMENT
+-----------------------------------
+
+A. KPI
+1. Organisation > Catégories : décocher « Tableau » pour une catégorie visible dans les KPI.
+2. Revenir au Tableau : cette catégorie ne doit plus apparaître dans le KPI détaillé.
+3. Vérifier qu'elle reste disponible dans la saisie et l'historique.
+4. Refaire le test avec une étiquette.
+
+B. RÉCURRENCE MODIFIÉE
+1. Créer une récurrence « À confirmer » débutant le 20 du mois.
+2. Modifier son début pour le 6 du mois.
+3. Vérifier dans Compte/Historique que l'ancienne occurrence prévue du 20 n'est plus utilisée comme ancienne projection.
+4. Si le 6 est déjà passé, l'occurrence du 6 doit apparaître « À confirmer » et non confirmée automatiquement.
+5. Une transaction déjà confirmée provenant de cette récurrence doit rester intacte.
+
+C. SUPPRESSION D'UNE RÉCURRENCE
+1. Créer une récurrence avec une occurrence prévue.
+2. Supprimer la récurrence en choisissant d'effacer les transactions prévues.
+3. Refaire le test avec l'option qui conserve les transactions prévues comme indépendantes.
+4. Vérifier dans les deux cas qu'une transaction confirmée existante n'est jamais supprimée.
+
+D. MARGE DE CRÉDIT
+1. Organisation > Modes de paiement > Ajouter.
+2. Choisir « Marge de crédit ».
+3. Exemple : solde utilisé 1 000 $, limite 5 000 $.
+4. Vérifier que le crédit disponible de départ est 4 000 $.
+5. Ajouter une dépense de 200 $ : la dette prévue doit monter à 1 200 $.
+6. Ajouter un remboursement/revenu de 300 $ : la dette doit redescendre à 900 $.
+7. Vérifier que le crédit disponible prévu devient 4 100 $.
+
+VALIDATIONS EFFECTUÉES AVANT LIVRAISON
+--------------------------------------
+- Compilation Python de tous les fichiers .py du paquet de travail.
+- Vérification des imports entre finances.py et finances_data.py.
+- Test de masquage des KPI catégorie/étiquette.
+- Test de suppression d'une récurrence avec les deux choix de conservation.
+- Test de calcul Compte bancaire et Marge de crédit.
+- Vérification que la modification d'une récurrence force les occurrences rétroactives reconstruites à rester prévues/à confirmer.
 
 IMPORTANT
 ---------
-Ne pas supprimer la base de données et ne pas effacer les transactions.
-Le correctif est conçu pour fonctionner même si le déploiement V1.6.1 a
-réussi à créer certaines colonnes avant de s’arrêter.
-
-CORRECTION DU 10 AOÛT 2026 — ERREUR DE SYNTAXE
-------------------------------------------------
-Le journal Canner a ensuite permis d'identifier précisément l'erreur :
-finances.py, ligne 2325 — SyntaxError: f-string: unmatched '('.
-
-La ligne d'affichage du nombre d'appareils Finances utilisait des guillemets
-imbriqués incorrectement. Elle est maintenant corrigée.
-
-Validation effectuée : les 7 fichiers Python du paquet ont été recompilés
-avec py_compile sans erreur de syntaxe.
+La validation finale sur Canner reste nécessaire parce que seul l'environnement de déploiement réel peut confirmer la migration PostgreSQL et l'interface NiceGUI avec vos données existantes.

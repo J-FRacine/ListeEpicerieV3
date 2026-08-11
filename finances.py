@@ -35,6 +35,7 @@ from finances_data import (
     create_reconciliation_session,
     dashboard_month_projection,
     dashboard_summary,
+    delete_recurrence,
     delete_transaction,
     ensure_default_finance_categories,
     ensure_default_finance_payment_methods,
@@ -70,6 +71,8 @@ from finances_data import (
     save_recurrence,
     save_tag,
     save_transaction,
+    set_category_dashboard_visible,
+    set_tag_dashboard_visible,
     set_transaction_reconciliation,
     set_transaction_status,
     toggle_budget_item,
@@ -1378,9 +1381,16 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                 bank_accounts = list_bank_accounts(user_id)
                 cash_summary = None
                 if bank_accounts:
+                    primary_account = next(
+                        (
+                            row for row in bank_accounts
+                            if row.get("method_type") == "bank"
+                        ),
+                        bank_accounts[0],
+                    )
                     try:
                         cash_summary = bank_cashflow_month(
-                            user_id, int(bank_accounts[0]["id"]), month_state["value"]
+                            user_id, int(primary_account["id"]), month_state["value"]
                         )
                     except Exception:
                         cash_summary = None
@@ -1726,26 +1736,55 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         )
 
                     if cash_summary and cash_summary.get("available"):
+                        is_credit_line = bool(cash_summary.get("is_credit_line"))
                         with ui.element("div").classes("jf-finance-bank-strip"):
                             with ui.row().classes("w-full items-center justify-between gap-2 flex-wrap"):
                                 with ui.column().classes("gap-0"):
-                                    ui.label("Compte bancaire — " + cash_summary["account"]["name"]).classes("font-bold")
-                                    ui.label("Projection de trésorerie incluant les mouvements hors budget.").classes("text-xs jf-muted")
+                                    ui.label(
+                                        ("Marge de crédit — " if is_credit_line else "Compte bancaire — ")
+                                        + cash_summary["account"]["name"]
+                                    ).classes("font-bold")
+                                    ui.label(
+                                        "Projection de la dette et du crédit disponible."
+                                        if is_credit_line
+                                        else "Projection de trésorerie incluant les mouvements hors budget."
+                                    ).classes("text-xs jf-muted")
                                 ui.button("Voir le compte", icon="account_balance", on_click=lambda: tabs.set_value(account_tab)).props("flat dense color=primary")
                             with ui.element("div").classes("jf-finance-summary-grid mt-2"):
-                                bank_values = (
-                                    ("Solde début", cash_summary["start_balance"]),
-                                    ("Solde actuel", cash_summary.get("current_balance") if cash_summary.get("current_balance") is not None else cash_summary["start_balance"]),
-                                    ("Plus bas prévu", cash_summary["minimum_balance"]),
-                                    ("Fin de mois prévue", cash_summary["end_balance"]),
-                                )
+                                if is_credit_line:
+                                    current_debt = (
+                                        cash_summary.get("current_balance")
+                                        if cash_summary.get("current_balance") is not None
+                                        else cash_summary["start_balance"]
+                                    )
+                                    bank_values = [
+                                        ("Dette début", cash_summary["start_balance"]),
+                                        ("Dette actuelle", current_debt),
+                                        ("Plus haut prévu", cash_summary["maximum_balance"]),
+                                        ("Dette fin de mois", cash_summary["end_balance"]),
+                                    ]
+                                    if cash_summary.get("end_available_credit") is not None:
+                                        bank_values.append(
+                                            ("Crédit disponible fin", cash_summary["end_available_credit"])
+                                        )
+                                else:
+                                    bank_values = [
+                                        ("Solde début", cash_summary["start_balance"]),
+                                        ("Solde actuel", cash_summary.get("current_balance") if cash_summary.get("current_balance") is not None else cash_summary["start_balance"]),
+                                        ("Plus bas prévu", cash_summary["minimum_balance"]),
+                                        ("Fin de mois prévue", cash_summary["end_balance"]),
+                                    ]
                                 for bank_label, bank_value in bank_values:
                                     with ui.element("div").classes("jf-finance-summary"):
                                         ui.label(bank_label).classes("jf-finance-summary-label")
-                                        ui.label(_balance_money(bank_value)).classes("jf-finance-summary-value " + ("jf-finance-expense" if Decimal(bank_value) < 0 else "jf-finance-income"))
+                                        if is_credit_line and "Dette" in bank_label:
+                                            css = "jf-finance-expense" if Decimal(bank_value) > 0 else "jf-finance-income"
+                                        else:
+                                            css = "jf-finance-expense" if Decimal(bank_value) < 0 else "jf-finance-income"
+                                        ui.label(_balance_money(bank_value)).classes("jf-finance-summary-value " + css)
                     elif bank_accounts:
                         with ui.element("div").classes("jf-finance-report-note"):
-                            ui.label("Compte bancaire : indique un solde initial et sa date dans Organisation > Modes de paiement pour activer la projection.").classes("text-sm")
+                            ui.label("Compte ou marge : indique un solde de référence et sa date dans Organisation > Modes de paiement pour activer la projection.").classes("text-sm")
 
                     with ui.element(
                         "div"
@@ -2307,13 +2346,17 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
         # COMPTE / TRÉSORERIE
         with ui.tab_panel(account_tab).classes("px-0"):
             account_state = {"month": date.today().replace(day=1)}
-            bank_options = _bank_account_options(user_id)
-            selected_bank = next(iter(bank_options), None)
+            bank_rows = list_bank_accounts(user_id)
+            bank_options = {int(row["id"]): row["name"] for row in bank_rows}
+            selected_bank = next(
+                (int(row["id"]) for row in bank_rows if row.get("method_type") == "bank"),
+                next(iter(bank_options), None),
+            )
             with ui.card().classes("w-full p-4"):
                 with ui.row().classes("w-full items-end gap-2 flex-wrap"):
-                    account_selector = ui.select(bank_options, value=selected_bank, label="Compte bancaire").props("dense outlined options-dense").classes("min-w-56 grow")
+                    account_selector = ui.select(bank_options, value=selected_bank, label="Compte bancaire / marge de crédit").props("dense outlined options-dense").classes("min-w-56 grow")
                     ui.button("Configurer les comptes", icon="settings", on_click=lambda: tabs.set_value(organization_tab)).props("flat dense color=primary")
-                ui.label("Le solde utilise les transactions dont le mode de paiement est ce compte bancaire. Un paiement de carte ou un transfert peut être Hors budget tout en continuant d’affecter le solde.").classes("text-xs jf-muted")
+                ui.label("La vue Compte suit les comptes bancaires et les marges de crédit. Pour une marge, une dépense augmente la dette et un remboursement la réduit. Les mouvements Hors budget continuent d’affecter le solde ou la dette.").classes("text-xs jf-muted")
             with ui.card().classes("w-full p-4"):
                 with ui.row().classes("w-full items-start justify-between gap-2 flex-wrap"):
                     with ui.column().classes("gap-0 min-w-0"):
@@ -2442,7 +2485,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                 with account_box:
                     if not account_selector.value:
                         with ui.element("div").classes("jf-finance-report-note"):
-                            ui.label("Aucun mode de paiement de type Compte bancaire n’est configuré. Crée-en un dans Organisation > Modes de paiement.").classes("text-sm")
+                            ui.label("Aucun Compte bancaire ni aucune Marge de crédit n’est configuré. Crée-en un dans Organisation > Modes de paiement.").classes("text-sm")
                         return
                     try:
                         month_data = bank_cashflow_month(user_id, account_selector.value, account_state["month"])
@@ -2456,17 +2499,51 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         ui.button(icon="chevron_right", on_click=lambda: change_account_month(1)).props("flat dense round")
                     if not month_data.get("available"):
                         with ui.element("div").classes("jf-finance-report-note"):
-                            ui.label("Pour calculer le solde, indique un Solde initial et une Date du solde initial dans Organisation > Modes de paiement.").classes("text-sm")
+                            ui.label("Pour calculer le suivi, indique un solde de référence et sa date dans Organisation > Modes de paiement.").classes("text-sm")
                         return
+                    is_credit_line = bool(month_data.get("is_credit_line"))
                     with ui.element("div").classes("jf-finance-summary-grid"):
-                        for label, value in (("Solde de départ", month_data["start_balance"]),("Solde actuel", month_data.get("current_balance") if month_data.get("current_balance") is not None else month_data["start_balance"]),("Plus bas prévu", month_data["minimum_balance"]),("Solde fin de mois", month_data["end_balance"])):
+                        if is_credit_line:
+                            current_debt = (
+                                month_data.get("current_balance")
+                                if month_data.get("current_balance") is not None
+                                else month_data["start_balance"]
+                            )
+                            summary_values = [
+                                ("Dette de départ", month_data["start_balance"]),
+                                ("Dette actuelle", current_debt),
+                                ("Plus haut prévu", month_data["maximum_balance"]),
+                                ("Dette fin de mois", month_data["end_balance"]),
+                            ]
+                            if month_data.get("credit_limit") is not None:
+                                summary_values.extend([
+                                    ("Limite de crédit", month_data["credit_limit"]),
+                                    ("Crédit disponible fin", month_data["end_available_credit"]),
+                                ])
+                        else:
+                            summary_values = [
+                                ("Solde de départ", month_data["start_balance"]),
+                                ("Solde actuel", month_data.get("current_balance") if month_data.get("current_balance") is not None else month_data["start_balance"]),
+                                ("Plus bas prévu", month_data["minimum_balance"]),
+                                ("Solde fin de mois", month_data["end_balance"]),
+                            ]
+                        for label, value in summary_values:
                             with ui.element("div").classes("jf-finance-summary"):
                                 ui.label(label).classes("jf-finance-summary-label")
-                                ui.label(_balance_money(value)).classes("jf-finance-summary-value " + ("jf-finance-expense" if Decimal(value) < 0 else "jf-finance-income"))
+                                if is_credit_line and "Dette" in label:
+                                    css = "jf-finance-expense" if Decimal(value) > 0 else "jf-finance-income"
+                                else:
+                                    css = "jf-finance-expense" if Decimal(value) < 0 else "jf-finance-income"
+                                ui.label(_balance_money(value)).classes("jf-finance-summary-value " + css)
                     with ui.card().classes("w-full p-0 overflow-hidden"):
                         with ui.element("div").classes("jf-finance-cashflow-head"):
-                            for text in ("Date","Description","Sortie","Entrée","Solde"):
-                                ui.label(text).classes("text-right" if text in {"Sortie","Entrée","Solde"} else "")
+                            headers = (
+                                ("Date","Description","Utilisation","Remboursement","Dette")
+                                if is_credit_line
+                                else ("Date","Description","Sortie","Entrée","Solde")
+                            )
+                            for text in headers:
+                                ui.label(text).classes("text-right" if text not in {"Date", "Description"} else "")
                         if month_data["rows"]:
                             for row in month_data["rows"]:
                                 with ui.element("div").classes("jf-finance-cashflow-row"):
@@ -2482,13 +2559,24 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                         if meta: ui.label(" • ".join(meta)).classes("text-xs jf-muted")
                                     ui.label(_money(row["amount"]) if row["transaction_type"] == "expense" else "").classes("jf-finance-cashflow-money jf-finance-expense")
                                     ui.label(_money(row["amount"]) if row["transaction_type"] == "income" else "").classes("jf-finance-cashflow-money jf-finance-income")
-                                    ui.label(_balance_money(row["running_balance"])).classes("jf-finance-cashflow-money font-bold " + ("jf-finance-expense" if Decimal(row["running_balance"]) < 0 else ""))
+                                    running_value = Decimal(row["running_balance"])
+                                    running_css = (
+                                        "jf-finance-expense"
+                                        if (is_credit_line and running_value > 0)
+                                        or (not is_credit_line and running_value < 0)
+                                        else ""
+                                    )
+                                    ui.label(_balance_money(running_value)).classes("jf-finance-cashflow-money font-bold " + running_css)
                         else:
                             ui.label("Aucun mouvement pour ce mois.").classes("p-4 text-sm jf-muted")
                     if year_data.get("available"):
                         with ui.row().classes("w-full items-center justify-between mt-2"):
                             ui.label(f"Vue annuelle {account_state['month'].year}").classes("text-lg font-bold")
-                            ui.label("Solde prévu à la fin de chaque mois").classes("text-xs jf-muted")
+                            ui.label(
+                                "Dette utilisée prévue à la fin de chaque mois"
+                                if is_credit_line
+                                else "Solde prévu à la fin de chaque mois"
+                            ).classes("text-xs jf-muted")
                         with ui.element("div").classes("jf-finance-year-grid"):
                             for month_row in year_data["months"]:
                                 month_value = month_row["month"]
@@ -2498,8 +2586,21 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                         ui.label("—").classes("font-bold jf-muted")
                                         ui.label("avant le solde de référence").classes("text-xs jf-muted")
                                     else:
-                                        ui.label(_balance_money(month_row["end_balance"])).classes("font-bold " + ("jf-finance-expense" if Decimal(month_row["end_balance"]) < 0 else "jf-finance-income"))
-                                        ui.label("min. " + _balance_money(month_row["minimum_balance"])).classes("text-xs jf-muted")
+                                        end_value = Decimal(month_row["end_balance"])
+                                        if is_credit_line:
+                                            ui.label(_balance_money(end_value)).classes(
+                                                "font-bold " + ("jf-finance-expense" if end_value > 0 else "jf-finance-income")
+                                            )
+                                            ui.label(
+                                                "max. " + _balance_money(month_row["maximum_balance"])
+                                            ).classes("text-xs jf-muted")
+                                            if month_row.get("end_available_credit") is not None:
+                                                ui.label(
+                                                    "disp. " + _balance_money(month_row["end_available_credit"])
+                                                ).classes("text-xs jf-muted")
+                                        else:
+                                            ui.label(_balance_money(end_value)).classes("font-bold " + ("jf-finance-expense" if end_value < 0 else "jf-finance-income"))
+                                            ui.label("min. " + _balance_money(month_row["minimum_balance"])).classes("text-xs jf-muted")
             account_selector.on_value_change(lambda _event: render_account.refresh())
             render_account()
 
@@ -3810,6 +3911,47 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
         with ui.tab_panel(recurring_tab).classes("px-0"):
             recurrence_box = ui.column().classes("w-full gap-2")
 
+            def delete_recurrence_dialog(row):
+                with ui.dialog() as delete_dialog:
+                    with ui.card().classes("w-full max-w-xl p-4"):
+                        ui.label("Supprimer la récurrence").classes(
+                            "text-xl font-bold"
+                        )
+                        ui.label(row["description"]).classes("font-semibold")
+                        ui.label(
+                            "Les transactions déjà confirmées resteront toujours dans l’historique. "
+                            "Choisis seulement ce qui doit arriver aux occurrences encore prévues."
+                        ).classes("text-sm jf-muted")
+
+                        def remove_recurrence(delete_planned):
+                            try:
+                                delete_recurrence(
+                                    user_id,
+                                    row["id"],
+                                    delete_planned=delete_planned,
+                                )
+                            except Exception as error:
+                                ui.notify(str(error), type="warning")
+                                return
+                            delete_dialog.close()
+                            ui.notify("Récurrence supprimée.", type="positive")
+                            refresh_all()
+
+                        with ui.column().classes("w-full gap-2 mt-2"):
+                            ui.button(
+                                "Supprimer aussi les transactions prévues non confirmées",
+                                icon="delete_sweep",
+                                on_click=lambda: remove_recurrence(True),
+                            ).props("color=negative").classes("w-full")
+                            ui.button(
+                                "Conserver les transactions prévues comme transactions indépendantes",
+                                icon="keep",
+                                on_click=lambda: remove_recurrence(False),
+                            ).props("outline color=primary").classes("w-full")
+                        with ui.row().classes("w-full justify-end"):
+                            ui.button("Annuler", on_click=delete_dialog.close).props("flat")
+                delete_dialog.open()
+
             def recurrence_dialog(row=None):
                 with ui.dialog() as dialog:
                     with ui.card().classes("w-full max-w-2xl p-4"):
@@ -3939,6 +4081,10 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         ui.label(
                             "Le rappel d’une récurrence est envoyé même si l’occurrence n’a pas encore été matérialisée dans l’Historique."
                         ).classes("text-xs jf-muted")
+                        if row:
+                            ui.label(
+                                "Si tu modifies la date, le montant ou la fréquence, les occurrences prévues non confirmées sont recalculées automatiquement. Les transactions confirmées restent intactes. Une occurrence rétroactive créée par la correction reste À confirmer."
+                            ).classes("text-xs jf-muted")
                         mode = ui.select(
                             CONFIRMATION_MODES,
                             value=row["confirmation_mode"] if row else "confirm",
@@ -3975,7 +4121,10 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     reminder_enabled=reminder_enabled_rec.value,
                                     reminder_time=reminder_time_rec.value or "09:00",
                                 )
-                                generate_due_recurrences(user_id)
+                                generate_due_recurrences(
+                                    user_id,
+                                    force_planned=bool(row),
+                                )
                             except Exception as error:
                                 ui.notify(str(error), type="warning")
                                 return
@@ -4079,6 +4228,16 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     ).props(
                                         "flat dense round size=sm color=primary"
                                     )
+                                    ui.button(
+                                        icon="delete",
+                                        on_click=(
+                                            lambda _event=None,
+                                            selected=row:
+                                            delete_recurrence_dialog(selected)
+                                        ),
+                                    ).props(
+                                        "flat dense round size=sm color=negative"
+                                    ).tooltip("Supprimer")
 
             def change_recurrence_state(recurrence_id, value):
                 toggle_recurrence(user_id, recurrence_id, value)
@@ -5344,6 +5503,16 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     ).props("color=primary")
                         dialog.open()
 
+                    def change_category_dashboard(category_id, value):
+                        try:
+                            set_category_dashboard_visible(
+                                user_id, category_id, value
+                            )
+                        except Exception as error:
+                            ui.notify(str(error), type="warning")
+                            return
+                        render_dashboard.refresh()
+
                     @ui.refreshable
                     def render_categories():
                         category_box.clear()
@@ -5354,9 +5523,13 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             with ui.row().classes(
                                 "w-full items-center justify-between"
                             ):
-                                ui.label(
-                                    "Catégories et sous-catégories"
-                                ).classes("text-xl font-bold")
+                                with ui.column().classes("gap-0"):
+                                    ui.label(
+                                        "Catégories et sous-catégories"
+                                    ).classes("text-xl font-bold")
+                                    ui.label(
+                                        "La case Tableau choisit les catégories affichées dans les KPI du Tableau de bord."
+                                    ).classes("text-xs jf-muted")
                                 ui.button(
                                     "Ajouter",
                                     icon="add",
@@ -5370,7 +5543,24 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                         ui.label(row["full_name"]).classes(
                                             "text-sm font-bold"
                                         )
-                                        with ui.row().classes("gap-1"):
+                                        with ui.row().classes("gap-1 items-center"):
+                                            ui.checkbox(
+                                                "Tableau",
+                                                value=bool(
+                                                    row.get(
+                                                        "dashboard_visible", True
+                                                    )
+                                                ),
+                                                on_change=(
+                                                    lambda event,
+                                                    selected=row["id"]:
+                                                    change_category_dashboard(
+                                                        selected, event.value
+                                                    )
+                                                ),
+                                            ).props("dense").tooltip(
+                                                "Afficher cette catégorie dans les KPI du Tableau"
+                                            )
                                             ui.switch(
                                                 value=row["is_active"],
                                                 on_change=(
@@ -5442,6 +5632,16 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     ).props("color=primary")
                         dialog.open()
 
+                    def change_tag_dashboard(tag_id, value):
+                        try:
+                            set_tag_dashboard_visible(
+                                user_id, tag_id, value
+                            )
+                        except Exception as error:
+                            ui.notify(str(error), type="warning")
+                            return
+                        render_dashboard.refresh()
+
                     @ui.refreshable
                     def render_tags():
                         tag_box.clear()
@@ -5450,9 +5650,13 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             with ui.row().classes(
                                 "w-full items-center justify-between"
                             ):
-                                ui.label("Étiquettes").classes(
-                                    "text-xl font-bold"
-                                )
+                                with ui.column().classes("gap-0"):
+                                    ui.label("Étiquettes").classes(
+                                        "text-xl font-bold"
+                                    )
+                                    ui.label(
+                                        "La case Tableau choisit les étiquettes affichées dans les KPI du Tableau de bord."
+                                    ).classes("text-xs jf-muted")
                                 ui.button(
                                     "Ajouter",
                                     icon="add",
@@ -5466,7 +5670,24 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                         ui.label(row["name"]).classes(
                                             "text-sm font-bold"
                                         )
-                                        with ui.row().classes("gap-1"):
+                                        with ui.row().classes("gap-1 items-center"):
+                                            ui.checkbox(
+                                                "Tableau",
+                                                value=bool(
+                                                    row.get(
+                                                        "dashboard_visible", True
+                                                    )
+                                                ),
+                                                on_change=(
+                                                    lambda event,
+                                                    selected=row["id"]:
+                                                    change_tag_dashboard(
+                                                        selected, event.value
+                                                    )
+                                                ),
+                                            ).props("dense").tooltip(
+                                                "Afficher cette étiquette dans les KPI du Tableau"
+                                            )
                                             ui.switch(
                                                 value=row["is_active"],
                                                 on_change=(
@@ -5599,9 +5820,36 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     "dense outlined"
                                 ).classes("w-full")
 
-                                ui.label(
+                                credit_limit = ui.number(
+                                    label="Limite de crédit — facultative",
+                                    value=(
+                                        row.get("credit_limit")
+                                        if row
+                                        else None
+                                    ),
+                                    min=0,
+                                    step=.01,
+                                ).props(
+                                    "dense outlined clearable"
+                                ).classes("w-full")
+
+                                payment_help = ui.label(
                                     "Pour une carte, le solde initial sert à la conciliation. Pour un Compte bancaire, il devient le solde de référence utilisé par l’onglet Compte et le Tableau; indique aussi la date de référence."
                                 ).classes("text-xs jf-muted")
+
+                                def update_payment_type_fields(_event=None):
+                                    is_credit_line = method_type.value == "credit_line"
+                                    credit_limit.visible = is_credit_line
+                                    payment_help.set_text(
+                                        (
+                                            "Pour une Marge de crédit, le solde initial représente la dette utilisée à la date de référence. La limite permet de calculer le crédit disponible; une dépense augmente la dette et un remboursement la réduit."
+                                            if is_credit_line
+                                            else "Pour une carte, le solde initial sert à la conciliation. Pour un Compte bancaire, il devient le solde de référence utilisé par l’onglet Compte et le Tableau; indique aussi la date de référence."
+                                        )
+                                    )
+
+                                method_type.on_value_change(update_payment_type_fields)
+                                update_payment_type_fields()
 
                                 note = ui.textarea(
                                     label="Note facultative",
@@ -5630,6 +5878,11 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                             ),
                                             opening_balance_date=(
                                                 opening_date.value or None
+                                            ),
+                                            credit_limit=(
+                                                credit_limit.value
+                                                if method_type.value == "credit_line"
+                                                else None
                                             ),
                                             note=note.value,
                                         )
@@ -5829,7 +6082,27 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                                 ).classes(
                                                     "text-xs jf-muted"
                                                 )
-                                            if Decimal(
+                                            if row.get("method_type") == "credit_line":
+                                                used = Decimal(
+                                                    row.get("opening_balance") or 0
+                                                )
+                                                limit = (
+                                                    Decimal(row["credit_limit"])
+                                                    if row.get("credit_limit") is not None
+                                                    else None
+                                                )
+                                                text = "Solde utilisé de référence : " + _balance_money(used)
+                                                if limit is not None:
+                                                    text += (
+                                                        " — limite "
+                                                        + _balance_money(limit)
+                                                        + " — disponible "
+                                                        + _balance_money(limit - used)
+                                                    )
+                                                ui.label(text).classes(
+                                                    "text-xs jf-muted"
+                                                )
+                                            elif Decimal(
                                                 row["opening_balance"]
                                             ) != 0:
                                                 ui.label(

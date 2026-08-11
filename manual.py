@@ -154,7 +154,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.7.0",
+        "title": "Finances — V1.8.0",
         "icon": "account_balance_wallet",
         "caption": "Budget, trésorerie, dépenses, prévisions et conciliation",
         "keywords": (
@@ -168,12 +168,14 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "solde minimum hors budget transfert paiement carte "
             "récurrence liée budget synchronisé programmée banque rappel notification push "
             "kpi configurable tableau catégorie étiquette marge crédit limite disponible "
-            "supprimer récurrence recalcul projection historique confirmé"
+            "supprimer récurrence recalcul projection historique confirmé "
+            "paiement carte lié compte départ carte destinataire crédit conciliation "
+            "programmé tableau compact transactions à venir repliable"
         ),
         "content": """
 ### Objectif de Finances
 
-**Finances V1.7.0** ajoute trois évolutions principales : les récurrences recalculent leurs occurrences prévues lorsqu’elles sont modifiées, les KPI du Tableau peuvent être choisis par catégorie et par étiquette, et la vue **Compte** prend maintenant en charge les **marges de crédit**.
+**Finances V1.8.0** ajoute les **paiements de cartes liés** entre un compte bancaire et une carte de crédit, rend l’indicateur **Programmé** directement visible dans l’Historique et réduit la hauteur du Tableau en repliant par défaut le détail des transactions à venir. Les fonctions V1.7 — récurrences dynamiques, KPI configurables et marges de crédit — sont conservées.
 
 Le correctif de démarrage introduit en V1.6.2 est conservé : une erreur propre à la mise à niveau Finances ou aux rappels Web Push ne doit pas empêcher le Portail JF Apps complet de démarrer.
 
@@ -250,6 +252,35 @@ Pour une **marge de crédit**, le solde de référence représente la dette déj
 
 Une transaction utilise un seul mode de paiement. Une transaction récurrente peut mémoriser son mode de paiement par défaut.
 
+### Paiement de carte lié
+
+Utilisez le bouton **Paiement de carte** lorsque vous payez une carte de crédit à partir d’un compte bancaire. Cette saisie est différente d’une dépense ordinaire : elle représente un **transfert lié entre deux comptes**.
+
+Le formulaire demande :
+
+- le **Compte bancaire de départ**;
+- la **Carte de crédit à payer**;
+- le montant;
+- la date du débit bancaire;
+- la date de réception sur la carte, qui peut être différente;
+- le statut Prévu ou Confirmé;
+- l’indicateur **Déjà programmé auprès de la banque**;
+- un rappel facultatif le jour du débit;
+- une note.
+
+Un seul paiement logique produit deux effets liés :
+
+- une sortie sur le compte bancaire;
+- un crédit sur la carte de crédit qui réduit le solde dû.
+
+Le paiement est automatiquement **Hors budget**. Les achats effectués avec la carte ont déjà été comptés comme dépenses; le paiement de la carte ne doit donc pas créer une deuxième dépense budgétaire.
+
+Lorsque le paiement est **Confirmé**, son côté carte apparaît dans **Conciliation** comme un paiement reçu/crédit appliqué. Le montant est soustrait du solde dû de la carte.
+
+Modifier, confirmer ou supprimer le paiement agit sur les deux côtés ensemble. Si l’un des côtés a déjà été concilié, retirez d’abord cette conciliation avant de modifier ou supprimer le paiement lié.
+
+Dans l’Historique, le mouvement est présenté une seule fois, du côté du compte bancaire, avec la relation **Compte → Carte**. Le côté carte technique reste disponible dans Conciliation sans créer une deuxième ligne dans l’Historique général.
+
 ### Compte bancaire, marge de crédit et trésorerie
 
 L’onglet **Compte** reproduit la logique d’un suivi mensuel. Pour un compte bancaire, un solde de départ est repris, les entrées et sorties sont placées dans l’ordre chronologique, puis le solde est recalculé après chaque mouvement.
@@ -275,7 +306,7 @@ Les transactions confirmées déjà survenues alimentent le solde actuel. Les tr
 
 Une transaction marquée **Hors budget** reste visible dans le Compte et modifie son solde si elle utilise ce compte bancaire. Elle n’est toutefois pas comptée comme nouvelle dépense ou nouveau revenu dans le budget et les KPI.
 
-Une transaction prévue peut aussi être marquée **Programmée à la banque**. Cet indicateur signifie que le paiement ou le mouvement a déjà été planifié auprès de l’institution bancaire, mais la transaction reste **Prévue** dans JF Apps jusqu’à ce qu’elle soit confirmée. Le libellé apparaît dans Compte et dans l’Historique.
+Une transaction prévue peut aussi être marquée **Programmée à la banque**. Cet indicateur signifie que le paiement ou le mouvement a déjà été planifié auprès de l’institution bancaire, mais la transaction reste **Prévue** dans JF Apps jusqu’à ce qu’elle soit confirmée. Dans les listes compactes, notamment l’Historique, le libellé court **Programmé** apparaît directement sur la ligne afin de repérer immédiatement les mouvements déjà planifiés.
 
 ### Rappels de transactions
 
@@ -351,15 +382,15 @@ Lorsque l’utilisateur possède un compte bancaire avec un solde de référence
 
 Les récurrences actives sont projetées jusqu’à la fin du mois affiché sans créer immédiatement de transactions confirmées. Un revenu récurrent futur apparaît donc dans les prévisions dès qu’il appartient au mois consulté.
 
-La section **Transactions à venir** affiche séparément :
+La section **Transactions à venir** conserve toujours visibles les trois montants essentiels :
 
-- les dépenses prévues;
-- les revenus prévus;
-- leur effet net;
-- la date;
-- la description;
-- le mode de paiement;
-- l’indication **Récurrence projetée** ou **À confirmer**.
+- **Dépenses à venir**;
+- **Revenus à venir**;
+- **Effet net prévu**.
+
+Les longues listes **Dépenses prévues** et **Revenus prévus** sont maintenant **repliées par défaut** afin de réduire fortement la hauteur du Tableau, surtout sur téléphone. Utilisez **Voir les transactions à venir** pour ouvrir le détail au besoin. Le contrôle indique aussi le nombre de dépenses et de revenus prévus.
+
+Une fois ouvert, le détail montre la date, la description, le mode de paiement, les mentions **Récurrence projetée**, **À confirmer**, **Hors budget** et **Programmé** lorsque pertinentes.
 
 Les KPI par catégorie et par étiquette utilisent les colonnes :
 
@@ -507,7 +538,7 @@ L’historique regroupe les transactions par date.
 
 Sur grand écran, les dépenses apparaissent dans la colonne de gauche et les revenus dans la colonne de droite. Sur téléphone, les deux sections sont empilées afin de préserver la lisibilité.
 
-Tous les montants sont alignés à droite. Les descriptions, catégories, étiquettes et modes de paiement restent alignés à gauche. La mention **Hors budget** apparaît lorsque l’option est activée.
+Tous les montants sont alignés à droite. Les descriptions, catégories, étiquettes et modes de paiement restent alignés à gauche. La mention **Hors budget** apparaît lorsque l’option est activée et la mention **Programmé** apparaît lorsqu’une transaction prévue est déjà programmée auprès de la banque. Un paiement de carte lié affiche aussi clairement la relation **Compte → Carte**.
 
 Les filtres permettent de chercher par :
 
@@ -544,9 +575,11 @@ Les exportations contiennent notamment :
 - le statut de conciliation;
 - la date de conciliation;
 - l’indicateur **Hors budget**;
-- la source et la clé d’importation.
+- la source et la clé d’importation;
+- l’indication qu’un mouvement est un paiement de carte lié;
+- le compte bancaire de départ et la carte destinataire.
 
-La sauvegarde JSON comprend aussi les lignes du **Budget global**, les réglages de visibilité des KPI et les paramètres des modes de paiement, y compris la limite d’une marge de crédit.
+La sauvegarde JSON comprend aussi les lignes du **Budget global**, les réglages de visibilité des KPI, les paramètres des modes de paiement, y compris la limite d’une marge de crédit, ainsi que les données des paiements de cartes liés.
 
 ### Versions
 

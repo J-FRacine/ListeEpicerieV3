@@ -43,6 +43,7 @@ from finances_data import (
     generate_due_recurrences,
     get_or_create_finance_category,
     get_or_create_finance_tag,
+    get_card_payment_transfer,
     get_reconciliation_session,
     get_transaction,
     goal_progress,
@@ -50,6 +51,7 @@ from finances_data import (
     init_finances_schema,
     list_bank_accounts,
     list_budget_items,
+    list_card_payment_transfers,
     list_categories,
     list_goals,
     list_payment_methods,
@@ -65,6 +67,7 @@ from finances_data import (
     prepare_finance_import,
     remove_transaction_from_reconciliation_session,
     save_budget_item,
+    save_card_payment_transfer,
     save_category,
     save_goal,
     save_payment_method,
@@ -890,6 +893,33 @@ def _payment_options(
 
 
 
+
+def _bank_payment_source_options(user_id, include_inactive=False):
+    return {
+        int(row["id"]): (
+            row["name"] + (" — désactivé" if not row.get("is_active") else "")
+        )
+        for row in list_payment_methods(
+            user_id,
+            include_inactive=include_inactive,
+        )
+        if row.get("method_type") == "bank"
+    }
+
+
+def _credit_card_options(user_id, include_inactive=False):
+    return {
+        int(row["id"]): (
+            row["name"] + (" — désactivée" if not row.get("is_active") else "")
+        )
+        for row in list_payment_methods(
+            user_id,
+            include_inactive=include_inactive,
+        )
+        if row.get("method_type") == "credit_card"
+    }
+
+
 def _recurrence_options(user_id):
     options = {None: "Aucune récurrence"}
     for row in list_recurrences(user_id):
@@ -904,6 +934,170 @@ def _recurrence_options(user_id):
             f"{row['description']} — {_money(row['amount'])} / {rhythm}{inactive}"
         )
     return options
+
+
+
+def _card_payment_dialog(
+    user_id,
+    on_saved,
+    transfer=None,
+):
+    source_options = _bank_payment_source_options(
+        user_id,
+        include_inactive=bool(transfer),
+    )
+    card_options = _credit_card_options(
+        user_id,
+        include_inactive=bool(transfer),
+    )
+    source_default = (
+        int(transfer["source_payment_method_id"])
+        if transfer
+        else next(iter(source_options), None)
+    )
+    card_default = (
+        int(transfer["destination_payment_method_id"])
+        if transfer
+        else next(iter(card_options), None)
+    )
+    default_date = date.today().isoformat()
+
+    with ui.dialog() as dialog:
+        with ui.card().classes("w-full max-w-2xl p-4"):
+            ui.label(
+                "Modifier le paiement de carte"
+                if transfer
+                else "Paiement de carte"
+            ).classes("text-xl font-bold")
+            ui.label(
+                "Un seul paiement est créé, avec deux effets liés : sortie du compte bancaire et crédit appliqué sur la carte. Le mouvement est automatiquement Hors budget."
+            ).classes("text-sm jf-muted")
+
+            if not source_options or not card_options:
+                missing = []
+                if not source_options:
+                    missing.append("un Compte bancaire")
+                if not card_options:
+                    missing.append("une Carte de crédit")
+                ui.label(
+                    "Configurez d’abord " + " et ".join(missing)
+                    + " dans Organisation > Modes de paiement."
+                ).classes("text-sm text-negative")
+                with ui.row().classes("w-full justify-end"):
+                    ui.button("Fermer", on_click=dialog.close).props("flat")
+                dialog.open()
+                return
+
+            with ui.element("div").classes("jf-finance-form-grid"):
+                source_method = ui.select(
+                    source_options,
+                    value=source_default,
+                    label="Compte bancaire de départ",
+                ).props("dense outlined options-dense").classes("jf-finance-field")
+                destination_method = ui.select(
+                    card_options,
+                    value=card_default,
+                    label="Carte de crédit à payer",
+                ).props("dense outlined options-dense").classes("jf-finance-field")
+                amount = ui.number(
+                    label="Montant du paiement",
+                    value=transfer.get("amount") if transfer else None,
+                    min=.01,
+                    step=.01,
+                ).props("dense outlined").classes("jf-finance-field")
+                source_date = ui.input(
+                    label="Date du débit bancaire",
+                    value=(
+                        transfer["source_date"].isoformat()
+                        if transfer
+                        else default_date
+                    ),
+                ).props("type=date dense outlined").classes("jf-finance-field")
+                destination_date = ui.input(
+                    label="Date de réception sur la carte",
+                    value=(
+                        transfer["destination_date"].isoformat()
+                        if transfer
+                        else default_date
+                    ),
+                ).props("type=date dense outlined").classes("jf-finance-field")
+                description = ui.input(
+                    label="Description",
+                    value=(
+                        transfer.get("description")
+                        if transfer
+                        else "Paiement de carte"
+                    ),
+                ).props("dense outlined maxlength=160").classes(
+                    "jf-finance-field jf-finance-description"
+                )
+
+            status = ui.select(
+                TRANSACTION_STATUSES,
+                value=transfer.get("status") if transfer else "planned",
+                label="Statut",
+            ).props("dense outlined options-dense").classes("w-full")
+            bank_programmed = ui.checkbox(
+                "Déjà programmé auprès de la banque",
+                value=bool(transfer.get("bank_programmed")) if transfer else False,
+            )
+            reminder_enabled = ui.checkbox(
+                "Me rappeler ce paiement le jour du débit",
+                value=bool(transfer.get("reminder_enabled")) if transfer else False,
+            )
+            reminder_time = ui.input(
+                label="Heure du rappel",
+                value=(
+                    str(transfer.get("reminder_time") or "09:00")[:5]
+                    if transfer
+                    else "09:00"
+                ),
+            ).props("type=time dense outlined").classes("w-full")
+            note = ui.textarea(
+                label="Note facultative",
+                value=transfer.get("note") or "" if transfer else "",
+            ).props("dense outlined autogrow maxlength=1000").classes("w-full")
+
+            ui.label(
+                "Quand le paiement est confirmé, son côté carte apparaît dans Conciliation comme un crédit qui réduit le solde dû. Les deux côtés restent liés lors d’une modification ou d’une suppression."
+            ).classes("text-xs jf-muted")
+
+            def save():
+                try:
+                    save_card_payment_transfer(
+                        user_id=user_id,
+                        transfer_id=transfer.get("id") if transfer else None,
+                        source_payment_method_id=source_method.value,
+                        destination_payment_method_id=destination_method.value,
+                        amount=amount.value,
+                        source_date=source_date.value,
+                        destination_date=destination_date.value or source_date.value,
+                        description=description.value,
+                        note=note.value,
+                        status=status.value,
+                        bank_programmed=bank_programmed.value,
+                        reminder_enabled=reminder_enabled.value,
+                        reminder_time=reminder_time.value or "09:00",
+                    )
+                except Exception as error:
+                    ui.notify(str(error), type="warning")
+                    return
+                dialog.close()
+                ui.notify(
+                    "Paiement de carte enregistré.",
+                    type="positive",
+                )
+                on_saved()
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Annuler", on_click=dialog.close).props("flat dense")
+                ui.button(
+                    "Enregistrer le paiement",
+                    icon="credit_card",
+                    on_click=save,
+                ).props("color=primary")
+
+    dialog.open()
 
 
 def _transaction_dialog(
@@ -1073,7 +1267,7 @@ def _transaction_dialog(
                     value=bool(transaction.get("budget_excluded")) if transaction else False,
                 )
                 ui.label(
-                    "La transaction affecte toujours le solde du compte, mais elle n’est pas comptée dans les dépenses, revenus, KPI ou objectifs du budget."
+                    "La transaction affecte toujours le solde du compte, mais elle n’est pas comptée dans les dépenses, revenus, KPI ou objectifs du budget. Pour payer une carte depuis un compte bancaire, privilégiez le bouton « Paiement carte » afin de lier les deux côtés."
                 ).classes("text-xs jf-muted")
                 status = ui.select(
                     TRANSACTION_STATUSES,
@@ -1286,13 +1480,24 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                     "Dépenses variables, revenus et objectifs mensuels."
                 ).classes("text-sm jf-muted")
 
-            ui.button(
-                "Ajouter",
-                icon="add",
-                on_click=lambda: _transaction_dialog(user_id, refresh_all),
-            ).props("color=primary dense")
+            with ui.row().classes("items-center gap-1"):
+                ui.button(
+                    "Paiement carte",
+                    icon="credit_card",
+                    on_click=lambda: _card_payment_dialog(user_id, refresh_all),
+                ).props("outline color=primary dense")
+                ui.button(
+                    "Ajouter",
+                    icon="add",
+                    on_click=lambda: _transaction_dialog(user_id, refresh_all),
+                ).props("color=primary dense")
     else:
-        with ui.row().classes("w-full justify-end"):
+        with ui.row().classes("w-full justify-end gap-1 flex-wrap"):
+            ui.button(
+                "Paiement de carte",
+                icon="credit_card",
+                on_click=lambda: _card_payment_dialog(user_id, refresh_all),
+            ).props("outline color=primary dense")
             ui.button(
                 "Ajouter une transaction",
                 icon="add",
@@ -1894,92 +2099,122 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                         + css
                                     )
 
-                        with ui.element("div").classes(
-                            "jf-finance-upcoming-grid"
-                        ):
-                            for transaction_type, title, css in (
-                                (
-                                    "expense",
-                                    "Dépenses prévues",
-                                    "jf-finance-expense",
-                                ),
-                                (
-                                    "income",
-                                    "Revenus prévus",
-                                    "jf-finance-income",
-                                ),
+                        expense_count = sum(
+                            1 for row in upcoming_rows
+                            if row["transaction_type"] == "expense"
+                        )
+                        income_count = sum(
+                            1 for row in upcoming_rows
+                            if row["transaction_type"] == "income"
+                        )
+                        detail_label = (
+                            f"Voir les transactions à venir — "
+                            f"{expense_count} dépense(s), {income_count} revenu(s)"
+                        )
+                        with ui.expansion(
+                            detail_label,
+                            icon="event_note",
+                            value=False,
+                        ).classes("w-full jf-finance-card"):
+                            with ui.element("div").classes(
+                                "jf-finance-upcoming-grid"
                             ):
-                                rows = [
-                                    row
-                                    for row in upcoming_rows
-                                    if row["transaction_type"]
-                                    == transaction_type
-                                ]
-                                with ui.element("section").classes(
-                                    "jf-finance-card"
+                                for transaction_type, title, css in (
+                                    (
+                                        "expense",
+                                        "Dépenses prévues",
+                                        "jf-finance-expense",
+                                    ),
+                                    (
+                                        "income",
+                                        "Revenus prévus",
+                                        "jf-finance-income",
+                                    ),
                                 ):
-                                    ui.label(title).classes(
-                                        "text-sm font-bold"
-                                    )
-                                    if not rows:
-                                        ui.label(
-                                            "Aucune transaction."
-                                        ).classes(
-                                            "text-xs jf-muted"
+                                    rows = [
+                                        row
+                                        for row in upcoming_rows
+                                        if row["transaction_type"]
+                                        == transaction_type
+                                    ]
+                                    with ui.element("section").classes(
+                                        "jf-finance-card"
+                                    ):
+                                        ui.label(title).classes(
+                                            "text-sm font-bold"
                                         )
-
-                                    for row in rows:
-                                        with ui.element("div").classes(
-                                            "jf-finance-upcoming-row"
-                                        ):
+                                        if not rows:
                                             ui.label(
-                                                row[
-                                                    "transaction_date"
-                                                ].strftime("%d/%m")
+                                                "Aucune transaction."
                                             ).classes(
-                                                "jf-finance-upcoming-date"
+                                                "text-xs jf-muted"
                                             )
-                                            with ui.column().classes(
-                                                "gap-0 min-w-0"
+
+                                        for row in rows:
+                                            with ui.element("div").classes(
+                                                "jf-finance-upcoming-row"
                                             ):
                                                 ui.label(
-                                                    row["description"]
+                                                    row[
+                                                        "transaction_date"
+                                                    ].strftime("%d/%m")
                                                 ).classes(
-                                                    "jf-finance-upcoming-name"
-                                                ).tooltip(
-                                                    row["description"]
+                                                    "jf-finance-upcoming-date"
                                                 )
-                                                meta = []
-                                                if row.get(
-                                                    "payment_method_name"
+                                                with ui.column().classes(
+                                                    "gap-0 min-w-0"
                                                 ):
-                                                    meta.append(
-                                                        row[
-                                                            "payment_method_name"
-                                                        ]
+                                                    ui.label(
+                                                        row["description"]
+                                                    ).classes(
+                                                        "jf-finance-upcoming-name"
+                                                    ).tooltip(
+                                                        row["description"]
                                                     )
-                                                if row.get("projected"):
-                                                    meta.append(
-                                                        "Récurrence projetée"
+                                                    meta = []
+                                                    if row.get(
+                                                        "linked_transfer_id"
+                                                    ) and row.get(
+                                                        "linked_transfer_role"
+                                                    ) == "source":
+                                                        meta.append(
+                                                            (
+                                                                f"{row.get('linked_transfer_source_name') or row.get('payment_method_name') or 'Compte'}"
+                                                                f" → {row.get('linked_transfer_destination_name') or 'Carte'}"
+                                                            )
+                                                        )
+                                                    elif row.get(
+                                                        "payment_method_name"
+                                                    ):
+                                                        meta.append(
+                                                            row[
+                                                                "payment_method_name"
+                                                            ]
+                                                        )
+                                                    if row.get("projected"):
+                                                        meta.append(
+                                                            "Récurrence projetée"
+                                                        )
+                                                    elif row.get("status") == "planned":
+                                                        meta.append(
+                                                            "À confirmer"
+                                                        )
+                                                    if row.get("budget_excluded"):
+                                                        meta.append("Hors budget")
+                                                    if row.get("bank_programmed"):
+                                                        meta.append("Programmé")
+                                                    ui.label(
+                                                        " — ".join(meta)
+                                                        or "Transaction postdatée"
+                                                    ).classes(
+                                                        "jf-finance-upcoming-meta"
                                                     )
-                                                elif row.get("status") == "planned":
-                                                    meta.append(
-                                                        "À confirmer"
-                                                    )
-                                                if row.get("budget_excluded"):
-                                                    meta.append("Hors budget")
                                                 ui.label(
-                                                    " — ".join(meta)
-                                                    or "Transaction postdatée"
+                                                    _money(row["amount"])
                                                 ).classes(
-                                                    "jf-finance-upcoming-meta"
+                                                    "jf-finance-upcoming-amount "
+                                                    + css
                                                 )
-                                            ui.label(
-                                                _money(row["amount"])
-                                            ).classes(
-                                                "jf-finance-upcoming-amount "
-                                                + css
-                                            )
 
                     if goals:
                         ui.label(
@@ -2551,10 +2786,12 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     with ui.column().classes("gap-0 min-w-0"):
                                         ui.label(row["description"]).classes("font-semibold truncate").tooltip(row["description"])
                                         meta=[]
+                                        if row.get("linked_transfer_id") and row.get("linked_transfer_destination_name"):
+                                            meta.append("Vers " + str(row.get("linked_transfer_destination_name")))
                                         if row.get("projected"): meta.append("Récurrence projetée")
                                         elif row.get("status") == "planned": meta.append("Prévue")
                                         if row.get("budget_excluded"): meta.append("Hors budget")
-                                        if row.get("bank_programmed"): meta.append("Programmée à la banque")
+                                        if row.get("bank_programmed"): meta.append("Programmé")
                                         if row.get("reminder_enabled"): meta.append("Rappel " + str(row.get("reminder_time") or "09:00")[:5])
                                         if meta: ui.label(" • ".join(meta)).classes("text-xs jf-muted")
                                     ui.label(_money(row["amount"]) if row["transaction_type"] == "expense" else "").classes("jf-finance-cashflow-money jf-finance-expense")
@@ -2719,11 +2956,17 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
             with ui.card().classes(
                 "w-full max-w-2xl p-4"
             ):
-                ui.label(
-                    "Saisie rapide"
-                ).classes(
-                    "text-xl font-bold"
-                )
+                with ui.row().classes("w-full items-center justify-between gap-2 flex-wrap"):
+                    ui.label(
+                        "Saisie rapide"
+                    ).classes(
+                        "text-xl font-bold"
+                    )
+                    ui.button(
+                        "Paiement de carte",
+                        icon="credit_card",
+                        on_click=lambda: _card_payment_dialog(user_id, refresh_all),
+                    ).props("outline color=primary dense")
 
                 kind = ui.toggle(
                     TRANSACTION_TYPES,
@@ -3387,6 +3630,10 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                 f"{_signed(row['amount'], row['transaction_type'])}"
                             )
                         )
+                        if row.get("linked_transfer_id"):
+                            ui.label(
+                                "Ce paiement est lié au compte bancaire et à la carte de crédit. Les deux côtés seront supprimés ensemble."
+                            ).classes("text-sm jf-muted")
 
                         def remove():
                             try:
@@ -3527,7 +3774,14 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                 ]
                             )
                         )
-                    if row.get(
+                    if row.get("linked_transfer_id") and row.get("linked_transfer_role") == "source":
+                        meta.append(
+                            (
+                                f"{row.get('linked_transfer_source_name') or row.get('payment_method_name') or 'Compte'}"
+                                f" → {row.get('linked_transfer_destination_name') or 'Carte'}"
+                            )
+                        )
+                    elif row.get(
                         "payment_method_name"
                     ):
                         meta.append(
@@ -3544,7 +3798,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                     if row.get("budget_excluded"):
                         meta.append("Hors budget")
                     if row.get("bank_programmed"):
-                        meta.append("Programmée à la banque")
+                        meta.append("Programmé")
                     if row.get("reminder_enabled"):
                         meta.append("Rappel " + str(row.get("reminder_time") or "09:00")[:5])
                     meta.append(
@@ -3656,28 +3910,49 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             reconciliation_tooltip
                         )
 
-                        ui.button(
-                            icon="edit",
-                            on_click=(
-                                lambda _event=None,
-                                selected_id=row[
-                                    "id"
-                                ]:
-                                _transaction_dialog(
-                                    user_id,
-                                    refresh_all,
-                                    get_transaction(
+                        if row.get("linked_transfer_id"):
+                            ui.button(
+                                icon="edit",
+                                on_click=(
+                                    lambda _event=None,
+                                    selected_transfer_id=row.get("linked_transfer_id"):
+                                    _card_payment_dialog(
                                         user_id,
-                                        selected_id,
-                                    ),
-                                )
-                            ),
-                        ).props(
-                            "flat dense round "
-                            "size=sm color=primary"
-                        ).tooltip(
-                            "Modifier"
-                        )
+                                        refresh_all,
+                                        get_card_payment_transfer(
+                                            user_id,
+                                            selected_transfer_id,
+                                        ),
+                                    )
+                                ),
+                            ).props(
+                                "flat dense round size=sm color=primary"
+                            ).tooltip(
+                                "Modifier le paiement de carte"
+                            )
+                        else:
+                            ui.button(
+                                icon="edit",
+                                on_click=(
+                                    lambda _event=None,
+                                    selected_id=row[
+                                        "id"
+                                    ]:
+                                    _transaction_dialog(
+                                        user_id,
+                                        refresh_all,
+                                        get_transaction(
+                                            user_id,
+                                            selected_id,
+                                        ),
+                                    )
+                                ),
+                            ).props(
+                                "flat dense round "
+                                "size=sm color=primary"
+                            ).tooltip(
+                                "Modifier"
+                            )
 
                         ui.button(
                             icon="delete",
@@ -3738,6 +4013,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             query.value
                             or None
                         ),
+                        include_linked_transfer_destinations=False,
                     )
                 except Exception as error:
                     with history_box:
@@ -4784,14 +5060,28 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                 ).classes(
                                     "jf-finance-reconcile-description"
                                 )
-                                meta = (
-                                    row["category_full_name"]
-                                    or "Sans catégorie"
-                                )
-                                if row["tag_names"]:
-                                    meta += " — " + " • ".join(
-                                        row["tag_names"]
+                                if (
+                                    row.get("linked_transfer_id")
+                                    and row.get("linked_transfer_role") == "destination"
+                                ):
+                                    meta = (
+                                        "Paiement reçu de "
+                                        + str(
+                                            row.get("linked_transfer_source_name")
+                                            or "compte bancaire"
+                                        )
                                     )
+                                    if row.get("budget_excluded"):
+                                        meta += " — Hors budget"
+                                else:
+                                    meta = (
+                                        row["category_full_name"]
+                                        or "Sans catégorie"
+                                    )
+                                    if row["tag_names"]:
+                                        meta += " — " + " • ".join(
+                                            row["tag_names"]
+                                        )
                                 ui.label(meta).classes(
                                     "text-xs jf-muted truncate"
                                 )

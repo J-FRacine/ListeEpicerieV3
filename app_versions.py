@@ -15,12 +15,34 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.1",
     "blood_pressure": "1.2.1",
-    "finances": "1.7.0",
+    "finances": "1.8.0",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.8.0",
+        "date": "2026-08-11",
+        "title": "Finances — paiements de cartes liés et Tableau plus compact",
+        "summary": (
+            "Les paiements de cartes peuvent maintenant relier un compte bancaire à une carte de crédit, "
+            "l’Historique indique clairement les mouvements programmés et le détail des transactions à venir est replié par défaut."
+        ),
+        "changes": [
+            "Nouveau formulaire Paiement de carte : choix du compte bancaire de départ, de la carte destinataire, du montant et des dates de débit et de réception.",
+            "Un paiement de carte crée un seul mouvement logique avec deux effets liés : sortie du compte bancaire et crédit sur la carte, automatiquement Hors budget.",
+            "Le côté carte apparaît dans Conciliation comme un paiement reçu qui réduit le solde dû lorsque le paiement est confirmé.",
+            "Modifier, confirmer ou supprimer un paiement lié met à jour les deux côtés ensemble; une conciliation existante doit d’abord être retirée avant modification ou suppression.",
+            "Le rappel et l’indicateur Programmé s’appliquent au côté bancaire du paiement prévu.",
+            "Dans l’Historique, le libellé court Programmé apparaît directement sur la ligne d’une transaction déjà programmée à la banque.",
+            "Dans le Tableau, les trois montants Dépenses à venir, Revenus à venir et Effet net prévu restent visibles, tandis que les longues listes de détail sont repliées par défaut.",
+            "Le détail des transactions à venir peut être ouvert au besoin avec un panneau extensible indiquant le nombre de dépenses et de revenus.",
+            "Les sauvegardes JSON incluent les informations des paiements de cartes liés et le CSV identifie leur compte de départ et leur carte destinataire.",
+            "Aucun script SQL manuel ni nouvelle dépendance n’est requis.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.7.0",

@@ -1,101 +1,156 @@
-JF APPS — FINANCES V1.7.0
-=========================
+JF APPS — FINANCES V1.8.0
+Paiements de cartes liés + Historique « Programmé » + Tableau plus compact
+Date : 2026-08-11
 
-BASE UTILISÉE
--------------
-Cette version part de Finances V1.6.2 corrigée (correctif de syntaxe inclus).
-Journal de pression demeure en V1.2.1.
-
+============================================================
 FICHIERS COMPLETS À REMPLACER
------------------------------
+============================================================
+
 - finances.py
 - finances_data.py
 - app_versions.py
 - manual.py
 
-Aucun script SQL manuel n'est requis.
-Aucune nouvelle dépendance Python n'est requise.
-Les nouvelles colonnes et contraintes sont adaptées automatiquement au démarrage de Finances.
+Déposer les 4 fichiers ensemble à la racine du dépôt GitHub JF Apps.
 
-NOUVEAUTÉS V1.7.0
------------------
+Aucun script SQL manuel n’est requis.
+Aucune nouvelle dépendance Python n’est requise.
+Le schéma PostgreSQL est étendu automatiquement au premier démarrage de Finances.
 
-1) RÉCURRENCES DYNAMIQUES
-- Une récurrence peut maintenant être supprimée.
-- À la suppression, deux choix sont proposés :
-  a) supprimer aussi les transactions prévues non confirmées;
-  b) conserver ces transactions prévues comme transactions indépendantes.
-- Les transactions déjà confirmées sont toujours conservées.
-- Si un poste Budget était lié à la récurrence supprimée, il devient indépendant.
-- Modifier la date de début, le montant ou la fréquence retire les anciennes occurrences prévues non confirmées et recalcule la projection à partir de la nouvelle règle.
-- Une occurrence rétroactive créée par une correction de date reste « À confirmer », même si la récurrence est habituellement automatique. Une correction ne transforme donc pas silencieusement une date passée en transaction réalisée.
-- Les transactions prévues dont la date est passée restent visibles dans Compte jusqu'à confirmation, modification ou suppression.
+============================================================
+NOUVEAUTÉS V1.8.0
+============================================================
 
-2) KPI CONFIGURABLES
-- Organisation > Catégories : nouvelle case « Tableau » sur chaque catégorie.
-- Organisation > Étiquettes : nouvelle case « Tableau » sur chaque étiquette.
-- Décochez un élément pour le masquer des KPI détaillés du Tableau de bord.
-- La catégorie ou l'étiquette demeure utilisable partout ailleurs : saisie, historique, filtres, objectifs, etc.
-- Tous les éléments existants sont visibles par défaut après la mise à jour.
+1. PAIEMENT DE CARTE LIÉ
 
-3) MARGE DE CRÉDIT
-- Nouveau type de mode de paiement : « Marge de crédit ».
-- Réglages : solde utilisé de référence, date de référence et limite de crédit facultative.
-- Le crédit disponible est calculé automatiquement lorsque la limite est renseignée.
-- Une dépense augmente la dette utilisée.
-- Un revenu/remboursement réduit la dette utilisée.
-- La vue Compte affiche : dette de départ, dette actuelle, plus haut prévu, dette de fin de mois et crédit disponible.
-- Les transactions, récurrences et projections utilisent la même logique.
+Un nouveau bouton « Paiement de carte » est disponible dans Finances et dans
+la Saisie rapide.
 
+Le formulaire permet de choisir :
+- le compte bancaire de départ;
+- la carte de crédit destinataire;
+- le montant;
+- la date du débit bancaire;
+- la date de réception sur la carte;
+- le statut Prévu / Confirmé;
+- « Déjà programmé auprès de la banque »;
+- un rappel facultatif;
+- une note.
+
+Le paiement est automatiquement Hors budget.
+
+Un seul paiement logique produit deux effets liés :
+- une sortie dans le compte bancaire;
+- un crédit sur la carte de crédit.
+
+Dans l’Historique général, une seule ligne est présentée afin d’éviter un
+doublon visuel. Elle indique la relation « Compte → Carte ».
+
+Lorsque le paiement est confirmé, son côté carte apparaît dans Conciliation
+comme un paiement reçu/crédit appliqué. Il réduit le solde dû de la carte.
+
+Modifier, confirmer ou supprimer un paiement lié agit sur les deux côtés.
+Si un côté est déjà concilié, il faut d’abord retirer cette conciliation.
+
+2. INDICATEUR « PROGRAMMÉ » DANS L’HISTORIQUE
+
+Une transaction prévue dont la case « Programmée dans le compte bancaire »
+est cochée affiche maintenant directement le libellé court « Programmé » sur
+sa ligne dans l’Historique.
+
+Le même libellé compact est utilisé dans la vue Compte et dans le détail des
+transactions à venir lorsque pertinent.
+
+3. TABLEAU — TRANSACTIONS À VENIR REPLIÉES
+
+Les trois montants suivants restent toujours visibles :
+- Dépenses à venir;
+- Revenus à venir;
+- Effet net prévu.
+
+Les listes « Dépenses prévues » et « Revenus prévus » sont repliées par défaut.
+Le bouton « Voir les transactions à venir » ouvre le détail au besoin et
+indique le nombre de dépenses et de revenus prévus.
+
+Cette modification réduit fortement la hauteur du Tableau, particulièrement
+sur téléphone.
+
+4. EXPORTS
+
+Le CSV indique maintenant si un mouvement est un paiement de carte lié ainsi
+que son compte de départ et sa carte destinataire.
+
+La sauvegarde JSON contient aussi les données des paiements de cartes liés.
+
+============================================================
 INSTALLATION
-------------
-1. Dans GitHub, remplacer les quatre fichiers .py listés plus haut.
-2. Faire Commit changes.
-3. Attendre le redéploiement complet de Canner.
-4. Sur ordinateur : Ctrl+F5.
-5. Sur téléphone/PWA : fermer complètement JF Apps puis la rouvrir.
-6. Vérifier que Finances affiche V1.7.0.
+============================================================
 
+1. Ouvrir le dépôt GitHub JF Apps.
+2. Add file > Upload files.
+3. Remplacer ensemble :
+   - finances.py
+   - finances_data.py
+   - app_versions.py
+   - manual.py
+4. Commit changes.
+5. Attendre le redéploiement complet de Canner.
+6. Vérifier que Finances affiche V1.8.0.
+7. Sur ordinateur : Ctrl+F5 si l’ancienne interface reste en cache.
+8. Sur téléphone/PWA : fermer complètement JF Apps puis la rouvrir au besoin.
+
+============================================================
 TESTS RECOMMANDÉS APRÈS DÉPLOIEMENT
------------------------------------
+============================================================
 
-A. KPI
-1. Organisation > Catégories : décocher « Tableau » pour une catégorie visible dans les KPI.
-2. Revenir au Tableau : cette catégorie ne doit plus apparaître dans le KPI détaillé.
-3. Vérifier qu'elle reste disponible dans la saisie et l'historique.
-4. Refaire le test avec une étiquette.
+A. Démarrage
+1. Vérifier que le Portail démarre normalement.
+2. Ouvrir Finances et confirmer la version V1.8.0.
 
-B. RÉCURRENCE MODIFIÉE
-1. Créer une récurrence « À confirmer » débutant le 20 du mois.
-2. Modifier son début pour le 6 du mois.
-3. Vérifier dans Compte/Historique que l'ancienne occurrence prévue du 20 n'est plus utilisée comme ancienne projection.
-4. Si le 6 est déjà passé, l'occurrence du 6 doit apparaître « À confirmer » et non confirmée automatiquement.
-5. Une transaction déjà confirmée provenant de cette récurrence doit rester intacte.
+B. Paiement de carte lié
+1. Vérifier dans Organisation qu’un mode est de type « Compte bancaire » et
+   qu’un autre est de type « Carte de crédit ».
+2. Saisie > Paiement de carte.
+3. Choisir le compte bancaire et la carte.
+4. Créer un paiement Prévu de test, par exemple 9,00 $.
+5. Cocher « Déjà programmé auprès de la banque ».
+6. Vérifier dans Historique :
+   - une seule ligne;
+   - « Hors budget »;
+   - « Programmé »;
+   - « Compte → Carte ».
+7. Vérifier dans Compte que le paiement réduit le solde bancaire prévu.
+8. Confirmer le paiement.
+9. Ouvrir Conciliation sur la carte : le paiement doit apparaître comme un
+   crédit/paiement reçu et réduire le solde dû.
+10. Modifier un paiement non concilié et vérifier que les deux côtés changent.
+11. Supprimer un paiement non concilié et vérifier que les deux côtés
+    disparaissent.
 
-C. SUPPRESSION D'UNE RÉCURRENCE
-1. Créer une récurrence avec une occurrence prévue.
-2. Supprimer la récurrence en choisissant d'effacer les transactions prévues.
-3. Refaire le test avec l'option qui conserve les transactions prévues comme indépendantes.
-4. Vérifier dans les deux cas qu'une transaction confirmée existante n'est jamais supprimée.
+C. Protection de la conciliation
+1. Concilier le côté carte d’un paiement lié.
+2. Tenter de modifier ou supprimer le paiement depuis l’Historique.
+3. L’application doit demander de retirer d’abord la conciliation.
 
-D. MARGE DE CRÉDIT
-1. Organisation > Modes de paiement > Ajouter.
-2. Choisir « Marge de crédit ».
-3. Exemple : solde utilisé 1 000 $, limite 5 000 $.
-4. Vérifier que le crédit disponible de départ est 4 000 $.
-5. Ajouter une dépense de 200 $ : la dette prévue doit monter à 1 200 $.
-6. Ajouter un remboursement/revenu de 300 $ : la dette doit redescendre à 900 $.
-7. Vérifier que le crédit disponible prévu devient 4 100 $.
+D. Tableau compact
+1. Ouvrir Tableau sur un mois ayant des transactions futures.
+2. Vérifier que Dépenses à venir / Revenus à venir / Effet net prévu restent
+   visibles.
+3. Vérifier que les longues listes sont fermées par défaut.
+4. Cliquer « Voir les transactions à venir » et vérifier l’ouverture du détail.
 
-VALIDATIONS EFFECTUÉES AVANT LIVRAISON
---------------------------------------
-- Compilation Python de tous les fichiers .py du paquet de travail.
-- Vérification des imports entre finances.py et finances_data.py.
-- Test de masquage des KPI catégorie/étiquette.
-- Test de suppression d'une récurrence avec les deux choix de conservation.
-- Test de calcul Compte bancaire et Marge de crédit.
-- Vérification que la modification d'une récurrence force les occurrences rétroactives reconstruites à rester prévues/à confirmer.
+E. Régression V1.7
+1. Modifier une récurrence et vérifier le recalcul des occurrences prévues.
+2. Vérifier les KPI configurables dans Organisation.
+3. Vérifier une Marge de crédit dans Compte.
+4. Vérifier Budget ↔ Récurrence et les rappels existants.
 
-IMPORTANT
----------
-La validation finale sur Canner reste nécessaire parce que seul l'environnement de déploiement réel peut confirmer la migration PostgreSQL et l'interface NiceGUI avec vos données existantes.
+============================================================
+NOTE DE SÉCURITÉ DES DONNÉES
+============================================================
+
+La migration ajoute uniquement les structures nécessaires aux paiements liés.
+Elle ne supprime ni ne remplace les transactions existantes.
+
+Comme toujours, une sauvegarde JSON avant un changement important demeure une
+bonne pratique.

@@ -154,7 +154,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.8.0",
+        "title": "Finances — V1.9.0",
         "icon": "account_balance_wallet",
         "caption": "Budget, trésorerie, dépenses, prévisions et conciliation",
         "keywords": (
@@ -170,12 +170,15 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "kpi configurable tableau catégorie étiquette marge crédit limite disponible "
             "supprimer récurrence recalcul projection historique confirmé "
             "paiement carte lié compte départ carte destinataire crédit conciliation "
-            "programmé tableau compact transactions à venir repliable"
+            "programmé tableau compact transactions à venir repliable "
+            "conciliation compte bancaire vu case cocher confirmer concilier "
+            "sélection persistante ajout modification tri date ascendante descendante "
+            "écart justifié différence relevé référence reporter écart"
         ),
         "content": """
 ### Objectif de Finances
 
-**Finances V1.8.0** ajoute les **paiements de cartes liés** entre un compte bancaire et une carte de crédit, rend l’indicateur **Programmé** directement visible dans l’Historique et réduit la hauteur du Tableau en repliant par défaut le détail des transactions à venir. Les fonctions V1.7 — récurrences dynamiques, KPI configurables et marges de crédit — sont conservées.
+**Finances V1.9.0** améliore surtout la **conciliation**. Les comptes bancaires peuvent être conciliés directement dans l’onglet Compte avec une case **Vu**, tandis que la conciliation des cartes conserve maintenant la sélection pendant l’ajout ou la modification d’une transaction, permet de trier par date et sait fermer un **écart justifié** sans le faire réapparaître au relevé suivant. Les paiements de cartes liés et le Tableau compact de V1.8 sont conservés.
 
 Le correctif de démarrage introduit en V1.6.2 est conservé : une erreur propre à la mise à niveau Finances ou aux rappels Web Push ne doit pas empêcher le Portail JF Apps complet de démarrer.
 
@@ -308,6 +311,18 @@ Une transaction marquée **Hors budget** reste visible dans le Compte et modifie
 
 Une transaction prévue peut aussi être marquée **Programmée à la banque**. Cet indicateur signifie que le paiement ou le mouvement a déjà été planifié auprès de l’institution bancaire, mais la transaction reste **Prévue** dans JF Apps jusqu’à ce qu’elle soit confirmée. Dans les listes compactes, notamment l’Historique, le libellé court **Programmé** apparaît directement sur la ligne afin de repérer immédiatement les mouvements déjà planifiés.
 
+#### Conciliation rapide du compte bancaire
+
+Pour un mode de paiement de type **Compte bancaire**, chaque mouvement de l’onglet **Compte** possède maintenant une case **Vu**.
+
+- cochez **Vu** lorsque vous avez réellement constaté le mouvement dans votre compte bancaire;
+- une transaction déjà confirmée est simplement marquée **Conciliée**;
+- une transaction encore **Prévue** est confirmée et conciliée en une seule opération;
+- décocher **Vu** retire la conciliation si vous vous êtes trompé, sans supprimer la transaction;
+- une **Récurrence projetée** qui n’existe pas encore comme transaction réelle ne peut pas être cochée.
+
+Cette méthode simplifiée s’applique uniquement aux **comptes bancaires**. Les cartes de crédit continuent d’utiliser l’écran **Conciliation** par relevé.
+
 ### Rappels de transactions
 
 Pour une transaction **Prévue**, activez **Me rappeler cette transaction le jour prévu** et choisissez une heure. L’heure proposée par défaut est **09:00**. Si la transaction a déjà été confirmée avant cette heure, aucun rappel n’est envoyé.
@@ -428,24 +443,37 @@ Cette vue de conciliation est distincte du **solde bancaire courant** présenté
 
 ### Conciliation par relevé
 
-L’onglet **Conciliation** permet de choisir un mode de paiement et d’afficher toutes ses transactions confirmées non conciliées, même lorsqu’elles proviennent de mois différents.
+L’onglet **Conciliation** est maintenant destiné principalement aux **cartes de crédit**. Il permet de choisir une carte et d’afficher ses transactions confirmées non conciliées, même lorsqu’elles proviennent de mois différents.
 
-L’utilisateur peut :
+Pendant une séance, l’utilisateur peut :
 
 - cocher une ou plusieurs transactions;
 - tout sélectionner ou tout désélectionner;
-- inscrire la date et le solde du relevé;
-- inscrire la date de paiement;
-- inscrire la date réelle de conciliation;
-- inclure l’ajustement initial;
-- voir le total sélectionné;
-- voir le solde non concilié restant;
-- voir la différence avec le solde du relevé;
+- trier l’affichage par **Date ascendante** ou **Date descendante**;
+- filtrer ou rechercher sans perdre les transactions déjà cochées;
+- **ajouter une transaction** directement depuis la conciliation;
+- **modifier une transaction** avec le bouton crayon;
+- inscrire la date et le solde réel du relevé;
+- inscrire la date de paiement et la date réelle de conciliation;
+- inclure le solde initial lors de la première séance, au besoin;
 - finaliser la sélection en une seule opération.
 
-Une différence non nulle produit un avertissement, mais peut être conservée dans l’historique après confirmation.
+Une transaction sélectionnée reste cochée après un ajout, une modification, un tri ou un rafraîchissement tant qu’elle demeure **confirmée, non conciliée et affectée à la même carte**. Si une modification la rend inadmissible — par exemple en changeant sa carte — elle est retirée de la sélection avec un avis. Changer volontairement de carte dans le sélecteur démarre une nouvelle sélection.
 
-Dès qu’une transaction est conciliée, elle cesse immédiatement de faire partie du solde confirmé non concilié.
+#### Solde de référence et différence
+
+À partir de V1.9, la conciliation présente explicitement la formule :
+
+**Solde précédent + mouvements sélectionnés = solde attendu**
+
+Le **solde du relevé** est ensuite comparé au solde attendu. Après la première séance, le dernier relevé finalisé sert normalement de point de départ au relevé suivant.
+
+Si une différence existe, deux choix sont proposés :
+
+- **Clore comme écart justifié** : une explication est obligatoire. Le solde réel du relevé devient la nouvelle référence; l’écart ne se reporte donc pas au mois ou au relevé suivant. L’explication reste uniquement dans l’historique de la séance et ne crée aucune transaction dans l’Historique ordinaire, le Budget, les KPI ou les Objectifs. Cette option convient par exemple à un achat fait pour quelqu’un d’autre que vous ne souhaitez pas suivre dans vos finances personnelles;
+- **Reporter l’écart** : le solde attendu demeure la référence. La différence reste donc à résoudre lors d’une prochaine conciliation.
+
+Lorsque la différence est nulle, la séance est simplement enregistrée comme **équilibrée**.
 
 ### Historique des conciliations
 
@@ -456,8 +484,13 @@ Chaque séance conserve :
 - la date de paiement;
 - la date de conciliation;
 - les transactions sélectionnées;
-- le total concilié;
+- le solde de référence précédent;
+- le total net des mouvements conciliés;
+- le solde attendu;
+- le solde réel du relevé;
 - la différence;
+- le traitement de la différence : équilibrée, écart justifié ou écart reporté;
+- l’explication de l’écart justifié, lorsqu’il y en a une;
 - la note;
 - l’ajustement initial, lorsqu’il a été inclus.
 

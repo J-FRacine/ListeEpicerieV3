@@ -1,156 +1,97 @@
-JF APPS — FINANCES V1.8.0
-Paiements de cartes liés + Historique « Programmé » + Tableau plus compact
-Date : 2026-08-11
+JF APPS — FINANCES V1.9.0
+Conciliation bancaire rapide + conciliation de cartes améliorée
+Date : 2026-08-20
 
-============================================================
-FICHIERS COMPLETS À REMPLACER
-============================================================
+BASE
+- Développée à partir de Finances V1.8.0.
+- Les paiements de cartes liés, le Tableau compact, les récurrences dynamiques,
+  les KPI configurables, le Budget et les marges de crédit sont conservés.
 
+FICHIERS À REMPLACER ENSEMBLE À LA RACINE DU DÉPÔT GITHUB
 - finances.py
 - finances_data.py
 - app_versions.py
 - manual.py
 
-Déposer les 4 fichiers ensemble à la racine du dépôt GitHub JF Apps.
+AUCUN SCRIPT SQL MANUEL
+Le schéma PostgreSQL est étendu automatiquement avec les informations nécessaires
+aux nouvelles séances de conciliation : solde de référence, solde attendu,
+traitement et explication de la différence.
 
-Aucun script SQL manuel n’est requis.
-Aucune nouvelle dépendance Python n’est requise.
-Le schéma PostgreSQL est étendu automatiquement au premier démarrage de Finances.
+AUCUNE NOUVELLE DÉPENDANCE PYTHON
 
-============================================================
-NOUVEAUTÉS V1.8.0
-============================================================
+NOUVEAUTÉ 1 — COMPTE BANCAIRE : CASE « VU »
+Dans Finances > Compte, les comptes bancaires affichent une case Vu devant chaque
+transaction réelle.
+- Cocher une transaction confirmée : elle devient conciliée.
+- Cocher une transaction Prévue : elle est confirmée et conciliée en une opération.
+- Décocher : retire la conciliation sans supprimer la transaction.
+- Une Récurrence projetée pure n’est pas cochable.
+- Cette méthode ne s’applique pas aux marges de crédit ni aux cartes de crédit.
 
-1. PAIEMENT DE CARTE LIÉ
+NOUVEAUTÉ 2 — SÉLECTION DE CARTE CONSERVÉE
+Dans Conciliation, les transactions cochées restent sélectionnées lors :
+- d’un rafraîchissement;
+- d’une recherche ou d’un filtre;
+- d’un changement de tri;
+- de l’ajout d’une transaction;
+- de la modification d’une transaction.
+Si une transaction modifiée ne correspond plus à la même carte, ou n’est plus
+confirmée/non conciliée, elle est retirée de la sélection avec un avis.
+Changer volontairement de carte dans le sélecteur réinitialise la sélection.
 
-Un nouveau bouton « Paiement de carte » est disponible dans Finances et dans
-la Saisie rapide.
+NOUVEAUTÉ 3 — AJOUT / MODIFICATION DIRECTEMENT DANS CONCILIATION
+- Bouton Ajouter une transaction dans l’écran Conciliation.
+- La carte actuellement sélectionnée est proposée automatiquement.
+- Bouton crayon sur chaque transaction affichée.
+- Pour un paiement de carte lié, le crayon ouvre le formulaire de paiement lié.
 
-Le formulaire permet de choisir :
-- le compte bancaire de départ;
-- la carte de crédit destinataire;
-- le montant;
-- la date du débit bancaire;
-- la date de réception sur la carte;
-- le statut Prévu / Confirmé;
-- « Déjà programmé auprès de la banque »;
-- un rappel facultatif;
-- une note.
+NOUVEAUTÉ 4 — TRI
+Le menu Tri permet :
+- Date ascendante;
+- Date descendante.
+Le tri modifie uniquement l’affichage et ne décoche aucune transaction.
 
-Le paiement est automatiquement Hors budget.
+NOUVEAUTÉ 5 — ÉCART JUSTIFIÉ / ÉCART REPORTÉ
+La conciliation utilise maintenant la logique :
+Solde précédent + mouvements sélectionnés = solde attendu.
 
-Un seul paiement logique produit deux effets liés :
-- une sortie dans le compte bancaire;
-- un crédit sur la carte de crédit.
+Si le relevé réel diffère :
+1) Clore comme écart justifié
+   - exige une explication;
+   - le solde réel du relevé devient la nouvelle référence;
+   - la différence ne revient pas au relevé suivant;
+   - aucune transaction ordinaire n’est créée;
+   - rien n’est ajouté aux KPI, Budget ou Objectifs.
 
-Dans l’Historique général, une seule ligne est présentée afin d’éviter un
-doublon visuel. Elle indique la relation « Compte → Carte ».
+2) Reporter l’écart
+   - conserve le solde attendu comme référence;
+   - la différence reste donc à résoudre au relevé suivant.
 
-Lorsque le paiement est confirmé, son côté carte apparaît dans Conciliation
-comme un paiement reçu/crédit appliqué. Il réduit le solde dû de la carte.
+L’historique de la séance conserve le solde précédent, les mouvements,
+le solde attendu, le relevé réel, la différence, son traitement et son explication.
 
-Modifier, confirmer ou supprimer un paiement lié agit sur les deux côtés.
-Si un côté est déjà concilié, il faut d’abord retirer cette conciliation.
-
-2. INDICATEUR « PROGRAMMÉ » DANS L’HISTORIQUE
-
-Une transaction prévue dont la case « Programmée dans le compte bancaire »
-est cochée affiche maintenant directement le libellé court « Programmé » sur
-sa ligne dans l’Historique.
-
-Le même libellé compact est utilisé dans la vue Compte et dans le détail des
-transactions à venir lorsque pertinent.
-
-3. TABLEAU — TRANSACTIONS À VENIR REPLIÉES
-
-Les trois montants suivants restent toujours visibles :
-- Dépenses à venir;
-- Revenus à venir;
-- Effet net prévu.
-
-Les listes « Dépenses prévues » et « Revenus prévus » sont repliées par défaut.
-Le bouton « Voir les transactions à venir » ouvre le détail au besoin et
-indique le nombre de dépenses et de revenus prévus.
-
-Cette modification réduit fortement la hauteur du Tableau, particulièrement
-sur téléphone.
-
-4. EXPORTS
-
-Le CSV indique maintenant si un mouvement est un paiement de carte lié ainsi
-que son compte de départ et sa carte destinataire.
-
-La sauvegarde JSON contient aussi les données des paiements de cartes liés.
-
-============================================================
-INSTALLATION
-============================================================
-
-1. Ouvrir le dépôt GitHub JF Apps.
-2. Add file > Upload files.
-3. Remplacer ensemble :
-   - finances.py
-   - finances_data.py
-   - app_versions.py
-   - manual.py
-4. Commit changes.
-5. Attendre le redéploiement complet de Canner.
-6. Vérifier que Finances affiche V1.8.0.
-7. Sur ordinateur : Ctrl+F5 si l’ancienne interface reste en cache.
-8. Sur téléphone/PWA : fermer complètement JF Apps puis la rouvrir au besoin.
-
-============================================================
 TESTS RECOMMANDÉS APRÈS DÉPLOIEMENT
-============================================================
+1. Ouvrir JF Apps puis Finances.
+2. Compte bancaire : cocher Vu sur une transaction confirmée et vérifier « Conciliée ».
+3. Décocher et vérifier que la transaction reste présente mais redevient à concilier.
+4. Cocher Vu sur une transaction Prévue et vérifier qu’elle devient Confirmée + Conciliée.
+5. Ouvrir Conciliation sur une carte et cocher plusieurs transactions.
+6. Changer le tri ascendant/descendant : les cases doivent rester cochées.
+7. Ajouter une transaction depuis Conciliation : les anciennes cases doivent rester cochées.
+8. Modifier une transaction sélectionnée sans changer sa carte : elle doit rester cochée.
+9. Modifier sa carte : elle doit être retirée de la sélection avec un avis.
+10. Faire une conciliation qui balance et la finaliser.
+11. Faire un test avec une différence : inscrire une explication et choisir
+    Clore comme écart justifié.
+12. Ouvrir la séance dans l’historique et vérifier l’explication.
+13. Commencer le relevé suivant : le solde réel du relevé précédent doit être
+    le nouveau « Solde précédent ».
+14. Tester Reporter l’écart : le solde attendu doit alors demeurer la référence.
 
-A. Démarrage
-1. Vérifier que le Portail démarre normalement.
-2. Ouvrir Finances et confirmer la version V1.8.0.
-
-B. Paiement de carte lié
-1. Vérifier dans Organisation qu’un mode est de type « Compte bancaire » et
-   qu’un autre est de type « Carte de crédit ».
-2. Saisie > Paiement de carte.
-3. Choisir le compte bancaire et la carte.
-4. Créer un paiement Prévu de test, par exemple 9,00 $.
-5. Cocher « Déjà programmé auprès de la banque ».
-6. Vérifier dans Historique :
-   - une seule ligne;
-   - « Hors budget »;
-   - « Programmé »;
-   - « Compte → Carte ».
-7. Vérifier dans Compte que le paiement réduit le solde bancaire prévu.
-8. Confirmer le paiement.
-9. Ouvrir Conciliation sur la carte : le paiement doit apparaître comme un
-   crédit/paiement reçu et réduire le solde dû.
-10. Modifier un paiement non concilié et vérifier que les deux côtés changent.
-11. Supprimer un paiement non concilié et vérifier que les deux côtés
-    disparaissent.
-
-C. Protection de la conciliation
-1. Concilier le côté carte d’un paiement lié.
-2. Tenter de modifier ou supprimer le paiement depuis l’Historique.
-3. L’application doit demander de retirer d’abord la conciliation.
-
-D. Tableau compact
-1. Ouvrir Tableau sur un mois ayant des transactions futures.
-2. Vérifier que Dépenses à venir / Revenus à venir / Effet net prévu restent
-   visibles.
-3. Vérifier que les longues listes sont fermées par défaut.
-4. Cliquer « Voir les transactions à venir » et vérifier l’ouverture du détail.
-
-E. Régression V1.7
-1. Modifier une récurrence et vérifier le recalcul des occurrences prévues.
-2. Vérifier les KPI configurables dans Organisation.
-3. Vérifier une Marge de crédit dans Compte.
-4. Vérifier Budget ↔ Récurrence et les rappels existants.
-
-============================================================
-NOTE DE SÉCURITÉ DES DONNÉES
-============================================================
-
-La migration ajoute uniquement les structures nécessaires aux paiements liés.
-Elle ne supprime ni ne remplace les transactions existantes.
-
-Comme toujours, une sauvegarde JSON avant un changement important demeure une
-bonne pratique.
+VALIDATIONS EFFECTUÉES AVANT LIVRAISON
+- py_compile sur finances.py, finances_data.py, app_versions.py et manual.py;
+- test d’importation avec dépendances externes simulées;
+- test du calcul d’une conciliation avec écart justifié;
+- test du calcul d’une conciliation avec écart reporté;
+- test de la conciliation bancaire rapide Prévue -> Confirmée + Conciliée.

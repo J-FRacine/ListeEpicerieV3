@@ -648,6 +648,33 @@ def init_finances_schema():
                     id DESC
                 );
             """)
+            # V1.9.0 — référence de relevé et traitement explicite des écarts.
+            # Les ALTER sont idempotents pour les bases déjà en production.
+            cur.execute("""
+                ALTER TABLE finance_reconciliation_sessions
+                ADD COLUMN IF NOT EXISTS reference_balance NUMERIC(14,2);
+            """)
+            cur.execute("""
+                ALTER TABLE finance_reconciliation_sessions
+                ADD COLUMN IF NOT EXISTS reference_date DATE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_reconciliation_sessions
+                ADD COLUMN IF NOT EXISTS expected_balance NUMERIC(14,2);
+            """)
+            cur.execute("""
+                ALTER TABLE finance_reconciliation_sessions
+                ADD COLUMN IF NOT EXISTS closing_reference_balance NUMERIC(14,2);
+            """)
+            cur.execute("""
+                ALTER TABLE finance_reconciliation_sessions
+                ADD COLUMN IF NOT EXISTS difference_resolution TEXT
+                    NOT NULL DEFAULT 'legacy';
+            """)
+            cur.execute("""
+                ALTER TABLE finance_reconciliation_sessions
+                ADD COLUMN IF NOT EXISTS difference_explanation TEXT;
+            """)
             cur.execute("""
                 ALTER TABLE finance_transactions
                 ADD COLUMN IF NOT EXISTS reconciliation_session_id BIGINT;
@@ -2550,11 +2577,19 @@ def _refresh_reconciliation_session_totals(
     cur,
     session_id,
 ):
+    """Recalcule une séance après le retrait d'une transaction.
+
+    Les séances V1.9 utilisent un solde de référence + les mouvements nets.
+    Les anciennes séances sans reference_balance conservent leur calcul historique.
+    """
     cur.execute(
         """
         SELECT
             session.statement_balance,
             session.opening_balance_amount,
+            session.reference_balance,
+            session.expected_balance,
+            session.difference_resolution,
             COALESCE(
                 SUM(
                     CASE
@@ -2579,24 +2614,52 @@ def _refresh_reconciliation_session_totals(
     if not row:
         return
 
-    selected_total = (
-        Decimal(row["transaction_total"])
-        + Decimal(row["opening_balance_amount"])
-    )
+    transaction_total = Decimal(row["transaction_total"])
     statement_balance = row["statement_balance"]
+    resolution = str(row.get("difference_resolution") or "legacy")
+
+    if row.get("reference_balance") is None:
+        # Compatibilité avec les séances créées avant V1.9.0.
+        selected_total = (
+            transaction_total
+            + Decimal(row.get("opening_balance_amount") or 0)
+        )
+        expected_balance = selected_total
+    else:
+        selected_total = transaction_total
+        expected_balance = (
+            Decimal(row["reference_balance"]) + transaction_total
+        )
+
     difference = (
-        Decimal(statement_balance) - selected_total
+        Decimal(statement_balance) - expected_balance
         if statement_balance is not None
         else None
     )
+
+    if resolution == "carry":
+        closing_reference_balance = expected_balance
+    elif statement_balance is not None:
+        closing_reference_balance = Decimal(statement_balance)
+    else:
+        closing_reference_balance = expected_balance
+
     cur.execute(
         """
         UPDATE finance_reconciliation_sessions
         SET selected_total = %s,
-            difference = %s
+            expected_balance = %s,
+            difference = %s,
+            closing_reference_balance = %s
         WHERE id = %s;
         """,
-        (selected_total, difference, session_id),
+        (
+            selected_total,
+            expected_balance,
+            difference,
+            closing_reference_balance,
+            session_id,
+        ),
     )
 
 
@@ -2680,6 +2743,175 @@ def set_transaction_reconciliation(
                 )
 
             conn.commit()
+
+
+def set_bank_transaction_seen(
+    user_id,
+    transaction_id,
+    seen,
+    reconciliation_date=None,
+):
+    """Conciliation rapide pour un compte bancaire.
+
+    Cocher confirme au besoin une transaction prévue et la concilie.
+    Décocher retire seulement la conciliation; la transaction reste confirmée.
+    """
+    parsed_date = (
+        reconciliation_date
+        if isinstance(reconciliation_date, date)
+        else (
+            date.fromisoformat(str(reconciliation_date))
+            if reconciliation_date
+            else date.today()
+        )
+    )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    transaction.id,
+                    transaction.status,
+                    transaction.reconciliation_session_id,
+                    method.method_type
+                FROM finance_transactions AS transaction
+                LEFT JOIN finance_payment_methods AS method
+                    ON method.id = transaction.payment_method_id
+                WHERE transaction.id = %s
+                  AND transaction.user_id = %s
+                FOR UPDATE;
+                """,
+                (transaction_id, user_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise ValueError("Transaction introuvable.")
+            if row.get("method_type") != "bank":
+                raise ValueError(
+                    "La conciliation rapide s’applique seulement aux comptes bancaires."
+                )
+
+            session_id = row.get("reconciliation_session_id")
+
+            if seen:
+                cur.execute(
+                    """
+                    UPDATE finance_transactions
+                    SET status = 'confirmed',
+                        reconciliation_status = 'reconciled',
+                        reconciliation_date = %s,
+                        bank_programmed = FALSE,
+                        reminder_enabled = FALSE,
+                        updated_at = NOW()
+                    WHERE id = %s AND user_id = %s;
+                    """,
+                    (parsed_date, transaction_id, user_id),
+                )
+            else:
+                if session_id:
+                    cur.execute(
+                        """
+                        UPDATE finance_reconciliation_session_transactions
+                        SET is_active = FALSE,
+                            removed_at = NOW()
+                        WHERE session_id = %s
+                          AND transaction_id = %s
+                          AND is_active = TRUE;
+                        """,
+                        (session_id, transaction_id),
+                    )
+                cur.execute(
+                    """
+                    UPDATE finance_transactions
+                    SET reconciliation_status = 'unreconciled',
+                        reconciliation_date = NULL,
+                        reconciliation_session_id = NULL,
+                        updated_at = NOW()
+                    WHERE id = %s AND user_id = %s;
+                    """,
+                    (transaction_id, user_id),
+                )
+
+            if session_id:
+                _refresh_reconciliation_session_totals(cur, session_id)
+            conn.commit()
+
+
+def reconciliation_reference_summary(
+    user_id,
+    payment_method_id,
+):
+    """Retourne le point de départ du prochain relevé de carte.
+
+    Un écart justifié est absorbé parce que le solde réel du relevé devient
+    la nouvelle référence. Un écart reporté conserve le solde attendu comme
+    référence afin que l'écart demeure visible au prochain relevé.
+    """
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            payment_method_id = _validate_payment_method(
+                cur, user_id, payment_method_id
+            )
+            cur.execute(
+                """
+                SELECT
+                    id, name, method_type, opening_balance, opening_balance_date
+                FROM finance_payment_methods
+                WHERE id = %s AND user_id = %s;
+                """,
+                (payment_method_id, user_id),
+            )
+            method = cur.fetchone()
+            if not method:
+                raise ValueError("Mode de paiement introuvable.")
+
+            cur.execute(
+                """
+                SELECT
+                    id, statement_date, statement_balance, expected_balance,
+                    closing_reference_balance, difference, difference_resolution
+                FROM finance_reconciliation_sessions
+                WHERE user_id = %s
+                  AND payment_method_id = %s
+                  AND status = 'completed'
+                ORDER BY statement_date DESC, id DESC
+                LIMIT 1;
+                """,
+                (user_id, payment_method_id),
+            )
+            previous = cur.fetchone()
+
+    if previous:
+        balance = previous.get("closing_reference_balance")
+        if balance is None:
+            balance = previous.get("statement_balance")
+        if balance is None:
+            balance = previous.get("expected_balance")
+        if balance is None:
+            balance = Decimal("0.00")
+        return {
+            "payment_method_id": payment_method_id,
+            "payment_method_name": method["name"],
+            "reference_balance": Decimal(balance),
+            "reference_date": previous.get("statement_date"),
+            "source": "previous_statement",
+            "previous_session_id": previous.get("id"),
+            "previous_difference": previous.get("difference"),
+            "previous_difference_resolution": previous.get("difference_resolution"),
+        }
+
+    return {
+        "payment_method_id": payment_method_id,
+        "payment_method_name": method["name"],
+        "reference_balance": Decimal(method.get("opening_balance") or 0),
+        "reference_date": method.get("opening_balance_date"),
+        "source": "opening_balance",
+        "previous_session_id": None,
+        "previous_difference": None,
+        "previous_difference_resolution": None,
+    }
+
 
 
 def dashboard_summary(user_id, month_value):
@@ -6007,6 +6239,8 @@ def create_reconciliation_session(
     reconciliation_date=None,
     note=None,
     include_opening_balance=False,
+    difference_resolution="balanced",
+    difference_explanation=None,
 ):
     ids = sorted({int(value) for value in (transaction_ids or [])})
     parsed_statement_date = (
@@ -6017,11 +6251,7 @@ def create_reconciliation_session(
     parsed_due_date = (
         due_date
         if isinstance(due_date, date)
-        else (
-            date.fromisoformat(str(due_date))
-            if due_date
-            else None
-        )
+        else (date.fromisoformat(str(due_date)) if due_date else None)
     )
     parsed_reconciliation_date = (
         reconciliation_date
@@ -6033,18 +6263,20 @@ def create_reconciliation_session(
         )
     )
     parsed_statement_balance = _decimal_value(
-        statement_balance,
-        "Le solde du relevé",
-        allow_blank=True,
+        statement_balance, "Le solde du relevé", allow_blank=True
     )
     cleaned_note = _text(note, "La note", 1000)
+    cleaned_explanation = _text(
+        difference_explanation, "L’explication de l’écart", 1000
+    )
+    resolution = str(difference_resolution or "balanced").strip().lower()
+    if resolution not in {"balanced", "justified", "carry"}:
+        raise ValueError("Traitement de la différence invalide.")
 
     with get_connection() as conn:
         with conn.cursor() as cur:
             payment_method_id = _validate_payment_method(
-                cur,
-                user_id,
-                payment_method_id,
+                cur, user_id, payment_method_id
             )
             cur.execute(
                 """
@@ -6059,13 +6291,50 @@ def create_reconciliation_session(
             if not method:
                 raise ValueError("Mode de paiement introuvable.")
 
+            # Le dernier relevé finalisé devient la référence du suivant.
+            cur.execute(
+                """
+                SELECT
+                    id, statement_date, statement_balance, expected_balance,
+                    closing_reference_balance
+                FROM finance_reconciliation_sessions
+                WHERE user_id = %s
+                  AND payment_method_id = %s
+                  AND status = 'completed'
+                ORDER BY statement_date DESC, id DESC
+                LIMIT 1
+                FOR UPDATE;
+                """,
+                (user_id, payment_method_id),
+            )
+            previous = cur.fetchone()
+            if previous:
+                reference_balance = previous.get("closing_reference_balance")
+                if reference_balance is None:
+                    reference_balance = previous.get("statement_balance")
+                if reference_balance is None:
+                    reference_balance = previous.get("expected_balance")
+                reference_balance = Decimal(reference_balance or 0)
+                reference_date = previous.get("statement_date")
+            else:
+                reference_balance = Decimal(method.get("opening_balance") or 0)
+                reference_date = method.get("opening_balance_date")
+
             opening_amount = Decimal("0.00")
+            # Dès la première séance V1.9, le solde initial devient le point
+            # de référence du relevé et ne doit plus rester artificiellement
+            # dans le solde « à concilier » des mois suivants.
+            if (
+                previous is None
+                and not method["opening_balance_reconciled"]
+                and Decimal(method["opening_balance"] or 0) != 0
+            ):
+                include_opening_balance = True
+
             if include_opening_balance:
                 if method["opening_balance_reconciled"]:
-                    raise ValueError(
-                        "Le solde initial est déjà concilié."
-                    )
-                opening_amount = Decimal(method["opening_balance"])
+                    raise ValueError("Le solde initial est déjà concilié.")
+                opening_amount = Decimal(method["opening_balance"] or 0)
                 if opening_amount == 0:
                     include_opening_balance = False
 
@@ -6099,50 +6368,60 @@ def create_reconciliation_session(
 
             if not ids and not include_opening_balance:
                 raise ValueError(
-                    "Sélectionnez au moins une transaction "
-                    "ou le solde initial."
+                    "Sélectionnez au moins une transaction ou le solde initial."
                 )
 
-            selected_total = transaction_total + opening_amount
+            selected_total = transaction_total
+            expected_balance = reference_balance + transaction_total
             difference = (
-                parsed_statement_balance - selected_total
+                parsed_statement_balance - expected_balance
                 if parsed_statement_balance is not None
                 else None
             )
 
+            if difference is None or abs(difference) < Decimal(".01"):
+                resolution = "balanced"
+                cleaned_explanation = None
+            elif resolution == "justified":
+                if not cleaned_explanation:
+                    raise ValueError(
+                        "Expliquez la différence avant de la clore comme écart justifié."
+                    )
+            elif resolution == "balanced":
+                raise ValueError(
+                    "La conciliation ne balance pas. Choisissez de justifier ou de reporter l’écart."
+                )
+
+            if resolution == "carry":
+                closing_reference_balance = expected_balance
+            elif parsed_statement_balance is not None:
+                closing_reference_balance = parsed_statement_balance
+            else:
+                closing_reference_balance = expected_balance
+
             cur.execute(
                 """
                 INSERT INTO finance_reconciliation_sessions (
-                    user_id,
-                    payment_method_id,
-                    statement_date,
-                    statement_balance,
-                    due_date,
-                    reconciliation_date,
-                    note,
-                    selected_total,
-                    difference,
-                    included_opening_balance,
-                    opening_balance_amount
+                    user_id, payment_method_id, statement_date,
+                    statement_balance, due_date, reconciliation_date, note,
+                    selected_total, difference, included_opening_balance,
+                    opening_balance_amount, reference_balance, reference_date,
+                    expected_balance, closing_reference_balance,
+                    difference_resolution, difference_explanation
                 )
                 VALUES (
                     %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                 )
                 RETURNING id;
                 """,
                 (
-                    user_id,
-                    payment_method_id,
-                    parsed_statement_date,
-                    parsed_statement_balance,
-                    parsed_due_date,
-                    parsed_reconciliation_date,
-                    cleaned_note,
-                    selected_total,
-                    difference,
-                    bool(include_opening_balance),
-                    opening_amount,
+                    user_id, payment_method_id, parsed_statement_date,
+                    parsed_statement_balance, parsed_due_date,
+                    parsed_reconciliation_date, cleaned_note, selected_total,
+                    difference, bool(include_opening_balance), opening_amount,
+                    reference_balance, reference_date, expected_balance,
+                    closing_reference_balance, resolution, cleaned_explanation,
                 ),
             )
             session_id = int(cur.fetchone()["id"])
@@ -6151,8 +6430,7 @@ def create_reconciliation_session(
                 cur.execute(
                     """
                     INSERT INTO finance_reconciliation_session_transactions (
-                        session_id,
-                        transaction_id
+                        session_id, transaction_id
                     )
                     VALUES (%s, %s);
                     """,
@@ -6171,10 +6449,7 @@ def create_reconciliation_session(
                       AND id = ANY(%s);
                     """,
                     (
-                        parsed_reconciliation_date,
-                        session_id,
-                        user_id,
-                        ids,
+                        parsed_reconciliation_date, session_id, user_id, ids,
                     ),
                 )
 
@@ -6194,7 +6469,12 @@ def create_reconciliation_session(
     return {
         "session_id": session_id,
         "selected_total": selected_total,
+        "reference_balance": reference_balance,
+        "expected_balance": expected_balance,
+        "statement_balance": parsed_statement_balance,
         "difference": difference,
+        "difference_resolution": resolution,
+        "closing_reference_balance": closing_reference_balance,
         "transaction_count": len(ids),
     }
 
@@ -6654,7 +6934,7 @@ def export_finances(user_id):
 
     payload = {
         "format": "JF Apps Finances",
-        "version": "1.8.0",
+        "version": "1.9.0",
         "categories": [
             serial(
                 dict(row)

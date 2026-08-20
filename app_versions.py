@@ -15,12 +15,36 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.1",
     "blood_pressure": "1.2.1",
-    "finances": "1.8.0",
+    "finances": "1.9.0",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.9.0",
+        "date": "2026-08-20",
+        "title": "Finances — conciliation bancaire rapide et cartes plus souples",
+        "summary": (
+            "La vue Compte permet maintenant de concilier directement les mouvements bancaires, "
+            "tandis que la conciliation des cartes conserve la sélection, ajoute le tri par date et gère les écarts justifiés sans les reporter."
+        ),
+        "changes": [
+            "Dans Compte, chaque transaction d’un compte bancaire possède une case Vu : la cocher confirme au besoin la transaction et la marque conciliée avec la date du jour.",
+            "Décocher Vu retire la conciliation sans effacer la transaction; les projections pures restent non cochables.",
+            "La conciliation rapide par cases s’applique seulement aux comptes bancaires; les cartes de crédit conservent l’écran Conciliation par relevé.",
+            "Dans Conciliation, l’ajout ou la modification d’une transaction ne vide plus les transactions déjà sélectionnées tant qu’elles demeurent admissibles pour la même carte.",
+            "Un bouton Ajouter une transaction et un bouton Modifier sont disponibles directement pendant la conciliation.",
+            "Le tri Date ascendante / Date descendante agit uniquement sur l’affichage et conserve la sélection en cours.",
+            "La sélection reste aussi conservée lors d’un filtre ou d’un rafraîchissement; une transaction devenue inadmissible est retirée avec un avis.",
+            "La conciliation d’une carte utilise maintenant le dernier relevé finalisé comme solde de référence : solde précédent + mouvements sélectionnés = solde attendu.",
+            "Lorsqu’une différence existe, elle peut être clôturée comme écart justifié avec une explication; le solde réel du relevé devient alors la nouvelle référence et l’écart ne revient pas au relevé suivant.",
+            "Une option Reporter l’écart conserve au contraire le solde attendu comme référence afin que la différence demeure à résoudre plus tard.",
+            "L’explication d’un écart justifié est conservée uniquement dans l’historique de la séance de conciliation et ne crée pas de transaction budgétaire ni de KPI.",
+            "Aucun script SQL manuel ni nouvelle dépendance n’est requis.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.8.0",

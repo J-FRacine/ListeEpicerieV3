@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-PORTAL_VERSION = "1.2.1"
+PORTAL_VERSION = "1.3.0"
 
 APP_LABELS = {
     "portal": "Portail JF Apps",
@@ -13,14 +13,69 @@ APP_LABELS = {
 
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
-    "grocery": "1.1.1",
+    "grocery": "1.1.2",
     "blood_pressure": "1.2.1",
-    "finances": "1.9.0",
+    "finances": "1.10.0",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.10.0",
+        "date": "2026-08-24",
+        "title": "Finances — Budget fixe, capacité variable et financements",
+        "summary": (
+            "Le Tableau devient le suivi des dépenses variables du mois tandis que "
+            "le Budget calcule la capacité disponible après les dépenses fixes."
+        ),
+        "changes": [
+            "Le Tableau met en avant Reste par paie, Disponible ce mois selon le nombre réel de paies, Dépenses réalisées, À venir, Total prévu variable et Reste disponible ce mois.",
+            "Le bloc KPI revenus est retiré du Tableau sans supprimer les revenus des données, récurrences, historiques ni calculs du Budget.",
+            "Les KPI de dépenses affichent une ligne Total des KPI affichés; le rappel sur les étiquettes multiples est conservé.",
+            "Les dépenses fixes liées à une récurrence Budget sont exclues du suivi variable du Tableau afin de ne pas consommer deux fois la capacité calculée.",
+            "Chaque poste Budget peut avoir une date de début et une date de fin facultatives; les mois passés conservent les montants qui leur étaient applicables.",
+            "Une nouvelle période d’un poste Budget peut être créée sans écraser l’ancienne; les chevauchements identiques sont bloqués par défaut et peuvent être autorisés explicitement.",
+            "Nouveau module Financements pour les programmes de magasins et les achats en versements sur carte, avec ou sans intérêts et frais.",
+            "Les plans déjà en cours peuvent être saisis avec montant initial, versements effectués, solde restant et prochaine échéance sans recréer automatiquement les anciennes mensualités.",
+            "Chaque versement futur est une vraie dépense prévue, catégorisable et étiquetable, incluse dans les KPI et le budget restant; le montant initial n’est pas compté une seconde fois.",
+            "Les versements liés à une carte apparaissent sur cette carte et deviennent disponibles pour la conciliation lorsqu’ils sont confirmés.",
+            "Aucun script SQL manuel ni nouvelle dépendance n’est requis.",
+        ],
+    },
+    {
+        "app_key": "portal",
+        "version": "1.3.0",
+        "date": "2026-08-24",
+        "title": "JF Apps — sauvegarde globale en une action",
+        "summary": (
+            "Le Portail peut créer une seule archive privée regroupant les données "
+            "de toutes les applications auxquelles le compte a accès."
+        ),
+        "changes": [
+            "Nouveau bouton Sauvegarder toutes mes données dans le Portail.",
+            "L’archive ZIP sépare clairement Liste d’épicerie, Finances, Journal de pression, Personnages JDR et commentaires lorsque ces modules sont accessibles.",
+            "Un manifest conserve la date de sauvegarde et la version de chaque application.",
+            "La Liste d’épicerie est sauvegardée famille par famille et uniquement pour les familles accessibles au compte.",
+            "La restauration globale reste une évolution future contrôlée; cette version priorise l’export complet en une seule action.",
+        ],
+    },
+    {
+        "app_key": "grocery",
+        "version": "1.1.2",
+        "date": "2026-08-24",
+        "title": "Liste d’épicerie — tri alphabétique accent-insensible renforcé",
+        "summary": (
+            "Le tri naturel déjà présent est conservé et renforcé pour que les accents "
+            "et ligatures ne déplacent jamais les items dans la liste."
+        ),
+        "changes": [
+            "Café est trié comme Cafe et Céréales comme Cereales, sans modifier l’orthographe affichée.",
+            "Le tri reste insensible à la casse dans Items et Besoins.",
+            "Les ligatures courantes comme Œ/Oe et Æ/Ae sont maintenant normalisées explicitement.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.9.0",

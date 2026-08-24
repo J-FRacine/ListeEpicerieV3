@@ -5411,6 +5411,12 @@ def _parse_jf_json(document):
                 "sync_from_recurrence": bool(item.get("sync_from_recurrence", True)),
                 "sort_order": int(item.get("sort_order") or index),
                 "is_active": bool(item.get("is_active", True)),
+                "effective_start": _optional_date_value(
+                    item.get("effective_start"), "La date de début"
+                ),
+                "effective_end": _optional_date_value(
+                    item.get("effective_end"), "La date de fin"
+                ),
             })
         except Exception as error:
             errors.append(f"Budget {index} : {error}")
@@ -5983,7 +5989,8 @@ def import_finance_rows(
                             UPDATE finance_budget_items
                             SET input_frequency=%s,input_amount=%s,biweekly_override=%s,
                                 note=%s,recurrence_id=NULL,sync_from_recurrence=%s,
-                                sort_order=%s,is_active=%s,updated_at=NOW()
+                                sort_order=%s,is_active=%s,effective_start=%s,effective_end=%s,
+                                updated_at=NOW()
                             WHERE id=%s AND user_id=%s;
                             """,
                             (
@@ -5991,6 +5998,7 @@ def import_finance_rows(
                                 item.get("biweekly_override"), item.get("note"),
                                 bool(item.get("sync_from_recurrence", True)),
                                 item.get("sort_order") or 0, bool(item.get("is_active", True)),
+                                item.get("effective_start"), item.get("effective_end"),
                                 existing["id"], user_id,
                             ),
                         )
@@ -6000,9 +6008,9 @@ def import_finance_rows(
                             INSERT INTO finance_budget_items (
                                 user_id,item_type,description,input_frequency,input_amount,
                                 biweekly_override,note,sort_order,is_active,
-                                recurrence_id,sync_from_recurrence
+                                recurrence_id,sync_from_recurrence,effective_start,effective_end
                             )
-                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL,%s);
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL,%s,%s,%s);
                             """,
                             (
                                 user_id,item["item_type"],item["description"],
@@ -6010,6 +6018,7 @@ def import_finance_rows(
                                 item.get("biweekly_override"),item.get("note"),
                                 item.get("sort_order") or 0,bool(item.get("is_active", True)),
                                 bool(item.get("sync_from_recurrence", True)),
+                                item.get("effective_start"), item.get("effective_end"),
                             ),
                         )
                     budget_items_imported += 1
@@ -7000,4 +7009,1468 @@ def export_finances(user_id):
         ).encode(
             "utf-8"
         ),
+    )
+
+# =========================================================
+# FINANCES V1.10.0 — BUDGET PÉRIODÉ, CAPACITÉ VARIABLE ET
+# PLANS DE FINANCEMENT / VERSEMENTS SUR CARTE
+# =========================================================
+
+_init_finances_schema_v190 = init_finances_schema
+_save_budget_item_v190 = save_budget_item
+_list_budget_items_v190 = list_budget_items
+_budget_summary_v190 = budget_summary
+_dashboard_month_projection_v190 = dashboard_month_projection
+_export_finances_v190 = export_finances
+
+INSTALLMENT_PLAN_TYPES = {
+    "merchant": "Financement magasin",
+    "credit_card": "Versements sur carte de crédit",
+}
+
+
+def _optional_date_value(value, label):
+    if value in (None, ""):
+        return None
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except ValueError as error:
+        raise ValueError(f"{label} est invalide.") from error
+
+
+def init_finances_schema():
+    """Mise à niveau V1.10.0, idempotente et sans SQL manuel."""
+
+    _init_finances_schema_v190()
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Périodes d'effet du Budget.
+            cur.execute(
+                """
+                ALTER TABLE finance_budget_items
+                ADD COLUMN IF NOT EXISTS effective_start DATE;
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE finance_budget_items
+                ADD COLUMN IF NOT EXISTS effective_end DATE;
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS finance_budget_items_effective_idx
+                ON finance_budget_items (
+                    user_id,
+                    is_active,
+                    effective_start,
+                    effective_end
+                );
+                """
+            )
+
+            # Plans de financement. Ils ne créent jamais une dépense pour le
+            # montant initial complet : seuls les versements deviennent des
+            # transactions budgétaires.
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS finance_installment_plans (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL
+                        REFERENCES users(id) ON DELETE CASCADE,
+                    plan_type TEXT NOT NULL
+                        CHECK (plan_type IN ('merchant', 'credit_card')),
+                    provider_name TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    original_amount NUMERIC(14,2) NOT NULL
+                        CHECK (original_amount > 0),
+                    purchase_date DATE,
+                    total_installments INTEGER NOT NULL
+                        CHECK (total_installments BETWEEN 1 AND 1200),
+                    completed_installments INTEGER NOT NULL DEFAULT 0
+                        CHECK (completed_installments >= 0),
+                    remaining_balance NUMERIC(14,2) NOT NULL DEFAULT 0
+                        CHECK (remaining_balance >= 0),
+                    installment_amount NUMERIC(14,2) NOT NULL
+                        CHECK (installment_amount > 0),
+                    annual_interest_rate NUMERIC(8,4) NOT NULL DEFAULT 0
+                        CHECK (annual_interest_rate >= 0),
+                    fees_total NUMERIC(14,2) NOT NULL DEFAULT 0
+                        CHECK (fees_total >= 0),
+                    frequency_unit TEXT NOT NULL DEFAULT 'month'
+                        CHECK (frequency_unit IN ('day','week','month','year')),
+                    frequency_interval INTEGER NOT NULL DEFAULT 1
+                        CHECK (frequency_interval BETWEEN 1 AND 365),
+                    next_due_date DATE,
+                    payment_method_id BIGINT
+                        REFERENCES finance_payment_methods(id)
+                        ON DELETE SET NULL,
+                    category_id BIGINT
+                        REFERENCES finance_categories(id)
+                        ON DELETE SET NULL,
+                    budget_excluded BOOLEAN NOT NULL DEFAULT FALSE,
+                    note TEXT,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CHECK (completed_installments <= total_installments),
+                    CHECK (CHAR_LENGTH(provider_name) BETWEEN 1 AND 120),
+                    CHECK (CHAR_LENGTH(description) BETWEEN 1 AND 160),
+                    CHECK (note IS NULL OR CHAR_LENGTH(note) <= 1000)
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS finance_installment_plans_user_idx
+                ON finance_installment_plans (
+                    user_id,
+                    is_active DESC,
+                    next_due_date,
+                    id
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS finance_installment_plan_tags (
+                    plan_id BIGINT NOT NULL
+                        REFERENCES finance_installment_plans(id)
+                        ON DELETE CASCADE,
+                    tag_id BIGINT NOT NULL
+                        REFERENCES finance_tags(id)
+                        ON DELETE CASCADE,
+                    PRIMARY KEY (plan_id, tag_id)
+                );
+                """
+            )
+
+            cur.execute(
+                """
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS installment_plan_id BIGINT;
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS installment_number INTEGER;
+                """
+            )
+            cur.execute(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname =
+                            'finance_transactions_installment_plan_fk'
+                    ) THEN
+                        ALTER TABLE finance_transactions
+                        ADD CONSTRAINT
+                            finance_transactions_installment_plan_fk
+                        FOREIGN KEY (installment_plan_id)
+                        REFERENCES finance_installment_plans(id)
+                        ON DELETE SET NULL;
+                    END IF;
+                END
+                $$;
+                """
+            )
+            cur.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                finance_transactions_installment_number_uq
+                ON finance_transactions (
+                    installment_plan_id,
+                    installment_number
+                )
+                WHERE installment_plan_id IS NOT NULL
+                  AND installment_number IS NOT NULL;
+                """
+            )
+
+            conn.commit()
+
+
+def _periods_overlap(start_a, end_a, start_b, end_b):
+    floor = date(1, 1, 1)
+    ceiling = date(9999, 12, 31)
+    a_start = start_a or floor
+    a_end = end_a or ceiling
+    b_start = start_b or floor
+    b_end = end_b or ceiling
+    return a_start <= b_end and b_start <= a_end
+
+
+def save_budget_item(
+    user_id,
+    item_type,
+    description,
+    input_frequency,
+    input_amount,
+    biweekly_override=None,
+    note=None,
+    recurrence_id=None,
+    sync_from_recurrence=True,
+    budget_item_id=None,
+    effective_start=None,
+    effective_end=None,
+    allow_overlap=False,
+):
+    """Enregistre un poste budgétaire avec période d'effet optionnelle."""
+
+    if item_type not in TRANSACTION_TYPES:
+        raise ValueError("Type de poste budgétaire invalide.")
+    if input_frequency not in BUDGET_INPUT_FREQUENCIES:
+        raise ValueError("Fréquence budgétaire invalide.")
+
+    description = _text(description, "La description", 160, True)
+    amount = _money(input_amount)
+    override = (
+        _money(biweekly_override)
+        if biweekly_override not in (None, "")
+        else None
+    )
+    note = _text(note, "La note", 1000)
+    start_value = _optional_date_value(
+        effective_start,
+        "La date de début",
+    )
+    end_value = _optional_date_value(
+        effective_end,
+        "La date de fin",
+    )
+    if start_value and end_value and end_value < start_value:
+        raise ValueError(
+            "La date de fin doit être égale ou postérieure à la date de début."
+        )
+
+    if input_frequency == "biweekly":
+        override = None
+
+    normalized_recurrence_id = (
+        int(recurrence_id)
+        if recurrence_id not in (None, "")
+        else None
+    )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            if normalized_recurrence_id is not None:
+                cur.execute(
+                    """
+                    SELECT id, transaction_type, amount,
+                           frequency_unit, frequency_interval
+                    FROM finance_recurrences
+                    WHERE id=%s AND user_id=%s;
+                    """,
+                    (normalized_recurrence_id, user_id),
+                )
+                linked = cur.fetchone()
+                if not linked:
+                    raise ValueError(
+                        "La récurrence sélectionnée est invalide."
+                    )
+                if sync_from_recurrence:
+                    item_type = linked["transaction_type"]
+                    input_frequency, amount = _budget_values_from_recurrence(
+                        linked
+                    )
+                    if input_frequency == "biweekly":
+                        override = None
+
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM finance_budget_items
+                    WHERE user_id=%s AND recurrence_id=%s
+                      AND (%s IS NULL OR id<>%s)
+                    LIMIT 1;
+                    """,
+                    (
+                        user_id,
+                        normalized_recurrence_id,
+                        budget_item_id,
+                        budget_item_id,
+                    ),
+                )
+                if cur.fetchone():
+                    raise ValueError(
+                        "Cette récurrence est déjà liée à un autre poste du Budget."
+                    )
+
+            if not allow_overlap:
+                cur.execute(
+                    """
+                    SELECT id, effective_start, effective_end
+                    FROM finance_budget_items
+                    WHERE user_id=%s
+                      AND item_type=%s
+                      AND LOWER(TRIM(description))=LOWER(TRIM(%s))
+                      AND (%s IS NULL OR id<>%s);
+                    """,
+                    (
+                        user_id,
+                        item_type,
+                        description,
+                        budget_item_id,
+                        budget_item_id,
+                    ),
+                )
+                for other in cur.fetchall():
+                    if _periods_overlap(
+                        start_value,
+                        end_value,
+                        other.get("effective_start"),
+                        other.get("effective_end"),
+                    ):
+                        raise ValueError(
+                            "Une autre période de ce poste budgétaire se chevauche. "
+                            "Ajustez les dates ou autorisez explicitement le chevauchement."
+                        )
+
+            if budget_item_id:
+                cur.execute(
+                    """
+                    UPDATE finance_budget_items
+                    SET item_type=%s,
+                        description=%s,
+                        input_frequency=%s,
+                        input_amount=%s,
+                        biweekly_override=%s,
+                        note=%s,
+                        recurrence_id=%s,
+                        sync_from_recurrence=%s,
+                        effective_start=%s,
+                        effective_end=%s,
+                        is_active=TRUE,
+                        updated_at=NOW()
+                    WHERE id=%s AND user_id=%s;
+                    """,
+                    (
+                        item_type,
+                        description,
+                        input_frequency,
+                        amount,
+                        override,
+                        note,
+                        normalized_recurrence_id,
+                        bool(sync_from_recurrence),
+                        start_value,
+                        end_value,
+                        budget_item_id,
+                        user_id,
+                    ),
+                )
+                if cur.rowcount == 0:
+                    raise ValueError("Poste budgétaire introuvable.")
+                saved_id = int(budget_item_id)
+            else:
+                cur.execute(
+                    """
+                    SELECT COALESCE(MAX(sort_order),0)+1 AS next_order
+                    FROM finance_budget_items
+                    WHERE user_id=%s AND item_type=%s;
+                    """,
+                    (user_id, item_type),
+                )
+                next_order = int(cur.fetchone()["next_order"])
+                cur.execute(
+                    """
+                    INSERT INTO finance_budget_items (
+                        user_id,
+                        item_type,
+                        description,
+                        input_frequency,
+                        input_amount,
+                        biweekly_override,
+                        note,
+                        sort_order,
+                        recurrence_id,
+                        sync_from_recurrence,
+                        effective_start,
+                        effective_end
+                    )
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    RETURNING id;
+                    """,
+                    (
+                        user_id,
+                        item_type,
+                        description,
+                        input_frequency,
+                        amount,
+                        override,
+                        note,
+                        next_order,
+                        normalized_recurrence_id,
+                        bool(sync_from_recurrence),
+                        start_value,
+                        end_value,
+                    ),
+                )
+                saved_id = int(cur.fetchone()["id"])
+
+            conn.commit()
+            return saved_id
+
+
+def list_budget_items(
+    user_id,
+    include_inactive=False,
+    month_value=None,
+    effective_only=False,
+):
+    month = _month_start(month_value) if month_value else None
+    month_end = (
+        _add_months(month, 1) - timedelta(days=1)
+        if month
+        else None
+    )
+
+    conditions = ["budget.user_id=%s", "(%s OR budget.is_active=TRUE)"]
+    params = [user_id, include_inactive]
+    if effective_only and month:
+        conditions.extend(
+            [
+                "(budget.effective_start IS NULL OR budget.effective_start <= %s)",
+                "(budget.effective_end IS NULL OR budget.effective_end >= %s)",
+            ]
+        )
+        params.extend([month_end, month])
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT
+                    budget.*,
+                    recurrence.description AS recurrence_description,
+                    recurrence.amount AS recurrence_amount,
+                    recurrence.frequency_unit AS recurrence_frequency_unit,
+                    recurrence.frequency_interval AS recurrence_frequency_interval,
+                    recurrence.start_date AS recurrence_start_date,
+                    recurrence.end_date AS recurrence_end_date,
+                    recurrence.next_date AS recurrence_next_date,
+                    recurrence.is_active AS recurrence_is_active
+                FROM finance_budget_items AS budget
+                LEFT JOIN finance_recurrences AS recurrence
+                    ON recurrence.id=budget.recurrence_id
+                   AND recurrence.user_id=budget.user_id
+                WHERE {' AND '.join(conditions)}
+                ORDER BY
+                    CASE WHEN budget.item_type='income' THEN 0 ELSE 1 END,
+                    budget.sort_order,
+                    LOWER(budget.description),
+                    budget.id;
+                """,
+                params,
+            )
+            rows = []
+            for raw in cur.fetchall():
+                row = dict(raw)
+                monthly, biweekly = _budget_amounts_from_values(
+                    row["input_frequency"],
+                    row["input_amount"],
+                    row.get("biweekly_override"),
+                )
+                row["monthly_amount"] = monthly
+                row["biweekly_amount"] = biweekly
+                row["biweekly_is_override"] = (
+                    row["input_frequency"] == "monthly"
+                    and row.get("biweekly_override") is not None
+                )
+                if month:
+                    row["effective_for_month"] = _periods_overlap(
+                        row.get("effective_start"),
+                        row.get("effective_end"),
+                        month,
+                        month_end,
+                    )
+                else:
+                    row["effective_for_month"] = True
+                rows.append(row)
+            return rows
+
+
+def budget_summary(user_id, month_value=None):
+    month = _month_start(month_value or date.today())
+    rows = list_budget_items(
+        user_id,
+        include_inactive=False,
+        month_value=month,
+        effective_only=True,
+    )
+    totals = {
+        "month": month,
+        "monthly_income": Decimal("0.00"),
+        "monthly_expense": Decimal("0.00"),
+        "biweekly_income": Decimal("0.00"),
+        "biweekly_expense": Decimal("0.00"),
+    }
+    for row in rows:
+        key = "income" if row["item_type"] == "income" else "expense"
+        totals[f"monthly_{key}"] += Decimal(row["monthly_amount"])
+        totals[f"biweekly_{key}"] += Decimal(row["biweekly_amount"])
+    totals["monthly_remaining"] = (
+        totals["monthly_income"] - totals["monthly_expense"]
+    )
+    totals["biweekly_remaining"] = (
+        totals["biweekly_income"] - totals["biweekly_expense"]
+    )
+    totals["rows"] = rows
+    return totals
+
+
+def _recurrence_dates_between(recurrence, start_date, end_date):
+    if not recurrence or not recurrence.get("is_active"):
+        return []
+    occurrence = recurrence.get("start_date") or recurrence.get("next_date")
+    if not occurrence:
+        return []
+    recurrence_end = recurrence.get("end_date")
+    if recurrence_end and recurrence_end < start_date:
+        return []
+    while occurrence < start_date:
+        occurrence = _next_date(
+            occurrence,
+            recurrence["frequency_unit"],
+            int(recurrence["frequency_interval"]),
+        )
+    dates = []
+    safety = 0
+    while occurrence <= end_date and safety < 1000:
+        if recurrence_end and occurrence > recurrence_end:
+            break
+        dates.append(occurrence)
+        occurrence = _next_date(
+            occurrence,
+            recurrence["frequency_unit"],
+            int(recurrence["frequency_interval"]),
+        )
+        safety += 1
+    return dates
+
+
+def budget_capacity_summary(user_id, month_value):
+    """Capacité disponible pour les dépenses variables du mois affiché."""
+
+    month = _month_start(month_value)
+    month_end = _add_months(month, 1) - timedelta(days=1)
+    summary = budget_summary(user_id, month)
+    active_rows = summary["rows"]
+    income_rows = [
+        row for row in active_rows
+        if row["item_type"] == "income"
+    ]
+
+    recurrence_by_id = {
+        int(row["id"]): dict(row)
+        for row in list_recurrences(user_id)
+    }
+
+    linked_income_rows = [
+        row for row in income_rows
+        if row.get("recurrence_id")
+        and int(row["recurrence_id"]) in recurrence_by_id
+    ]
+
+    pay_dates = []
+    source = "budget"
+    if linked_income_rows:
+        # Le poste de revenu principal est celui qui représente le plus gros
+        # montant par paie. Cela évite qu'un remboursement ponctuel soit compté
+        # comme une paie supplémentaire.
+        primary_income = max(
+            linked_income_rows,
+            key=lambda row: Decimal(row["biweekly_amount"]),
+        )
+        recurrence = recurrence_by_id[int(primary_income["recurrence_id"])]
+        pay_dates = _recurrence_dates_between(
+            recurrence,
+            month,
+            month_end,
+        )
+        source = "recurrence"
+    else:
+        # À défaut d'une récurrence liée, une ligne réellement saisie aux deux
+        # semaines est considérée comme un budget sur 26 paies. Sans date
+        # d'ancrage fiable, on garde la valeur prudente de 2 paies.
+        has_biweekly_income = any(
+            row["input_frequency"] == "biweekly"
+            for row in income_rows
+        )
+        if has_biweekly_income:
+            pay_dates = [month, month]
+            source = "fallback_2"
+
+    if pay_dates:
+        pay_count = len(pay_dates)
+        available_month = (
+            Decimal(summary["biweekly_remaining"])
+            * Decimal(pay_count)
+        )
+    else:
+        pay_count = 1 if income_rows else 0
+        available_month = Decimal(summary["monthly_remaining"])
+        source = "monthly"
+
+    return {
+        **summary,
+        "pay_count": pay_count,
+        "pay_dates": pay_dates,
+        "pay_count_source": source,
+        "remaining_per_pay": Decimal(summary["biweekly_remaining"]),
+        "available_month": available_month,
+    }
+
+
+def _fixed_budget_recurrence_ids(user_id, month_value):
+    rows = list_budget_items(
+        user_id,
+        month_value=month_value,
+        effective_only=True,
+    )
+    return {
+        int(row["recurrence_id"])
+        for row in rows
+        if row["item_type"] == "expense"
+        and row.get("recurrence_id")
+    }
+
+
+def dashboard_month_projection(
+    user_id,
+    month_value,
+    *,
+    today_value=None,
+    kpi_limit=12,
+):
+    """Tableau V1.10 : dépenses variables + capacité issue du Budget."""
+
+    projection = _dashboard_month_projection_v190(
+        user_id,
+        month_value,
+        today_value=today_value,
+        kpi_limit=max(int(kpi_limit), 1000),
+    )
+    fixed_recurrence_ids = _fixed_budget_recurrence_ids(
+        user_id,
+        month_value,
+    )
+
+    all_rows = []
+    variable_rows = []
+    for original in projection["transactions"]:
+        row = dict(original)
+        recurrence_id = row.get("recurrence_id")
+        is_fixed_budget = bool(
+            row["transaction_type"] == "expense"
+            and recurrence_id
+            and int(recurrence_id) in fixed_recurrence_ids
+        )
+        row["fixed_budget"] = is_fixed_budget
+        all_rows.append(row)
+        if (
+            row["transaction_type"] == "expense"
+            and not bool(row.get("budget_excluded"))
+            and not is_fixed_budget
+        ):
+            variable_rows.append(row)
+
+    realized_expenses = sum(
+        (
+            Decimal(row["amount"])
+            for row in variable_rows
+            if row.get("projection_bucket") == "realized"
+        ),
+        Decimal("0.00"),
+    )
+    upcoming_expenses = sum(
+        (
+            Decimal(row["amount"])
+            for row in variable_rows
+            if row.get("projection_bucket") == "upcoming"
+        ),
+        Decimal("0.00"),
+    )
+    total_expenses = realized_expenses + upcoming_expenses
+
+    fixed_realized = sum(
+        (
+            Decimal(row["amount"])
+            for row in all_rows
+            if row.get("fixed_budget")
+            and row.get("projection_bucket") == "realized"
+            and not bool(row.get("budget_excluded"))
+        ),
+        Decimal("0.00"),
+    )
+    fixed_upcoming = sum(
+        (
+            Decimal(row["amount"])
+            for row in all_rows
+            if row.get("fixed_budget")
+            and row.get("projection_bucket") == "upcoming"
+            and not bool(row.get("budget_excluded"))
+        ),
+        Decimal("0.00"),
+    )
+
+    visible_category_ids = {
+        int(row["id"])
+        for row in list_categories(user_id, include_inactive=True)
+        if bool(row.get("dashboard_visible", True))
+    }
+    visible_tag_ids = {
+        int(row["id"])
+        for row in list_tags(user_id, include_inactive=True)
+        if bool(row.get("dashboard_visible", True))
+    }
+
+    variable_upcoming = sorted(
+        (
+            row for row in variable_rows
+            if row.get("projection_bucket") == "upcoming"
+        ),
+        key=lambda row: (
+            row["transaction_date"],
+            str(row["description"]).casefold(),
+        ),
+    )
+
+    capacity = budget_capacity_summary(user_id, month_value)
+    remaining_available = (
+        Decimal(capacity["available_month"])
+        - total_expenses
+    )
+
+    # Les revenus demeurent dans les données du mois, mais ne sont plus un KPI
+    # du Tableau : ils servent au Budget et au calcul de capacité.
+    projection["transactions"] = all_rows
+    projection["upcoming_transactions"] = variable_upcoming
+    projection["realized"]["expenses"] = realized_expenses
+    projection["upcoming"]["expenses"] = upcoming_expenses
+    projection["upcoming"]["count"] = len(variable_upcoming)
+    projection["total"]["expenses"] = total_expenses
+    projection["kpis"]["expense"] = _projection_kpis(
+        variable_rows,
+        "expense",
+        limit=kpi_limit,
+        visible_category_ids=visible_category_ids,
+        visible_tag_ids=visible_tag_ids,
+    )
+    projection["fixed_budget"] = {
+        "realized": fixed_realized,
+        "upcoming": fixed_upcoming,
+        "total": fixed_realized + fixed_upcoming,
+        "recurrence_ids": sorted(fixed_recurrence_ids),
+    }
+    projection["capacity"] = capacity
+    projection["remaining_available"] = remaining_available
+    return projection
+
+
+def _periods_per_year(unit, interval):
+    interval = max(1, int(interval or 1))
+    if unit == "day":
+        return Decimal("365") / Decimal(interval)
+    if unit == "week":
+        return Decimal("52") / Decimal(interval)
+    if unit == "month":
+        return Decimal("12") / Decimal(interval)
+    if unit == "year":
+        return Decimal("1") / Decimal(interval)
+    return Decimal("12")
+
+
+def _automatic_installment_amount(
+    principal,
+    remaining_count,
+    annual_interest_rate,
+    fees_total,
+    frequency_unit,
+    frequency_interval,
+):
+    principal = Decimal(principal) + Decimal(fees_total)
+    remaining_count = int(remaining_count)
+    if remaining_count <= 0:
+        return Decimal("0.00")
+    annual_rate = Decimal(annual_interest_rate) / Decimal("100")
+    if annual_rate <= 0:
+        return (principal / Decimal(remaining_count)).quantize(
+            Decimal("0.01")
+        )
+    periods = _periods_per_year(
+        frequency_unit,
+        frequency_interval,
+    )
+    periodic = annual_rate / periods
+    # Decimal power with an integer exponent is deterministic here.
+    factor = (Decimal("1") + periodic) ** (-remaining_count)
+    payment = principal * periodic / (Decimal("1") - factor)
+    return payment.quantize(Decimal("0.01"))
+
+
+def _plan_transaction_note(plan, installment_number):
+    pieces = [
+        f"Versement {installment_number}/{plan['total_installments']}",
+        str(plan.get("provider_name") or "").strip(),
+    ]
+    if plan.get("note"):
+        pieces.append(str(plan["note"]).strip())
+    return " — ".join(piece for piece in pieces if piece)[:1000]
+
+
+def _rebuild_installment_transactions(cur, user_id, plan_id):
+    cur.execute(
+        """
+        SELECT *
+        FROM finance_installment_plans
+        WHERE id=%s AND user_id=%s
+        FOR UPDATE;
+        """,
+        (plan_id, user_id),
+    )
+    plan = cur.fetchone()
+    if not plan:
+        raise ValueError("Plan de financement introuvable.")
+
+    # Les versements déjà confirmés font partie de l'historique réel et ne sont
+    # jamais reconstruits. Les prévisions, elles, sont régénérées.
+    cur.execute(
+        """
+        SELECT installment_number, amount
+        FROM finance_transactions
+        WHERE user_id=%s
+          AND installment_plan_id=%s
+          AND status='confirmed';
+        """,
+        (user_id, plan_id),
+    )
+    confirmed_rows = cur.fetchall()
+    confirmed_numbers = {
+        int(row["installment_number"])
+        for row in confirmed_rows
+        if row.get("installment_number") is not None
+    }
+    confirmed_amount = sum(
+        (Decimal(row["amount"]) for row in confirmed_rows),
+        Decimal("0.00"),
+    )
+
+    cur.execute(
+        """
+        DELETE FROM finance_transactions
+        WHERE user_id=%s
+          AND installment_plan_id=%s
+          AND status='planned'
+          AND reconciliation_status='unreconciled';
+        """,
+        (user_id, plan_id),
+    )
+
+    if not plan["is_active"]:
+        return
+
+    total = int(plan["total_installments"])
+    baseline_completed = int(plan["completed_installments"])
+    if baseline_completed >= total or not plan.get("next_due_date"):
+        return
+
+    cur.execute(
+        """
+        SELECT tag_id
+        FROM finance_installment_plan_tags
+        WHERE plan_id=%s
+        ORDER BY tag_id;
+        """,
+        (plan_id,),
+    )
+    tag_ids = [int(row["tag_id"]) for row in cur.fetchall()]
+
+    remaining_numbers = [
+        number
+        for number in range(baseline_completed + 1, total + 1)
+        if number not in confirmed_numbers
+    ]
+    if not remaining_numbers:
+        return
+
+    base_due = plan["next_due_date"]
+    standard_amount = Decimal(plan["installment_amount"])
+    zero_cost = (
+        Decimal(plan["annual_interest_rate"]) == 0
+        and Decimal(plan["fees_total"]) == 0
+    )
+    balance_after_confirmed = max(
+        Decimal("0.00"),
+        Decimal(plan["remaining_balance"]) - confirmed_amount,
+    )
+
+    for position, installment_number in enumerate(remaining_numbers):
+        offset = installment_number - (baseline_completed + 1)
+        due = base_due
+        for _ in range(offset):
+            due = _next_date(
+                due,
+                plan["frequency_unit"],
+                int(plan["frequency_interval"]),
+            )
+
+        amount = standard_amount
+        if zero_cost and position == len(remaining_numbers) - 1:
+            previous_count = max(0, len(remaining_numbers) - 1)
+            adjusted = (
+                balance_after_confirmed
+                - standard_amount * Decimal(previous_count)
+            )
+            if adjusted > 0:
+                amount = adjusted.quantize(Decimal("0.01"))
+
+        cur.execute(
+            """
+            INSERT INTO finance_transactions (
+                user_id,
+                transaction_date,
+                transaction_type,
+                amount,
+                description,
+                category_id,
+                note,
+                status,
+                payment_method_id,
+                reconciliation_status,
+                budget_excluded,
+                bank_programmed,
+                reminder_enabled,
+                reminder_time,
+                installment_plan_id,
+                installment_number
+            )
+            VALUES (
+                %s,%s,'expense',%s,%s,%s,%s,'planned',%s,
+                'unreconciled',%s,FALSE,FALSE,'09:00',%s,%s
+            )
+            RETURNING id;
+            """,
+            (
+                user_id,
+                due,
+                amount,
+                plan["description"],
+                plan.get("category_id"),
+                _plan_transaction_note(plan, installment_number),
+                plan.get("payment_method_id"),
+                bool(plan.get("budget_excluded")),
+                plan_id,
+                installment_number,
+            ),
+        )
+        transaction_id = int(cur.fetchone()["id"])
+        for tag_id in tag_ids:
+            cur.execute(
+                """
+                INSERT INTO finance_transaction_tags (
+                    transaction_id,
+                    tag_id
+                )
+                VALUES (%s,%s)
+                ON CONFLICT DO NOTHING;
+                """,
+                (transaction_id, tag_id),
+            )
+
+
+def save_installment_plan(
+    user_id,
+    *,
+    plan_type,
+    provider_name,
+    description,
+    original_amount,
+    total_installments,
+    next_due_date,
+    payment_method_id,
+    category_id=None,
+    tag_ids=None,
+    purchase_date=None,
+    completed_installments=0,
+    remaining_balance=None,
+    installment_amount=None,
+    annual_interest_rate=0,
+    fees_total=0,
+    frequency_unit="month",
+    frequency_interval=1,
+    budget_excluded=False,
+    note=None,
+    plan_id=None,
+):
+    if plan_type not in INSTALLMENT_PLAN_TYPES:
+        raise ValueError("Type de financement invalide.")
+    provider_name = _text(
+        provider_name,
+        "Le commerçant ou programme",
+        120,
+        True,
+    )
+    description = _text(description, "La description", 160, True)
+    original = _money(original_amount)
+    try:
+        total_count = int(total_installments)
+        completed_count = int(completed_installments or 0)
+    except (TypeError, ValueError) as error:
+        raise ValueError("Le nombre de versements est invalide.") from error
+    if total_count < 1 or total_count > 1200:
+        raise ValueError("Le nombre total de versements doit être entre 1 et 1200.")
+    if completed_count < 0 or completed_count > total_count:
+        raise ValueError("Le nombre de versements déjà effectués est invalide.")
+
+    purchase = _optional_date_value(purchase_date, "La date d’achat")
+    next_due = _optional_date_value(
+        next_due_date,
+        "La prochaine échéance",
+    )
+    if completed_count < total_count and next_due is None:
+        raise ValueError("Indiquez la date du prochain versement.")
+
+    interest_rate = _decimal_value(
+        annual_interest_rate,
+        "Le taux d’intérêt",
+        allow_blank=True,
+    ) or Decimal("0.00")
+    if interest_rate < 0:
+        raise ValueError("Le taux d’intérêt ne peut pas être négatif.")
+    fees = _decimal_value(
+        fees_total,
+        "Les frais",
+        allow_blank=True,
+    ) or Decimal("0.00")
+    if fees < 0:
+        raise ValueError("Les frais ne peuvent pas être négatifs.")
+
+    if frequency_unit not in FREQUENCY_UNITS:
+        raise ValueError("Fréquence invalide.")
+    try:
+        interval = int(frequency_interval or 1)
+    except (TypeError, ValueError) as error:
+        raise ValueError("L’intervalle de fréquence est invalide.") from error
+    if interval < 1 or interval > 365:
+        raise ValueError("L’intervalle de fréquence est invalide.")
+
+    remaining_count = total_count - completed_count
+    if remaining_balance in (None, ""):
+        if completed_count == 0:
+            remaining = original
+        else:
+            remaining = (
+                original
+                * Decimal(remaining_count)
+                / Decimal(total_count)
+            ).quantize(Decimal("0.01"))
+    else:
+        remaining = _money(
+            remaining_balance,
+            allow_zero=(remaining_count == 0),
+        )
+
+    if remaining_count == 0:
+        remaining = Decimal("0.00")
+
+    if installment_amount in (None, ""):
+        payment = _automatic_installment_amount(
+            remaining,
+            remaining_count,
+            interest_rate,
+            fees,
+            frequency_unit,
+            interval,
+        )
+        if payment <= 0 and remaining_count:
+            raise ValueError("Le montant du versement ne peut pas être calculé.")
+    else:
+        payment = _money(installment_amount)
+
+    note = _text(note, "La note", 1000)
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            tags = _validate_links(cur, user_id, category_id, tag_ids)
+            method_id = _validate_payment_method(
+                cur,
+                user_id,
+                payment_method_id,
+            )
+            if method_id is None:
+                raise ValueError("Choisissez le mode de paiement des versements.")
+            cur.execute(
+                """
+                SELECT method_type
+                FROM finance_payment_methods
+                WHERE id=%s AND user_id=%s;
+                """,
+                (method_id, user_id),
+            )
+            method = cur.fetchone()
+            if plan_type == "credit_card" and (
+                not method or method["method_type"] != "credit_card"
+            ):
+                raise ValueError(
+                    "Un plan de versements sur carte doit être associé à une carte de crédit."
+                )
+
+            is_active = completed_count < total_count
+            if plan_id:
+                cur.execute(
+                    """
+                    UPDATE finance_installment_plans
+                    SET plan_type=%s,
+                        provider_name=%s,
+                        description=%s,
+                        original_amount=%s,
+                        purchase_date=%s,
+                        total_installments=%s,
+                        completed_installments=%s,
+                        remaining_balance=%s,
+                        installment_amount=%s,
+                        annual_interest_rate=%s,
+                        fees_total=%s,
+                        frequency_unit=%s,
+                        frequency_interval=%s,
+                        next_due_date=%s,
+                        payment_method_id=%s,
+                        category_id=%s,
+                        budget_excluded=%s,
+                        note=%s,
+                        is_active=%s,
+                        updated_at=NOW()
+                    WHERE id=%s AND user_id=%s;
+                    """,
+                    (
+                        plan_type,
+                        provider_name,
+                        description,
+                        original,
+                        purchase,
+                        total_count,
+                        completed_count,
+                        remaining,
+                        payment,
+                        interest_rate,
+                        fees,
+                        frequency_unit,
+                        interval,
+                        next_due,
+                        method_id,
+                        category_id,
+                        bool(budget_excluded),
+                        note,
+                        is_active,
+                        plan_id,
+                        user_id,
+                    ),
+                )
+                if cur.rowcount == 0:
+                    raise ValueError("Plan de financement introuvable.")
+                saved_id = int(plan_id)
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO finance_installment_plans (
+                        user_id,
+                        plan_type,
+                        provider_name,
+                        description,
+                        original_amount,
+                        purchase_date,
+                        total_installments,
+                        completed_installments,
+                        remaining_balance,
+                        installment_amount,
+                        annual_interest_rate,
+                        fees_total,
+                        frequency_unit,
+                        frequency_interval,
+                        next_due_date,
+                        payment_method_id,
+                        category_id,
+                        budget_excluded,
+                        note,
+                        is_active
+                    )
+                    VALUES (
+                        %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                        %s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                    )
+                    RETURNING id;
+                    """,
+                    (
+                        user_id,
+                        plan_type,
+                        provider_name,
+                        description,
+                        original,
+                        purchase,
+                        total_count,
+                        completed_count,
+                        remaining,
+                        payment,
+                        interest_rate,
+                        fees,
+                        frequency_unit,
+                        interval,
+                        next_due,
+                        method_id,
+                        category_id,
+                        bool(budget_excluded),
+                        note,
+                        is_active,
+                    ),
+                )
+                saved_id = int(cur.fetchone()["id"])
+
+            cur.execute(
+                "DELETE FROM finance_installment_plan_tags WHERE plan_id=%s;",
+                (saved_id,),
+            )
+            for tag_id in tags:
+                cur.execute(
+                    """
+                    INSERT INTO finance_installment_plan_tags (plan_id, tag_id)
+                    VALUES (%s,%s);
+                    """,
+                    (saved_id, tag_id),
+                )
+
+            _rebuild_installment_transactions(cur, user_id, saved_id)
+            conn.commit()
+            return saved_id
+
+
+def list_installment_plans(user_id, include_inactive=True):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    plan.*,
+                    payment_method.name AS payment_method_name,
+                    payment_method.method_type AS payment_method_type,
+                    CASE
+                        WHEN parent.id IS NULL THEN category.name
+                        ELSE parent.name || ' › ' || category.name
+                    END AS category_full_name,
+                    COALESCE(
+                        ARRAY_AGG(tag.id ORDER BY tag.name)
+                        FILTER (WHERE tag.id IS NOT NULL),
+                        ARRAY[]::BIGINT[]
+                    ) AS tag_ids,
+                    COALESCE(
+                        ARRAY_AGG(tag.name ORDER BY tag.name)
+                        FILTER (WHERE tag.id IS NOT NULL),
+                        ARRAY[]::TEXT[]
+                    ) AS tag_names,
+                    (
+                        SELECT COUNT(*)
+                        FROM finance_transactions AS tx
+                        WHERE tx.installment_plan_id=plan.id
+                          AND tx.status='confirmed'
+                    ) AS confirmed_tracked_count,
+                    (
+                        SELECT COUNT(*)
+                        FROM finance_transactions AS tx
+                        WHERE tx.installment_plan_id=plan.id
+                          AND tx.status='planned'
+                    ) AS planned_count,
+                    COALESCE((
+                        SELECT SUM(tx.amount)
+                        FROM finance_transactions AS tx
+                        WHERE tx.installment_plan_id=plan.id
+                          AND tx.status='confirmed'
+                    ), 0) AS confirmed_tracked_amount
+                FROM finance_installment_plans AS plan
+                LEFT JOIN finance_payment_methods AS payment_method
+                    ON payment_method.id=plan.payment_method_id
+                LEFT JOIN finance_categories AS category
+                    ON category.id=plan.category_id
+                LEFT JOIN finance_categories AS parent
+                    ON parent.id=category.parent_id
+                LEFT JOIN finance_installment_plan_tags AS plan_tag
+                    ON plan_tag.plan_id=plan.id
+                LEFT JOIN finance_tags AS tag
+                    ON tag.id=plan_tag.tag_id
+                WHERE plan.user_id=%s
+                  AND (%s OR plan.is_active=TRUE)
+                GROUP BY
+                    plan.id,
+                    payment_method.id,
+                    payment_method.name,
+                    payment_method.method_type,
+                    category.id,
+                    parent.id,
+                    parent.name
+                ORDER BY
+                    plan.is_active DESC,
+                    plan.next_due_date NULLS LAST,
+                    LOWER(plan.provider_name),
+                    LOWER(plan.description),
+                    plan.id;
+                """,
+                (user_id, include_inactive),
+            )
+            result = []
+            for raw in cur.fetchall():
+                row = dict(raw)
+                confirmed_count = int(row.get("confirmed_tracked_count") or 0)
+                completed = min(
+                    int(row["total_installments"]),
+                    int(row["completed_installments"]) + confirmed_count,
+                )
+                row["display_completed_installments"] = completed
+                row["display_remaining_installments"] = max(
+                    0,
+                    int(row["total_installments"]) - completed,
+                )
+                confirmed_amount = Decimal(
+                    row.get("confirmed_tracked_amount") or 0
+                )
+                if (
+                    Decimal(row["annual_interest_rate"]) == 0
+                    and Decimal(row["fees_total"]) == 0
+                ):
+                    row["estimated_remaining_balance"] = max(
+                        Decimal("0.00"),
+                        Decimal(row["remaining_balance"]) - confirmed_amount,
+                    )
+                else:
+                    # Avec intérêts/frais, le capital restant réel dépend du
+                    # relevé du fournisseur; on conserve donc le solde saisi.
+                    row["estimated_remaining_balance"] = Decimal(
+                        row["remaining_balance"]
+                    )
+                result.append(row)
+            return result
+
+
+def get_installment_plan(user_id, plan_id):
+    rows = list_installment_plans(user_id, include_inactive=True)
+    for row in rows:
+        if int(row["id"]) == int(plan_id):
+            return row
+    raise ValueError("Plan de financement introuvable.")
+
+
+def toggle_installment_plan(user_id, plan_id, is_active):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE finance_installment_plans
+                SET is_active=%s, updated_at=NOW()
+                WHERE id=%s AND user_id=%s;
+                """,
+                (bool(is_active), plan_id, user_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError("Plan de financement introuvable.")
+            if is_active:
+                _rebuild_installment_transactions(cur, user_id, plan_id)
+            else:
+                cur.execute(
+                    """
+                    DELETE FROM finance_transactions
+                    WHERE user_id=%s
+                      AND installment_plan_id=%s
+                      AND status='planned'
+                      AND reconciliation_status='unreconciled';
+                    """,
+                    (user_id, plan_id),
+                )
+            conn.commit()
+
+
+def delete_installment_plan(user_id, plan_id):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id
+                FROM finance_installment_plans
+                WHERE id=%s AND user_id=%s
+                FOR UPDATE;
+                """,
+                (plan_id, user_id),
+            )
+            if not cur.fetchone():
+                raise ValueError("Plan de financement introuvable.")
+            cur.execute(
+                """
+                DELETE FROM finance_transactions
+                WHERE user_id=%s
+                  AND installment_plan_id=%s
+                  AND status='planned'
+                  AND reconciliation_status='unreconciled';
+                """,
+                (user_id, plan_id),
+            )
+            # Les versements déjà confirmés sont conservés dans l'historique.
+            cur.execute(
+                """
+                UPDATE finance_transactions
+                SET installment_plan_id=NULL,
+                    installment_number=NULL,
+                    updated_at=NOW()
+                WHERE user_id=%s
+                  AND installment_plan_id=%s
+                  AND status='confirmed';
+                """,
+                (user_id, plan_id),
+            )
+            cur.execute(
+                """
+                DELETE FROM finance_installment_plans
+                WHERE id=%s AND user_id=%s;
+                """,
+                (plan_id, user_id),
+            )
+            conn.commit()
+
+
+def export_finances(user_id):
+    csv_bytes, json_bytes = _export_finances_v190(user_id)
+    try:
+        payload = json.loads(json_bytes.decode("utf-8"))
+    except Exception:
+        return csv_bytes, json_bytes
+
+    def serial(value):
+        if isinstance(value, (date, datetime, time, Decimal)):
+            return str(value)
+        if isinstance(value, list):
+            return [serial(item) for item in value]
+        if isinstance(value, dict):
+            return {key: serial(item) for key, item in value.items()}
+        return value
+
+    payload["version"] = "1.10.0"
+    payload["installment_plans"] = [
+        serial(dict(row))
+        for row in list_installment_plans(user_id, include_inactive=True)
+    ]
+    payload["budget_items"] = [
+        serial(dict(row))
+        for row in list_budget_items(user_id, include_inactive=True)
+    ]
+    return (
+        csv_bytes,
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            indent=2,
+        ).encode("utf-8"),
     )

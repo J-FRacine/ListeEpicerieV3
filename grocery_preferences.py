@@ -17,6 +17,9 @@ def normalized_text(value):
     """Clé de tri et de recherche insensible à la casse et aux accents."""
 
     text = str(value or "").strip().casefold()
+    # Les ligatures courantes ne sont pas toutes décomposées de façon identique
+    # selon les versions Unicode. On les normalise explicitement avant NFKD.
+    text = text.replace("œ", "oe").replace("æ", "ae")
     return "".join(
         character
         for character in unicodedata.normalize("NFKD", text)

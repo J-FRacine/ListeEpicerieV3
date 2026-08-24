@@ -49,6 +49,7 @@ from feedback_data import (
 )
 from finances import finances_panel
 from finances_data import init_finances_schema
+from global_backup import download_global_backup
 from grocery_preferences import (
     categories_are_enabled,
     init_grocery_preferences_schema,
@@ -1653,6 +1654,25 @@ def show_portal(user):
             )
 
         portal_section(
+            "Données et sécurité",
+            (
+                "Créez une copie privée de vos données sans ouvrir chaque application séparément."
+            ),
+        )
+
+        with ui.element("div").classes("jf-card-grid"):
+            portal_action_card(
+                title="Sauvegarder toutes mes données",
+                description=(
+                    "Crée une seule archive ZIP avec les données de toutes les "
+                    "applications auxquelles votre compte a accès."
+                ),
+                icon="archive",
+                action_label="Créer la sauvegarde",
+                on_click=lambda: download_global_backup(user),
+            )
+
+        portal_section(
             "Aide et démarrage",
             (
                 "Comprenez l’organisation des données et "
@@ -2709,25 +2729,10 @@ init_db()
 init_grocery_preferences_schema()
 init_app_access_schema()
 init_blood_pressure_schema()
-
-# Les deux initialisations modifiées récemment sont non bloquantes :
-# si PostgreSQL refuse une migration facultative, le Portail doit quand même
-# démarrer. L’erreur complète est imprimée et Finances réessaie son schéma
-# lorsqu’on ouvre l’application.
-try:
-    init_blood_pressure_push_schema()
-except Exception:
-    print("JF Apps — erreur d’initialisation Web Push :")
-    traceback.print_exc()
-
+init_blood_pressure_push_schema()
 init_rpg_character_schema()
 init_feedback_schema()
-
-try:
-    init_finances_schema()
-except Exception:
-    print("JF Apps — erreur d’initialisation Finances :")
-    traceback.print_exc()
+init_finances_schema()
 
 app.on_startup(
     start_blood_pressure_push_monitor

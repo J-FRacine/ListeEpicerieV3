@@ -102,6 +102,12 @@ Sur téléphone, l’en-tête est volontairement réduit à :
 
 Le menu Plus contient Commentaires, Aide, Mon compte, Nouveautés, Installer JF Apps et Déconnexion. Un indicateur peut signaler les commentaires non lus.
 
+### Sauvegarder toutes mes données
+
+Le Portail contient maintenant l’action **Sauvegarder toutes mes données**. Elle crée en une seule opération une archive ZIP privée contenant les données de toutes les applications auxquelles le compte a accès. Les fichiers sont séparés par application et un `manifest.json` conserve la date de sauvegarde et les versions.
+
+Pour la Liste d’épicerie, seules les familles accessibles au compte sont incluses. Aucune donnée d’une famille ou d’un utilisateur non autorisé n’est exportée. La restauration globale contrôlée est prévue séparément; cette version fournit d’abord la sauvegarde complète.
+
 ### Applications
 
 La grille **Applications** du Portail contient :
@@ -154,7 +160,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.9.0",
+        "title": "Finances — V1.10.0",
         "icon": "account_balance_wallet",
         "caption": "Budget, trésorerie, dépenses, prévisions et conciliation",
         "keywords": (
@@ -178,13 +184,33 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
         "content": """
 ### Objectif de Finances
 
-**Finances V1.9.0** améliore surtout la **conciliation**. Les comptes bancaires peuvent être conciliés directement dans l’onglet Compte avec une case **Vu**, tandis que la conciliation des cartes conserve maintenant la sélection pendant l’ajout ou la modification d’une transaction, permet de trier par date et sait fermer un **écart justifié** sans le faire réapparaître au relevé suivant. Les paiements de cartes liés et le Tableau compact de V1.8 sont conservés.
+**Finances V1.10.0** clarifie le rôle des deux écrans principaux : **Budget = dépenses fixes et capacité disponible**; **Tableau = suivi des dépenses variables du mois**. La conciliation améliorée de V1.9 reste entièrement conservée.
+
+Le Tableau affiche maintenant le **Reste par paie**, le **Disponible ce mois** selon le nombre de paies détectées, les dépenses variables réalisées et à venir, leur total prévu et le **Reste disponible ce mois**. Le bloc KPI revenus est retiré du Tableau seulement; les revenus restent présents dans l’Historique, les récurrences et les calculs du Budget.
 
 Le correctif de démarrage introduit en V1.6.2 est conservé : une erreur propre à la mise à niveau Finances ou aux rappels Web Push ne doit pas empêcher le Portail JF Apps complet de démarrer.
 
 **Finances** sert au suivi personnel des dépenses, des revenus, des prévisions, du budget global et de la trésorerie. La V1.6 a ajouté la vue de compte bancaire et le budget global; la V1.6.1 a ajouté le lien Budget–Récurrence, les transactions programmées à la banque et les rappels Web Push.
 
 L’application demeure volontairement plus simple qu’une comptabilité complète : elle ne demande pas d’écritures comptables en partie double et ne transforme pas les mouvements personnels en système comptable professionnel.
+
+### Budget fixe et capacité disponible
+
+L’onglet **Budget** sert principalement aux revenus récurrents et aux dépenses fixes. Chaque poste peut avoir une **date de début** et une **date de fin** facultatives. Cela permet, par exemple, de conserver un loyer valide jusqu’au 30 juin et un nouveau montant à partir du 1er juillet sans réécrire les mois passés.
+
+Le Budget calcule le reste mensuel et le **Reste par paie**. Lorsqu’un revenu aux deux semaines est lié à une récurrence, JF Apps utilise les dates réelles/projetées pour déterminer si le mois affiché contient **2 ou 3 paies**. Le Tableau reçoit alors le **Disponible ce mois** correspondant.
+
+### Tableau — dépenses variables
+
+Le **Tableau** est le poste de pilotage des dépenses variables. Les dépenses fixes déjà représentées par un poste Budget lié à une récurrence ne sont pas comptées une deuxième fois dans ces KPI variables.
+
+Les KPI de dépenses utilisent **Réalisé / À venir / Total prévu** et affichent au bas des catégories une ligne **Total des KPI affichés**. Les étiquettes peuvent compter une même transaction plusieurs fois lorsqu’elle possède plusieurs étiquettes; leur total doit donc être interprété comme un total d’affichage.
+
+### Financements et achats en versements
+
+L’onglet **Financements** permet de documenter un financement de magasin ou un plan de versements offert par une carte de crédit, avec ou sans intérêts/frais. Il est possible de saisir un plan neuf ou déjà en cours : montant initial, nombre total de versements, versements déjà effectués, solde restant, prochaine échéance, fréquence, montant du versement, taux/frais, mode de paiement, catégorie et étiquettes.
+
+Par défaut, chaque versement futur est une **vraie dépense prévue** : il apparaît dans les KPI du mois selon sa catégorie et réduit le montant disponible. Le montant initial complet n’est pas ajouté en plus des versements, ce qui évite le double comptage. Un financement peut exceptionnellement être marqué **Hors budget**. Les anciennes mensualités d’un plan déjà commencé ne sont pas recréées automatiquement.
 
 ### Confidentialité
 
@@ -1153,7 +1179,7 @@ Les produits souvent ajoutés peuvent être proposés comme raccourcis. Un touch
 
 Le tri **Alphabétique** est insensible aux majuscules et aux accents.
 
-Par exemple, Café, Céréales et Concombre sont classés selon leurs lettres normales, sans repousser les mots accentués à la fin. L’orthographe originale reste affichée.
+Par exemple, Café, Céréales et Concombre sont classés selon leurs lettres normales, sans repousser les mots accentués à la fin. Les ligatures courantes sont aussi normalisées : Œufs est trié comme Oeufs. L’orthographe originale reste affichée.
 """,
     },
     {

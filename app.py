@@ -1656,20 +1656,20 @@ def show_portal(user):
         portal_section(
             "Données et sécurité",
             (
-                "Créez une copie privée de vos données sans ouvrir chaque application séparément."
+                "Les sauvegardes et outils d’entretien sont regroupés dans le Centre de maintenance."
             ),
         )
 
         with ui.element("div").classes("jf-card-grid"):
             portal_action_card(
-                title="Sauvegarder toutes mes données",
+                title="Centre de maintenance",
                 description=(
-                    "Crée une seule archive ZIP avec les données de toutes les "
-                    "applications auxquelles votre compte a accès."
+                    "Sauvegardez toutes vos données en une action. Les outils de "
+                    "diagnostic avancés restent réservés aux administrateurs."
                 ),
-                icon="archive",
-                action_label="Créer la sauvegarde",
-                on_click=lambda: download_global_backup(user),
+                icon="health_and_safety",
+                action_label="Ouvrir",
+                on_click=lambda: ui.navigate.to("/?tab=maintenance"),
             )
 
         portal_section(
@@ -1821,18 +1821,6 @@ def show_portal(user):
                     ),
                 )
 
-                portal_action_card(
-                    title="Centre de maintenance",
-                    description=(
-                        "Diagnostiquez l’intégrité et "
-                        "l’organisation de la base."
-                    ),
-                    icon="health_and_safety",
-                    action_label="Diagnostiquer",
-                    on_click=lambda: ui.navigate.to(
-                        "/?tab=maintenance"
-                    ),
-                )
 
 
 def ensure_valid_family(user_id):
@@ -2606,15 +2594,42 @@ def index(
         return
 
     if normalized_tab in MAINTENANCE_TABS:
-        if not user["is_admin"]:
-            ui.navigate.to("/?tab=portail")
-            return
-
         set_current_tab("maintenance")
 
         with page_container():
             portal_header("Centre de maintenance")
-            maintenance_panel()
+
+            portal_section(
+                "Sauvegarde globale",
+                (
+                    "Créez une archive ZIP privée regroupant les données des "
+                    "applications auxquelles votre compte a accès."
+                ),
+            )
+            with ui.element("div").classes("jf-card-grid"):
+                portal_action_card(
+                    title="Sauvegarder toutes mes données",
+                    description=(
+                        "Crée une archive unique avec un manifest et des dossiers "
+                        "séparés par application."
+                    ),
+                    icon="archive",
+                    action_label="Créer la sauvegarde",
+                    on_click=lambda: download_global_backup(user),
+                )
+
+            if user["is_admin"]:
+                portal_section(
+                    "Diagnostic administrateur",
+                    (
+                        "Vérifiez l’intégrité et l’organisation de la base de données."
+                    ),
+                )
+                maintenance_panel()
+            else:
+                ui.label(
+                    "Les outils de diagnostic de la base sont réservés aux administrateurs."
+                ).classes("text-sm text-gray-500")
 
         return
 

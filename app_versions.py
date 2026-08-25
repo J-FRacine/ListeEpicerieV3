@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-PORTAL_VERSION = "1.3.0"
+PORTAL_VERSION = "1.3.1"
 
 APP_LABELS = {
     "portal": "Portail JF Apps",
@@ -15,12 +15,48 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.2",
     "blood_pressure": "1.2.1",
-    "finances": "1.10.0",
+    "finances": "1.10.1",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.10.1",
+        "date": "2026-08-25",
+        "title": "Finances — correctifs Budget, report mensuel et récurrence intégrée",
+        "summary": (
+            "Le Budget peut créer sa récurrence directement, synchroniser sa date de fin "
+            "et le Tableau peut reporter le solde variable d’un mois au suivant."
+        ),
+        "changes": [
+            "Correction PostgreSQL lors de l’ajout d’un nouveau poste Budget : les validations ne transmettent plus un NULL non typé dans la condition d’exclusion de l’ID.",
+            "Les montants négatifs des KPI affichent maintenant explicitement le signe moins, notamment Reste disponible ce mois.",
+            "Nouvelle option Reporter le solde positif ou négatif au mois suivant; l’activation commence au mois affiché et le report reçu est montré séparément du disponible de base.",
+            "Le Tableau distingue Disponible de base, Report du mois précédent et Disponible ajusté lorsque le report mensuel est actif.",
+            "Dans un poste Budget, l’option + Créer une nouvelle récurrence permet de définir la fréquence, les dates, le mode de paiement, la catégorie, les étiquettes, la confirmation, la programmation bancaire et le rappel sans quitter la fenêtre.",
+            "La création du poste Budget et de sa nouvelle récurrence est atomique : si l’enregistrement échoue, aucune récurrence orpheline n’est conservée.",
+            "Lorsque la synchronisation est active, la date de fin du poste Budget est appliquée à la récurrence liée; seules les occurrences prévues au-delà de cette date sont retirées, jamais les transactions confirmées.",
+            "Le libellé de synchronisation précise maintenant qu’il couvre le montant et la date de fin.",
+            "Aucun script SQL manuel ni nouvelle dépendance n’est requis.",
+        ],
+    },
+    {
+        "app_key": "portal",
+        "version": "1.3.1",
+        "date": "2026-08-25",
+        "title": "JF Apps — sauvegarde globale dans le Centre de maintenance",
+        "summary": (
+            "La sauvegarde globale est déplacée vers le Centre de maintenance afin de "
+            "regrouper les fonctions d’entretien sans encombrer l’accueil."
+        ),
+        "changes": [
+            "L’accueil n’affiche plus directement le bouton Sauvegarder toutes mes données; il ouvre maintenant le Centre de maintenance.",
+            "Le Centre de maintenance est accessible à tous les utilisateurs pour leur sauvegarde globale privée.",
+            "Les diagnostics avancés de la base restent visibles uniquement pour les administrateurs.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.10.0",

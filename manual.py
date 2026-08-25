@@ -102,11 +102,11 @@ Sur téléphone, l’en-tête est volontairement réduit à :
 
 Le menu Plus contient Commentaires, Aide, Mon compte, Nouveautés, Installer JF Apps et Déconnexion. Un indicateur peut signaler les commentaires non lus.
 
-### Sauvegarder toutes mes données
+### Centre de maintenance et sauvegarde globale
 
-Le Portail contient maintenant l’action **Sauvegarder toutes mes données**. Elle crée en une seule opération une archive ZIP privée contenant les données de toutes les applications auxquelles le compte a accès. Les fichiers sont séparés par application et un `manifest.json` conserve la date de sauvegarde et les versions.
+L’action **Sauvegarder toutes mes données** se trouve maintenant dans le **Centre de maintenance**. Depuis l’accueil du Portail, ouvrez **Centre de maintenance**, puis utilisez **Créer la sauvegarde**. Une seule archive ZIP privée est créée avec les données des applications auxquelles le compte a accès. Les fichiers sont séparés par application et un `manifest.json` conserve la date de sauvegarde et les versions.
 
-Pour la Liste d’épicerie, seules les familles accessibles au compte sont incluses. Aucune donnée d’une famille ou d’un utilisateur non autorisé n’est exportée. La restauration globale contrôlée est prévue séparément; cette version fournit d’abord la sauvegarde complète.
+Le Centre de maintenance est accessible à tous les utilisateurs pour cette sauvegarde privée. Les diagnostics de la base de données restent réservés aux administrateurs. Pour la Liste d’épicerie, seules les familles accessibles au compte sont incluses. Aucune donnée d’une famille ou d’un utilisateur non autorisé n’est exportée. La restauration globale contrôlée reste une évolution future.
 
 ### Applications
 
@@ -160,7 +160,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.10.0",
+        "title": "Finances — V1.10.1",
         "icon": "account_balance_wallet",
         "caption": "Budget, trésorerie, dépenses, prévisions et conciliation",
         "keywords": (
@@ -184,7 +184,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
         "content": """
 ### Objectif de Finances
 
-**Finances V1.10.0** clarifie le rôle des deux écrans principaux : **Budget = dépenses fixes et capacité disponible**; **Tableau = suivi des dépenses variables du mois**. La conciliation améliorée de V1.9 reste entièrement conservée.
+**Finances V1.10.1** conserve et complète le principe directeur : **Budget = dépenses fixes et capacité disponible**; **Tableau = suivi des dépenses variables du mois**. La conciliation améliorée de V1.9 reste entièrement conservée.
 
 Le Tableau affiche maintenant le **Reste par paie**, le **Disponible ce mois** selon le nombre de paies détectées, les dépenses variables réalisées et à venir, leur total prévu et le **Reste disponible ce mois**. Le bloc KPI revenus est retiré du Tableau seulement; les revenus restent présents dans l’Historique, les récurrences et les calculs du Budget.
 
@@ -200,11 +200,19 @@ L’onglet **Budget** sert principalement aux revenus récurrents et aux dépens
 
 Le Budget calcule le reste mensuel et le **Reste par paie**. Lorsqu’un revenu aux deux semaines est lié à une récurrence, JF Apps utilise les dates réelles/projetées pour déterminer si le mois affiché contient **2 ou 3 paies**. Le Tableau reçoit alors le **Disponible ce mois** correspondant.
 
+Lors de l’ajout ou de la modification d’un poste Budget, **Récurrence associée** permet maintenant de choisir **+ Créer une nouvelle récurrence**. La fréquence, les dates, le mode de paiement, la catégorie, les étiquettes, le mode de confirmation, l’indicateur Programmé et le rappel peuvent être définis dans la même fenêtre. Le poste et sa récurrence sont enregistrés dans une seule transaction afin de ne pas laisser de récurrence orpheline en cas d’erreur.
+
+Lorsque **Synchroniser le montant et la date de fin avec la récurrence** est actif, le montant du poste suit la règle de récurrence et la date de fin du poste Budget est aussi appliquée à la récurrence. Si cette date est raccourcie, seules les occurrences **Prévues** situées après la nouvelle fin sont retirées; les transactions confirmées et l’historique ne sont jamais supprimés automatiquement.
+
 ### Tableau — dépenses variables
 
 Le **Tableau** est le poste de pilotage des dépenses variables. Les dépenses fixes déjà représentées par un poste Budget lié à une récurrence ne sont pas comptées une deuxième fois dans ces KPI variables.
 
 Les KPI de dépenses utilisent **Réalisé / À venir / Total prévu** et affichent au bas des catégories une ligne **Total des KPI affichés**. Les étiquettes peuvent compter une même transaction plusieurs fois lorsqu’elle possède plusieurs étiquettes; leur total doit donc être interprété comme un total d’affichage.
+
+L’option **Reporter le solde positif ou négatif au mois suivant** permet de conserver le résultat variable d’un mois. Lorsqu’elle est activée, le mois affiché devient le premier mois du cycle : il n’a pas de report entrant, mais son **Reste disponible ce mois** devient le report du mois suivant. Le Tableau montre alors séparément **Disponible de base**, **Report du mois précédent** et **Disponible ajusté ce mois**. Un report positif augmente la capacité du mois suivant; un report négatif la réduit.
+
+Les valeurs négatives des KPI affichent toujours explicitement le signe **-** en plus de leur couleur.
 
 ### Financements et achats en versements
 

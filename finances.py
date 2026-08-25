@@ -48,6 +48,7 @@ from finances_data import (
     get_or_create_finance_tag,
     get_card_payment_transfer,
     get_installment_plan,
+    get_finance_settings,
     get_reconciliation_session,
     get_transaction,
     goal_progress,
@@ -82,6 +83,7 @@ from finances_data import (
     save_tag,
     save_transaction,
     set_bank_transaction_seen,
+    set_month_carryover,
     set_category_dashboard_visible,
     set_tag_dashboard_visible,
     set_transaction_reconciliation,
@@ -98,6 +100,7 @@ from finances_data import (
 
 ADD_CATEGORY_OPTION = "__jf_add_category__"
 ADD_TAG_OPTION = "__jf_add_tag__"
+CREATE_RECURRENCE_OPTION = "__jf_create_recurrence__"
 
 
 FINANCE_CSS = r"""
@@ -2024,18 +2027,64 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                     ).classes("text-xs jf-muted")
 
                     pay_count = int(capacity.get("pay_count") or 0)
-                    with ui.element("div").classes("jf-finance-summary-grid"):
-                        values = (
-                            (
-                                "Reste par paie",
-                                capacity.get("remaining_per_pay", Decimal("0.00")),
-                                "jf-finance-income" if Decimal(capacity.get("remaining_per_pay", 0)) >= 0 else "jf-finance-expense",
-                            ),
+                    carry_enabled = bool(capacity.get("carry_enabled"))
+                    carry_in = Decimal(capacity.get("carry_in") or 0)
+                    base_available = Decimal(
+                        capacity.get(
+                            "available_month_base",
+                            capacity.get("available_month", 0),
+                        )
+                    )
+                    adjusted_available = Decimal(
+                        capacity.get("available_month", 0)
+                    )
+                    values = [
+                        (
+                            "Reste par paie",
+                            capacity.get("remaining_per_pay", Decimal("0.00")),
+                            "jf-finance-income"
+                            if Decimal(capacity.get("remaining_per_pay", 0)) >= 0
+                            else "jf-finance-expense",
+                        ),
+                    ]
+                    if carry_enabled:
+                        values.extend(
+                            [
+                                (
+                                    f"Disponible de base — {pay_count} paie(s)",
+                                    base_available,
+                                    "jf-finance-income"
+                                    if base_available >= 0
+                                    else "jf-finance-expense",
+                                ),
+                                (
+                                    "Report du mois précédent",
+                                    carry_in,
+                                    "jf-finance-income"
+                                    if carry_in >= 0
+                                    else "jf-finance-expense",
+                                ),
+                                (
+                                    "Disponible ajusté ce mois",
+                                    adjusted_available,
+                                    "jf-finance-income"
+                                    if adjusted_available >= 0
+                                    else "jf-finance-expense",
+                                ),
+                            ]
+                        )
+                    else:
+                        values.append(
                             (
                                 f"Disponible ce mois — {pay_count} paie(s)",
-                                capacity.get("available_month", Decimal("0.00")),
-                                "jf-finance-income" if Decimal(capacity.get("available_month", 0)) >= 0 else "jf-finance-expense",
-                            ),
+                                adjusted_available,
+                                "jf-finance-income"
+                                if adjusted_available >= 0
+                                else "jf-finance-expense",
+                            )
+                        )
+                    values.extend(
+                        [
                             (
                                 "Dépenses réalisées",
                                 projection["realized"]["expenses"],
@@ -2053,16 +2102,52 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             ),
                             (
                                 "Reste disponible ce mois",
-                                projection.get("remaining_available", Decimal("0.00")),
-                                "jf-finance-income" if Decimal(projection.get("remaining_available", 0)) >= 0 else "jf-finance-expense",
+                                projection.get(
+                                    "remaining_available", Decimal("0.00")
+                                ),
+                                "jf-finance-income"
+                                if Decimal(
+                                    projection.get("remaining_available", 0)
+                                ) >= 0
+                                else "jf-finance-expense",
                             ),
-                        )
+                        ]
+                    )
+                    with ui.element("div").classes("jf-finance-summary-grid"):
                         for label, value, css in values:
                             with ui.element("div").classes("jf-finance-summary"):
                                 ui.label(label).classes("jf-finance-summary-label")
-                                ui.label(_money(value)).classes(
+                                # Contrairement à _money(), _balance_money()
+                                # conserve explicitement le signe négatif.
+                                ui.label(_balance_money(value)).classes(
                                     "jf-finance-summary-value " + css
                                 )
+
+                    carry_toggle = ui.checkbox(
+                        "Reporter le solde positif ou négatif au mois suivant",
+                        value=carry_enabled,
+                    ).classes("text-sm")
+
+                    def change_month_carry(event):
+                        try:
+                            set_month_carryover(
+                                user_id,
+                                bool(event.value),
+                                month_state["value"],
+                            )
+                        except Exception as error:
+                            ui.notify(str(error), type="warning")
+                            return
+                        refresh_all()
+
+                    carry_toggle.on_value_change(change_month_carry)
+                    if carry_enabled and capacity.get("carry_start_month"):
+                        ui.label(
+                            "Report actif à partir de "
+                            + _month_label(capacity["carry_start_month"])
+                            + ". Le premier mois n’a pas de report entrant; "
+                            "son solde final alimente le mois suivant."
+                        ).classes("text-xs jf-muted")
 
                     if capacity.get("pay_dates"):
                         ui.label(
@@ -2956,7 +3041,14 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                 edit_id = None if clone_period else (row["id"] if row else None)
                 suggested_start = ""
                 if clone_period and source_row and source_row.get("effective_end"):
-                    suggested_start = (source_row["effective_end"] + timedelta(days=1)).isoformat()
+                    suggested_start = (
+                        source_row["effective_end"] + timedelta(days=1)
+                    ).isoformat()
+
+                recurrence_options = _recurrence_options(user_id)
+                recurrence_options[CREATE_RECURRENCE_OPTION] = (
+                    "+ Créer une nouvelle récurrence"
+                )
 
                 with ui.dialog() as dialog:
                     with ui.card().classes("w-full max-w-2xl p-4"):
@@ -2976,45 +3068,193 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         with ui.row().classes("w-full gap-2 flex-wrap"):
                             frequency_budget = ui.select(
                                 BUDGET_INPUT_FREQUENCIES,
-                                value=source_row["input_frequency"] if source_row else "monthly",
+                                value=(
+                                    source_row["input_frequency"]
+                                    if source_row else "monthly"
+                                ),
                                 label="Montant saisi en",
-                            ).props("dense outlined options-dense").classes("grow min-w-44")
+                            ).props(
+                                "dense outlined options-dense"
+                            ).classes("grow min-w-44")
                             amount_budget = ui.number(
                                 label="Montant",
-                                value=source_row["input_amount"] if source_row else None,
-                                min=.01, step=.01,
+                                value=(
+                                    source_row["input_amount"]
+                                    if source_row else None
+                                ),
+                                min=.01,
+                                step=.01,
                             ).props("dense outlined").classes("grow min-w-36")
                         biweekly_override = ui.number(
                             label="Montant par paie personnalisé — facultatif",
-                            value=source_row.get("biweekly_override") if source_row else None,
-                            min=.01, step=.01,
+                            value=(
+                                source_row.get("biweekly_override")
+                                if source_row else None
+                            ),
+                            min=.01,
+                            step=.01,
                         ).props("dense outlined clearable").classes("w-full")
                         ui.label(
-                            "Le Budget représente les revenus et dépenses fixes. Le reste calculé "
-                            "alimente automatiquement la capacité disponible du Tableau."
+                            "Le Budget représente les revenus et dépenses fixes. "
+                            "Le reste calculé alimente automatiquement la capacité "
+                            "disponible du Tableau."
                         ).classes("text-xs jf-muted")
                         with ui.row().classes("w-full gap-2 flex-wrap"):
                             effective_start = ui.input(
                                 label="Début — facultatif",
-                                value=(suggested_start or (source_row.get("effective_start").isoformat() if source_row and source_row.get("effective_start") else "")),
-                            ).props("type=date dense outlined clearable").classes("grow min-w-44")
+                                value=(
+                                    suggested_start
+                                    or (
+                                        source_row.get("effective_start").isoformat()
+                                        if source_row
+                                        and source_row.get("effective_start")
+                                        else ""
+                                    )
+                                ),
+                            ).props(
+                                "type=date dense outlined clearable"
+                            ).classes("grow min-w-44")
                             effective_end = ui.input(
                                 label="Fin — facultatif",
-                                value=("" if clone_period else (source_row.get("effective_end").isoformat() if source_row and source_row.get("effective_end") else "")),
-                            ).props("type=date dense outlined clearable").classes("grow min-w-44")
+                                value=(
+                                    ""
+                                    if clone_period
+                                    else (
+                                        source_row.get("effective_end").isoformat()
+                                        if source_row
+                                        and source_row.get("effective_end")
+                                        else ""
+                                    )
+                                ),
+                            ).props(
+                                "type=date dense outlined clearable"
+                            ).classes("grow min-w-44")
                         ui.label(
-                            "Exemple : ancien loyer jusqu’au 30 juin, nouveau loyer à partir du 1er juillet. "
-                            "Les mois passés conservent ainsi leur budget historique."
+                            "Exemple : ancien loyer jusqu’au 30 juin, nouveau loyer "
+                            "à partir du 1er juillet. Les mois passés conservent ainsi "
+                            "leur budget historique."
                         ).classes("text-xs jf-muted")
+
                         recurrence_budget = ui.select(
-                            _recurrence_options(user_id),
-                            value=source_row.get("recurrence_id") if source_row else None,
+                            recurrence_options,
+                            value=(
+                                source_row.get("recurrence_id")
+                                if source_row else None
+                            ),
                             label="Récurrence associée — facultatif",
-                        ).props("dense outlined clearable options-dense").classes("w-full")
+                        ).props(
+                            "dense outlined clearable options-dense"
+                        ).classes("w-full")
+
+                        with ui.column().classes(
+                            "w-full gap-2 p-3 rounded-borders bg-grey-1"
+                        ) as new_recurrence_box:
+                            ui.label(
+                                "Nouvelle récurrence liée"
+                            ).classes("font-bold text-primary")
+                            ui.label(
+                                "Les valeurs sont proposées à partir du poste Budget. "
+                                "La récurrence et le poste seront enregistrés ensemble : "
+                                "si l’un échoue, aucun des deux n’est conservé."
+                            ).classes("text-xs jf-muted")
+                            recurrence_description = ui.input(
+                                label="Description de la récurrence",
+                                value="",
+                            ).props(
+                                "dense outlined maxlength=160"
+                            ).classes("w-full")
+                            with ui.row().classes("w-full gap-2 flex-wrap"):
+                                recurrence_amount = ui.number(
+                                    label="Montant de la récurrence",
+                                    value=None,
+                                    min=.01,
+                                    step=.01,
+                                ).props("dense outlined").classes("grow min-w-36")
+                                recurrence_interval = ui.number(
+                                    label="Tous les",
+                                    value=1,
+                                    min=1,
+                                    max=365,
+                                    step=1,
+                                ).props("dense outlined").classes("w-28")
+                                recurrence_unit = ui.select(
+                                    FREQUENCY_UNITS,
+                                    value="month",
+                                    label="Unité",
+                                ).props(
+                                    "dense outlined options-dense"
+                                ).classes("grow min-w-36")
+                            with ui.row().classes("w-full gap-2 flex-wrap"):
+                                recurrence_start = ui.input(
+                                    label="Début de la récurrence",
+                                    value=date.today().isoformat(),
+                                ).props(
+                                    "type=date dense outlined"
+                                ).classes("grow min-w-44")
+                                recurrence_end = ui.input(
+                                    label="Fin de la récurrence — facultatif",
+                                    value="",
+                                ).props(
+                                    "type=date dense outlined clearable"
+                                ).classes("grow min-w-44")
+                            with ui.row().classes("w-full gap-2 flex-wrap"):
+                                recurrence_category = ui.select(
+                                    {None: "Aucune", **_category_options(user_id)},
+                                    value=None,
+                                    label="Catégorie — facultatif",
+                                ).props(
+                                    "dense outlined clearable options-dense"
+                                ).classes("grow min-w-52")
+                                recurrence_payment = ui.select(
+                                    _payment_options(user_id),
+                                    value=None,
+                                    label="Mode de paiement — facultatif",
+                                ).props(
+                                    "dense outlined clearable options-dense"
+                                ).classes("grow min-w-52")
+                            recurrence_tags = ui.select(
+                                _tag_options(user_id),
+                                value=[],
+                                label="Étiquettes — facultatif",
+                                multiple=True,
+                            ).props(
+                                "dense outlined use-chips clearable options-dense"
+                            ).classes("w-full")
+                            recurrence_mode = ui.select(
+                                CONFIRMATION_MODES,
+                                value="confirm",
+                                label="Création des occurrences",
+                            ).props(
+                                "dense outlined options-dense"
+                            ).classes("w-full")
+                            recurrence_bank_programmed = ui.checkbox(
+                                "Programmée dans le compte bancaire",
+                                value=False,
+                            )
+                            recurrence_reminder = ui.checkbox(
+                                "Me rappeler chaque occurrence le jour prévu",
+                                value=False,
+                            )
+                            recurrence_reminder_time = ui.input(
+                                label="Heure du rappel",
+                                value="09:00",
+                            ).props(
+                                "type=time dense outlined"
+                            ).classes("w-full")
+
                         sync_budget_recurrence = ui.checkbox(
-                            "Synchroniser automatiquement le montant avec la récurrence",
-                            value=bool(source_row.get("sync_from_recurrence", True)) if source_row else True,
+                            "Synchroniser le montant et la date de fin avec la récurrence",
+                            value=(
+                                bool(source_row.get("sync_from_recurrence", True))
+                                if source_row else True
+                            ),
                         )
+                        ui.label(
+                            "Avec la synchronisation active, le montant du poste suit "
+                            "la récurrence et la date de fin du poste est appliquée à "
+                            "la récurrence. Les transactions confirmées ne sont jamais "
+                            "supprimées."
+                        ).classes("text-xs jf-muted")
                         allow_overlap = ui.checkbox(
                             "Autoriser volontairement un chevauchement avec une autre période identique",
                             value=False,
@@ -3022,26 +3262,104 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         note_budget = ui.textarea(
                             label="Note facultative",
                             value=source_row.get("note") if source_row else "",
-                        ).props("dense outlined autogrow maxlength=1000").classes("w-full")
+                        ).props(
+                            "dense outlined autogrow maxlength=1000"
+                        ).classes("w-full")
 
                         def sync_override_visibility(_event=None):
-                            biweekly_override.visible = frequency_budget.value == "monthly"
-                        frequency_budget.on_value_change(sync_override_visibility)
+                            biweekly_override.visible = (
+                                frequency_budget.value == "monthly"
+                            )
+
+                        def update_new_recurrence_visibility(_event=None):
+                            creating = (
+                                recurrence_budget.value
+                                == CREATE_RECURRENCE_OPTION
+                            )
+                            new_recurrence_box.visible = creating
+                            if not creating:
+                                return
+                            recurrence_description.value = (
+                                description_budget.value or ""
+                            )
+                            recurrence_amount.value = amount_budget.value
+                            if frequency_budget.value == "biweekly":
+                                recurrence_unit.value = "week"
+                                recurrence_interval.value = 2
+                            else:
+                                recurrence_unit.value = "month"
+                                recurrence_interval.value = 1
+                            recurrence_start.value = (
+                                effective_start.value
+                                or date.today().isoformat()
+                            )
+                            recurrence_end.value = effective_end.value or ""
+
+                        frequency_budget.on_value_change(
+                            sync_override_visibility
+                        )
+                        recurrence_budget.on_value_change(
+                            update_new_recurrence_visibility
+                        )
                         sync_override_visibility()
+                        update_new_recurrence_visibility()
 
                         def save_budget_now():
+                            creating_recurrence = (
+                                recurrence_budget.value
+                                == CREATE_RECURRENCE_OPTION
+                            )
+                            new_recurrence = None
+                            selected_recurrence = recurrence_budget.value
+                            if creating_recurrence:
+                                selected_recurrence = None
+                                new_recurrence = {
+                                    "description": (
+                                        recurrence_description.value
+                                        or description_budget.value
+                                    ),
+                                    "amount": (
+                                        recurrence_amount.value
+                                        if recurrence_amount.value not in (None, "")
+                                        else amount_budget.value
+                                    ),
+                                    "frequency_unit": recurrence_unit.value,
+                                    "frequency_interval": recurrence_interval.value,
+                                    "start_date": (
+                                        recurrence_start.value
+                                        or effective_start.value
+                                        or date.today().isoformat()
+                                    ),
+                                    "end_date": (
+                                        recurrence_end.value
+                                        or effective_end.value
+                                        or None
+                                    ),
+                                    "category_id": recurrence_category.value,
+                                    "tag_ids": recurrence_tags.value or [],
+                                    "payment_method_id": recurrence_payment.value,
+                                    "confirmation_mode": recurrence_mode.value,
+                                    "bank_programmed": recurrence_bank_programmed.value,
+                                    "reminder_enabled": recurrence_reminder.value,
+                                    "reminder_time": (
+                                        recurrence_reminder_time.value or "09:00"
+                                    ),
+                                    "note": note_budget.value,
+                                }
+
                             try:
                                 # Lorsqu'on crée une nouvelle période à partir d'un
                                 # poste existant, l'ancienne période est fermée la
                                 # veille et sa récurrence est détachée. La nouvelle
-                                # période peut ainsi reprendre la même récurrence sans
-                                # réécrire l'historique du Budget.
+                                # période peut ainsi reprendre la même récurrence.
                                 if clone_period and source_row:
                                     if not effective_start.value:
                                         raise ValueError(
                                             "Indiquez la date de début de la nouvelle période."
                                         )
-                                    new_start = date.fromisoformat(effective_start.value)
+                                    new_start = date.fromisoformat(
+                                        effective_start.value
+                                    )
                                     old_start = source_row.get("effective_start")
                                     if old_start and new_start <= old_start:
                                         raise ValueError(
@@ -3057,11 +3375,15 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                         description=source_row["description"],
                                         input_frequency=source_row["input_frequency"],
                                         input_amount=source_row["input_amount"],
-                                        biweekly_override=source_row.get("biweekly_override"),
+                                        biweekly_override=source_row.get(
+                                            "biweekly_override"
+                                        ),
                                         note=source_row.get("note"),
                                         recurrence_id=None,
                                         sync_from_recurrence=False,
-                                        effective_start=source_row.get("effective_start"),
+                                        effective_start=source_row.get(
+                                            "effective_start"
+                                        ),
                                         effective_end=old_end,
                                         allow_overlap=True,
                                     )
@@ -3079,22 +3401,44 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                         else None
                                     ),
                                     note=note_budget.value,
-                                    recurrence_id=recurrence_budget.value,
-                                    sync_from_recurrence=sync_budget_recurrence.value,
-                                    effective_start=effective_start.value or None,
-                                    effective_end=effective_end.value or None,
+                                    recurrence_id=selected_recurrence,
+                                    sync_from_recurrence=(
+                                        sync_budget_recurrence.value
+                                    ),
+                                    effective_start=(
+                                        effective_start.value or None
+                                    ),
+                                    effective_end=(
+                                        effective_end.value or None
+                                    ),
                                     allow_overlap=allow_overlap.value,
+                                    new_recurrence=new_recurrence,
                                 )
+                                if creating_recurrence:
+                                    generate_due_recurrences(user_id)
                             except Exception as error:
                                 ui.notify(str(error), type="warning")
                                 return
                             dialog.close()
-                            ui.notify("Poste budgétaire enregistré.", type="positive")
+                            ui.notify(
+                                (
+                                    "Poste budgétaire et récurrence enregistrés."
+                                    if creating_recurrence
+                                    else "Poste budgétaire enregistré."
+                                ),
+                                type="positive",
+                            )
                             refresh_all()
 
                         with ui.row().classes("w-full justify-end gap-2"):
-                            ui.button("Annuler", on_click=dialog.close).props("flat")
-                            ui.button("Enregistrer", icon="save", on_click=save_budget_now).props("color=primary")
+                            ui.button(
+                                "Annuler", on_click=dialog.close
+                            ).props("flat")
+                            ui.button(
+                                "Enregistrer",
+                                icon="save",
+                                on_click=save_budget_now,
+                            ).props("color=primary")
                 dialog.open()
 
             def change_budget_state(item_id, value):
@@ -3152,7 +3496,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             ("Dépenses fixes mensuelles", summary_budget["monthly_expense"], "jf-finance-expense"),
                             ("Reste mensuel moyen", summary_budget["monthly_remaining"], "jf-finance-income" if summary_budget["monthly_remaining"] >= 0 else "jf-finance-expense"),
                             ("Reste par paie", summary_budget["biweekly_remaining"], "jf-finance-income" if summary_budget["biweekly_remaining"] >= 0 else "jf-finance-expense"),
-                            (f"Disponible ce mois — {capacity_budget.get('pay_count', 0)} paie(s)", capacity_budget.get("available_month", 0), "jf-finance-income" if Decimal(capacity_budget.get("available_month", 0)) >= 0 else "jf-finance-expense"),
+                            (f"Disponible ce mois — {capacity_budget.get('pay_count', 0)} paie(s)", capacity_budget.get("available_month_base", capacity_budget.get("available_month", 0)), "jf-finance-income" if Decimal(capacity_budget.get("available_month_base", capacity_budget.get("available_month", 0))) >= 0 else "jf-finance-expense"),
                         ):
                             with ui.element("div").classes("jf-finance-summary"):
                                 ui.label(label).classes("jf-finance-summary-label")

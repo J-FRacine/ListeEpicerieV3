@@ -1,163 +1,125 @@
-JF APPS — DÉVELOPPEMENT DU 24 AOÛT 2026
-========================================
+JF APPS — FINANCES V1.10.1 / PORTAIL V1.3.1
+Correctifs Budget, report mensuel, récurrence intégrée et sauvegarde au Centre de maintenance
+==============================================================================================
 
-VERSIONS
---------
-- Portail JF Apps : V1.3.0
-- Finances : V1.10.0
-- Liste d’épicerie : V1.1.2
-- Journal de pression : reste V1.2.1
-- Personnages JDR : reste V1.2.0
+VERSION DE DÉPART
+-----------------
+Ce paquet part de la livraison Finances V1.10.0 / Portail V1.3.0 du 24 août 2026.
 
-CONTENU DE CETTE LIVRAISON
+CHANGEMENTS FINANCES V1.10.1
+----------------------------
+1. Correctif du blocage lors de l'ajout d'un nouveau poste Budget
+   - corrige l'erreur PostgreSQL : could not determine data type of parameter $4;
+   - les validations de récurrence liée et de chevauchement ne transmettent plus
+     un identifiant NULL non typé;
+   - aucune modification manuelle de la base n'est nécessaire.
+
+2. Montants négatifs
+   - les KPI qui peuvent devenir négatifs affichent maintenant explicitement le
+     signe -, par exemple : -377,77 $.
+
+3. Report du solde variable au mois suivant
+   - nouvelle case dans le Tableau :
+     « Reporter le solde positif ou négatif au mois suivant »;
+   - l'activation commence au mois actuellement affiché;
+   - ce premier mois n'a aucun report entrant;
+   - son Reste disponible devient le report du mois suivant;
+   - un report positif augmente la capacité du mois suivant;
+   - un report négatif la diminue;
+   - le Tableau distingue Disponible de base, Report du mois précédent et
+     Disponible ajusté ce mois.
+   - le Budget continue d'afficher la capacité de base provenant uniquement de
+     la structure fixe : le report demeure une notion du Tableau variable.
+
+4. Créer une récurrence directement depuis un poste Budget
+   - dans « Récurrence associée », choisir « + Créer une nouvelle récurrence »;
+   - les champs de récurrence apparaissent dans la même fenêtre : description,
+     montant, fréquence, dates, catégorie, étiquettes, mode de paiement,
+     confirmation, Programmé et rappel;
+   - le poste Budget et la nouvelle récurrence sont créés dans la même
+     transaction SQL : en cas d'échec, aucune récurrence orpheline n'est laissée.
+
+5. Synchronisation de la date de fin
+   - l'option est renommée : « Synchroniser le montant et la date de fin avec
+     la récurrence »;
+   - avec la synchronisation active, la date de fin du poste Budget devient la
+     date de fin de la récurrence liée;
+   - si la date est raccourcie, seules les occurrences futures Prévue situées
+     après la nouvelle fin sont supprimées;
+   - les transactions Confirmées et l'historique ne sont jamais supprimés.
+
+CHANGEMENTS PORTAIL V1.3.1
 --------------------------
+- « Sauvegarder toutes mes données » est déplacé dans le Centre de maintenance.
+- L'accueil contient maintenant un accès au Centre de maintenance plutôt qu'un
+  bouton de sauvegarde globale direct.
+- Tous les utilisateurs peuvent ouvrir le Centre de maintenance pour créer leur
+  sauvegarde privée.
+- Les diagnostics de la base restent réservés aux administrateurs.
 
-1) FINANCES V1.10.0
+FICHIERS À REMPLACER
+--------------------
+Remplacer ensemble :
+- app.py
+- finances.py
+- finances_data.py
+- app_versions.py
+- manual.py
 
-Principe directeur de l’interface :
-- Budget = revenus et dépenses fixes, puis calcul de la capacité disponible;
-- Tableau = suivi des dépenses variables qui consomment cette capacité.
+Le fichier global_backup.py est inclus dans le paquet et peut aussi être remplacé;
+sa logique de sauvegarde V1.3.0 est conservée, mais il utilise automatiquement les
+nouvelles versions déclarées dans app_versions.py.
 
-Tableau :
-- Reste par paie ramené directement dans le Tableau;
-- Disponible ce mois calculé avec le nombre de paies du mois;
-- lorsqu’un revenu aux deux semaines est lié à une récurrence, les vraies dates
-  projetées déterminent automatiquement s’il y a 2 ou 3 paies;
-- Dépenses réalisées, Dépenses à venir, Total prévu variable;
-- nouveau KPI Reste disponible ce mois;
-- retrait du bloc KPI revenus du Tableau seulement;
-- total au bas des KPI de dépenses affichés;
-- les KPI par étiquette conservent l’avertissement : une transaction ayant
-  plusieurs étiquettes peut être comptée dans plusieurs lignes;
-- les dépenses fixes déjà représentées par un poste Budget lié à une récurrence
-  ne sont pas recomptées comme dépenses variables du Tableau.
-
-Budget :
-- date de début facultative;
-- date de fin facultative;
-- un mois passé conserve les postes qui étaient applicables à cette période;
-- bouton permettant de créer une nouvelle période à partir d’un poste existant;
-- détection des chevauchements accidentels entre périodes portant le même nom;
-- possibilité d’autoriser volontairement un chevauchement;
-- calcul du Reste par paie et du Disponible ce mois visible dans Budget.
-
-Financements :
-- nouvel onglet Financements;
-- financement de magasin ou achat en versements sur carte de crédit;
-- avec ou sans intérêts et frais;
-- montant initial, date d’achat, nombre total de versements, versements déjà
-  effectués, solde actuel, prochaine échéance, fréquence et montant du versement;
-- catégorie, étiquettes et compte/carte de paiement;
-- prise en charge des plans déjà en cours sans recréer les anciennes mensualités;
-- seuls les versements futurs sont créés comme dépenses prévues;
-- le montant initial complet n’est pas compté en plus des versements;
-- par défaut les versements sont de vraies dépenses budgétaires et alimentent
-  Réalisé / À venir / Total prévu dans le Tableau;
-- option Hors budget disponible seulement pour les exceptions;
-- si le plan est lié à une carte, les versements confirmés entrent normalement
-  dans la conciliation de cette carte.
-
-Toutes les fonctions de Finances V1.9.0 sont conservées, notamment :
-- case Vu pour la conciliation bancaire;
-- sélection persistante en conciliation de carte;
-- tri Date ascendante / Date descendante;
-- ajout/modification pendant la conciliation;
-- écart justifié / reporter l’écart;
-- paiements de cartes liés;
-- marges de crédit;
-- rappels et transactions programmées.
-
-2) PORTAIL JF APPS V1.3.0 — SAUVEGARDE GLOBALE
-
-Nouveau bloc « Données et sécurité » dans le Portail :
-- bouton « Sauvegarder toutes mes données »;
-- une seule action crée une archive ZIP;
-- l’archive sépare les données par application;
-- Liste d’épicerie : chaque famille accessible est sauvegardée séparément;
-- Finances : JSON + CSV;
-- Journal de pression : JSON + CSV;
-- Personnages JDR : snapshot des tables privées appartenant au compte;
-- commentaires/suggestions du compte lorsque le module est disponible;
-- manifest.json avec la date et les versions des applications;
-- aucune famille non accessible ni données financières d’un autre utilisateur
-  ne sont exportées.
-
-La restauration globale est volontairement réservée à une étape future : cette
-version donne priorité à une sauvegarde complète en une seule action.
-
-3) LISTE D’ÉPICERIE V1.1.2 — TRI INSENSIBLE AUX ACCENTS
-
-Le code récent possédait déjà la base du tri sans accents. Cette livraison la
-confirme et la renforce :
-- Café est trié comme Cafe;
-- Céréales est trié comme Cereales;
-- la casse ne change pas l’ordre;
-- Œufs est trié comme Oeufs;
-- Æ est traité comme Ae;
-- l’orthographe originale reste affichée.
-
-FICHIERS COMPLETS À REMPLACER / AJOUTER
-----------------------------------------
-À la racine du dépôt GitHub :
-
-- app.py                         (remplacer)
-- global_backup.py               (NOUVEAU)
-- finances.py                    (remplacer)
-- finances_data.py               (remplacer)
-- grocery_preferences.py         (remplacer)
-- items.py                       (remplacer)
-- needs.py                       (remplacer)
-- app_versions.py                (remplacer)
-- manual.py                      (remplacer)
-
-AUCUN SCRIPT SQL MANUEL.
-AUCUNE NOUVELLE DÉPENDANCE PYTHON.
-
-Finances crée automatiquement ses nouvelles colonnes/tables lors de son
-initialisation. Ne supprimez aucune table et ne recréez pas la base de données.
+Les fichiers Liste d'épicerie présents dans le dossier sont inchangés par ce
+correctif et n'ont pas besoin d'être remplacés.
 
 INSTALLATION
 ------------
-1. Faire une sauvegarde de sécurité de la version actuellement déployée.
-2. Dans GitHub, remplacer les fichiers ci-dessus et ajouter global_backup.py.
+1. Faire d'abord une sauvegarde de sécurité si possible.
+2. Dans GitHub, remplacer les fichiers indiqués ci-dessus.
 3. Commit changes.
 4. Laisser Canner terminer le redéploiement.
-5. Vérifier d’abord que le Portail s’ouvre et affiche V1.3.0.
-6. Ouvrir Finances et vérifier V1.10.0.
-7. Sur ordinateur, faire Ctrl+F5 si l’ancienne interface reste en cache.
-8. Sur téléphone/PWA, fermer complètement JF Apps puis la rouvrir si nécessaire.
+5. Sur ordinateur : Ctrl+F5.
+6. Vérifier que Finances affiche V1.10.1 et le Portail V1.3.1.
 
-TESTS CONSEILLÉS APRÈS DÉPLOIEMENT
----------------------------------
+AUCUN SQL MANUEL.
+AUCUNE NOUVELLE DÉPENDANCE PYTHON.
+La nouvelle table de réglages Finances est créée automatiquement au démarrage.
 
-A. Tableau / Budget
-1. Ouvrir un mois normal à 2 paies : vérifier Disponible ce mois.
-2. Ouvrir un mois où la récurrence de salaire tombe 3 fois : vérifier que le
-   montant est Reste par paie × 3.
-3. Vérifier que le bloc KPI revenus n’apparaît plus dans Tableau.
-4. Vérifier la ligne Total des KPI affichés sous les catégories de dépenses.
-5. Vérifier que Reste disponible ce mois = Disponible ce mois - Total prévu.
+TESTS RECOMMANDÉS APRÈS DÉPLOIEMENT
+-----------------------------------
+A. Correctif Budget
+1. Budget > Ajouter un poste.
+2. Créer une dépense simple sans récurrence.
+3. Vérifier qu'elle s'enregistre sans erreur PostgreSQL.
 
-B. Périodes Budget
-1. Créer « Loyer ancien » ou un poste test avec fin au 30 juin.
-2. Créer la nouvelle période à partir du 1er juillet avec un autre montant.
-3. Consulter juin puis juillet et vérifier que le bon montant est utilisé.
+B. Récurrence intégrée
+1. Budget > Ajouter un poste.
+2. Dans Récurrence associée, choisir + Créer une nouvelle récurrence.
+3. Remplir les informations et enregistrer.
+4. Vérifier que le poste apparaît dans Budget et la règle dans Récurrences.
 
-C. Financement
-1. Créer un financement 999 $ / 18 mois / 0 %.
-2. Laisser le montant du versement vide : le calcul doit proposer 55,50 $.
-3. Choisir une catégorie et vérifier les versements futurs dans le Tableau.
-4. Créer ensuite un plan déjà en cours et indiquer les versements déjà payés;
-   vérifier que les anciennes mensualités ne sont pas recréées.
-5. Pour un plan sur carte, confirmer un versement et vérifier sa présence dans
-   la conciliation de la carte.
+C. Date de fin synchronisée
+1. Modifier un poste lié et synchronisé.
+2. Ajouter ou raccourcir sa date de fin.
+3. Vérifier dans Récurrences que la même date de fin est appliquée.
+4. Vérifier qu'aucune transaction Confirmée historique n'a disparu.
 
-D. Sauvegarde globale
-1. Portail > Données et sécurité > Sauvegarder toutes mes données.
-2. Ouvrir le ZIP et vérifier manifest.json ainsi que les dossiers correspondant
-   aux applications auxquelles le compte a accès.
-3. Vérifier qu’aucune famille non accessible au compte n’est présente.
+D. Montant négatif
+1. Ouvrir un mois dont le Reste disponible est négatif.
+2. Vérifier que le signe - apparaît devant le montant, en plus de la couleur rouge.
 
-E. Tri épicerie
-Créer/repérer par exemple : Café, Cafe, Céréales, Concombre, Épices, Œufs.
-Vérifier que l’ordre suit les lettres normales et non le code Unicode des accents.
+E. Report mensuel
+1. Dans Tableau, choisir le mois de départ du suivi.
+2. Cocher Reporter le solde positif ou négatif au mois suivant.
+3. Noter le Reste disponible du mois.
+4. Passer au mois suivant.
+5. Vérifier le KPI Report du mois précédent et le Disponible ajusté.
+6. Tester idéalement une valeur positive puis une valeur négative.
+
+F. Centre de maintenance
+1. Depuis le Portail, ouvrir Centre de maintenance.
+2. Vérifier que Sauvegarder toutes mes données s'y trouve.
+3. Créer une archive et vérifier son téléchargement.
+4. Avec un compte non administrateur, vérifier que la sauvegarde est disponible
+   mais que les outils de diagnostic de la base ne le sont pas.

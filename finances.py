@@ -102,6 +102,18 @@ ADD_CATEGORY_OPTION = "__jf_add_category__"
 ADD_TAG_OPTION = "__jf_add_tag__"
 CREATE_RECURRENCE_OPTION = "__jf_create_recurrence__"
 
+BUDGET_SORT_FIELDS = {
+    "custom": "Ordre personnalisé",
+    "description": "Alphabétique",
+    "monthly_amount": "Montant par mois",
+    "biweekly_amount": "Montant par paie",
+    "effective_start": "Date de début",
+}
+BUDGET_SORT_DIRECTIONS = {
+    "asc": "Croissant",
+    "desc": "Décroissant",
+}
+
 
 FINANCE_CSS = r"""
 .jf-finance-main-tabs {
@@ -2841,6 +2853,130 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                 account_state["month"] = _shift_month(account_state["month"], offset)
                 render_account.refresh()
 
+            def open_account_row_editor(selected_row):
+                row = dict(selected_row or {})
+
+                if row.get("projected"):
+                    recurrence_id = row.get("recurrence_id")
+                    if not recurrence_id:
+                        ui.notify(
+                            "Cette ligne est une projection et ne peut pas être modifiée comme transaction.",
+                            type="info",
+                        )
+                        return
+                    recurrence = next(
+                        (
+                            item
+                            for item in list_recurrences(user_id)
+                            if int(item["id"]) == int(recurrence_id)
+                        ),
+                        None,
+                    )
+                    if not recurrence:
+                        ui.notify("Récurrence introuvable.", type="warning")
+                        return
+                    recurrence_dialog(recurrence)
+                    return
+
+                transaction_id = row.get("id")
+                if not transaction_id:
+                    ui.notify("Transaction introuvable.", type="warning")
+                    return
+
+                linked_transfer_id = row.get("linked_transfer_id")
+
+                def open_real_editor():
+                    try:
+                        if linked_transfer_id:
+                            transfer = get_card_payment_transfer(
+                                user_id, linked_transfer_id
+                            )
+                            if not transfer:
+                                raise ValueError("Paiement de carte introuvable.")
+                            if (
+                                transfer.get("destination_reconciliation_status")
+                                == "reconciled"
+                            ):
+                                ui.notify(
+                                    "Ce paiement est déjà concilié sur la carte de crédit. "
+                                    "Retirez d’abord cette conciliation dans l’onglet Conciliation.",
+                                    type="warning",
+                                )
+                                return
+                            _card_payment_dialog(
+                                user_id, refresh_all, transfer=transfer
+                            )
+                        else:
+                            transaction = get_transaction(
+                                user_id, transaction_id
+                            )
+                            _transaction_dialog(
+                                user_id, refresh_all, transaction=transaction
+                            )
+                    except Exception as error:
+                        ui.notify(str(error), type="warning")
+
+                if row.get("reconciliation_status") != "reconciled":
+                    open_real_editor()
+                    return
+
+                if linked_transfer_id:
+                    try:
+                        transfer = get_card_payment_transfer(
+                            user_id, linked_transfer_id
+                        )
+                    except Exception as error:
+                        ui.notify(str(error), type="warning")
+                        return
+                    if (
+                        transfer
+                        and transfer.get("destination_reconciliation_status")
+                        == "reconciled"
+                    ):
+                        ui.notify(
+                            "Ce paiement est aussi concilié sur la carte de crédit. "
+                            "Retirez d’abord cette conciliation dans l’onglet Conciliation.",
+                            type="warning",
+                        )
+                        return
+
+                with ui.dialog() as confirm_dialog:
+                    with ui.card().classes("w-full max-w-lg p-4"):
+                        ui.label("Transaction déjà conciliée").classes(
+                            "text-lg font-bold"
+                        )
+                        ui.label(
+                            "Pour la modifier, Finances doit d’abord retirer la conciliation "
+                            "« Vu ». La transaction restera enregistrée et pourra être "
+                            "conciliée de nouveau après la modification."
+                        ).classes("text-sm jf-muted")
+
+                        def remove_reconciliation_and_edit():
+                            try:
+                                set_bank_transaction_seen(
+                                    user_id,
+                                    transaction_id,
+                                    False,
+                                    date.today(),
+                                )
+                            except Exception as error:
+                                ui.notify(str(error), type="warning")
+                                return
+                            confirm_dialog.close()
+                            render_account.refresh()
+                            open_real_editor()
+
+                        with ui.row().classes("w-full justify-end gap-2"):
+                            ui.button(
+                                "Annuler", on_click=confirm_dialog.close
+                            ).props("flat dense")
+                            ui.button(
+                                "Retirer la conciliation et modifier",
+                                icon="edit",
+                                on_click=remove_reconciliation_and_edit,
+                            ).props("color=primary")
+                confirm_dialog.open()
+
             @ui.refreshable
             def render_account():
                 account_box.clear()
@@ -2969,7 +3105,28 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                             )
                                     ui.label(row["transaction_date"].strftime("%d/%m"))
                                     with ui.column().classes("gap-0 min-w-0"):
-                                        ui.label(row["description"]).classes("font-semibold truncate").tooltip(row["description"])
+                                        with ui.row().classes(
+                                            "w-full items-center gap-1 flex-nowrap min-w-0"
+                                        ):
+                                            ui.label(row["description"]).classes(
+                                                "font-semibold truncate grow"
+                                            ).tooltip(row["description"])
+                                            edit_icon = (
+                                                "event_repeat"
+                                                if row.get("projected")
+                                                else "edit"
+                                            )
+                                            edit_tip = (
+                                                "Modifier la récurrence à l’origine de cette projection"
+                                                if row.get("projected")
+                                                else "Modifier cette transaction"
+                                            )
+                                            ui.button(
+                                                icon=edit_icon,
+                                                on_click=lambda _event=None, selected=dict(row): open_account_row_editor(selected),
+                                            ).props(
+                                                "flat dense round size=sm color=primary"
+                                            ).tooltip(edit_tip)
                                         meta=[]
                                         if row.get("linked_transfer_id") and row.get("linked_transfer_destination_name"):
                                             meta.append("Vers " + str(row.get("linked_transfer_destination_name")))
@@ -3035,6 +3192,52 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
         # BUDGET GLOBAL
         with ui.tab_panel(budget_tab).classes("px-0"):
             budget_box = ui.column().classes("w-full gap-2")
+            budget_sort_state = {
+                "field": "monthly_amount",
+                "direction": "desc",
+            }
+
+            def sorted_budget_rows(section_rows, section_type):
+                rows_to_sort = list(section_rows)
+                if section_type != "expense":
+                    return rows_to_sort
+
+                field = budget_sort_state["field"]
+                direction = budget_sort_state["direction"]
+                reverse = direction == "desc"
+
+                # Critère secondaire stable : libellé alphabétique A → Z.
+                rows_to_sort.sort(
+                    key=lambda item: str(item.get("description") or "").casefold()
+                )
+
+                if field == "description":
+                    rows_to_sort.sort(
+                        key=lambda item: str(item.get("description") or "").casefold(),
+                        reverse=reverse,
+                    )
+                elif field == "monthly_amount":
+                    rows_to_sort.sort(
+                        key=lambda item: Decimal(item.get("monthly_amount") or 0),
+                        reverse=reverse,
+                    )
+                elif field == "biweekly_amount":
+                    rows_to_sort.sort(
+                        key=lambda item: Decimal(item.get("biweekly_amount") or 0),
+                        reverse=reverse,
+                    )
+                elif field == "effective_start":
+                    missing_date = date.min if reverse else date.max
+                    rows_to_sort.sort(
+                        key=lambda item: item.get("effective_start") or missing_date,
+                        reverse=reverse,
+                    )
+                elif field == "custom":
+                    rows_to_sort.sort(
+                        key=lambda item: int(item.get("sort_order") or 0),
+                        reverse=reverse,
+                    )
+                return rows_to_sort
 
             def budget_item_dialog(row=None, clone_period=False):
                 source_row = dict(row) if row else None
@@ -3503,8 +3706,49 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                 ui.label(_balance_money(value)).classes("jf-finance-summary-value " + css)
 
                     for section_type, section_label in (("income", "Revenus fixes"), ("expense", "Dépenses fixes")):
-                        ui.label(section_label).classes("text-lg font-bold mt-2")
-                        section_rows = [row for row in rows if row["item_type"] == section_type]
+                        if section_type == "expense":
+                            with ui.row().classes(
+                                "w-full items-end justify-between gap-2 flex-wrap mt-2"
+                            ):
+                                ui.label(section_label).classes("text-lg font-bold")
+                                with ui.row().classes("items-end gap-2 flex-wrap"):
+                                    budget_sort_field = ui.select(
+                                        BUDGET_SORT_FIELDS,
+                                        value=budget_sort_state["field"],
+                                        label="Trier par",
+                                    ).props(
+                                        "dense outlined options-dense"
+                                    ).classes("min-w-44")
+                                    budget_sort_direction = ui.select(
+                                        BUDGET_SORT_DIRECTIONS,
+                                        value=budget_sort_state["direction"],
+                                        label="Sens",
+                                    ).props(
+                                        "dense outlined options-dense"
+                                    ).classes("min-w-32")
+
+                                    def change_budget_sort(_event=None):
+                                        budget_sort_state["field"] = (
+                                            budget_sort_field.value or "monthly_amount"
+                                        )
+                                        budget_sort_state["direction"] = (
+                                            budget_sort_direction.value or "desc"
+                                        )
+                                        render_budget.refresh()
+
+                                    budget_sort_field.on_value_change(
+                                        change_budget_sort
+                                    )
+                                    budget_sort_direction.on_value_change(
+                                        change_budget_sort
+                                    )
+                        else:
+                            ui.label(section_label).classes("text-lg font-bold mt-2")
+
+                        section_rows = sorted_budget_rows(
+                            [row for row in rows if row["item_type"] == section_type],
+                            section_type,
+                        )
                         with ui.card().classes("w-full p-0 overflow-hidden"):
                             if not section_rows:
                                 ui.label("Aucun poste.").classes("p-4 text-sm jf-muted")
@@ -3540,8 +3784,12 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     ui.label(_money(row["monthly_amount"]) + " / mois").classes("jf-finance-budget-money")
                                     ui.label(_money(row["biweekly_amount"]) + " / paie").classes("jf-finance-budget-money")
                                     with ui.row().classes("gap-0 shrink-0"):
-                                        ui.button(icon="keyboard_arrow_up", on_click=lambda _event=None, selected=row["id"]: change_budget_order(selected, "up")).props("flat dense round size=sm")
-                                        ui.button(icon="keyboard_arrow_down", on_click=lambda _event=None, selected=row["id"]: change_budget_order(selected, "down")).props("flat dense round size=sm")
+                                        if (
+                                            section_type == "income"
+                                            or budget_sort_state["field"] == "custom"
+                                        ):
+                                            ui.button(icon="keyboard_arrow_up", on_click=lambda _event=None, selected=row["id"]: change_budget_order(selected, "up")).props("flat dense round size=sm")
+                                            ui.button(icon="keyboard_arrow_down", on_click=lambda _event=None, selected=row["id"]: change_budget_order(selected, "down")).props("flat dense round size=sm")
                                         ui.switch(value=row["is_active"], on_change=lambda event, selected=row["id"]: change_budget_state(selected, event.value)).props("dense")
                                         ui.button(icon="event_repeat", on_click=lambda _event=None, selected=row: budget_item_dialog(selected, clone_period=True)).props("flat dense round size=sm color=secondary").tooltip("Créer une nouvelle période")
                                         ui.button(icon="edit", on_click=lambda _event=None, selected=row: budget_item_dialog(selected)).props("flat dense round size=sm color=primary")

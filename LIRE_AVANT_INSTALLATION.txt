@@ -1,125 +1,122 @@
-JF APPS — FINANCES V1.10.1 / PORTAIL V1.3.1
-Correctifs Budget, report mensuel, récurrence intégrée et sauvegarde au Centre de maintenance
-==============================================================================================
+JF APPS — FINANCES V1.10.2 / PORTAIL V1.3.2
+================================================
 
-VERSION DE DÉPART
------------------
-Ce paquet part de la livraison Finances V1.10.0 / Portail V1.3.0 du 24 août 2026.
+OBJECTIF DE CE CORRECTIF
+------------------------
+Ce paquet part de Finances V1.10.1 / Portail V1.3.1 et regroupe les derniers
+commentaires de test :
 
-CHANGEMENTS FINANCES V1.10.1
-----------------------------
-1. Correctif du blocage lors de l'ajout d'un nouveau poste Budget
-   - corrige l'erreur PostgreSQL : could not determine data type of parameter $4;
-   - les validations de récurrence liée et de chevauchement ne transmettent plus
-     un identifiant NULL non typé;
-   - aucune modification manuelle de la base n'est nécessaire.
+1. Corriger l'erreur PostgreSQL de la case « Vu » dans Compte :
+   « FOR UPDATE cannot be applied to the nullable side of an outer join ».
+2. Permettre de modifier directement une transaction depuis l'onglet Compte.
+3. Ajouter un tri configurable des dépenses fixes du Budget.
+4. Corriger le bouton actif « Portail » qui apparaissait comme un rectangle
+   bleu vide dans l'en-tête bureau.
 
-2. Montants négatifs
-   - les KPI qui peuvent devenir négatifs affichent maintenant explicitement le
-     signe -, par exemple : -377,77 $.
+FINANCES V1.10.2
+----------------
+COMPTE — CASE « VU »
+- Le verrou PostgreSQL porte maintenant uniquement sur finance_transactions.
+- Une transaction Prévue peut de nouveau être cochée Vu pour être confirmée
+  et conciliée en une seule action.
+- Décocher Vu retire la conciliation sans supprimer la transaction.
 
-3. Report du solde variable au mois suivant
-   - nouvelle case dans le Tableau :
-     « Reporter le solde positif ou négatif au mois suivant »;
-   - l'activation commence au mois actuellement affiché;
-   - ce premier mois n'a aucun report entrant;
-   - son Reste disponible devient le report du mois suivant;
-   - un report positif augmente la capacité du mois suivant;
-   - un report négatif la diminue;
-   - le Tableau distingue Disponible de base, Report du mois précédent et
-     Disponible ajusté ce mois.
-   - le Budget continue d'afficher la capacité de base provenant uniquement de
-     la structure fixe : le report demeure une notion du Tableau variable.
+COMPTE — MODIFICATION DIRECTE
+- Une icône de modification apparaît directement à côté de la description.
+- Une transaction réelle non conciliée ouvre la fiche complète de transaction.
+- Si la transaction est déjà conciliée/Vu, Finances propose :
+  « Retirer la conciliation et modifier ».
+- La transaction reste enregistrée; seule sa conciliation est retirée avant
+  l'ouverture de la fiche.
+- Une projection pure de récurrence ouvre la récurrence d'origine au lieu de
+  créer ou modifier silencieusement une transaction inexistante.
+- Un paiement de carte lié ouvre sa fiche « Paiement de carte ».
+- Si le côté carte du paiement lié est déjà concilié, il faut d'abord retirer
+  cette conciliation dans l'onglet Conciliation.
+- Après l'enregistrement, le même compte et le même mois restent affichés et
+  les soldes/projections sont recalculés.
 
-4. Créer une récurrence directement depuis un poste Budget
-   - dans « Récurrence associée », choisir « + Créer une nouvelle récurrence »;
-   - les champs de récurrence apparaissent dans la même fenêtre : description,
-     montant, fréquence, dates, catégorie, étiquettes, mode de paiement,
-     confirmation, Programmé et rappel;
-   - le poste Budget et la nouvelle récurrence sont créés dans la même
-     transaction SQL : en cas d'échec, aucune récurrence orpheline n'est laissée.
+BUDGET — TRI DES DÉPENSES FIXES
+Le bloc Dépenses fixes possède maintenant deux sélecteurs :
+- Trier par :
+  * Ordre personnalisé
+  * Alphabétique
+  * Montant par mois
+  * Montant par paie
+  * Date de début
+- Sens : Croissant / Décroissant
 
-5. Synchronisation de la date de fin
-   - l'option est renommée : « Synchroniser le montant et la date de fin avec
-     la récurrence »;
-   - avec la synchronisation active, la date de fin du poste Budget devient la
-     date de fin de la récurrence liée;
-   - si la date est raccourcie, seules les occurrences futures Prévue situées
-     après la nouvelle fin sont supprimées;
-   - les transactions Confirmées et l'historique ne sont jamais supprimés.
+Le tri par défaut est « Montant par mois / Décroissant ».
+Le tri est uniquement visuel. Il ne modifie pas les données, les récurrences,
+les calculs ou les montants enregistrés. Les flèches de réorganisation sont
+conservées lorsque « Ordre personnalisé » est choisi.
 
-CHANGEMENTS PORTAIL V1.3.1
---------------------------
-- « Sauvegarder toutes mes données » est déplacé dans le Centre de maintenance.
-- L'accueil contient maintenant un accès au Centre de maintenance plutôt qu'un
-  bouton de sauvegarde globale direct.
-- Tous les utilisateurs peuvent ouvrir le Centre de maintenance pour créer leur
-  sauvegarde privée.
-- Les diagnostics de la base restent réservés aux administrateurs.
+PORTAIL V1.3.2
+--------------
+- Correction CSS de l'état actif des boutons du bandeau bureau.
+- Le bouton Portail actif affiche maintenant son icône et le texte « Portail »
+  en blanc sur le fond bleu.
+- La même correction protège aussi les autres boutons actifs, notamment
+  Commentaires.
+- Aucune logique de navigation n'est modifiée.
 
-FICHIERS À REMPLACER
---------------------
-Remplacer ensemble :
+FICHIERS COMPLETS À REMPLACER ENSEMBLE
+---------------------------------------
 - app.py
 - finances.py
 - finances_data.py
 - app_versions.py
 - manual.py
 
-Le fichier global_backup.py est inclus dans le paquet et peut aussi être remplacé;
-sa logique de sauvegarde V1.3.0 est conservée, mais il utilise automatiquement les
-nouvelles versions déclarées dans app_versions.py.
-
-Les fichiers Liste d'épicerie présents dans le dossier sont inchangés par ce
-correctif et n'ont pas besoin d'être remplacés.
+Le fichier global_backup.py de V1.10.1 / V1.3.1 est inchangé et n'a pas besoin
+d'être remplacé.
 
 INSTALLATION
 ------------
-1. Faire d'abord une sauvegarde de sécurité si possible.
-2. Dans GitHub, remplacer les fichiers indiqués ci-dessus.
-3. Commit changes.
-4. Laisser Canner terminer le redéploiement.
-5. Sur ordinateur : Ctrl+F5.
-6. Vérifier que Finances affiche V1.10.1 et le Portail V1.3.1.
-
-AUCUN SQL MANUEL.
-AUCUNE NOUVELLE DÉPENDANCE PYTHON.
-La nouvelle table de réglages Finances est créée automatiquement au démarrage.
+1. Dans GitHub, remplacer les 5 fichiers ci-dessus par ceux de ce paquet.
+2. Faire Commit changes.
+3. Laisser Canner redéployer.
+4. Sur l'ordinateur, faire Ctrl+F5 après le redéploiement.
+5. Vérifier que Finances affiche V1.10.2 et le Portail V1.3.2.
 
 TESTS RECOMMANDÉS APRÈS DÉPLOIEMENT
 -----------------------------------
-A. Correctif Budget
-1. Budget > Ajouter un poste.
-2. Créer une dépense simple sans récurrence.
-3. Vérifier qu'elle s'enregistre sans erreur PostgreSQL.
+A. Case Vu
+1. Ouvrir Finances > Compte > un compte bancaire.
+2. Cocher Vu sur une transaction Prévue réelle.
+3. Vérifier qu'elle devient Confirmée + Conciliée sans erreur PostgreSQL.
+4. Décocher Vu et vérifier qu'elle reste Confirmée mais redevient À concilier.
 
-B. Récurrence intégrée
-1. Budget > Ajouter un poste.
-2. Dans Récurrence associée, choisir + Créer une nouvelle récurrence.
-3. Remplir les informations et enregistrer.
-4. Vérifier que le poste apparaît dans Budget et la règle dans Récurrences.
+B. Modification depuis Compte
+1. Cliquer le crayon d'une transaction non conciliée.
+2. Modifier par exemple la description ou le montant et enregistrer.
+3. Vérifier le recalcul immédiat des soldes.
+4. Refaire le test sur une transaction cochée Vu.
+5. Vérifier que Finances demande d'abord « Retirer la conciliation et modifier ».
 
-C. Date de fin synchronisée
-1. Modifier un poste lié et synchronisé.
-2. Ajouter ou raccourcir sa date de fin.
-3. Vérifier dans Récurrences que la même date de fin est appliquée.
-4. Vérifier qu'aucune transaction Confirmée historique n'a disparu.
+C. Projection de récurrence
+1. Cliquer l'icône de modification d'une ligne « Récurrence projetée ».
+2. Vérifier que la fiche de la récurrence s'ouvre, et non une transaction fictive.
 
-D. Montant négatif
-1. Ouvrir un mois dont le Reste disponible est négatif.
-2. Vérifier que le signe - apparaît devant le montant, en plus de la couleur rouge.
+D. Tri Budget
+1. Ouvrir Finances > Budget.
+2. Dans Dépenses fixes, tester Alphabétique, Montant par mois,
+   Montant par paie et Date de début.
+3. Tester Croissant et Décroissant.
+4. Vérifier que les montants et les calculs du Budget ne changent pas.
 
-E. Report mensuel
-1. Dans Tableau, choisir le mois de départ du suivi.
-2. Cocher Reporter le solde positif ou négatif au mois suivant.
-3. Noter le Reste disponible du mois.
-4. Passer au mois suivant.
-5. Vérifier le KPI Report du mois précédent et le Disponible ajusté.
-6. Tester idéalement une valeur positive puis une valeur négative.
+E. En-tête Portail
+1. Revenir au Portail sur ordinateur.
+2. Vérifier que le bouton actif Portail montre bien l'icône et le texte en blanc.
 
-F. Centre de maintenance
-1. Depuis le Portail, ouvrir Centre de maintenance.
-2. Vérifier que Sauvegarder toutes mes données s'y trouve.
-3. Créer une archive et vérifier son téléchargement.
-4. Avec un compte non administrateur, vérifier que la sauvegarde est disponible
-   mais que les outils de diagnostic de la base ne le sont pas.
+VALIDATION TECHNIQUE EFFECTUÉE
+------------------------------
+- py_compile réussi sur les 5 fichiers Python.
+- Test isolé de set_bank_transaction_seen() avec une connexion simulée : OK.
+- Vérification que le SELECT utilise « FOR UPDATE OF transaction » : OK.
+- Vérification statique des actions de modification Compte : OK.
+- Vérification statique des contrôles de tri Budget : OK.
+- Vérification CSS du bouton actif Portail : OK.
+
+Aucun script SQL manuel.
+Aucune nouvelle dépendance Python.

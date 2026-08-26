@@ -2780,7 +2780,7 @@ def set_bank_transaction_seen(
                     ON method.id = transaction.payment_method_id
                 WHERE transaction.id = %s
                   AND transaction.user_id = %s
-                FOR UPDATE;
+                FOR UPDATE OF transaction;
                 """,
                 (transaction_id, user_id),
             )
@@ -9033,7 +9033,7 @@ def save_budget_item(
 
 
 def export_finances(user_id):
-    """Export V1.10.1 incluant les réglages de report mensuel."""
+    """Export V1.10.2 incluant les réglages de report mensuel."""
 
     csv_bytes, json_bytes = _export_finances_v110(user_id)
     try:
@@ -9050,7 +9050,7 @@ def export_finances(user_id):
             return {key: serial(item) for key, item in value.items()}
         return value
 
-    payload["version"] = "1.10.1"
+    payload["version"] = "1.10.2"
     payload["finance_settings"] = serial(get_finance_settings(user_id))
     return (
         csv_bytes,

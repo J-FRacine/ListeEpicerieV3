@@ -160,7 +160,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.10.1",
+        "title": "Finances — V1.10.2",
         "icon": "account_balance_wallet",
         "caption": "Budget, trésorerie, dépenses, prévisions et conciliation",
         "keywords": (
@@ -184,7 +184,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
         "content": """
 ### Objectif de Finances
 
-**Finances V1.10.1** conserve et complète le principe directeur : **Budget = dépenses fixes et capacité disponible**; **Tableau = suivi des dépenses variables du mois**. La conciliation améliorée de V1.9 reste entièrement conservée.
+**Finances V1.10.2** conserve et complète le principe directeur : **Budget = dépenses fixes et capacité disponible**; **Tableau = suivi des dépenses variables du mois**. La conciliation améliorée de V1.9 reste entièrement conservée.
 
 Le Tableau affiche maintenant le **Reste par paie**, le **Disponible ce mois** selon le nombre de paies détectées, les dépenses variables réalisées et à venir, leur total prévu et le **Reste disponible ce mois**. Le bloc KPI revenus est retiré du Tableau seulement; les revenus restent présents dans l’Historique, les récurrences et les calculs du Budget.
 
@@ -357,6 +357,8 @@ Pour un mode de paiement de type **Compte bancaire**, chaque mouvement de l’on
 
 Cette méthode simplifiée s’applique uniquement aux **comptes bancaires**. Les cartes de crédit continuent d’utiliser l’écran **Conciliation** par relevé.
 
+Chaque transaction réelle du Compte possède aussi une action **Modifier**. Une transaction confirmée non conciliée peut être ouverte directement. Si elle est déjà cochée **Vu**, Finances demande d’abord **Retirer la conciliation et modifier**; la transaction n’est pas supprimée et peut être conciliée de nouveau après la correction. Une ligne qui est encore une **Récurrence projetée** ouvre plutôt la récurrence d’origine, puisqu’elle n’est pas encore une vraie transaction. Un paiement de carte lié ouvre sa fiche de paiement liée; si son côté carte est déjà concilié, cette conciliation doit d’abord être retirée dans l’écran Conciliation.
+
 ### Rappels de transactions
 
 Pour une transaction **Prévue**, activez **Me rappeler cette transaction le jour prévu** et choisissez une heure. L’heure proposée par défaut est **09:00**. Si la transaction a déjà été confirmée avant cette heure, aucun rappel n’est envoyé.
@@ -392,9 +394,9 @@ Le résumé affiche :
 - le reste disponible mensuel;
 - le reste disponible par paie.
 
-Les lignes peuvent être activées, désactivées, réordonnées et modifiées.
+Les lignes peuvent être activées, désactivées, réordonnées et modifiées. Pour les **Dépenses fixes**, le menu **Trier par** permet d’afficher les postes selon l’**ordre personnalisé**, l’ordre **alphabétique**, le **montant par mois**, le **montant par paie** ou la **date de début**, en sens croissant ou décroissant. Le tri est uniquement visuel : il ne change pas les données, les récurrences ni les calculs. Les flèches de réorganisation restent disponibles lorsque l’ordre personnalisé est choisi.
 
-Un poste du Budget peut maintenant être associé à une **récurrence existante**. Lorsque **Synchroniser automatiquement le montant avec la récurrence** est activé, une modification du montant ou de la fréquence de cette récurrence met à jour le poste budgétaire lié. Une récurrence mensuelle est reprise comme montant mensuel; une récurrence toutes les deux semaines est reprise comme montant aux deux semaines. Les autres fréquences sont converties en moyenne mensuelle.
+Un poste du Budget peut maintenant être associé à une **récurrence existante**. Lorsque **Synchroniser le montant et la date de fin avec la récurrence** est activé, une modification du montant ou de la fréquence de cette récurrence met à jour le poste budgétaire lié et la date de fin du poste est aussi appliquée à la récurrence. Une récurrence mensuelle est reprise comme montant mensuel; une récurrence toutes les deux semaines est reprise comme montant aux deux semaines. Les autres fréquences sont converties en moyenne mensuelle.
 
 Le montant par paie personnalisé demeure disponible pour un poste mensuel synchronisé. La liaison est facultative : les postes comme « Épicerie 600 $/mois » peuvent rester **Budget seulement** sans créer ni nécessiter une transaction. Une même récurrence ne peut être liée qu’à un seul poste budgétaire afin d’éviter les doublons.
 

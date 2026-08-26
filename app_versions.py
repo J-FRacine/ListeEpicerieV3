@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-PORTAL_VERSION = "1.3.1"
+PORTAL_VERSION = "1.3.2"
 
 APP_LABELS = {
     "portal": "Portail JF Apps",
@@ -15,12 +15,46 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.2",
     "blood_pressure": "1.2.1",
-    "finances": "1.10.1",
+    "finances": "1.10.2",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.10.2",
+        "date": "2026-08-25",
+        "title": "Finances — modification depuis Compte et tri du Budget",
+        "summary": (
+            "Le Compte permet de modifier directement ses mouvements et le Budget "
+            "offre maintenant un tri configurable des dépenses fixes."
+        ),
+        "changes": [
+            "Correction de la case Vu : PostgreSQL verrouille uniquement la transaction principale et n’essaie plus de verrouiller le côté nullable du LEFT JOIN.",
+            "Ajout d’un bouton de modification directement sur chaque transaction réelle de l’onglet Compte.",
+            "Une transaction déjà conciliée propose Retirer la conciliation et modifier avant d’ouvrir sa fiche, afin de préserver la cohérence bancaire.",
+            "Une projection de récurrence ouvre sa récurrence d’origine au lieu d’être modifiée comme une transaction réelle.",
+            "Les paiements de carte liés ouvrent leur fiche de paiement liée; si le côté carte est déjà concilié, sa conciliation doit d’abord être retirée dans Conciliation.",
+            "Les dépenses fixes du Budget peuvent être triées par ordre personnalisé, ordre alphabétique, montant par mois, montant par paie ou date de début, en ordre croissant ou décroissant.",
+            "Le tri du Budget est uniquement visuel et ne modifie ni les données, ni les récurrences, ni les calculs.",
+            "Aucun script SQL manuel ni nouvelle dépendance n’est requis.",
+        ],
+    },
+    {
+        "app_key": "portal",
+        "version": "1.3.2",
+        "date": "2026-08-25",
+        "title": "JF Apps — correction du bouton Portail actif",
+        "summary": (
+            "Le bouton Portail actif conserve maintenant son icône et son libellé "
+            "visibles dans l’en-tête bureau."
+        ),
+        "changes": [
+            "Le texte et l’icône des boutons actifs de l’en-tête sont explicitement affichés en blanc sur le fond bleu.",
+            "La logique de navigation et les autres actions de l’en-tête ne changent pas.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.10.1",

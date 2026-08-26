@@ -760,6 +760,11 @@ SHELL_CSS = r"""
     color: white !important;
     background: var(--jf-navy) !important;
 }
+.jf-suite-action-active .q-btn__content,
+.jf-suite-action-active .q-icon,
+.jf-suite-action-active .block {
+    color: white !important;
+}
 
 .jf-suite-action-wrap {
     position: relative;

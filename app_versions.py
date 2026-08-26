@@ -15,12 +15,35 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.2",
     "blood_pressure": "1.2.1",
-    "finances": "1.10.2",
+    "finances": "1.11.0",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.11.0",
+        "date": "2026-08-26",
+        "title": "Finances — conciliation reprise, contrôles d’historique et financements",
+        "summary": (
+            "La conciliation peut être sauvegardée en cours, les paiements de carte peuvent être préparés "
+            "à la fermeture du relevé, et l’Historique gagne des outils de recherche et de vérification."
+        ),
+        "changes": [
+            "Une conciliation peut être enregistrée comme travail en cours puis reprise plus tard sans marquer les transactions comme conciliées.",
+            "La carte ayant le brouillon de conciliation le plus récent est proposée automatiquement au retour dans Conciliation.",
+            "Nouvelle action Clore et programmer le paiement : après la finalisation, la fiche Paiement de carte s’ouvre préremplie mais exige une validation explicite.",
+            "La fiche Paiement de carte offre un raccourci Arrondir au dollar supérieur sans enregistrer automatiquement le paiement.",
+            "Les financements affichent la modalité de paiement, le mode de paiement, la prochaine échéance et la date de fin prévue.",
+            "Versements déjà effectués devient facultatif; lorsque la valeur est absente, Finances estime la progression à partir du montant initial, du solde restant et du versement.",
+            "Une valeur manuelle incohérente de versements déjà effectués produit un avertissement avant enregistrement, avec possibilité de la conserver.",
+            "Historique peut filtrer par montant exact ou plage de montants, avec point ou virgule décimale.",
+            "Nouveau bouton Rechercher les doublons : même montant exact et écart de date de 2 jours ou moins, sans suppression automatique.",
+            "Nouvelle vérification mensuelle des transactions confirmées non conciliées, regroupées par compte ou carte, avec repérage des doublons potentiels.",
+            "Aucun script SQL manuel ni nouvelle dépendance n’est requis.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.10.2",

@@ -3,7 +3,7 @@ from __future__ import annotations
 from calendar import monthrange
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_HALF_UP
 import csv
 import hashlib
 import io
@@ -2210,6 +2210,9 @@ def list_transactions(
     query=None,
     transaction_id=None,
     include_linked_transfer_destinations=True,
+    amount_exact=None,
+    amount_min=None,
+    amount_max=None,
     limit=1000,
 ):
     conditions = [
@@ -2315,6 +2318,32 @@ def list_transactions(
             ]
         )
 
+    def _amount_filter_value(value, label):
+        if value in (None, ""):
+            return None
+        text = str(value).strip().replace(" ", "").replace(",", ".")
+        try:
+            parsed = Decimal(text).copy_abs().quantize(Decimal("0.01"))
+        except (InvalidOperation, ValueError, TypeError) as error:
+            raise ValueError(f"{label} est invalide.") from error
+        return parsed
+
+    exact_value = _amount_filter_value(amount_exact, "Le montant")
+    min_value = _amount_filter_value(amount_min, "Le montant minimum")
+    max_value = _amount_filter_value(amount_max, "Le montant maximum")
+    if min_value is not None and max_value is not None and min_value > max_value:
+        raise ValueError("Le montant minimum ne peut pas dépasser le montant maximum.")
+    if exact_value is not None:
+        conditions.append("ABS(t.amount) = %s")
+        params.append(exact_value)
+    else:
+        if min_value is not None:
+            conditions.append("ABS(t.amount) >= %s")
+            params.append(min_value)
+        if max_value is not None:
+            conditions.append("ABS(t.amount) <= %s")
+            params.append(max_value)
+
     params.append(
         int(limit)
     )
@@ -2327,6 +2356,8 @@ def list_transactions(
                     t.*,
                     payment_method.name
                         AS payment_method_name,
+                    payment_method.method_type
+                        AS payment_method_type,
                     linked_transfer.transfer_type
                         AS linked_transfer_type,
                     linked_transfer.source_payment_method_id
@@ -2393,6 +2424,7 @@ def list_transactions(
                     parent.name,
                     payment_method.id,
                     payment_method.name,
+                    payment_method.method_type,
                     linked_transfer.id,
                     linked_transfer.transfer_type,
                     linked_transfer.source_payment_method_id,
@@ -6473,6 +6505,15 @@ def create_reconciliation_session(
                     (payment_method_id, user_id),
                 )
 
+            # Une finalisation réussie remplace le brouillon éventuel de la carte.
+            cur.execute(
+                """
+                DELETE FROM finance_reconciliation_drafts
+                WHERE user_id=%s AND payment_method_id=%s;
+                """,
+                (user_id, payment_method_id),
+            )
+
             conn.commit()
 
     return {
@@ -8023,21 +8064,16 @@ def save_installment_plan(
     original = _money(original_amount)
     try:
         total_count = int(total_installments)
-        completed_count = int(completed_installments or 0)
     except (TypeError, ValueError) as error:
-        raise ValueError("Le nombre de versements est invalide.") from error
+        raise ValueError("Le nombre total de versements est invalide.") from error
     if total_count < 1 or total_count > 1200:
         raise ValueError("Le nombre total de versements doit être entre 1 et 1200.")
-    if completed_count < 0 or completed_count > total_count:
-        raise ValueError("Le nombre de versements déjà effectués est invalide.")
 
     purchase = _optional_date_value(purchase_date, "La date d’achat")
     next_due = _optional_date_value(
         next_due_date,
         "La prochaine échéance",
     )
-    if completed_count < total_count and next_due is None:
-        raise ValueError("Indiquez la date du prochain versement.")
 
     interest_rate = _decimal_value(
         annual_interest_rate,
@@ -8063,26 +8099,59 @@ def save_installment_plan(
     if interval < 1 or interval > 365:
         raise ValueError("L’intervalle de fréquence est invalide.")
 
+    supplied_completed = completed_installments not in (None, "")
+    completed_count = None
+    if supplied_completed:
+        try:
+            completed_count = int(completed_installments)
+        except (TypeError, ValueError) as error:
+            raise ValueError("Le nombre de versements déjà effectués est invalide.") from error
+        if completed_count < 0 or completed_count > total_count:
+            raise ValueError("Le nombre de versements déjà effectués est invalide.")
+
+    provisional_remaining = (
+        _money(remaining_balance, allow_zero=True)
+        if remaining_balance not in (None, "")
+        else None
+    )
+    provisional_payment = (
+        _money(installment_amount)
+        if installment_amount not in (None, "")
+        else None
+    )
+
+    # Si le nombre déjà effectué est inconnu mais que le solde et le versement
+    # sont disponibles, on estime la progression avant de générer l’échéancier.
+    progress = analyze_installment_progress(
+        original_amount=original,
+        remaining_balance=provisional_remaining,
+        installment_amount=provisional_payment,
+        total_installments=total_count,
+        completed_installments=completed_count if supplied_completed else None,
+    )
+    completed_estimated = (not supplied_completed and provisional_remaining is not None)
+    if completed_count is None:
+        completed_count = int(progress["estimated_completed_installments"] or 0)
+
     remaining_count = total_count - completed_count
-    if remaining_balance in (None, ""):
+    if remaining_count > 0 and next_due is None:
+        raise ValueError("Indiquez la date du prochain versement.")
+
+    if provisional_remaining is None:
         if completed_count == 0:
             remaining = original
         else:
-            remaining = (
-                original
-                * Decimal(remaining_count)
-                / Decimal(total_count)
-            ).quantize(Decimal("0.01"))
+            remaining = max(
+                Decimal("0.00"),
+                (original - (Decimal(completed_count) * (provisional_payment or (original / Decimal(total_count))))).quantize(Decimal("0.01")),
+            )
     else:
-        remaining = _money(
-            remaining_balance,
-            allow_zero=(remaining_count == 0),
-        )
+        remaining = provisional_remaining
 
     if remaining_count == 0:
         remaining = Decimal("0.00")
 
-    if installment_amount in (None, ""):
+    if provisional_payment is None:
         payment = _automatic_installment_amount(
             remaining,
             remaining_count,
@@ -8094,7 +8163,7 @@ def save_installment_plan(
         if payment <= 0 and remaining_count:
             raise ValueError("Le montant du versement ne peut pas être calculé.")
     else:
-        payment = _money(installment_amount)
+        payment = provisional_payment
 
     note = _text(note, "La note", 1000)
 
@@ -8136,6 +8205,7 @@ def save_installment_plan(
                         purchase_date=%s,
                         total_installments=%s,
                         completed_installments=%s,
+                        completed_installments_estimated=%s,
                         remaining_balance=%s,
                         installment_amount=%s,
                         annual_interest_rate=%s,
@@ -8159,6 +8229,7 @@ def save_installment_plan(
                         purchase,
                         total_count,
                         completed_count,
+                        completed_estimated,
                         remaining,
                         payment,
                         interest_rate,
@@ -8190,6 +8261,7 @@ def save_installment_plan(
                         purchase_date,
                         total_installments,
                         completed_installments,
+                        completed_installments_estimated,
                         remaining_balance,
                         installment_amount,
                         annual_interest_rate,
@@ -8205,7 +8277,7 @@ def save_installment_plan(
                     )
                     VALUES (
                         %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                        %s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                        %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
                     )
                     RETURNING id;
                     """,
@@ -8218,6 +8290,7 @@ def save_installment_plan(
                         purchase,
                         total_count,
                         completed_count,
+                        completed_estimated,
                         remaining,
                         payment,
                         interest_rate,
@@ -8293,6 +8366,13 @@ def list_installment_plans(user_id, include_inactive=True):
                         WHERE tx.installment_plan_id=plan.id
                           AND tx.status='confirmed'
                     ), 0) AS confirmed_tracked_amount
+,
+                    (
+                        SELECT MIN(tx.transaction_date)
+                        FROM finance_transactions AS tx
+                        WHERE tx.installment_plan_id=plan.id
+                          AND tx.status='planned'
+                    ) AS next_planned_date
                 FROM finance_installment_plans AS plan
                 LEFT JOIN finance_payment_methods AS payment_method
                     ON payment_method.id=plan.payment_method_id
@@ -8353,6 +8433,40 @@ def list_installment_plans(user_id, include_inactive=True):
                     row["estimated_remaining_balance"] = Decimal(
                         row["remaining_balance"]
                     )
+                effective_next = row.get("next_planned_date") or row.get("next_due_date")
+                row["display_next_due_date"] = effective_next
+                remaining_display = int(row.get("display_remaining_installments") or 0)
+                if effective_next and remaining_display > 0:
+                    end_date = effective_next
+                    for _ in range(max(0, remaining_display - 1)):
+                        end_date = _next_date(
+                            end_date,
+                            row["frequency_unit"],
+                            int(row["frequency_interval"] or 1),
+                        )
+                    row["estimated_end_date"] = end_date
+                else:
+                    row["estimated_end_date"] = None
+                unit_key = row.get("frequency_unit")
+                interval = int(row.get("frequency_interval") or 1)
+                if interval == 1:
+                    row["payment_terms_label"] = {
+                        "day": "Quotidien",
+                        "week": "Hebdomadaire",
+                        "month": "Mensuel",
+                        "year": "Annuel",
+                    }.get(unit_key, FREQUENCY_UNITS.get(unit_key, str(unit_key or "")))
+                else:
+                    plural_unit = {
+                        "day": "jours",
+                        "week": "semaines",
+                        "month": "mois",
+                        "year": "ans",
+                    }.get(unit_key, str(FREQUENCY_UNITS.get(unit_key, unit_key or "")).lower())
+                    row["payment_terms_label"] = f"Tous les {interval} {plural_unit}"
+                row["progress_estimated"] = bool(
+                    row.get("completed_installments_estimated", False)
+                )
                 result.append(row)
             return result
 
@@ -9055,4 +9169,407 @@ def export_finances(user_id):
     return (
         csv_bytes,
         json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
+    )
+
+
+# =========================================================
+# FINANCES V1.11.0 — BROUILLONS DE CONCILIATION,
+# CONTRÔLES D'HISTORIQUE ET FINANCEMENTS PLUS TOLÉRANTS
+# =========================================================
+
+_init_finances_schema_v1102 = init_finances_schema
+_export_finances_v1102 = export_finances
+
+
+def init_finances_schema():
+    """Mise à niveau V1.11.0, idempotente et sans SQL manuel."""
+
+    _init_finances_schema_v1102()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                ALTER TABLE finance_installment_plans
+                ADD COLUMN IF NOT EXISTS completed_installments_estimated BOOLEAN
+                NOT NULL DEFAULT FALSE;
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS finance_reconciliation_drafts (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL
+                        REFERENCES users(id) ON DELETE CASCADE,
+                    payment_method_id BIGINT NOT NULL
+                        REFERENCES finance_payment_methods(id) ON DELETE CASCADE,
+                    statement_date DATE,
+                    statement_balance NUMERIC(14,2),
+                    due_date DATE,
+                    reconciliation_date DATE,
+                    note TEXT,
+                    include_opening_balance BOOLEAN NOT NULL DEFAULT FALSE,
+                    difference_explanation TEXT,
+                    filter_start DATE,
+                    filter_end DATE,
+                    filter_query TEXT,
+                    sort_direction TEXT NOT NULL DEFAULT 'asc'
+                        CHECK (sort_direction IN ('asc', 'desc')),
+                    selected_transaction_ids BIGINT[] NOT NULL DEFAULT ARRAY[]::BIGINT[],
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE (user_id, payment_method_id),
+                    CHECK (note IS NULL OR CHAR_LENGTH(note) <= 1000),
+                    CHECK (
+                        difference_explanation IS NULL
+                        OR CHAR_LENGTH(difference_explanation) <= 1000
+                    )
+                );
+                """
+            )
+            conn.commit()
+
+
+def analyze_installment_progress(
+    *,
+    original_amount,
+    remaining_balance,
+    installment_amount,
+    total_installments,
+    completed_installments=None,
+):
+    """Estime la progression d'un plan à versements fixes.
+
+    Le calcul est volontairement simple et transparent. Il sert d'aide à la
+    saisie; un plan comportant intérêts, frais ou versements variables peut
+    légitimement s'écarter de cette estimation.
+    """
+
+    original = Decimal(str(original_amount or 0)).copy_abs().quantize(Decimal("0.01"))
+    remaining = (
+        Decimal(str(remaining_balance)).copy_abs().quantize(Decimal("0.01"))
+        if remaining_balance not in (None, "")
+        else None
+    )
+    total = int(total_installments or 0)
+    payment = (
+        Decimal(str(installment_amount)).copy_abs().quantize(Decimal("0.01"))
+        if installment_amount not in (None, "")
+        else None
+    )
+    if total <= 0:
+        return {
+            "estimated_completed_installments": 0,
+            "estimated_remaining_installments": 0,
+            "expected_remaining_balance": None,
+            "balance_difference": None,
+            "is_inconsistent": False,
+        }
+
+    if payment is None or payment <= 0:
+        payment = (
+            (original / Decimal(total)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if original > 0
+            else None
+        )
+
+    estimated_completed = 0
+    estimated_remaining = total
+    if remaining is not None and payment and payment > 0:
+        if remaining <= 0:
+            estimated_remaining = 0
+        else:
+            estimated_remaining = int(
+                (remaining / payment).to_integral_value(rounding=ROUND_CEILING)
+            )
+            estimated_remaining = max(0, min(total, estimated_remaining))
+        estimated_completed = max(0, total - estimated_remaining)
+
+        # Quand le montant payé est un multiple très net du versement, cette
+        # estimation est plus intuitive et corrige les effets du dernier
+        # versement arrondi.
+        paid = max(Decimal("0.00"), original - remaining)
+        completed_from_paid = int(
+            (paid / payment).to_integral_value(rounding=ROUND_HALF_UP)
+        )
+        completed_from_paid = max(0, min(total, completed_from_paid))
+        expected_paid = (Decimal(completed_from_paid) * payment).quantize(Decimal("0.01"))
+        if abs(paid - expected_paid) <= Decimal("0.02"):
+            estimated_completed = completed_from_paid
+            estimated_remaining = max(0, total - estimated_completed)
+
+    expected_remaining = None
+    difference = None
+    inconsistent = False
+    if completed_installments not in (None, "") and payment and payment > 0:
+        manual_completed = max(0, min(total, int(completed_installments)))
+        expected_remaining = max(
+            Decimal("0.00"),
+            (original - Decimal(manual_completed) * payment).quantize(Decimal("0.01")),
+        )
+        if remaining is not None:
+            difference = (remaining - expected_remaining).quantize(Decimal("0.01"))
+            inconsistent = abs(difference) > Decimal("0.02")
+
+    return {
+        "estimated_completed_installments": estimated_completed,
+        "estimated_remaining_installments": estimated_remaining,
+        "expected_remaining_balance": expected_remaining,
+        "balance_difference": difference,
+        "is_inconsistent": inconsistent,
+    }
+
+
+def save_reconciliation_draft(
+    user_id,
+    payment_method_id,
+    transaction_ids,
+    *,
+    statement_date=None,
+    statement_balance=None,
+    due_date=None,
+    reconciliation_date=None,
+    note=None,
+    include_opening_balance=False,
+    difference_explanation=None,
+    filter_start=None,
+    filter_end=None,
+    filter_query=None,
+    sort_direction="asc",
+):
+    """Sauvegarde le travail de conciliation sans concilier les transactions."""
+
+    ids = sorted({int(value) for value in (transaction_ids or [])})
+    statement = _optional_date_value(statement_date, "La date du relevé")
+    due = _optional_date_value(due_date, "La date de paiement")
+    reconciled_on = _optional_date_value(
+        reconciliation_date, "La date de conciliation"
+    )
+    start = _optional_date_value(filter_start, "La date de début du filtre")
+    end = _optional_date_value(filter_end, "La date de fin du filtre")
+    balance = _decimal_value(
+        statement_balance, "Le solde du relevé", allow_blank=True
+    )
+    cleaned_note = _text(note, "La note", 1000)
+    cleaned_explanation = _text(
+        difference_explanation, "L’explication de l’écart", 1000
+    )
+    cleaned_query = _text(filter_query, "La recherche", 300)
+    sort_value = str(sort_direction or "asc").strip().lower()
+    if sort_value not in {"asc", "desc"}:
+        sort_value = "asc"
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            method_id = _validate_payment_method(cur, user_id, payment_method_id)
+            if method_id is None:
+                raise ValueError("Choisissez un mode de paiement.")
+            cur.execute(
+                """
+                INSERT INTO finance_reconciliation_drafts (
+                    user_id, payment_method_id, statement_date,
+                    statement_balance, due_date, reconciliation_date,
+                    note, include_opening_balance, difference_explanation,
+                    filter_start, filter_end, filter_query, sort_direction,
+                    selected_transaction_ids
+                )
+                VALUES (
+                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                )
+                ON CONFLICT (user_id, payment_method_id) DO UPDATE
+                SET statement_date=EXCLUDED.statement_date,
+                    statement_balance=EXCLUDED.statement_balance,
+                    due_date=EXCLUDED.due_date,
+                    reconciliation_date=EXCLUDED.reconciliation_date,
+                    note=EXCLUDED.note,
+                    include_opening_balance=EXCLUDED.include_opening_balance,
+                    difference_explanation=EXCLUDED.difference_explanation,
+                    filter_start=EXCLUDED.filter_start,
+                    filter_end=EXCLUDED.filter_end,
+                    filter_query=EXCLUDED.filter_query,
+                    sort_direction=EXCLUDED.sort_direction,
+                    selected_transaction_ids=EXCLUDED.selected_transaction_ids,
+                    updated_at=NOW()
+                RETURNING id;
+                """,
+                (
+                    user_id,
+                    method_id,
+                    statement,
+                    balance,
+                    due,
+                    reconciled_on,
+                    cleaned_note,
+                    bool(include_opening_balance),
+                    cleaned_explanation,
+                    start,
+                    end,
+                    cleaned_query,
+                    sort_value,
+                    ids,
+                ),
+            )
+            draft_id = int(cur.fetchone()["id"])
+            conn.commit()
+    return draft_id
+
+
+def get_reconciliation_draft(user_id, payment_method_id):
+    if payment_method_id in (None, ""):
+        return None
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT draft.*, method.name AS payment_method_name
+                FROM finance_reconciliation_drafts AS draft
+                JOIN finance_payment_methods AS method
+                  ON method.id=draft.payment_method_id
+                WHERE draft.user_id=%s AND draft.payment_method_id=%s;
+                """,
+                (user_id, int(payment_method_id)),
+            )
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def list_reconciliation_drafts(user_id):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT draft.*, method.name AS payment_method_name
+                FROM finance_reconciliation_drafts AS draft
+                JOIN finance_payment_methods AS method
+                  ON method.id=draft.payment_method_id
+                WHERE draft.user_id=%s
+                ORDER BY draft.updated_at DESC, draft.id DESC;
+                """,
+                (user_id,),
+            )
+            return cur.fetchall()
+
+
+def delete_reconciliation_draft(user_id, payment_method_id):
+    if payment_method_id in (None, ""):
+        return 0
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM finance_reconciliation_drafts
+                WHERE user_id=%s AND payment_method_id=%s;
+                """,
+                (user_id, int(payment_method_id)),
+            )
+            count = cur.rowcount
+            conn.commit()
+    return count
+
+
+def find_potential_duplicate_transactions(
+    user_id,
+    *,
+    start_date=None,
+    end_date=None,
+    same_type=True,
+    window_days=2,
+    limit=10000,
+):
+    """Retourne des groupes de doublons potentiels: montant exact + dates proches."""
+
+    rows = list_transactions(
+        user_id,
+        start_date=start_date,
+        end_date=end_date,
+        include_linked_transfer_destinations=False,
+        limit=limit,
+    )
+    buckets = defaultdict(list)
+    for row in rows:
+        key = (
+            Decimal(row["amount"]).copy_abs().quantize(Decimal("0.01")),
+            row["transaction_type"] if same_type else "*",
+        )
+        buckets[key].append(dict(row))
+
+    groups = []
+    delta_days = max(0, int(window_days))
+    for (amount, tx_type), bucket in buckets.items():
+        bucket.sort(key=lambda item: (item["transaction_date"], int(item["id"])))
+        cluster = []
+        for row in bucket:
+            if not cluster:
+                cluster = [row]
+                continue
+            if (
+                row["transaction_date"] - cluster[0]["transaction_date"]
+            ).days <= delta_days:
+                cluster.append(row)
+            else:
+                if len(cluster) >= 2:
+                    groups.append(
+                        {
+                            "amount": amount,
+                            "transaction_type": tx_type,
+                            "transactions": cluster,
+                        }
+                    )
+                cluster = [row]
+        if len(cluster) >= 2:
+            groups.append(
+                {
+                    "amount": amount,
+                    "transaction_type": tx_type,
+                    "transactions": cluster,
+                }
+            )
+
+    groups.sort(
+        key=lambda group: (
+            group["transactions"][-1]["transaction_date"],
+            group["amount"],
+        ),
+        reverse=True,
+    )
+    return groups
+
+
+def list_month_unreconciled_transactions(user_id, month_value):
+    month = _month_start(month_value)
+    month_end = _add_months(month, 1) - timedelta(days=1)
+    return list_transactions(
+        user_id,
+        start_date=month,
+        end_date=month_end,
+        status="confirmed",
+        reconciliation_status="unreconciled",
+        include_linked_transfer_destinations=True,
+        limit=10000,
+    )
+
+
+def export_finances(user_id):
+    """Export V1.11.0 incluant les nouveaux réglages de financement."""
+
+    csv_bytes, json_bytes = _export_finances_v1102(user_id)
+    try:
+        payload = json.loads(json_bytes.decode("utf-8"))
+    except Exception:
+        return csv_bytes, json_bytes
+
+    payload["version"] = "1.11.0"
+    payload["reconciliation_drafts"] = [
+        {
+            key: (
+                str(value)
+                if isinstance(value, (date, datetime, time, Decimal))
+                else value
+            )
+            for key, value in dict(row).items()
+        }
+        for row in list_reconciliation_drafts(user_id)
+    ]
+    return (
+        csv_bytes,
+        json.dumps(payload, ensure_ascii=False, indent=2, default=str).encode("utf-8"),
     )

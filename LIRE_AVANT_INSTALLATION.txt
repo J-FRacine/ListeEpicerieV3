@@ -1,122 +1,89 @@
-JF APPS — FINANCES V1.10.2 / PORTAIL V1.3.2
-================================================
+JF APPS — FINANCES V1.11.0
+==========================
+Date : 26 août 2026
 
-OBJECTIF DE CE CORRECTIF
-------------------------
-Ce paquet part de Finances V1.10.1 / Portail V1.3.1 et regroupe les derniers
-commentaires de test :
+OBJET DE CETTE VERSION
+---------------------
+Cette version regroupe les dernières demandes Finances après V1.10.2 :
+- sauvegarde et reprise d'une conciliation en cours;
+- action « Clore et programmer le paiement » après une conciliation de carte;
+- bouton « Arrondir au dollar supérieur » dans la fiche Paiement de carte;
+- améliorations du suivi des financements;
+- recherche Historique par montant;
+- recherche de doublons potentiels;
+- vérification mensuelle des transactions non conciliées.
 
-1. Corriger l'erreur PostgreSQL de la case « Vu » dans Compte :
-   « FOR UPDATE cannot be applied to the nullable side of an outer join ».
-2. Permettre de modifier directement une transaction depuis l'onglet Compte.
-3. Ajouter un tri configurable des dépenses fixes du Budget.
-4. Corriger le bouton actif « Portail » qui apparaissait comme un rectangle
-   bleu vide dans l'en-tête bureau.
-
-FINANCES V1.10.2
-----------------
-COMPTE — CASE « VU »
-- Le verrou PostgreSQL porte maintenant uniquement sur finance_transactions.
-- Une transaction Prévue peut de nouveau être cochée Vu pour être confirmée
-  et conciliée en une seule action.
-- Décocher Vu retire la conciliation sans supprimer la transaction.
-
-COMPTE — MODIFICATION DIRECTE
-- Une icône de modification apparaît directement à côté de la description.
-- Une transaction réelle non conciliée ouvre la fiche complète de transaction.
-- Si la transaction est déjà conciliée/Vu, Finances propose :
-  « Retirer la conciliation et modifier ».
-- La transaction reste enregistrée; seule sa conciliation est retirée avant
-  l'ouverture de la fiche.
-- Une projection pure de récurrence ouvre la récurrence d'origine au lieu de
-  créer ou modifier silencieusement une transaction inexistante.
-- Un paiement de carte lié ouvre sa fiche « Paiement de carte ».
-- Si le côté carte du paiement lié est déjà concilié, il faut d'abord retirer
-  cette conciliation dans l'onglet Conciliation.
-- Après l'enregistrement, le même compte et le même mois restent affichés et
-  les soldes/projections sont recalculés.
-
-BUDGET — TRI DES DÉPENSES FIXES
-Le bloc Dépenses fixes possède maintenant deux sélecteurs :
-- Trier par :
-  * Ordre personnalisé
-  * Alphabétique
-  * Montant par mois
-  * Montant par paie
-  * Date de début
-- Sens : Croissant / Décroissant
-
-Le tri par défaut est « Montant par mois / Décroissant ».
-Le tri est uniquement visuel. Il ne modifie pas les données, les récurrences,
-les calculs ou les montants enregistrés. Les flèches de réorganisation sont
-conservées lorsque « Ordre personnalisé » est choisi.
-
-PORTAIL V1.3.2
---------------
-- Correction CSS de l'état actif des boutons du bandeau bureau.
-- Le bouton Portail actif affiche maintenant son icône et le texte « Portail »
-  en blanc sur le fond bleu.
-- La même correction protège aussi les autres boutons actifs, notamment
-  Commentaires.
-- Aucune logique de navigation n'est modifiée.
-
-FICHIERS COMPLETS À REMPLACER ENSEMBLE
----------------------------------------
-- app.py
+FICHIERS À REMPLACER ENSEMBLE
+-----------------------------
 - finances.py
 - finances_data.py
 - app_versions.py
 - manual.py
 
-Le fichier global_backup.py de V1.10.1 / V1.3.1 est inchangé et n'a pas besoin
-d'être remplacé.
+Le Portail demeure V1.3.2. app.py et global_backup.py ne changent pas dans cette livraison.
+
+AUCUN SQL MANUEL
+----------------
+Aucun script SQL n'est à exécuter manuellement.
+Au premier démarrage de Finances, la mise à niveau crée automatiquement :
+- le stockage des brouillons de conciliation;
+- l'indicateur permettant de savoir si le nombre de versements déjà effectués a été estimé.
+
+Aucune nouvelle dépendance Python.
 
 INSTALLATION
 ------------
-1. Dans GitHub, remplacer les 5 fichiers ci-dessus par ceux de ce paquet.
+1. Remplacer les quatre fichiers ci-dessus dans GitHub.
 2. Faire Commit changes.
-3. Laisser Canner redéployer.
-4. Sur l'ordinateur, faire Ctrl+F5 après le redéploiement.
-5. Vérifier que Finances affiche V1.10.2 et le Portail V1.3.2.
+3. Attendre le redéploiement Canner.
+4. Sur PC : Ctrl+F5 après le déploiement.
+5. Ouvrir Finances et vérifier que la version affichée est V1.11.0.
 
-TESTS RECOMMANDÉS APRÈS DÉPLOIEMENT
------------------------------------
-A. Case Vu
-1. Ouvrir Finances > Compte > un compte bancaire.
-2. Cocher Vu sur une transaction Prévue réelle.
-3. Vérifier qu'elle devient Confirmée + Conciliée sans erreur PostgreSQL.
-4. Décocher Vu et vérifier qu'elle reste Confirmée mais redevient À concilier.
+TESTS RECOMMANDÉS
+-----------------
+A. Conciliation en cours
+1. Ouvrir Conciliation sur une carte.
+2. Cocher quelques transactions et saisir les données du relevé.
+3. Cliquer « Enregistrer le travail en cours ».
+4. Aller dans un autre onglet puis revenir à Conciliation.
+5. Vérifier la carte « Conciliation en cours enregistrée » et cliquer « Reprendre ».
+6. Vérifier que sélection, dates, solde, note, filtres et tri ont été restaurés.
+7. Confirmer qu'aucune transaction n'est conciliée avant la finalisation.
 
-B. Modification depuis Compte
-1. Cliquer le crayon d'une transaction non conciliée.
-2. Modifier par exemple la description ou le montant et enregistrer.
-3. Vérifier le recalcul immédiat des soldes.
-4. Refaire le test sur une transaction cochée Vu.
-5. Vérifier que Finances demande d'abord « Retirer la conciliation et modifier ».
+B. Clore et programmer le paiement
+1. Finaliser un relevé de carte avec « Clore et programmer le paiement ».
+2. Vérifier que la fiche Paiement de carte s'ouvre après la conciliation.
+3. Vérifier la carte destination, le montant proposé et la date proposée.
+4. Choisir/confirmer le compte bancaire source.
+5. Tester « Arrondir au dollar supérieur » (ex. 417,32 -> 418,00).
+6. Vérifier qu'aucun paiement n'est créé avant « Enregistrer le paiement ».
 
-C. Projection de récurrence
-1. Cliquer l'icône de modification d'une ligne « Récurrence projetée ».
-2. Vérifier que la fiche de la récurrence s'ouvre, et non une transaction fictive.
+C. Financements
+1. Ouvrir un financement existant.
+2. Effacer « Versements déjà effectués » et conserver montant initial, solde et versement.
+3. Enregistrer et vérifier que la carte indique « estimation ».
+4. Vérifier Modalité, Prochaine échéance et Fin prévue.
+5. Saisir volontairement un nombre incohérent avec le solde et le versement; vérifier l'avertissement et l'option « Conserver quand même ».
 
-D. Tri Budget
-1. Ouvrir Finances > Budget.
-2. Dans Dépenses fixes, tester Alphabétique, Montant par mois,
-   Montant par paie et Date de début.
-3. Tester Croissant et Décroissant.
-4. Vérifier que les montants et les calculs du Budget ne changent pas.
+D. Historique — montants
+1. Chercher un montant exact avec une virgule, ex. 42,50.
+2. Refaire avec un point, ex. 42.50.
+3. Tester Montant min. / Montant max. combiné avec une catégorie ou un mode de paiement.
 
-E. En-tête Portail
-1. Revenir au Portail sur ordinateur.
-2. Vérifier que le bouton actif Portail montre bien l'icône et le texte en blanc.
+E. Doublons
+1. Cliquer « Rechercher les doublons ».
+2. Vérifier qu'un même montant sur deux dates à 2 jours ou moins apparaît comme doublon potentiel.
+3. Vérifier qu'aucune suppression n'est automatique.
+4. Tester Ouvrir/Modifier et Supprimer sur une transaction de test.
 
-VALIDATION TECHNIQUE EFFECTUÉE
-------------------------------
-- py_compile réussi sur les 5 fichiers Python.
-- Test isolé de set_bank_transaction_seen() avec une connexion simulée : OK.
-- Vérification que le SELECT utilise « FOR UPDATE OF transaction » : OK.
-- Vérification statique des actions de modification Compte : OK.
-- Vérification statique des contrôles de tri Budget : OK.
-- Vérification CSS du bouton actif Portail : OK.
+F. Non conciliées du mois
+1. Cliquer « Vérifier les non conciliées du mois ».
+2. Choisir un mois connu.
+3. Vérifier le regroupement par compte/carte et les doublons potentiels signalés.
+4. Pour un compte bancaire, tester « Marquer Vu » sur une transaction de test.
+5. Vérifier le message « Aucune transaction non conciliée pour ce mois » lorsqu'il n'en reste plus.
 
-Aucun script SQL manuel.
-Aucune nouvelle dépendance Python.
+IMPORTANT
+---------
+Ne pas supprimer la base de données.
+Les brouillons de conciliation ne changent pas le statut des transactions : seule la finalisation les concilie.

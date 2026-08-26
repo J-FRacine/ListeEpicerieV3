@@ -160,7 +160,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.10.2",
+        "title": "Finances — V1.11.0",
         "icon": "account_balance_wallet",
         "caption": "Budget, trésorerie, dépenses, prévisions et conciliation",
         "keywords": (
@@ -179,12 +179,14 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "programmé tableau compact transactions à venir repliable "
             "conciliation compte bancaire vu case cocher confirmer concilier "
             "sélection persistante ajout modification tri date ascendante descendante "
-            "écart justifié différence relevé référence reporter écart"
+            "écart justifié différence relevé référence reporter écart "
+            "brouillon conciliation reprendre enregistrer travail paiement programmer arrondir "
+            "financement estimation versements fin prévue modalité montant recherche doublons non conciliées mois"
         ),
         "content": """
 ### Objectif de Finances
 
-**Finances V1.10.2** conserve et complète le principe directeur : **Budget = dépenses fixes et capacité disponible**; **Tableau = suivi des dépenses variables du mois**. La conciliation améliorée de V1.9 reste entièrement conservée.
+**Finances V1.11.0** conserve et complète le principe directeur : **Budget = dépenses fixes et capacité disponible**; **Tableau = suivi des dépenses variables du mois**. La conciliation améliorée de V1.9 reste entièrement conservée.
 
 Le Tableau affiche maintenant le **Reste par paie**, le **Disponible ce mois** selon le nombre de paies détectées, les dépenses variables réalisées et à venir, leur total prévu et le **Reste disponible ce mois**. Le bloc KPI revenus est retiré du Tableau seulement; les revenus restent présents dans l’Historique, les récurrences et les calculs du Budget.
 
@@ -216,7 +218,11 @@ Les valeurs négatives des KPI affichent toujours explicitement le signe **-** e
 
 ### Financements et achats en versements
 
-L’onglet **Financements** permet de documenter un financement de magasin ou un plan de versements offert par une carte de crédit, avec ou sans intérêts/frais. Il est possible de saisir un plan neuf ou déjà en cours : montant initial, nombre total de versements, versements déjà effectués, solde restant, prochaine échéance, fréquence, montant du versement, taux/frais, mode de paiement, catégorie et étiquettes.
+L’onglet **Financements** permet de documenter un financement de magasin ou un plan de versements offert par une carte de crédit, avec ou sans intérêts/frais. Il est possible de saisir un plan neuf ou déjà en cours : montant initial, nombre total de versements, solde restant, prochaine échéance, fréquence, montant du versement, taux/frais, mode de paiement, catégorie et étiquettes.
+
+Le champ **Versements déjà effectués** est facultatif. Si vous connaissez cette valeur, vous pouvez la saisir. Si vous la laissez vide, Finances estime la progression à partir du montant initial, du solde restant actuel et du montant du versement. La fiche indique alors que le nombre de versements est une **estimation**. Lorsqu’un nombre saisi manuellement ne concorde pas avec les montants, un avertissement présente le nombre estimé, le solde théorique et l’écart; vous pouvez toutefois conserver la valeur saisie, notamment pour les plans comportant intérêts, frais ou versements variables.
+
+Chaque carte de financement affiche aussi la **modalité de paiement** (fréquence, montant du versement et compte/carte utilisé), la **prochaine échéance** et une **date de fin prévue** calculée à partir des versements restants.
 
 Par défaut, chaque versement futur est une **vraie dépense prévue** : il apparaît dans les KPI du mois selon sa catégorie et réduit le montant disponible. Le montant initial complet n’est pas ajouté en plus des versements, ce qui évite le double comptage. Un financement peut exceptionnellement être marqué **Hors budget**. Les anciennes mensualités d’un plan déjà commencé ne sont pas recréées automatiquement.
 
@@ -496,6 +502,8 @@ Pendant une séance, l’utilisateur peut :
 
 Une transaction sélectionnée reste cochée après un ajout, une modification, un tri ou un rafraîchissement tant qu’elle demeure **confirmée, non conciliée et affectée à la même carte**. Si une modification la rend inadmissible — par exemple en changeant sa carte — elle est retirée de la sélection avec un avis. Changer volontairement de carte dans le sélecteur démarre une nouvelle sélection.
 
+Une conciliation peut maintenant être **enregistrée en cours**. Le brouillon conserve la carte, les transactions cochées, les dates et le solde du relevé, la date de paiement, la note, l’explication d’écart, les filtres et le tri. Vous pouvez ensuite quitter l’onglet et revenir plus tard avec **Reprendre**. La sauvegarde intermédiaire ne concilie aucune transaction et ne change jamais la référence du relevé. Si une transaction sauvegardée n’est plus admissible au retour, elle est retirée de la sélection avec un avis. Un brouillon peut aussi être **Abandonné**.
+
 #### Solde de référence et différence
 
 À partir de V1.9, la conciliation présente explicitement la formule :
@@ -510,6 +518,8 @@ Si une différence existe, deux choix sont proposés :
 - **Reporter l’écart** : le solde attendu demeure la référence. La différence reste donc à résoudre lors d’une prochaine conciliation.
 
 Lorsque la différence est nulle, la séance est simplement enregistrée comme **équilibrée**.
+
+Pour une carte de crédit, **Clore et programmer le paiement** finalise d’abord la conciliation puis ouvre la fiche existante **Paiement de carte**. La carte, le montant du relevé et la date de paiement sont proposés automatiquement, mais rien n’est enregistré sans validation explicite. Le compte bancaire source, le montant, les dates et le statut restent modifiables. Le bouton **Arrondir au dollar supérieur** permet, par exemple, de transformer 417,32 $ en 418,00 $ avant l’enregistrement. Si la conciliation contient un écart, l’action de clôture et paiement utilise la logique d’**écart justifié** et exige donc une explication.
 
 ### Historique des conciliations
 
@@ -618,7 +628,15 @@ Les filtres permettent de chercher par :
 - étiquette;
 - mode de paiement;
 - statut de conciliation;
-- texte.
+- texte;
+- **montant exact**;
+- **montant minimum / maximum**.
+
+Les montants peuvent être saisis avec un point ou une virgule décimale. Le signe n’est pas nécessaire : une recherche sur 42,50 compare le montant enregistré des dépenses comme des revenus.
+
+Le bouton **Rechercher les doublons** repère les groupes de transactions ayant exactement le même montant et des dates espacées de **2 jours ou moins**. Par défaut, les dépenses sont comparées avec les dépenses et les revenus avec les revenus. Les résultats sont présentés comme **doublons potentiels** avec les détails nécessaires pour ouvrir, modifier ou supprimer manuellement une transaction; aucune suppression n’est automatique.
+
+Le bouton **Vérifier les non conciliées du mois** affiche toutes les transactions confirmées encore à concilier pour le mois choisi, regroupées par compte ou carte. Cette vue sert de liste de contrôle de fin de mois et signale aussi les transactions appartenant à un groupe de doublons potentiels. Pour un compte bancaire, une transaction peut être marquée **Vu** directement depuis cette vérification.
 
 ### Importer
 

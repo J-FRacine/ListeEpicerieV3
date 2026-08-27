@@ -1,89 +1,52 @@
-JF APPS — FINANCES V1.11.0
-==========================
-Date : 26 août 2026
+JF APPS — PORTAIL V1.3.3 — STATISTIQUES CANNER WEB VITALS
+==========================================================
 
-OBJET DE CETTE VERSION
----------------------
-Cette version regroupe les dernières demandes Finances après V1.10.2 :
-- sauvegarde et reprise d'une conciliation en cours;
-- action « Clore et programmer le paiement » après une conciliation de carte;
-- bouton « Arrondir au dollar supérieur » dans la fiche Paiement de carte;
-- améliorations du suivi des financements;
-- recherche Historique par montant;
-- recherche de doublons potentiels;
-- vérification mensuelle des transactions non conciliées.
+OBJECTIF
+--------
+Canner demande d'ajouter le script suivant afin d'alimenter ses statistiques
+techniques / Web Vitals :
+
+<script src="https://api.canner.ca/_canner/vitals.js" async></script>
+
+INTÉGRATION
+-----------
+Le script est ajouté dans app.py avec ui.add_head_html(..., shared=True).
+Il est donc injecté dans le <head> commun de JF Apps et chargé de façon
+asynchrone sur toutes les pages.
 
 FICHIERS À REMPLACER ENSEMBLE
 -----------------------------
-- finances.py
-- finances_data.py
+- app.py
 - app_versions.py
 - manual.py
 
-Le Portail demeure V1.3.2. app.py et global_backup.py ne changent pas dans cette livraison.
-
-AUCUN SQL MANUEL
-----------------
-Aucun script SQL n'est à exécuter manuellement.
-Au premier démarrage de Finances, la mise à niveau crée automatiquement :
-- le stockage des brouillons de conciliation;
-- l'indicateur permettant de savoir si le nombre de versements déjà effectués a été estimé.
-
-Aucune nouvelle dépendance Python.
+VERSIONS
+--------
+- Portail JF Apps : V1.3.3
+- Finances : V1.11.0 (inchangée)
+- Liste d'épicerie : V1.1.2 (inchangée)
+- Journal de pression : V1.2.1 (inchangé)
+- Personnages JDR : V1.2.0 (inchangé)
 
 INSTALLATION
 ------------
-1. Remplacer les quatre fichiers ci-dessus dans GitHub.
+1. Dans GitHub, remplacer les 3 fichiers ci-dessus.
 2. Faire Commit changes.
-3. Attendre le redéploiement Canner.
-4. Sur PC : Ctrl+F5 après le déploiement.
-5. Ouvrir Finances et vérifier que la version affichée est V1.11.0.
+3. Laisser Canner redéployer.
+4. Faire Ctrl+F5 sur ordinateur après le redéploiement.
+5. Vérifier que le Portail affiche V1.3.3.
+6. Après quelques visites/pages, vérifier dans Canner que les statistiques
+   commencent à recevoir des données. Le délai d'affichage éventuel dépend de Canner.
 
-TESTS RECOMMANDÉS
------------------
-A. Conciliation en cours
-1. Ouvrir Conciliation sur une carte.
-2. Cocher quelques transactions et saisir les données du relevé.
-3. Cliquer « Enregistrer le travail en cours ».
-4. Aller dans un autre onglet puis revenir à Conciliation.
-5. Vérifier la carte « Conciliation en cours enregistrée » et cliquer « Reprendre ».
-6. Vérifier que sélection, dates, solde, note, filtres et tri ont été restaurés.
-7. Confirmer qu'aucune transaction n'est conciliée avant la finalisation.
+VÉRIFICATIONS TECHNIQUES EFFECTUÉES
+-----------------------------------
+- app.py : py_compile OK
+- app_versions.py : py_compile OK
+- manual.py : py_compile OK
+- présence exacte du script Canner dans app.py : OK
+- chargement async : OK
+- intégration dans le head partagé NiceGUI : OK
 
-B. Clore et programmer le paiement
-1. Finaliser un relevé de carte avec « Clore et programmer le paiement ».
-2. Vérifier que la fiche Paiement de carte s'ouvre après la conciliation.
-3. Vérifier la carte destination, le montant proposé et la date proposée.
-4. Choisir/confirmer le compte bancaire source.
-5. Tester « Arrondir au dollar supérieur » (ex. 417,32 -> 418,00).
-6. Vérifier qu'aucun paiement n'est créé avant « Enregistrer le paiement ».
-
-C. Financements
-1. Ouvrir un financement existant.
-2. Effacer « Versements déjà effectués » et conserver montant initial, solde et versement.
-3. Enregistrer et vérifier que la carte indique « estimation ».
-4. Vérifier Modalité, Prochaine échéance et Fin prévue.
-5. Saisir volontairement un nombre incohérent avec le solde et le versement; vérifier l'avertissement et l'option « Conserver quand même ».
-
-D. Historique — montants
-1. Chercher un montant exact avec une virgule, ex. 42,50.
-2. Refaire avec un point, ex. 42.50.
-3. Tester Montant min. / Montant max. combiné avec une catégorie ou un mode de paiement.
-
-E. Doublons
-1. Cliquer « Rechercher les doublons ».
-2. Vérifier qu'un même montant sur deux dates à 2 jours ou moins apparaît comme doublon potentiel.
-3. Vérifier qu'aucune suppression n'est automatique.
-4. Tester Ouvrir/Modifier et Supprimer sur une transaction de test.
-
-F. Non conciliées du mois
-1. Cliquer « Vérifier les non conciliées du mois ».
-2. Choisir un mois connu.
-3. Vérifier le regroupement par compte/carte et les doublons potentiels signalés.
-4. Pour un compte bancaire, tester « Marquer Vu » sur une transaction de test.
-5. Vérifier le message « Aucune transaction non conciliée pour ce mois » lorsqu'il n'en reste plus.
-
-IMPORTANT
----------
-Ne pas supprimer la base de données.
-Les brouillons de conciliation ne changent pas le statut des transactions : seule la finalisation les concilie.
+Aucun script SQL manuel.
+Aucune nouvelle dépendance Python.
+Aucune donnée PostgreSQL n'est modifiée par ce correctif.

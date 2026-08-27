@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-PORTAL_VERSION = "1.3.2"
+PORTAL_VERSION = "1.3.3"
 
 APP_LABELS = {
     "portal": "Portail JF Apps",
@@ -21,6 +21,22 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "portal",
+        "version": "1.3.3",
+        "date": "2026-08-27",
+        "title": "JF Apps — statistiques techniques Canner",
+        "summary": (
+            "Le Portail charge maintenant le script officiel Canner Web Vitals "
+            "afin d’alimenter les statistiques de performance de l’hébergement."
+        ),
+        "changes": [
+            "Ajout du script https://api.canner.ca/_canner/vitals.js dans le head partagé de JF Apps.",
+            "Le chargement est asynchrone afin de ne pas bloquer l’affichage de l’application.",
+            "Aucune donnée PostgreSQL, transaction Finances ou logique métier n’est modifiée.",
+            "Aucune nouvelle dépendance Python n’est requise.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.11.0",

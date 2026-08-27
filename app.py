@@ -240,6 +240,13 @@ if LOGO_FILE.exists():
 
 configure_pwa(BASE_DIR)
 
+# Statistiques techniques et Web Vitals fournis par Canner.
+# Le script est ajouté une seule fois au <head> partagé de toutes les pages JF Apps.
+ui.add_head_html(
+    '<script src="https://api.canner.ca/_canner/vitals.js" async></script>',
+    shared=True,
+)
+
 
 APP_CSS = r'''
 :root {

@@ -92,6 +92,10 @@ Il présente toujours :
 
 Le logo et le bouton **Portail** ramènent tous deux au Portail principal.
 
+### Statistiques techniques Canner
+
+JF Apps charge le script officiel **Canner Web Vitals** dans l’en-tête commun afin de permettre à l’hébergeur d’afficher ses statistiques techniques et de performance. Le script est chargé de façon asynchrone sur toutes les pages et ne modifie pas les données des applications ni les données PostgreSQL.
+
 Sur téléphone, l’en-tête est volontairement réduit à :
 
 - le logo;

@@ -16,11 +16,33 @@ APP_VERSIONS = {
     "grocery": "1.1.2",
     "blood_pressure": "1.2.1",
     "finances": "1.13.1",
-    "rpg": "1.2.0",
+    "rpg": "1.3.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "rpg",
+        "version": "1.3.0",
+        "date": "2026-08-31",
+        "title": "Personnages JDR — progression guidée",
+        "summary": (
+            "Ajout d’un assistant de montée de niveau avec prévisualisation, "
+            "sous-classe facultative et historique des changements."
+        ),
+        "changes": [
+            "Nouvel onglet Progression pour monter le personnage d’un niveau à la fois.",
+            "La classe est reprise automatiquement et la sous-classe demeure entièrement facultative.",
+            "Si aucune sous-classe n’est indiquée, les choix propres aux sous-classes sont ignorés sans avertissement ni blocage.",
+            "Prévisualisation avant application des PV, du BBA, des sauvegardes de base, de l’augmentation de caractéristique et des rangs de compétences.",
+            "Les rangs existants sont conservés; seuls les rangs ajoutés pour le nouveau niveau sont appliqués.",
+            "Les dons, capacités spéciales et autres choix du niveau peuvent être documentés dans l’assistant même avant leurs futurs modules spécialisés.",
+            "Historique détaillé des montées de niveau avec classe, sous-classe, changements numériques, compétences et notes.",
+            "La nouvelle colonne de sous-classe et l’historique sont créés automatiquement au démarrage; aucun SQL manuel n’est requis.",
+            "La sauvegarde/restauration globale existante prend automatiquement en charge les nouvelles données rpg_ liées au personnage.",
+            "Aucune nouvelle dépendance Python n’est requise.",
+        ],
+    },
     {
         "app_key": "portal",
         "version": "1.4.0",

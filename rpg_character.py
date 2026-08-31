@@ -22,10 +22,12 @@ from rpg_character_data import (
     get_rpg_character,
     list_rpg_attacks,
     list_rpg_equipment,
+    list_rpg_level_history,
     list_rpg_characters,
     list_rpg_saves,
     list_rpg_skills,
     save_rpg_equipment,
+    apply_rpg_level_up,
     update_rpg_attack,
     update_rpg_character_combat,
     update_rpg_character_identity,
@@ -973,6 +975,14 @@ def _identity_panel(
             ).classes(
                 "w-full"
             )
+            subclass_input = ui.input(
+                label="Sous-classe facultative",
+                value=character.get("subclass_name") or "",
+            ).props(
+                "maxlength=160 clearable"
+            ).classes(
+                "w-full"
+            )
             level_input = ui.number(
                 label="Niveau",
                 value=character[
@@ -1408,6 +1418,7 @@ def _identity_panel(
                         "player_name": player_input.value,
                         "campaign": campaign_input.value,
                         "class_name": class_input.value,
+                        "subclass_name": subclass_input.value,
                         "character_level": level_input.value,
                         "race_key": race_key,
                         "race": race_name,
@@ -1955,6 +1966,264 @@ def _calculation_rules_dialog(
                     ).props("outline")
 
     dialog.open()
+
+
+
+def _progression_panel(
+    user_id,
+    character,
+):
+    """Assistant de montée de niveau Pathfinder, volontairement adaptable."""
+    next_level = int(character.get("character_level") or 1) + 1
+    skills = list_rpg_skills(user_id, character["id"])
+    history = list_rpg_level_history(user_id, character["id"])
+
+    with ui.card().classes("w-full p-5"):
+        with ui.row().classes("w-full items-start justify-between gap-3 flex-wrap"):
+            with ui.column().classes("gap-0"):
+                ui.label("Progression du personnage").classes("text-xl font-bold")
+                ui.label(
+                    "Montez d’un niveau à la fois. L’assistant applique seulement "
+                    "les valeurs que vous confirmez et conserve un historique."
+                ).classes("text-sm jf-muted")
+            ui.button(
+                f"Monter au niveau {next_level}",
+                icon="trending_up",
+                on_click=lambda: open_level_up_dialog(),
+            ).props("color=primary").set_enabled(next_level <= 100)
+
+        with ui.element("div").classes("jf-rpg-grid mt-3"):
+            for label, value in (
+                ("Niveau actuel", character.get("character_level") or 1),
+                ("Classe", character.get("class_name") or "—"),
+                ("Sous-classe", character.get("subclass_name") or "Aucune"),
+                ("BBA", format_modifier(character.get("base_attack_bonus") or 0)),
+            ):
+                with ui.column().classes("gap-0"):
+                    ui.label(label).classes("text-xs jf-muted")
+                    ui.label(str(value)).classes("font-bold")
+
+    def open_level_up_dialog():
+        if next_level > 100:
+            ui.notify("Le niveau maximal de cette feuille est 100.", type="warning")
+            return
+
+        with ui.dialog() as dialog:
+            with ui.card().classes("w-full max-w-4xl p-5"):
+                ui.label(f"Passage au niveau {next_level}").classes("text-2xl font-bold")
+                ui.label(
+                    "La sous-classe est facultative. Si elle reste vide, "
+                    "aucune étape propre aux sous-classes n’est requise."
+                ).classes("text-sm jf-muted")
+
+                with ui.expansion("1. Classe et sous-classe", icon="badge", value=True).props(
+                    "expand-separator"
+                ).classes("w-full"):
+                    with ui.element("div").classes("jf-rpg-grid mt-2"):
+                        class_input = ui.input(
+                            label="Classe",
+                            value=character.get("class_name") or "",
+                        ).props("maxlength=120")
+                        subclass_input = ui.input(
+                            label="Sous-classe facultative",
+                            value=character.get("subclass_name") or "",
+                        ).props("maxlength=160 clearable")
+                    subclass_notes = ui.textarea(
+                        label="Choix / capacités propres à la sous-classe",
+                        value="",
+                    ).props("outlined autogrow maxlength=4000").classes("w-full")
+
+                    def refresh_subclass_notes(_event=None):
+                        subclass_notes.set_visibility(bool(str(subclass_input.value or "").strip()))
+                    subclass_input.on_value_change(refresh_subclass_notes)
+                    refresh_subclass_notes()
+
+                with ui.expansion("2. Vitalité et progression de base", icon="favorite", value=True).props(
+                    "expand-separator"
+                ).classes("w-full"):
+                    with ui.element("div").classes("jf-rpg-grid mt-2"):
+                        hp_gain = ui.number(label="PV gagnés", value=0, min=0, max=1000, step=1).props("inputmode=numeric")
+                        add_current_hp = ui.checkbox("Ajouter aussi aux PV actuels", value=True)
+                        bab_delta = ui.number(label="BBA gagné", value=0, min=0, max=20, step=1).props("inputmode=numeric")
+                        fort_delta = ui.number(label="Vigueur de base gagnée", value=0, min=0, max=20, step=1).props("inputmode=numeric")
+                        reflex_delta = ui.number(label="Réflexes de base gagnés", value=0, min=0, max=20, step=1).props("inputmode=numeric")
+                        will_delta = ui.number(label="Volonté de base gagnée", value=0, min=0, max=20, step=1).props("inputmode=numeric")
+                        ability_options = {"": "Aucune"}
+                        ability_options.update({key: ABILITY_LONG_LABELS[key] for key in ABILITY_LABELS})
+                        ability_input = ui.select(
+                            ability_options,
+                            label="Caractéristique +1 facultative",
+                            value="",
+                        ).props("options-dense")
+                    if next_level % 4 == 0:
+                        ui.label(
+                            "Rappel Pathfinder : ce niveau est un multiple de 4; "
+                            "une augmentation de caractéristique est généralement à vérifier."
+                        ).classes("text-sm text-primary font-bold mt-2")
+
+                rank_inputs = {}
+                with ui.expansion("3. Rangs de compétences", icon="psychology").props(
+                    "expand-separator"
+                ).classes("w-full"):
+                    ui.label(
+                        "Inscrivez uniquement les nouveaux rangs gagnés à ce niveau. "
+                        "Les rangs existants sont conservés."
+                    ).classes("text-sm jf-muted")
+                    for skill in skills:
+                        with ui.row().classes("w-full items-center justify-between gap-3 py-1"):
+                            ui.label(
+                                f"{_skill_display_name(skill.get('skill_name'), skill.get('english_name'))} "
+                                f"— rangs actuels {format_number(skill.get('ranks') or 0)}"
+                            ).classes("text-sm grow min-w-0")
+                            rank_inputs[int(skill["id"])] = ui.number(
+                                label="+ rangs",
+                                value=0,
+                                min=0,
+                                max=100,
+                                step=1,
+                            ).props("dense inputmode=numeric").classes("w-28")
+
+                with ui.expansion("4. Choix et notes du niveau", icon="edit_note").props(
+                    "expand-separator"
+                ).classes("w-full"):
+                    feat_notes = ui.textarea(
+                        label="Dons / choix de don",
+                        value="",
+                    ).props("outlined autogrow maxlength=4000").classes("w-full")
+                    special_notes = ui.textarea(
+                        label="Capacités spéciales / pouvoirs de classe",
+                        value="",
+                    ).props("outlined autogrow maxlength=4000").classes("w-full")
+                    general_notes = ui.textarea(
+                        label="Autres notes de progression",
+                        value="",
+                    ).props("outlined autogrow maxlength=4000").classes("w-full")
+
+                def collected_skill_deltas():
+                    return {
+                        skill_id: int(control.value or 0)
+                        for skill_id, control in rank_inputs.items()
+                        if int(control.value or 0) > 0
+                    }
+
+                def apply_level_now(confirm_dialog):
+                    try:
+                        result = apply_rpg_level_up(
+                            user_id,
+                            character["id"],
+                            class_name=class_input.value,
+                            subclass_name=subclass_input.value,
+                            hp_gain=hp_gain.value,
+                            increase_current_hp=add_current_hp.value,
+                            bab_delta=bab_delta.value,
+                            fortitude_delta=fort_delta.value,
+                            reflex_delta=reflex_delta.value,
+                            will_delta=will_delta.value,
+                            ability_key=ability_input.value or None,
+                            skill_rank_deltas=collected_skill_deltas(),
+                            feat_notes=feat_notes.value,
+                            special_ability_notes=special_notes.value,
+                            subclass_notes=subclass_notes.value,
+                            general_notes=general_notes.value,
+                        )
+                    except Exception as error:
+                        _safe_notify_error(error, "La montée de niveau n’a pas pu être appliquée.")
+                        return
+                    confirm_dialog.close()
+                    dialog.close()
+                    ui.notify(
+                        f"Niveau {result['to_level']} appliqué et ajouté à l’historique.",
+                        type="positive",
+                    )
+                    ui.navigate.to(_character_url(character["id"], "progression"))
+
+                def preview_level():
+                    skill_deltas = collected_skill_deltas()
+                    skill_by_id = {int(row["id"]): row for row in skills}
+                    with ui.dialog() as confirm_dialog:
+                        with ui.card().classes("w-full max-w-2xl p-5"):
+                            ui.label("Prévisualisation de la montée de niveau").classes("text-xl font-bold")
+                            subclass_value = str(subclass_input.value or "").strip()
+                            summary_lines = [
+                                f"Niveau {character['character_level']} → {next_level}",
+                                f"Classe : {str(class_input.value or '').strip() or 'à préciser'}",
+                                f"Sous-classe : {subclass_value or 'aucune'}",
+                                f"PV : +{int(hp_gain.value or 0)}",
+                                f"BBA : +{int(bab_delta.value or 0)}",
+                                f"Sauvegardes de base : Vigueur +{int(fort_delta.value or 0)}, "
+                                f"Réflexes +{int(reflex_delta.value or 0)}, Volonté +{int(will_delta.value or 0)}",
+                            ]
+                            if ability_input.value:
+                                summary_lines.append(
+                                    f"Caractéristique : {ABILITY_LONG_LABELS[ability_input.value]} +1"
+                                )
+                            for line in summary_lines:
+                                ui.label(line).classes("text-sm")
+                            if skill_deltas:
+                                ui.separator().classes("my-2")
+                                ui.label("Compétences").classes("font-bold")
+                                for skill_id, delta in skill_deltas.items():
+                                    row = skill_by_id[skill_id]
+                                    ui.label(
+                                        f"{_skill_display_name(row.get('skill_name'), row.get('english_name'))} : +{delta} rang(s)"
+                                    ).classes("text-sm")
+                            if not subclass_value:
+                                ui.label(
+                                    "Aucune sous-classe : les choix de sous-classe seront ignorés."
+                                ).classes("text-sm jf-muted mt-2")
+                            with ui.row().classes("w-full justify-end gap-2 mt-3 flex-wrap"):
+                                ui.button("Retour", on_click=confirm_dialog.close).props("flat")
+                                ui.button(
+                                    "Appliquer ce niveau",
+                                    icon="check",
+                                    on_click=lambda: apply_level_now(confirm_dialog),
+                                ).props("color=primary")
+                    confirm_dialog.open()
+
+                with ui.row().classes("w-full justify-end gap-2 mt-4 flex-wrap"):
+                    ui.button("Annuler", on_click=dialog.close).props("flat")
+                    ui.button(
+                        "Prévisualiser",
+                        icon="preview",
+                        on_click=preview_level,
+                    ).props("color=primary")
+        dialog.open()
+
+    with ui.card().classes("w-full p-5"):
+        ui.label("Historique des niveaux").classes("text-xl font-bold")
+        if not history:
+            ui.label(
+                "Aucune montée de niveau guidée n’a encore été enregistrée."
+            ).classes("text-sm jf-muted")
+        for row in history:
+            with ui.expansion(
+                f"Niveau {row['from_level']} → {row['to_level']} — {row.get('class_name') or 'Classe non précisée'}",
+                icon="history",
+            ).props("expand-separator").classes("w-full"):
+                if row.get("subclass_name"):
+                    ui.label(f"Sous-classe : {row['subclass_name']}").classes("text-sm font-bold")
+                ui.label(
+                    f"PV +{row.get('hp_gain') or 0} · BBA +{row.get('bab_delta') or 0} · "
+                    f"Vig +{row.get('fortitude_delta') or 0} · Réf +{row.get('reflex_delta') or 0} · "
+                    f"Vol +{row.get('will_delta') or 0}"
+                ).classes("text-sm")
+                if row.get("ability_key"):
+                    ui.label(
+                        f"{ABILITY_LONG_LABELS.get(row['ability_key'], row['ability_key'])} +{row.get('ability_delta') or 1}"
+                    ).classes("text-sm")
+                for change in row.get("skill_changes") or []:
+                    ui.label(
+                        f"{change.get('name')}: +{change.get('added')} rang(s) "
+                        f"({change.get('before')} → {change.get('after')})"
+                    ).classes("text-sm")
+                for label, value in (
+                    ("Dons", row.get("feat_notes")),
+                    ("Capacités spéciales", row.get("special_ability_notes")),
+                    ("Sous-classe", row.get("subclass_notes")),
+                    ("Notes", row.get("general_notes")),
+                ):
+                    if value:
+                        ui.label(f"{label} : {value}").classes("text-sm jf-muted")
 
 
 def _combat_panel(
@@ -5342,8 +5611,15 @@ def rpg_character_panel(
                             ],
                             (
                                 (
-                                    f"{character['class_name']} "
-                                    f"niveau {character['character_level']}"
+                                    (
+                                        f"{character['class_name']}"
+                                        + (
+                                            f" — {character.get('subclass_name')}"
+                                            if character.get("subclass_name")
+                                            else ""
+                                        )
+                                        + f" niveau {character['character_level']}"
+                                    )
                                 )
                                 if character[
                                     "class_name"
@@ -5427,6 +5703,10 @@ def rpg_character_panel(
             "Identité",
             icon="badge",
         )
+        progression_tab = ui.tab(
+            "Progression",
+            icon="trending_up",
+        )
         combat_tab = ui.tab(
             "Combat",
             icon="shield",
@@ -5456,6 +5736,9 @@ def rpg_character_panel(
     initial_tab = {
         "identite": identity_tab,
         "identity": identity_tab,
+        "progression": progression_tab,
+        "niveau": progression_tab,
+        "level": progression_tab,
         "combat": combat_tab,
         "caracteristiques": combat_tab,
         "equipement": equipment_tab,
@@ -5484,6 +5767,16 @@ def rpg_character_panel(
             "px-0"
         ):
             _identity_panel(
+                user_id,
+                character,
+            )
+
+        with ui.tab_panel(
+            progression_tab
+        ).classes(
+            "px-0"
+        ):
+            _progression_panel(
                 user_id,
                 character,
             )
@@ -5547,9 +5840,9 @@ def rpg_character_panel(
             "font-bold"
         )
         ui.label(
-            "Les dons, les capacités spéciales, les sorts, le PDF "
-            "et les campagnes seront ajoutés dans les phases suivantes. "
-            "L’équipement, la race et l’encombrement sont maintenant actifs."
+            "La progression guidée conserve maintenant les choix de niveau, "
+            "les rangs de compétences et une sous-classe facultative. "
+            "Les modules détaillés de dons, sorts, PDF et campagnes restent prévus ensuite."
         ).classes(
             "text-sm"
         )

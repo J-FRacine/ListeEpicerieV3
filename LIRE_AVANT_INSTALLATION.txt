@@ -1,122 +1,106 @@
-JF APPS — PORTAIL V1.4.0
-RESTAURATION GLOBALE SÉLECTIVE + STATISTIQUES CANNER
-Date : 31 août 2026
+JF APPS — PERSONNAGES JDR V1.3.0
+PROGRESSION GUIDÉE ET SOUS-CLASSE FACULTATIVE
+============================================================
 
-OBJECTIF
---------
-Cette livraison concerne le Portail JF Apps. Elle conserve Finances V1.13.1 et
-les versions actuelles des autres applications.
+BASE UTILISÉE
+-------------
+Cette version part de Personnages JDR V1.2.0 et conserve :
+- profils raciaux Pathfinder;
+- équipement, armures, boucliers et possessions;
+- poids, encombrement et vitesse;
+- audit des calculs Pathfinder;
+- compétences, sauvegardes et attaques existantes.
 
-NOUVEAUTÉS
-----------
-1. Centre de maintenance — restauration globale sélective
-   - chargement d'une archive ZIP créée par « Sauvegarder toutes mes données »;
-   - validation du manifest et de la structure avant toute écriture;
-   - prévisualisation du contenu de chaque application;
-   - choix des applications à restaurer individuellement;
-   - possibilité de restaurer uniquement Finances, par exemple, sans toucher aux
-     autres applications;
-   - pour Liste d'épicerie, choix de la famille de destination pour chacune des
-     familles présentes dans l'archive;
-   - restauration par fusion non destructive : aucune donnée actuelle n'est
-     supprimée automatiquement;
-   - doublons reconnus ignorés selon les règles de chaque application;
-   - respect des droits d'accès actuels de l'utilisateur.
+NOUVEAUTÉS V1.3.0
+-----------------
+1. Nouvel onglet « Progression ».
+2. Montée d’un niveau à la fois avec prévisualisation avant application.
+3. Sous-classe facultative :
+   - elle peut rester vide;
+   - aucun avertissement ou blocage si elle est vide;
+   - les choix propres à la sous-classe sont alors ignorés;
+   - elle peut être ajoutée plus tard.
+4. L’assistant peut appliquer/documenter :
+   - PV gagnés;
+   - ajout facultatif des PV gagnés aux PV actuels;
+   - BBA gagné;
+   - Vigueur, Réflexes et Volonté de base gagnés;
+   - augmentation facultative de caractéristique;
+   - nouveaux rangs de compétences;
+   - dons / choix de don;
+   - capacités spéciales / pouvoirs de classe;
+   - notes générales.
+5. Rappel visuel aux niveaux multiples de 4 pour vérifier l’augmentation
+   de caractéristique, sans l’imposer.
+6. Historique détaillé des montées de niveau.
+7. La sous-classe apparaît aussi dans Identité et dans le résumé du personnage.
 
-2. Sauvegarde globale V2
-   - le manifest indique maintenant que la restauration sélective est disponible;
-   - les familles de Liste d'épicerie possèdent un chemin explicite et leur
-     identifiant source dans le manifest;
-   - les anciennes archives globales V1 restent acceptées par la restauration.
+DONNÉES ET MIGRATION
+--------------------
+Aucun script SQL manuel n’est requis.
+Au démarrage, Personnages JDR crée automatiquement :
+- la colonne rpg_characters.subclass_name si elle n’existe pas;
+- la table rpg_character_level_history et son index.
 
-3. Statistiques Canner
-   Le script suivant est ajouté une seule fois dans le <head> partagé, en plus
-   du script Web Vitals déjà installé :
+La montée de niveau est enregistrée dans une transaction : si une validation
+échoue, les changements du niveau ne sont pas appliqués partiellement.
 
-   <script defer src="https://canner.ca/t.js"
-           data-site-id="2dd1f6d1-013b-4ec9-a990-4770b46f3277"
-           data-domains="liste-jfr-v1.canner.app"></script>
+SAUVEGARDE / RESTAURATION GLOBALE
+---------------------------------
+Aucune modification du Portail V1.4.0 n’est nécessaire.
+Le mécanisme actuel exporte automatiquement les tables rpg_ reliées au
+personnage et restaure les colonnes compatibles dynamiquement. La nouvelle
+sous-classe et l’historique de progression sont donc pris en charge.
 
 FICHIERS À REMPLACER
 --------------------
-- app.py
-- global_backup.py
+À la racine du dépôt GitHub :
+- rpg_character.py
+- rpg_character_data.py
 - app_versions.py
 - manual.py
 
-NOUVEAU FICHIER À AJOUTER
--------------------------
-- global_restore.py
+FICHIERS INCLUS POUR COHÉRENCE, MAIS INCHANGÉS FONCTIONNELLEMENT
+----------------------------------------------------------------
+- rpg_character_rules.py
+- rpg_character_catalog.py
 
-AUCUN AUTRE FICHIER N'EST À REMPLACER.
-Finances V1.13.1 et ses modules restent tels quels.
+Vous pouvez aussi les remplacer avec les copies incluses si vous souhaitez
+installer le paquet complet en une seule fois.
 
-INSTALLATION
-------------
-1. Faire une sauvegarde de sécurité de l'installation actuellement en ligne.
-2. Dans GitHub, remplacer les quatre fichiers indiqués ci-dessus.
-3. Ajouter global_restore.py à la racine, au même niveau que app.py.
-4. Faire Commit changes.
-5. Laisser Canner terminer le redéploiement.
-6. Faire Ctrl+F5 sur ordinateur si l'ancienne interface reste en cache.
-7. Vérifier que le Portail affiche V1.4.0 et Finances V1.13.1.
+AUCUNE NOUVELLE DÉPENDANCE
+--------------------------
+Aucune modification de requirements.txt n’est requise.
 
-TESTS CONSEILLÉS APRÈS DÉPLOIEMENT
----------------------------------
-A. Nouvelle sauvegarde
-1. Ouvrir Portail > Centre de maintenance.
-2. Cliquer « Créer la sauvegarde ».
-3. Conserver le ZIP obtenu comme sauvegarde de test.
+VERSIONS CONSERVÉES
+-------------------
+- Portail JF Apps : V1.4.0
+- Finances : V1.13.1
+- Liste d’épicerie : V1.1.2
+- Journal de pression : V1.2.1
+- Personnages JDR : V1.3.0
 
-B. Prévisualisation sans restauration
-1. Dans « Restauration globale », charger le ZIP de test.
-2. Vérifier que le Portail affiche les applications présentes.
-3. Vérifier qu'aucune donnée n'est modifiée à cette étape.
-4. Décocher toutes les applications sauf une application de test.
+TESTS EFFECTUÉS
+---------------
+- py_compile sur les fichiers Python du paquet : OK
+- analyse AST des fichiers modifiés : OK
+- présence de la migration subclass_name : OK
+- présence de la table d’historique : OK
+- contrôle statique de la version et du manuel : OK
+- simulation d’une montée niveau 3 -> 4 : OK
+- sous-classe vide acceptée : OK
+- notes propres à la sous-classe ignorées si sous-classe vide : OK
+- rangs de compétence ajoutés sans remplacer les rangs existants : OK
 
-C. Restauration sélective
-1. Choisir une application dont les données existent déjà.
-2. Lancer « Restaurer la sélection ».
-3. Vérifier que les doublons connus ne sont pas recréés.
-4. Vérifier que les autres applications non cochées n'ont pas été modifiées.
+TESTS CONSEILLÉS APRÈS DÉPLOIEMENT CANNER
+-----------------------------------------
+1. Ouvrir un personnage existant et vérifier que la page affiche V1.3.0.
+2. Vérifier Identité : le champ « Sous-classe facultative » est présent.
+3. Ouvrir Progression et lancer une montée de niveau avec sous-classe vide.
+4. Prévisualiser, puis appliquer; vérifier le nouveau niveau et l’historique.
+5. Refaire un essai avec une sous-classe et une note propre à celle-ci.
+6. Tester un ajout de PV, BBA, sauvegarde et rang de compétence.
+7. Vérifier qu’un rang existant est augmenté plutôt que remplacé.
+8. Créer une sauvegarde globale depuis le Centre de maintenance après le test.
 
-D. Liste d'épicerie
-1. Charger une sauvegarde contenant une ou plusieurs familles.
-2. Vérifier que chaque famille source peut être activée/désactivée et associée
-   seulement à une famille actuellement accessible au compte.
-
-E. Finances
-La restauration Finances est une fusion non destructive. Elle restaure les
-transactions et postes Budget compatibles ainsi que les modules complémentaires
-pris en charge (financements, groupes de financements et prêts partagés). Elle
-ne supprime pas les données actuelles et évite les doublons reconnus.
-
-SÉCURITÉ
---------
-- Archives acceptées : sauvegardes globales JF Apps V1 et V2 seulement.
-- Taille ZIP maximale : 40 Mo.
-- Taille décompressée maximale : 120 Mo.
-- Protection contre les chemins ZIP non sécuritaires (« ../ » etc.).
-- Une application non autorisée pour le compte n'est pas restaurable.
-- Une famille d'épicerie devenue inaccessible n'est pas restaurable.
-- Aucun remplacement global destructif n'est proposé dans cette version.
-
-VALIDATION TECHNIQUE EFFECTUÉE
-------------------------------
-- py_compile réussi sur tous les fichiers Python du paquet.
-- compileall réussi.
-- 12 tests unittest réussis :
-  * sauvegarde globale V2;
-  * compatibilité des archives V1 et V2;
-  * rejet des formats inconnus;
-  * rejet des chemins ZIP non sécuritaires;
-  * rejet d'une application déclarée dont le fichier est absent;
-  * prévisualisation Finances et Liste d'épicerie;
-  * restauration réellement sélective;
-  * script Canner avec les attributs exacts;
-  * intégration de la restauration au Centre de maintenance;
-  * conservation de Finances V1.13.1;
-  * présence des API de restauration nécessaires dans Finances V1.13.1.
-
-Aucun script SQL manuel.
-Aucune nouvelle dépendance Python.
+Aucun SQL manuel. Aucune nouvelle dépendance.

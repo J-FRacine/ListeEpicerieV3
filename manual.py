@@ -929,16 +929,17 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
 """,
     },
     {
-        "title": "Personnages JDR — V1.2.0",
+        "title": "Personnages JDR — V1.3.0",
         "icon": "casino",
-        "caption": "Races, équipement, poids et feuille Pathfinder / Ravenloft",
+        "caption": "Progression, races, équipement et feuille Pathfinder / Ravenloft",
         "keywords": (
             "jdr personnage ravenloft pathfinder feuille force "
             "dextérité constitution intelligence sagesse charisme "
             "classe armure initiative sauvegarde peur horreur folie "
             "compétence attaque points vie audit vérification calcul "
             "race héritage traits raciaux équipement armure bouclier "
-            "poids encombrement charge légère moyenne lourde vitesse"
+            "poids encombrement charge légère moyenne lourde vitesse "
+            "progression niveau montée niveau sous-classe facultative historique dons capacités"
         ),
         "content": """
 ### Données privées et plusieurs personnages
@@ -953,13 +954,40 @@ L’onglet **Identité** permet notamment de saisir :
 
 - le nom du personnage et du joueur;
 - la campagne;
-- la classe et le niveau;
+- la classe, la sous-classe facultative et le niveau;
 - la race, l’héritage ou la sous-race;
 - l’alignement et la divinité;
 - la catégorie de taille;
 - l’âge, le genre, la taille physique et le poids du personnage;
 - les yeux, les cheveux et la peau;
 - les points d’expérience.
+
+Le champ **Niveau** reste disponible dans Identité pour corriger une feuille existante ou saisir un personnage déjà avancé. Pour les nouvelles montées de niveau, utilisez plutôt l’onglet **Progression** afin de conserver un historique.
+
+### Progression guidée
+
+L’onglet **Progression** permet de monter le personnage **d’un niveau à la fois**. Le prochain niveau est proposé automatiquement et une prévisualisation doit être confirmée avant d’appliquer les changements.
+
+L’assistant permet de vérifier ou saisir :
+
+- la classe;
+- une **sous-classe facultative**;
+- les points de vie gagnés et leur ajout éventuel aux PV actuels;
+- l’augmentation du BBA;
+- les augmentations des sauvegardes de base Vigueur, Réflexes et Volonté;
+- une augmentation facultative de caractéristique;
+- les nouveaux rangs de compétences;
+- les dons ou choix de don;
+- les capacités spéciales ou pouvoirs de classe;
+- les autres notes propres au niveau.
+
+La **sous-classe n’est jamais obligatoire**. Elle peut être laissée vide ou retirée. Lorsqu’elle est vide, l’assistant ignore les choix propres aux sous-classes et ne produit aucun avertissement ni blocage. Elle peut être ajoutée plus tard lors d’une autre progression ou depuis Identité.
+
+Pour les compétences, l’assistant affiche les rangs actuels et demande seulement les **rangs à ajouter**. Les rangs existants ne sont pas remplacés.
+
+Lors d’un niveau multiple de 4, l’assistant affiche un rappel pour vérifier l’augmentation de caractéristique, mais il ne l’impose pas afin de rester compatible avec les règles maison, les campagnes Ravenloft et les personnages importés.
+
+Chaque montée guidée est inscrite dans un **Historique des niveaux** avec les changements numériques, les compétences et les notes. La progression est transactionnelle : si une validation échoue, le niveau n’est pas appliqué partiellement.
 
 ### Race principale et profil racial
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from decimal import Decimal
 from uuid import uuid4
 
@@ -192,6 +194,7 @@ def init_rpg_character_schema():
                     player_name TEXT,
                     campaign TEXT,
                     class_name TEXT,
+                    subclass_name TEXT,
                     character_level SMALLINT NOT NULL
                         DEFAULT 1
                         CHECK (
@@ -460,6 +463,7 @@ def init_rpg_character_schema():
             )
 
             for definition in (
+                "subclass_name TEXT",
                 "race_key TEXT NOT NULL DEFAULT 'custom'",
                 "race_heritage TEXT",
                 "alternate_racial_traits TEXT",
@@ -621,6 +625,52 @@ def init_rpg_character_schema():
                     character_id,
                     sort_order,
                     id
+                );
+                """
+            )
+
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS
+                rpg_character_level_history (
+                    id BIGSERIAL PRIMARY KEY,
+                    character_id BIGINT NOT NULL
+                        REFERENCES rpg_characters(id)
+                        ON DELETE CASCADE,
+                    from_level SMALLINT NOT NULL,
+                    to_level SMALLINT NOT NULL,
+                    class_name TEXT,
+                    subclass_name TEXT,
+                    hp_gain INTEGER NOT NULL DEFAULT 0,
+                    increase_current_hp BOOLEAN NOT NULL DEFAULT TRUE,
+                    bab_delta INTEGER NOT NULL DEFAULT 0,
+                    fortitude_delta INTEGER NOT NULL DEFAULT 0,
+                    reflex_delta INTEGER NOT NULL DEFAULT 0,
+                    will_delta INTEGER NOT NULL DEFAULT 0,
+                    ability_key TEXT,
+                    ability_delta INTEGER NOT NULL DEFAULT 0,
+                    skill_changes_json TEXT,
+                    feat_notes TEXT,
+                    special_ability_notes TEXT,
+                    subclass_notes TEXT,
+                    general_notes TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CHECK (to_level = from_level + 1),
+                    CHECK (ability_key IS NULL OR ability_key IN (
+                        'str', 'dex', 'con', 'int', 'wis', 'cha'
+                    ))
+                );
+                """
+            )
+
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS
+                rpg_character_level_history_idx
+                ON rpg_character_level_history (
+                    character_id,
+                    created_at DESC,
+                    id DESC
                 );
                 """
             )
@@ -1035,6 +1085,11 @@ def update_rpg_character_identity(
             label="La classe",
             maximum=120,
         ),
+        "subclass_name": _normalize_text(
+            values.get("subclass_name"),
+            label="La sous-classe",
+            maximum=160,
+        ),
         "character_level": _normalize_int(
             values.get("character_level"),
             label="Le niveau",
@@ -1195,6 +1250,7 @@ def update_rpg_character_identity(
                     player_name = %s,
                     campaign = %s,
                     class_name = %s,
+                    subclass_name = %s,
                     character_level = %s,
                     race = %s,
                     race_key = %s,
@@ -1230,6 +1286,7 @@ def update_rpg_character_identity(
                     normalized["player_name"],
                     normalized["campaign"],
                     normalized["class_name"],
+                    normalized["subclass_name"],
                     normalized["character_level"],
                     normalized["race"],
                     normalized["race_key"],
@@ -1262,6 +1319,333 @@ def update_rpg_character_identity(
             )
 
             conn.commit()
+
+
+
+def list_rpg_level_history(
+    user_id,
+    character_id,
+):
+    """Retourne l’historique de progression du personnage, plus récent d’abord."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            _require_character(cur, user_id, character_id)
+            cur.execute(
+                """
+                SELECT *
+                FROM rpg_character_level_history
+                WHERE character_id = %s
+                ORDER BY created_at DESC, id DESC;
+                """,
+                (character_id,),
+            )
+            rows = []
+            for raw in cur.fetchall():
+                row = dict(raw)
+                try:
+                    row["skill_changes"] = json.loads(
+                        row.get("skill_changes_json") or "[]"
+                    )
+                except Exception:
+                    row["skill_changes"] = []
+                rows.append(row)
+            return rows
+
+
+def apply_rpg_level_up(
+    user_id,
+    character_id,
+    *,
+    class_name,
+    subclass_name=None,
+    hp_gain=0,
+    increase_current_hp=True,
+    bab_delta=0,
+    fortitude_delta=0,
+    reflex_delta=0,
+    will_delta=0,
+    ability_key=None,
+    skill_rank_deltas=None,
+    feat_notes=None,
+    special_ability_notes=None,
+    subclass_notes=None,
+    general_notes=None,
+):
+    """Applique une montée d’un seul niveau et conserve une trace détaillée.
+
+    La sous-classe est volontairement facultative. Lorsqu’elle est vide,
+    aucun choix ou texte propre à une sous-classe n’est exigé ni enregistré.
+    """
+    normalized_class = _normalize_text(
+        class_name,
+        label="La classe",
+        maximum=120,
+        required=True,
+    )
+    normalized_subclass = _normalize_text(
+        subclass_name,
+        label="La sous-classe",
+        maximum=160,
+    )
+    normalized_hp = _normalize_int(
+        hp_gain,
+        label="Les PV gagnés",
+        minimum=0,
+        maximum=1000,
+        default=0,
+    )
+    normalized_bab = _normalize_int(
+        bab_delta,
+        label="L’augmentation du BBA",
+        minimum=0,
+        maximum=20,
+        default=0,
+    )
+    save_deltas = {
+        "fortitude": _normalize_int(
+            fortitude_delta,
+            label="L’augmentation de Vigueur",
+            minimum=0,
+            maximum=20,
+            default=0,
+        ),
+        "reflex": _normalize_int(
+            reflex_delta,
+            label="L’augmentation des Réflexes",
+            minimum=0,
+            maximum=20,
+            default=0,
+        ),
+        "will": _normalize_int(
+            will_delta,
+            label="L’augmentation de Volonté",
+            minimum=0,
+            maximum=20,
+            default=0,
+        ),
+    }
+    normalized_ability = str(ability_key or "").strip() or None
+    if normalized_ability is not None and normalized_ability not in ABILITY_LABELS:
+        raise ValueError("La caractéristique à augmenter est invalide.")
+
+    normalized_skill_deltas = {}
+    for raw_id, raw_delta in (skill_rank_deltas or {}).items():
+        delta = _normalize_int(
+            raw_delta,
+            label="Les rangs de compétence gagnés",
+            minimum=0,
+            maximum=100,
+            default=0,
+        )
+        if not delta:
+            continue
+        try:
+            skill_id = int(raw_id)
+        except (TypeError, ValueError) as error:
+            raise ValueError("Une compétence sélectionnée est invalide.") from error
+        normalized_skill_deltas[skill_id] = delta
+
+    normalized_feat_notes = _normalize_text(
+        feat_notes,
+        label="Les notes de dons",
+        maximum=4000,
+    )
+    normalized_special_notes = _normalize_text(
+        special_ability_notes,
+        label="Les capacités spéciales",
+        maximum=4000,
+    )
+    normalized_subclass_notes = (
+        _normalize_text(
+            subclass_notes,
+            label="Les choix de sous-classe",
+            maximum=4000,
+        )
+        if normalized_subclass
+        else None
+    )
+    normalized_general_notes = _normalize_text(
+        general_notes,
+        label="Les notes de progression",
+        maximum=4000,
+    )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM rpg_characters
+                WHERE id = %s AND user_id = %s
+                FOR UPDATE;
+                """,
+                (character_id, user_id),
+            )
+            character = cur.fetchone()
+            if character is None:
+                raise ValueError(
+                    "Ce personnage n’existe plus ou ne vous appartient pas."
+                )
+            current_level = int(character["character_level"] or 1)
+            if current_level >= 100:
+                raise ValueError("Le niveau maximal de cette feuille est 100.")
+            next_level = current_level + 1
+
+            _initialize_character_rows(cur, character_id)
+
+            skill_changes = []
+            if normalized_skill_deltas:
+                cur.execute(
+                    """
+                    SELECT id, skill_name, english_name, ranks
+                    FROM rpg_character_skills
+                    WHERE character_id = %s
+                      AND id = ANY(%s)
+                    FOR UPDATE;
+                    """,
+                    (character_id, list(normalized_skill_deltas)),
+                )
+                selected_skills = {
+                    int(row["id"]): row for row in cur.fetchall()
+                }
+                missing = set(normalized_skill_deltas) - set(selected_skills)
+                if missing:
+                    raise ValueError(
+                        "Une compétence choisie n’appartient plus à ce personnage."
+                    )
+                for skill_id, delta in normalized_skill_deltas.items():
+                    row = selected_skills[skill_id]
+                    before = Decimal(row["ranks"] or 0)
+                    after = before + Decimal(delta)
+                    cur.execute(
+                        """
+                        UPDATE rpg_character_skills
+                        SET ranks = %s
+                        WHERE id = %s AND character_id = %s;
+                        """,
+                        (after, skill_id, character_id),
+                    )
+                    skill_changes.append(
+                        {
+                            "id": skill_id,
+                            "name": row["skill_name"],
+                            "english_name": row.get("english_name"),
+                            "added": delta,
+                            "before": str(before),
+                            "after": str(after),
+                        }
+                    )
+
+            for save_key, delta in save_deltas.items():
+                if delta:
+                    cur.execute(
+                        """
+                        UPDATE rpg_character_saves
+                        SET base_save = base_save + %s
+                        WHERE character_id = %s AND save_key = %s;
+                        """,
+                        (delta, character_id, save_key),
+                    )
+
+            ability_delta = 1 if normalized_ability else 0
+            if normalized_ability:
+                ability_column = f"{normalized_ability}_score"
+                current_score = int(character[ability_column] or 10)
+                if current_score >= 100:
+                    raise ValueError(
+                        "Cette caractéristique a déjà atteint la limite de la feuille."
+                    )
+                cur.execute(
+                    f"""
+                    UPDATE rpg_characters
+                    SET {ability_column} = {ability_column} + 1
+                    WHERE id = %s AND user_id = %s;
+                    """,
+                    (character_id, user_id),
+                )
+
+            current_hp_increment = normalized_hp if bool(increase_current_hp) else 0
+            cur.execute(
+                """
+                UPDATE rpg_characters
+                SET class_name = %s,
+                    subclass_name = %s,
+                    character_level = %s,
+                    max_hp = max_hp + %s,
+                    current_hp = current_hp + %s,
+                    base_attack_bonus = base_attack_bonus + %s,
+                    updated_at = NOW()
+                WHERE id = %s AND user_id = %s;
+                """,
+                (
+                    normalized_class,
+                    normalized_subclass,
+                    next_level,
+                    normalized_hp,
+                    current_hp_increment,
+                    normalized_bab,
+                    character_id,
+                    user_id,
+                ),
+            )
+
+            cur.execute(
+                """
+                INSERT INTO rpg_character_level_history (
+                    character_id,
+                    from_level,
+                    to_level,
+                    class_name,
+                    subclass_name,
+                    hp_gain,
+                    increase_current_hp,
+                    bab_delta,
+                    fortitude_delta,
+                    reflex_delta,
+                    will_delta,
+                    ability_key,
+                    ability_delta,
+                    skill_changes_json,
+                    feat_notes,
+                    special_ability_notes,
+                    subclass_notes,
+                    general_notes
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s
+                )
+                RETURNING id;
+                """,
+                (
+                    character_id,
+                    current_level,
+                    next_level,
+                    normalized_class,
+                    normalized_subclass,
+                    normalized_hp,
+                    bool(increase_current_hp),
+                    normalized_bab,
+                    save_deltas["fortitude"],
+                    save_deltas["reflex"],
+                    save_deltas["will"],
+                    normalized_ability,
+                    ability_delta,
+                    json.dumps(skill_changes, ensure_ascii=False),
+                    normalized_feat_notes,
+                    normalized_special_notes,
+                    normalized_subclass_notes,
+                    normalized_general_notes,
+                ),
+            )
+            history_id = cur.fetchone()["id"]
+            conn.commit()
+            return {
+                "history_id": history_id,
+                "from_level": current_level,
+                "to_level": next_level,
+                "skill_changes": skill_changes,
+            }
 
 
 def update_rpg_character_combat(

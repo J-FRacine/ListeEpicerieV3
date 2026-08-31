@@ -5,8 +5,8 @@ from decimal import Decimal
 
 from nicegui import ui
 
-from finances_data import (
-    FREQUENCY_UNITS,
+from finances_data import FREQUENCY_UNITS
+from finances_shared_loans_data import (
     SHARED_LOAN_PERMISSIONS,
     SHARED_LOAN_ROLES,
     add_shared_loan_event,

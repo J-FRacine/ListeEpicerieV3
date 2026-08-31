@@ -13,6 +13,31 @@ import unicodedata
 from zoneinfo import ZoneInfo
 
 from db import get_connection
+from finances_shared_loans_data import (
+    SHARED_LOAN_PERMISSIONS,
+    SHARED_LOAN_ROLES,
+    add_shared_loan_event,
+    get_shared_loan,
+    list_available_loan_participants,
+    list_shared_loans,
+    save_shared_loan,
+    shared_loan_amortization_preview,
+)
+from finances_validation import (
+    decimal_value as _decimal_value,
+    money as _money,
+    optional_date as _optional_date_value,
+    text_value as _text,
+)
+from finances_calculations import (
+    add_months as _add_months,
+    analyze_installment_progress,
+    automatic_installment_amount as _automatic_installment_amount,
+    month_start as _month_start,
+    next_date as _next_date,
+    periods_per_year as _periods_per_year,
+    recurrence_dates_between as _recurrence_dates_between,
+)
 
 
 TRANSACTION_TYPES = {"expense": "Dépense", "income": "Revenu"}
@@ -70,37 +95,10 @@ BUDGET_INPUT_FREQUENCIES = {
 }
 
 
-def _money(value, allow_zero=False):
-    try:
-        amount = Decimal(str(value)).quantize(Decimal("0.01"))
-    except (InvalidOperation, ValueError, TypeError):
-        raise ValueError("Le montant est invalide.")
-    if allow_zero:
-        if amount < 0:
-            raise ValueError("Le montant ne peut pas être négatif.")
-    elif amount <= 0:
-        raise ValueError("Le montant doit être supérieur à zéro.")
-    return amount
 
 
-def _decimal_value(value, label, allow_blank=False):
-    if value in (None, ""):
-        if allow_blank:
-            return None
-        return Decimal("0.00")
-    try:
-        return Decimal(str(value)).quantize(Decimal("0.01"))
-    except (InvalidOperation, ValueError, TypeError):
-        raise ValueError(f"{label} est invalide.")
 
 
-def _text(value, label, maximum, required=False):
-    text = str(value or "").strip()
-    if required and not text:
-        raise ValueError(f"{label} est obligatoire.")
-    if len(text) > maximum:
-        raise ValueError(f"{label} ne peut pas dépasser {maximum} caractères.")
-    return text or None
 
 
 def _normalize_reminder_time(value):
@@ -112,36 +110,13 @@ def _normalize_reminder_time(value):
     return parsed
 
 
-def _month_start(value):
-    if isinstance(value, date):
-        return value.replace(day=1)
-    text = str(value or "")
-    if len(text) == 7:
-        text += "-01"
-    return date.fromisoformat(text).replace(day=1)
 
 
-def _add_months(value, months):
-    absolute = value.year * 12 + value.month - 1 + months
-    year, month_index = divmod(absolute, 12)
-    month = month_index + 1
-    day = min(value.day, monthrange(year, month)[1])
-    return date(year, month, day)
 
 
-def _next_date(current, unit, interval):
-    if unit == "day":
-        return current + timedelta(days=interval)
-    if unit == "week":
-        return current + timedelta(weeks=interval)
-    if unit == "month":
-        return _add_months(current, interval)
-    if unit == "year":
-        return _add_months(current, interval * 12)
-    raise ValueError("Fréquence invalide.")
 
 
-def init_finances_schema():
+def _init_finances_schema_v190():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -3232,7 +3207,7 @@ def _projection_kpis(
     }
 
 
-def dashboard_month_projection(
+def _dashboard_month_projection_v190(
     user_id,
     month_value,
     *,
@@ -4223,162 +4198,8 @@ def _sync_budget_items_from_recurrence_cursor(cur, user_id, recurrence_id):
     )
 
 
-def save_budget_item(
-    user_id,
-    item_type,
-    description,
-    input_frequency,
-    input_amount,
-    biweekly_override=None,
-    note=None,
-    recurrence_id=None,
-    sync_from_recurrence=True,
-    budget_item_id=None,
-):
-    if item_type not in TRANSACTION_TYPES:
-        raise ValueError("Type de poste budgétaire invalide.")
-    if input_frequency not in BUDGET_INPUT_FREQUENCIES:
-        raise ValueError("Fréquence budgétaire invalide.")
-    description = _text(description, "La description", 160, True)
-    amount = _money(input_amount)
-    override = (
-        _money(biweekly_override)
-        if biweekly_override not in (None, "")
-        else None
-    )
-    note = _text(note, "La note", 1000)
-    if input_frequency == "biweekly":
-        override = None
-
-    normalized_recurrence_id = (
-        int(recurrence_id)
-        if recurrence_id not in (None, "")
-        else None
-    )
-
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            if normalized_recurrence_id is not None:
-                cur.execute(
-                    """
-                    SELECT id, transaction_type, amount, frequency_unit, frequency_interval
-                    FROM finance_recurrences
-                    WHERE id=%s AND user_id=%s;
-                    """,
-                    (normalized_recurrence_id, user_id),
-                )
-                linked = cur.fetchone()
-                if not linked:
-                    raise ValueError("La récurrence sélectionnée est invalide.")
-                if sync_from_recurrence:
-                    item_type = linked["transaction_type"]
-                    input_frequency, amount = _budget_values_from_recurrence(linked)
-                    if input_frequency == "biweekly":
-                        override = None
-                cur.execute(
-                    """
-                    SELECT id
-                    FROM finance_budget_items
-                    WHERE user_id=%s AND recurrence_id=%s
-                      AND (%s::BIGINT IS NULL OR id<>%s)
-                    LIMIT 1;
-                    """,
-                    (
-                        user_id, normalized_recurrence_id,
-                        budget_item_id, budget_item_id,
-                    ),
-                )
-                if cur.fetchone():
-                    raise ValueError(
-                        "Cette récurrence est déjà liée à un autre poste du Budget."
-                    )
-
-            if budget_item_id:
-                cur.execute(
-                    """
-                    UPDATE finance_budget_items
-                    SET item_type=%s, description=%s, input_frequency=%s,
-                        input_amount=%s, biweekly_override=%s, note=%s,
-                        recurrence_id=%s, sync_from_recurrence=%s,
-                        is_active=TRUE, updated_at=NOW()
-                    WHERE id=%s AND user_id=%s;
-                    """,
-                    (
-                        item_type, description, input_frequency, amount,
-                        override, note, normalized_recurrence_id,
-                        bool(sync_from_recurrence), budget_item_id, user_id,
-                    ),
-                )
-                if cur.rowcount == 0:
-                    raise ValueError("Poste budgétaire introuvable.")
-            else:
-                cur.execute(
-                    """
-                    SELECT COALESCE(MAX(sort_order),0)+1 AS next_order
-                    FROM finance_budget_items
-                    WHERE user_id=%s AND item_type=%s;
-                    """,
-                    (user_id, item_type),
-                )
-                next_order = int(cur.fetchone()["next_order"])
-                cur.execute(
-                    """
-                    INSERT INTO finance_budget_items (
-                        user_id, item_type, description, input_frequency,
-                        input_amount, biweekly_override, note, sort_order,
-                        recurrence_id, sync_from_recurrence
-                    )
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);
-                    """,
-                    (
-                        user_id, item_type, description, input_frequency,
-                        amount, override, note, next_order,
-                        normalized_recurrence_id, bool(sync_from_recurrence),
-                    ),
-                )
-            conn.commit()
 
 
-def list_budget_items(user_id, include_inactive=False):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
-                    budget.*,
-                    recurrence.description AS recurrence_description,
-                    recurrence.amount AS recurrence_amount,
-                    recurrence.frequency_unit AS recurrence_frequency_unit,
-                    recurrence.frequency_interval AS recurrence_frequency_interval,
-                    recurrence.is_active AS recurrence_is_active
-                FROM finance_budget_items AS budget
-                LEFT JOIN finance_recurrences AS recurrence
-                    ON recurrence.id=budget.recurrence_id
-                   AND recurrence.user_id=budget.user_id
-                WHERE budget.user_id=%s
-                  AND (%s OR budget.is_active=TRUE)
-                ORDER BY
-                    CASE WHEN budget.item_type='income' THEN 0 ELSE 1 END,
-                    budget.sort_order, LOWER(budget.description), budget.id;
-                """,
-                (user_id, include_inactive),
-            )
-            rows = []
-            for raw in cur.fetchall():
-                row = dict(raw)
-                monthly, biweekly = _budget_amounts_from_values(
-                    row["input_frequency"],
-                    row["input_amount"],
-                    row.get("biweekly_override"),
-                )
-                row["monthly_amount"] = monthly
-                row["biweekly_amount"] = biweekly
-                row["biweekly_is_override"] = (
-                    row["input_frequency"] == "monthly"
-                    and row.get("biweekly_override") is not None
-                )
-                rows.append(row)
-            return rows
 
 
 def toggle_budget_item(user_id, budget_item_id, is_active):
@@ -4442,22 +4263,6 @@ def move_budget_item(user_id, budget_item_id, direction):
             conn.commit()
 
 
-def budget_summary(user_id):
-    rows = list_budget_items(user_id)
-    totals = {
-        "monthly_income": Decimal("0.00"),
-        "monthly_expense": Decimal("0.00"),
-        "biweekly_income": Decimal("0.00"),
-        "biweekly_expense": Decimal("0.00"),
-    }
-    for row in rows:
-        key = "income" if row["item_type"] == "income" else "expense"
-        totals[f"monthly_{key}"] += Decimal(row["monthly_amount"])
-        totals[f"biweekly_{key}"] += Decimal(row["biweekly_amount"])
-    totals["monthly_remaining"] = totals["monthly_income"] - totals["monthly_expense"]
-    totals["biweekly_remaining"] = totals["biweekly_income"] - totals["biweekly_expense"]
-    totals["rows"] = rows
-    return totals
 
 
 def list_bank_accounts(user_id, include_inactive=False):
@@ -6778,7 +6583,7 @@ def list_reconciliation_session_links(user_id):
             return cur.fetchall()
 
 
-def export_finances(user_id):
+def _export_finances_v190(user_id):
     transactions = list_transactions(
         user_id,
         include_linked_transfer_destinations=False,
@@ -7053,16 +6858,24 @@ def export_finances(user_id):
     )
 
 # =========================================================
+# ARCHITECTURE V1.13.0 — IMPLÉMENTATIONS HISTORIQUES EXPLICITES
+# Les fonctions remplacées au fil des versions portent désormais un nom
+# versionné (_..._v190, _..._v1100, etc.) plutôt que d’être redéfinies
+# plusieurs fois sous le même nom. Les fonctions publiques restent celles
+# de la version courante; le comportement et les migrations sont inchangés.
+# =========================================================
+
+# =========================================================
 # FINANCES V1.10.0 — BUDGET PÉRIODÉ, CAPACITÉ VARIABLE ET
 # PLANS DE FINANCEMENT / VERSEMENTS SUR CARTE
 # =========================================================
 
-_init_finances_schema_v190 = init_finances_schema
-_save_budget_item_v190 = save_budget_item
-_list_budget_items_v190 = list_budget_items
-_budget_summary_v190 = budget_summary
-_dashboard_month_projection_v190 = dashboard_month_projection
-_export_finances_v190 = export_finances
+
+
+
+
+
+
 
 INSTALLMENT_PLAN_TYPES = {
     "merchant": "Financement magasin",
@@ -7070,18 +6883,9 @@ INSTALLMENT_PLAN_TYPES = {
 }
 
 
-def _optional_date_value(value, label):
-    if value in (None, ""):
-        return None
-    if isinstance(value, date):
-        return value
-    try:
-        return date.fromisoformat(str(value))
-    except ValueError as error:
-        raise ValueError(f"{label} est invalide.") from error
 
 
-def init_finances_schema():
+def _init_finances_schema_v1100():
     """Mise à niveau V1.10.0, idempotente et sans SQL manuel."""
 
     _init_finances_schema_v190()
@@ -7248,220 +7052,9 @@ def _periods_overlap(start_a, end_a, start_b, end_b):
     return a_start <= b_end and b_start <= a_end
 
 
-def save_budget_item(
-    user_id,
-    item_type,
-    description,
-    input_frequency,
-    input_amount,
-    biweekly_override=None,
-    note=None,
-    recurrence_id=None,
-    sync_from_recurrence=True,
-    budget_item_id=None,
-    effective_start=None,
-    effective_end=None,
-    allow_overlap=False,
-):
-    """Enregistre un poste budgétaire avec période d'effet optionnelle."""
-
-    if item_type not in TRANSACTION_TYPES:
-        raise ValueError("Type de poste budgétaire invalide.")
-    if input_frequency not in BUDGET_INPUT_FREQUENCIES:
-        raise ValueError("Fréquence budgétaire invalide.")
-
-    description = _text(description, "La description", 160, True)
-    amount = _money(input_amount)
-    override = (
-        _money(biweekly_override)
-        if biweekly_override not in (None, "")
-        else None
-    )
-    note = _text(note, "La note", 1000)
-    start_value = _optional_date_value(
-        effective_start,
-        "La date de début",
-    )
-    end_value = _optional_date_value(
-        effective_end,
-        "La date de fin",
-    )
-    if start_value and end_value and end_value < start_value:
-        raise ValueError(
-            "La date de fin doit être égale ou postérieure à la date de début."
-        )
-
-    if input_frequency == "biweekly":
-        override = None
-
-    normalized_recurrence_id = (
-        int(recurrence_id)
-        if recurrence_id not in (None, "")
-        else None
-    )
-
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            if normalized_recurrence_id is not None:
-                cur.execute(
-                    """
-                    SELECT id, transaction_type, amount,
-                           frequency_unit, frequency_interval
-                    FROM finance_recurrences
-                    WHERE id=%s AND user_id=%s;
-                    """,
-                    (normalized_recurrence_id, user_id),
-                )
-                linked = cur.fetchone()
-                if not linked:
-                    raise ValueError(
-                        "La récurrence sélectionnée est invalide."
-                    )
-                if sync_from_recurrence:
-                    item_type = linked["transaction_type"]
-                    input_frequency, amount = _budget_values_from_recurrence(
-                        linked
-                    )
-                    if input_frequency == "biweekly":
-                        override = None
-
-                cur.execute(
-                    """
-                    SELECT id
-                    FROM finance_budget_items
-                    WHERE user_id=%s AND recurrence_id=%s
-                      AND (%s::BIGINT IS NULL OR id<>%s)
-                    LIMIT 1;
-                    """,
-                    (
-                        user_id,
-                        normalized_recurrence_id,
-                        budget_item_id,
-                        budget_item_id,
-                    ),
-                )
-                if cur.fetchone():
-                    raise ValueError(
-                        "Cette récurrence est déjà liée à un autre poste du Budget."
-                    )
-
-            if not allow_overlap:
-                cur.execute(
-                    """
-                    SELECT id, effective_start, effective_end
-                    FROM finance_budget_items
-                    WHERE user_id=%s
-                      AND item_type=%s
-                      AND LOWER(TRIM(description))=LOWER(TRIM(%s))
-                      AND (%s::BIGINT IS NULL OR id<>%s);
-                    """,
-                    (
-                        user_id,
-                        item_type,
-                        description,
-                        budget_item_id,
-                        budget_item_id,
-                    ),
-                )
-                for other in cur.fetchall():
-                    if _periods_overlap(
-                        start_value,
-                        end_value,
-                        other.get("effective_start"),
-                        other.get("effective_end"),
-                    ):
-                        raise ValueError(
-                            "Une autre période de ce poste budgétaire se chevauche. "
-                            "Ajustez les dates ou autorisez explicitement le chevauchement."
-                        )
-
-            if budget_item_id:
-                cur.execute(
-                    """
-                    UPDATE finance_budget_items
-                    SET item_type=%s,
-                        description=%s,
-                        input_frequency=%s,
-                        input_amount=%s,
-                        biweekly_override=%s,
-                        note=%s,
-                        recurrence_id=%s,
-                        sync_from_recurrence=%s,
-                        effective_start=%s,
-                        effective_end=%s,
-                        is_active=TRUE,
-                        updated_at=NOW()
-                    WHERE id=%s AND user_id=%s;
-                    """,
-                    (
-                        item_type,
-                        description,
-                        input_frequency,
-                        amount,
-                        override,
-                        note,
-                        normalized_recurrence_id,
-                        bool(sync_from_recurrence),
-                        start_value,
-                        end_value,
-                        budget_item_id,
-                        user_id,
-                    ),
-                )
-                if cur.rowcount == 0:
-                    raise ValueError("Poste budgétaire introuvable.")
-                saved_id = int(budget_item_id)
-            else:
-                cur.execute(
-                    """
-                    SELECT COALESCE(MAX(sort_order),0)+1 AS next_order
-                    FROM finance_budget_items
-                    WHERE user_id=%s AND item_type=%s;
-                    """,
-                    (user_id, item_type),
-                )
-                next_order = int(cur.fetchone()["next_order"])
-                cur.execute(
-                    """
-                    INSERT INTO finance_budget_items (
-                        user_id,
-                        item_type,
-                        description,
-                        input_frequency,
-                        input_amount,
-                        biweekly_override,
-                        note,
-                        sort_order,
-                        recurrence_id,
-                        sync_from_recurrence,
-                        effective_start,
-                        effective_end
-                    )
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                    RETURNING id;
-                    """,
-                    (
-                        user_id,
-                        item_type,
-                        description,
-                        input_frequency,
-                        amount,
-                        override,
-                        note,
-                        next_order,
-                        normalized_recurrence_id,
-                        bool(sync_from_recurrence),
-                        start_value,
-                        end_value,
-                    ),
-                )
-                saved_id = int(cur.fetchone()["id"])
-
-            conn.commit()
-            return saved_id
 
 
-def list_budget_items(
+def _list_budget_items_v111(
     user_id,
     include_inactive=False,
     month_value=None,
@@ -7568,70 +7161,10 @@ def budget_summary(user_id, month_value=None):
     return totals
 
 
-def _recurrence_dates_between(recurrence, start_date, end_date):
-    """Retourne les occurrences réelles d'une récurrence dans une période.
-
-    Pour les fréquences fixes en jours/semaines, ``next_date`` est l'ancrage
-    opérationnel autoritatif. On peut remonter de cet ancrage pour les mois
-    antérieurs et avancer pour les mois futurs, ce qui conserve exactement le
-    cycle réel d'une paie aux deux semaines.
-    """
-    if not recurrence or not recurrence.get("is_active"):
-        return []
-
-    unit = recurrence["frequency_unit"]
-    interval = int(recurrence.get("frequency_interval") or 1)
-    recurrence_start = recurrence.get("start_date")
-    recurrence_end = recurrence.get("end_date")
-    next_date = recurrence.get("next_date")
-
-    if recurrence_end and recurrence_end < start_date:
-        return []
-
-    if next_date and unit in {"day", "week"}:
-        step_days = interval if unit == "day" else interval * 7
-        occurrence = next_date
-        safety = 0
-
-        # Reculer jusqu'à la première occurrence du mois/période demandée.
-        while occurrence > start_date and safety < 2000:
-            candidate = occurrence - timedelta(days=step_days)
-            if candidate < start_date:
-                break
-            if recurrence_start and candidate < recurrence_start:
-                break
-            occurrence = candidate
-            safety += 1
-
-        # Si l'ancrage est encore avant la période, avancer jusqu'à celle-ci.
-        while occurrence < start_date and safety < 4000:
-            occurrence = occurrence + timedelta(days=step_days)
-            safety += 1
-    else:
-        occurrence = next_date or recurrence_start
-        if not occurrence:
-            return []
-        safety = 0
-        while occurrence < start_date and safety < 2000:
-            occurrence = _next_date(occurrence, unit, interval)
-            safety += 1
-
-    dates = []
-    while occurrence <= end_date and safety < 6000:
-        if recurrence_start and occurrence < recurrence_start:
-            occurrence = _next_date(occurrence, unit, interval)
-            safety += 1
-            continue
-        if recurrence_end and occurrence > recurrence_end:
-            break
-        dates.append(occurrence)
-        occurrence = _next_date(occurrence, unit, interval)
-        safety += 1
-    return dates
 
 
 
-def budget_capacity_summary(user_id, month_value):
+def _budget_capacity_summary_v110(user_id, month_value):
     """Capacité disponible pour les dépenses variables du mois affiché."""
 
     month = _month_start(month_value)
@@ -7748,177 +7281,10 @@ def _fixed_budget_recurrence_ids(user_id, month_value):
     }
 
 
-def dashboard_month_projection(
-    user_id,
-    month_value,
-    *,
-    today_value=None,
-    kpi_limit=12,
-):
-    """Tableau V1.10 : dépenses variables + capacité issue du Budget."""
-
-    projection = _dashboard_month_projection_v190(
-        user_id,
-        month_value,
-        today_value=today_value,
-        kpi_limit=max(int(kpi_limit), 1000),
-    )
-    fixed_recurrence_ids = _fixed_budget_recurrence_ids(
-        user_id,
-        month_value,
-    )
-
-    all_rows = []
-    variable_rows = []
-    for original in projection["transactions"]:
-        row = dict(original)
-        recurrence_id = row.get("recurrence_id")
-        is_fixed_budget = bool(
-            row["transaction_type"] == "expense"
-            and recurrence_id
-            and int(recurrence_id) in fixed_recurrence_ids
-        )
-        row["fixed_budget"] = is_fixed_budget
-        all_rows.append(row)
-        if (
-            row["transaction_type"] == "expense"
-            and not bool(row.get("budget_excluded"))
-            and not is_fixed_budget
-        ):
-            variable_rows.append(row)
-
-    realized_expenses = sum(
-        (
-            Decimal(row["amount"])
-            for row in variable_rows
-            if row.get("projection_bucket") == "realized"
-        ),
-        Decimal("0.00"),
-    )
-    upcoming_expenses = sum(
-        (
-            Decimal(row["amount"])
-            for row in variable_rows
-            if row.get("projection_bucket") == "upcoming"
-        ),
-        Decimal("0.00"),
-    )
-    total_expenses = realized_expenses + upcoming_expenses
-
-    fixed_realized = sum(
-        (
-            Decimal(row["amount"])
-            for row in all_rows
-            if row.get("fixed_budget")
-            and row.get("projection_bucket") == "realized"
-            and not bool(row.get("budget_excluded"))
-        ),
-        Decimal("0.00"),
-    )
-    fixed_upcoming = sum(
-        (
-            Decimal(row["amount"])
-            for row in all_rows
-            if row.get("fixed_budget")
-            and row.get("projection_bucket") == "upcoming"
-            and not bool(row.get("budget_excluded"))
-        ),
-        Decimal("0.00"),
-    )
-
-    visible_category_ids = {
-        int(row["id"])
-        for row in list_categories(user_id, include_inactive=True)
-        if bool(row.get("dashboard_visible", True))
-    }
-    visible_tag_ids = {
-        int(row["id"])
-        for row in list_tags(user_id, include_inactive=True)
-        if bool(row.get("dashboard_visible", True))
-    }
-
-    variable_upcoming = sorted(
-        (
-            row for row in variable_rows
-            if row.get("projection_bucket") == "upcoming"
-        ),
-        key=lambda row: (
-            row["transaction_date"],
-            str(row["description"]).casefold(),
-        ),
-    )
-
-    capacity = budget_capacity_summary(user_id, month_value)
-    remaining_available = (
-        Decimal(capacity["available_month"])
-        - total_expenses
-    )
-
-    # Les revenus demeurent dans les données du mois, mais ne sont plus un KPI
-    # du Tableau : ils servent au Budget et au calcul de capacité.
-    projection["transactions"] = all_rows
-    projection["upcoming_transactions"] = variable_upcoming
-    projection["realized"]["expenses"] = realized_expenses
-    projection["upcoming"]["expenses"] = upcoming_expenses
-    projection["upcoming"]["count"] = len(variable_upcoming)
-    projection["total"]["expenses"] = total_expenses
-    projection["kpis"]["expense"] = _projection_kpis(
-        variable_rows,
-        "expense",
-        limit=kpi_limit,
-        visible_category_ids=visible_category_ids,
-        visible_tag_ids=visible_tag_ids,
-    )
-    projection["fixed_budget"] = {
-        "realized": fixed_realized,
-        "upcoming": fixed_upcoming,
-        "total": fixed_realized + fixed_upcoming,
-        "recurrence_ids": sorted(fixed_recurrence_ids),
-    }
-    projection["capacity"] = capacity
-    projection["remaining_available"] = remaining_available
-    return projection
 
 
-def _periods_per_year(unit, interval):
-    interval = max(1, int(interval or 1))
-    if unit == "day":
-        return Decimal("365") / Decimal(interval)
-    if unit == "week":
-        return Decimal("52") / Decimal(interval)
-    if unit == "month":
-        return Decimal("12") / Decimal(interval)
-    if unit == "year":
-        return Decimal("1") / Decimal(interval)
-    return Decimal("12")
 
 
-def _automatic_installment_amount(
-    principal,
-    remaining_count,
-    annual_interest_rate,
-    fees_total,
-    frequency_unit,
-    frequency_interval,
-):
-    principal = Decimal(principal) + Decimal(fees_total)
-    remaining_count = int(remaining_count)
-    if remaining_count <= 0:
-        return Decimal("0.00")
-    annual_rate = Decimal(annual_interest_rate) / Decimal("100")
-    if annual_rate <= 0:
-        return (principal / Decimal(remaining_count)).quantize(
-            Decimal("0.01")
-        )
-    periods = _periods_per_year(
-        frequency_unit,
-        frequency_interval,
-    )
-    periodic = annual_rate / periods
-    # Decimal power with an integer exponent is deterministic here.
-    factor = (Decimal("1") + periodic) ** (-remaining_count)
-    payment = principal * periodic / (Decimal("1") - factor)
-    return payment.quantize(Decimal("0.01"))
 
 
 def _plan_transaction_note(plan, installment_number):
@@ -8091,7 +7457,7 @@ def _rebuild_installment_transactions(cur, user_id, plan_id):
             )
 
 
-def save_installment_plan(
+def _save_installment_plan_v111(
     user_id,
     *,
     plan_type,
@@ -8388,7 +7754,7 @@ def save_installment_plan(
             return saved_id
 
 
-def list_installment_plans(user_id, include_inactive=True):
+def _list_installment_plans_v111(user_id, include_inactive=True):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -8618,7 +7984,7 @@ def delete_installment_plan(user_id, plan_id):
             conn.commit()
 
 
-def export_finances(user_id):
+def _export_finances_v1100(user_id):
     csv_bytes, json_bytes = _export_finances_v190(user_id)
     try:
         payload = json.loads(json_bytes.decode("utf-8"))
@@ -8658,15 +8024,15 @@ def export_finances(user_id):
 # ET SYNCHRONISATION BUDGET ↔ RÉCURRENCE
 # =========================================================
 
-_init_finances_schema_v110 = init_finances_schema
-_budget_capacity_summary_v110 = budget_capacity_summary
-_export_finances_v110 = export_finances
 
 
-def init_finances_schema():
+
+
+
+def _init_finances_schema_v1101():
     """Mise à niveau V1.10.1, idempotente et sans SQL manuel."""
 
-    _init_finances_schema_v110()
+    _init_finances_schema_v1100()
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -8761,29 +8127,6 @@ def set_month_carryover(user_id, enabled, start_month=None):
     return get_finance_settings(user_id)
 
 
-def _variable_expense_total_for_month(user_id, month_value):
-    """Dépenses variables prévues/réalisées d'un mois, sans capacité Budget."""
-
-    month = _month_start(month_value)
-    projection = _dashboard_month_projection_v190(
-        user_id,
-        month,
-        kpi_limit=1000,
-    )
-    fixed_recurrence_ids = _fixed_budget_recurrence_ids(user_id, month)
-    return sum(
-        (
-            Decimal(row["amount"])
-            for row in projection["transactions"]
-            if row["transaction_type"] == "expense"
-            and not bool(row.get("budget_excluded"))
-            and not (
-                row.get("recurrence_id")
-                and int(row["recurrence_id"]) in fixed_recurrence_ids
-            )
-        ),
-        Decimal("0.00"),
-    )
 
 
 def budget_capacity_summary(user_id, month_value):
@@ -9209,10 +8552,10 @@ def save_budget_item(
             return saved_id
 
 
-def export_finances(user_id):
+def _export_finances_v1102(user_id):
     """Export V1.10.2 incluant les réglages de report mensuel."""
 
-    csv_bytes, json_bytes = _export_finances_v110(user_id)
+    csv_bytes, json_bytes = _export_finances_v1100(user_id)
     try:
         payload = json.loads(json_bytes.decode("utf-8"))
     except Exception:
@@ -9240,14 +8583,14 @@ def export_finances(user_id):
 # CONTRÔLES D'HISTORIQUE ET FINANCEMENTS PLUS TOLÉRANTS
 # =========================================================
 
-_init_finances_schema_v1102 = init_finances_schema
-_export_finances_v1102 = export_finances
 
 
-def init_finances_schema():
+
+
+def _init_finances_schema_v1110():
     """Mise à niveau V1.11.0, idempotente et sans SQL manuel."""
 
-    _init_finances_schema_v1102()
+    _init_finances_schema_v1101()
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -9292,94 +8635,6 @@ def init_finances_schema():
             conn.commit()
 
 
-def analyze_installment_progress(
-    *,
-    original_amount,
-    remaining_balance,
-    installment_amount,
-    total_installments,
-    completed_installments=None,
-):
-    """Estime la progression d'un plan à versements fixes.
-
-    Le calcul est volontairement simple et transparent. Il sert d'aide à la
-    saisie; un plan comportant intérêts, frais ou versements variables peut
-    légitimement s'écarter de cette estimation.
-    """
-
-    original = Decimal(str(original_amount or 0)).copy_abs().quantize(Decimal("0.01"))
-    remaining = (
-        Decimal(str(remaining_balance)).copy_abs().quantize(Decimal("0.01"))
-        if remaining_balance not in (None, "")
-        else None
-    )
-    total = int(total_installments or 0)
-    payment = (
-        Decimal(str(installment_amount)).copy_abs().quantize(Decimal("0.01"))
-        if installment_amount not in (None, "")
-        else None
-    )
-    if total <= 0:
-        return {
-            "estimated_completed_installments": 0,
-            "estimated_remaining_installments": 0,
-            "expected_remaining_balance": None,
-            "balance_difference": None,
-            "is_inconsistent": False,
-        }
-
-    if payment is None or payment <= 0:
-        payment = (
-            (original / Decimal(total)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            if original > 0
-            else None
-        )
-
-    estimated_completed = 0
-    estimated_remaining = total
-    if remaining is not None and payment and payment > 0:
-        if remaining <= 0:
-            estimated_remaining = 0
-        else:
-            estimated_remaining = int(
-                (remaining / payment).to_integral_value(rounding=ROUND_CEILING)
-            )
-            estimated_remaining = max(0, min(total, estimated_remaining))
-        estimated_completed = max(0, total - estimated_remaining)
-
-        # Quand le montant payé est un multiple très net du versement, cette
-        # estimation est plus intuitive et corrige les effets du dernier
-        # versement arrondi.
-        paid = max(Decimal("0.00"), original - remaining)
-        completed_from_paid = int(
-            (paid / payment).to_integral_value(rounding=ROUND_HALF_UP)
-        )
-        completed_from_paid = max(0, min(total, completed_from_paid))
-        expected_paid = (Decimal(completed_from_paid) * payment).quantize(Decimal("0.01"))
-        if abs(paid - expected_paid) <= Decimal("0.02"):
-            estimated_completed = completed_from_paid
-            estimated_remaining = max(0, total - estimated_completed)
-
-    expected_remaining = None
-    difference = None
-    inconsistent = False
-    if completed_installments not in (None, "") and payment and payment > 0:
-        manual_completed = max(0, min(total, int(completed_installments)))
-        expected_remaining = max(
-            Decimal("0.00"),
-            (original - Decimal(manual_completed) * payment).quantize(Decimal("0.01")),
-        )
-        if remaining is not None:
-            difference = (remaining - expected_remaining).quantize(Decimal("0.01"))
-            inconsistent = abs(difference) > Decimal("0.02")
-
-    return {
-        "estimated_completed_installments": estimated_completed,
-        "estimated_remaining_installments": estimated_remaining,
-        "expected_remaining_balance": expected_remaining,
-        "balance_difference": difference,
-        "is_inconsistent": inconsistent,
-    }
 
 
 def save_reconciliation_draft(
@@ -9611,7 +8866,7 @@ def list_month_unreconciled_transactions(user_id, month_value):
     )
 
 
-def export_finances(user_id):
+def _export_finances_v1110(user_id):
     """Export V1.11.0 incluant les nouveaux réglages de financement."""
 
     csv_bytes, json_bytes = _export_finances_v1102(user_id)
@@ -9642,28 +8897,19 @@ def export_finances(user_id):
 # INTÉRÊTS ET PRÊTS PARTAGÉS
 # =========================================================
 
-_init_finances_schema_v111 = init_finances_schema
-_list_budget_items_v111 = list_budget_items
-_dashboard_month_projection_v111 = dashboard_month_projection
-_save_installment_plan_v111 = save_installment_plan
-_list_installment_plans_v111 = list_installment_plans
-_export_finances_v111 = export_finances
 
-SHARED_LOAN_ROLES = {
-    "lender": "Prêteur",
-    "borrower": "Emprunteur",
-    "observer": "Consultation",
-}
-SHARED_LOAN_PERMISSIONS = {
-    "view": "Lecture seulement",
-    "edit": "Peut ajouter des versements",
-}
+
+
+
+
+
+
 
 
 def init_finances_schema():
     """Mise à niveau V1.12.0, idempotente et sans SQL manuel."""
 
-    _init_finances_schema_v111()
+    _init_finances_schema_v1110()
     with get_connection() as conn:
         with conn.cursor() as cur:
             # Groupes de financements intégrés au Budget.
@@ -9804,66 +9050,6 @@ def init_finances_schema():
             conn.commit()
 
 
-def _recurrence_dates_between(recurrence, start_date, end_date):
-    """Retourne les occurrences réelles d'une récurrence dans une période.
-
-    Pour les fréquences fixes en jours/semaines, ``next_date`` est l'ancrage
-    opérationnel autoritatif. On peut remonter de cet ancrage pour les mois
-    antérieurs et avancer pour les mois futurs, ce qui conserve exactement le
-    cycle réel d'une paie aux deux semaines.
-    """
-    if not recurrence or not recurrence.get("is_active"):
-        return []
-
-    unit = recurrence["frequency_unit"]
-    interval = int(recurrence.get("frequency_interval") or 1)
-    recurrence_start = recurrence.get("start_date")
-    recurrence_end = recurrence.get("end_date")
-    next_date = recurrence.get("next_date")
-
-    if recurrence_end and recurrence_end < start_date:
-        return []
-
-    if next_date and unit in {"day", "week"}:
-        step_days = interval if unit == "day" else interval * 7
-        occurrence = next_date
-        safety = 0
-
-        # Reculer jusqu'à la première occurrence du mois/période demandée.
-        while occurrence > start_date and safety < 2000:
-            candidate = occurrence - timedelta(days=step_days)
-            if candidate < start_date:
-                break
-            if recurrence_start and candidate < recurrence_start:
-                break
-            occurrence = candidate
-            safety += 1
-
-        # Si l'ancrage est encore avant la période, avancer jusqu'à celle-ci.
-        while occurrence < start_date and safety < 4000:
-            occurrence = occurrence + timedelta(days=step_days)
-            safety += 1
-    else:
-        occurrence = next_date or recurrence_start
-        if not occurrence:
-            return []
-        safety = 0
-        while occurrence < start_date and safety < 2000:
-            occurrence = _next_date(occurrence, unit, interval)
-            safety += 1
-
-    dates = []
-    while occurrence <= end_date and safety < 6000:
-        if recurrence_start and occurrence < recurrence_start:
-            occurrence = _next_date(occurrence, unit, interval)
-            safety += 1
-            continue
-        if recurrence_end and occurrence > recurrence_end:
-            break
-        dates.append(occurrence)
-        occurrence = _next_date(occurrence, unit, interval)
-        safety += 1
-    return dates
 
 
 
@@ -10273,13 +9459,6 @@ def dashboard_month_projection(
     return projection
 
 
-def _variable_expense_total_for_month(user_id, month_value):
-    projection = dashboard_month_projection(
-        user_id,
-        _month_start(month_value),
-        kpi_limit=1000,
-    )
-    return Decimal(projection["total"]["expenses"]).quantize(Decimal("0.01"))
 
 
 def budget_forecast(user_id, start_month, months=6):
@@ -10579,346 +9758,22 @@ def list_installment_plans(user_id, include_inactive=True):
     return rows
 
 
-def list_available_loan_participants(user_id):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, display_name, email
-                FROM users
-                WHERE is_active=TRUE AND id<>%s
-                ORDER BY LOWER(display_name), LOWER(email), id;
-                """,
-                (user_id,),
-            )
-            return cur.fetchall()
 
 
-def _require_shared_loan_access(cur, user_id, loan_id, *, edit=False):
-    cur.execute(
-        """
-        SELECT loan.*,
-               CASE WHEN loan.owner_user_id=%s THEN TRUE ELSE FALSE END AS is_owner,
-               member.permission AS member_permission,
-               member.role AS member_role
-        FROM finance_shared_loans AS loan
-        LEFT JOIN finance_shared_loan_members AS member
-          ON member.loan_id=loan.id AND member.user_id=%s
-        WHERE loan.id=%s
-          AND (loan.owner_user_id=%s OR member.user_id=%s);
-        """,
-        (user_id, user_id, int(loan_id), user_id, user_id),
-    )
-    row = cur.fetchone()
-    if not row:
-        raise PermissionError("Vous n’avez pas accès à ce prêt.")
-    if edit and not row["is_owner"] and row.get("member_permission") != "edit":
-        raise PermissionError("Ce prêt est en lecture seulement pour votre compte.")
-    return dict(row)
 
 
-def save_shared_loan(
-    user_id,
-    *,
-    title,
-    original_balance,
-    current_balance=None,
-    annual_interest_rate=0,
-    payment_amount=None,
-    frequency_unit="month",
-    frequency_interval=1,
-    start_date=None,
-    next_due_date=None,
-    end_date=None,
-    lender_name=None,
-    borrower_name=None,
-    note=None,
-    status="active",
-    members=None,
-    loan_id=None,
-):
-    title = _text(title, "Le nom du prêt", 160, True)
-    original = _money(original_balance, allow_zero=True)
-    current = original if current_balance in (None, "") else _money(current_balance, allow_zero=True)
-    rate = _decimal_value(annual_interest_rate, "Le taux d’intérêt", allow_blank=True) or Decimal("0.00")
-    payment = (
-        _money(payment_amount)
-        if payment_amount not in (None, "")
-        else None
-    )
-    if frequency_unit not in FREQUENCY_UNITS:
-        raise ValueError("La fréquence du prêt est invalide.")
-    interval = int(frequency_interval or 1)
-    if interval < 1:
-        raise ValueError("L’intervalle de paiement doit être positif.")
-    if status not in {"active", "paused", "completed"}:
-        raise ValueError("Le statut du prêt est invalide.")
-    normalized_members = []
-    for member in members or []:
-        member_id = int(member.get("user_id"))
-        role = str(member.get("role") or "observer")
-        permission = str(member.get("permission") or "view")
-        if role not in SHARED_LOAN_ROLES or permission not in SHARED_LOAN_PERMISSIONS:
-            raise ValueError("Les permissions du prêt sont invalides.")
-        if member_id != int(user_id):
-            normalized_members.append((member_id, role, permission))
-
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            if loan_id:
-                existing = _require_shared_loan_access(cur, user_id, loan_id, edit=True)
-                if not existing["is_owner"]:
-                    raise PermissionError("Seul le propriétaire peut modifier la fiche et le partage du prêt.")
-                cur.execute(
-                    """
-                    UPDATE finance_shared_loans
-                    SET title=%s,lender_name=%s,borrower_name=%s,
-                        original_balance=%s,current_balance=%s,
-                        annual_interest_rate=%s,payment_amount=%s,
-                        frequency_unit=%s,frequency_interval=%s,
-                        start_date=%s,next_due_date=%s,end_date=%s,
-                        note=%s,status=%s,updated_at=NOW()
-                    WHERE id=%s AND owner_user_id=%s;
-                    """,
-                    (
-                        title,
-                        _text(lender_name, "Le prêteur", 160),
-                        _text(borrower_name, "L’emprunteur", 160),
-                        original,
-                        current,
-                        rate,
-                        payment,
-                        frequency_unit,
-                        interval,
-                        _optional_date_value(start_date, "La date de début"),
-                        _optional_date_value(next_due_date, "La prochaine échéance"),
-                        _optional_date_value(end_date, "La date de fin"),
-                        _text(note, "La note", 2000),
-                        status,
-                        int(loan_id),
-                        user_id,
-                    ),
-                )
-                saved_id = int(loan_id)
-            else:
-                cur.execute(
-                    """
-                    INSERT INTO finance_shared_loans (
-                        owner_user_id,title,lender_name,borrower_name,
-                        original_balance,current_balance,annual_interest_rate,
-                        payment_amount,frequency_unit,frequency_interval,
-                        start_date,next_due_date,end_date,note,status
-                    )
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                    RETURNING id;
-                    """,
-                    (
-                        user_id,title,
-                        _text(lender_name, "Le prêteur", 160),
-                        _text(borrower_name, "L’emprunteur", 160),
-                        original,current,rate,payment,frequency_unit,interval,
-                        _optional_date_value(start_date, "La date de début"),
-                        _optional_date_value(next_due_date, "La prochaine échéance"),
-                        _optional_date_value(end_date, "La date de fin"),
-                        _text(note, "La note", 2000),status,
-                    ),
-                )
-                saved_id = int(cur.fetchone()["id"])
-
-            cur.execute(
-                "DELETE FROM finance_shared_loan_members WHERE loan_id=%s;",
-                (saved_id,),
-            )
-            for member_id, role, permission in normalized_members:
-                cur.execute(
-                    """
-                    INSERT INTO finance_shared_loan_members (loan_id,user_id,role,permission)
-                    SELECT %s,id,%s,%s FROM users WHERE id=%s AND is_active=TRUE;
-                    """,
-                    (saved_id, role, permission, member_id),
-                )
-            conn.commit()
-            return saved_id
 
 
-def list_shared_loans(user_id):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT loan.*,
-                       owner.display_name AS owner_name,
-                       CASE WHEN loan.owner_user_id=%s THEN TRUE ELSE FALSE END AS is_owner,
-                       member.permission AS my_permission,
-                       member.role AS my_role,
-                       COALESCE((
-                           SELECT COUNT(*) FROM finance_shared_loan_members m
-                           WHERE m.loan_id=loan.id
-                       ),0)::INTEGER AS shared_count
-                FROM finance_shared_loans AS loan
-                JOIN users AS owner ON owner.id=loan.owner_user_id
-                LEFT JOIN finance_shared_loan_members AS member
-                  ON member.loan_id=loan.id AND member.user_id=%s
-                WHERE loan.owner_user_id=%s OR member.user_id=%s
-                ORDER BY CASE loan.status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END,
-                         LOWER(loan.title), loan.id;
-                """,
-                (user_id, user_id, user_id, user_id),
-            )
-            return [dict(row) for row in cur.fetchall()]
 
 
-def get_shared_loan(user_id, loan_id):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            loan = _require_shared_loan_access(cur, user_id, loan_id)
-            cur.execute(
-                """
-                SELECT member.user_id, member.role, member.permission,
-                       account.display_name, account.email
-                FROM finance_shared_loan_members AS member
-                JOIN users AS account ON account.id=member.user_id
-                WHERE member.loan_id=%s
-                ORDER BY LOWER(account.display_name), member.user_id;
-                """,
-                (int(loan_id),),
-            )
-            loan["members"] = [dict(row) for row in cur.fetchall()]
-            cur.execute(
-                """
-                SELECT event.*, account.display_name AS created_by_name
-                FROM finance_shared_loan_events AS event
-                JOIN users AS account ON account.id=event.created_by_user_id
-                WHERE event.loan_id=%s
-                ORDER BY event.event_date DESC, event.id DESC;
-                """,
-                (int(loan_id),),
-            )
-            loan["events"] = [dict(row) for row in cur.fetchall()]
-            return loan
 
 
-def add_shared_loan_event(
-    user_id,
-    loan_id,
-    *,
-    event_type,
-    amount=0,
-    event_date=None,
-    note=None,
-):
-    if event_type not in {"payment", "principal_addition", "adjustment", "note"}:
-        raise ValueError("Le type d’événement est invalide.")
-    event_day = _optional_date_value(event_date, "La date") or date.today()
-    if event_type == "adjustment":
-        try:
-            value = Decimal(str(amount or 0)).quantize(Decimal("0.01"))
-        except (InvalidOperation, ValueError, TypeError) as error:
-            raise ValueError("Le montant est invalide.") from error
-    else:
-        value = _money(amount, allow_zero=True)
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            loan = _require_shared_loan_access(cur, user_id, loan_id, edit=True)
-            balance = Decimal(loan["current_balance"])
-            interest = Decimal("0.00")
-            principal = Decimal("0.00")
-            new_balance = balance
-            if event_type == "payment":
-                if value <= 0:
-                    raise ValueError("Le versement doit être supérieur à 0.")
-                periods = _periods_per_year(
-                    loan["frequency_unit"], int(loan["frequency_interval"] or 1)
-                )
-                periodic_rate = (
-                    Decimal(loan["annual_interest_rate"] or 0)
-                    / Decimal("100") / periods
-                )
-                interest = (balance * periodic_rate).quantize(Decimal("0.01"))
-                principal = max(Decimal("0.00"), value - interest)
-                principal = min(balance, principal)
-                new_balance = max(Decimal("0.00"), balance - principal)
-            elif event_type == "principal_addition":
-                principal = value
-                new_balance = balance + value
-            elif event_type == "adjustment":
-                # Une valeur positive augmente le solde; négative le réduit.
-                signed = value
-                principal = signed
-                new_balance = max(Decimal("0.00"), balance + signed)
-            cur.execute(
-                """
-                INSERT INTO finance_shared_loan_events (
-                    loan_id,created_by_user_id,event_date,event_type,amount,
-                    interest_amount,principal_amount,balance_after,note
-                )
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s);
-                """,
-                (
-                    int(loan_id),user_id,event_day,event_type,value,
-                    interest,principal,new_balance,_text(note, "La note", 1000),
-                ),
-            )
-            new_status = "completed" if new_balance <= 0 else loan["status"]
-            cur.execute(
-                """
-                UPDATE finance_shared_loans
-                SET current_balance=%s,status=%s,updated_at=NOW()
-                WHERE id=%s;
-                """,
-                (new_balance, new_status, int(loan_id)),
-            )
-            conn.commit()
-            return {
-                "balance_before": balance,
-                "interest": interest,
-                "principal": principal,
-                "balance_after": new_balance,
-            }
 
 
-def shared_loan_amortization_preview(user_id, loan_id, max_rows=36):
-    loan = get_shared_loan(user_id, loan_id)
-    balance = Decimal(loan["current_balance"] or 0)
-    payment = Decimal(loan.get("payment_amount") or 0)
-    if payment <= 0 or balance <= 0:
-        return []
-    occurrence = loan.get("next_due_date") or date.today()
-    periods = _periods_per_year(
-        loan["frequency_unit"], int(loan["frequency_interval"] or 1)
-    )
-    periodic_rate = Decimal(loan["annual_interest_rate"] or 0) / Decimal("100") / periods
-    rows = []
-    for number in range(1, max(1, min(int(max_rows), 120)) + 1):
-        interest = (balance * periodic_rate).quantize(Decimal("0.01"))
-        principal = max(Decimal("0.00"), payment - interest)
-        if principal <= 0:
-            break
-        principal = min(balance, principal)
-        actual_payment = principal + interest
-        balance = max(Decimal("0.00"), balance - principal)
-        rows.append(
-            {
-                "number": number,
-                "date": occurrence,
-                "payment": actual_payment,
-                "interest": interest,
-                "principal": principal,
-                "remaining": balance,
-            }
-        )
-        if balance <= 0:
-            break
-        occurrence = _next_date(
-            occurrence,
-            loan["frequency_unit"],
-            int(loan["frequency_interval"] or 1),
-        )
-    return rows
 
 
 def export_finances(user_id):
-    csv_bytes, json_bytes = _export_finances_v111(user_id)
+    csv_bytes, json_bytes = _export_finances_v1110(user_id)
     try:
         payload = json.loads(json_bytes.decode("utf-8"))
     except Exception:

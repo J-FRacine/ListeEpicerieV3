@@ -164,7 +164,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.12.2",
+        "title": "Finances — V1.13.0",
         "icon": "account_balance_wallet",
         "caption": "Prévisions, Budget, financements et prêts partagés",
         "keywords": (
@@ -172,6 +172,14 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "archives à venir paies prêts partagés catégorie étiquette saisie rapide"
         ),
         "content": """
+### V1.13.0 — refactorisation et stabilité
+
+Finances V1.13.0 conserve les écrans, les données et les calculs fonctionnels de la série V1.12, mais réorganise le code pour rendre les prochaines modifications plus sûres. Les calculs de dates, paies, récurrences et versements sont regroupés dans un module commun; les validations de saisie et la couche de données des Prêts partagés sont séparées; les sélecteurs mensuels utilisent un même objet d’état; et les anciennes redéfinitions successives de fonctions dans `finances_data.py` ont été remplacées par des implémentations versionnées explicites.
+
+Budget et Financements utilisent maintenant le même principe de rendu : chaque vue mensuelle est un composant NiceGUI rafraîchissable autonome. Cette réorganisation ne modifie ni le schéma PostgreSQL ni les transactions existantes.
+
+Une batterie de tests de non-régression couvre notamment le cas des **3 paies en octobre 2026**, l’estimation des versements de financement, le calcul amorti avec intérêts et l’absence de redéfinitions de fonctions dans la couche de données.
+
 ### Correctifs V1.12.2 et V1.12.1
 
 V1.12.2 corrige une seconde erreur de démarrage dans le nouvel onglet **Prêts partagés** : l’écran transmettait un nom `user` inexistant au lieu du paramètre `current_user` reçu par `finances_panel`. Le module reçoit maintenant correctement l’utilisateur courant.

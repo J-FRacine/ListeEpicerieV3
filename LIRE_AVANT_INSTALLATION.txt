@@ -1,76 +1,123 @@
-JF APPS — FINANCES V1.12.6
-CORRECTIF NAVIGATION MENSUELLE DU BUDGET
-31 août 2026
+JF APPS — FINANCES V1.13.0 — REFACTORISATION ET STABILITÉ
+Date : 31 août 2026
 
-PROBLÈME CORRIGÉ
-----------------
-Dans V1.12.5, le mois interne changeait bien au clic sur les flèches du Budget,
-mais l'écran visible pouvait rester sur l'ancien mois jusqu'à ce que l'utilisateur
-quitte l'onglet puis y revienne.
+OBJECTIF
+--------
+Cette version ne cherche pas à ajouter une grosse fonction. Elle remet en ordre
+le code de Finances après les nombreuses évolutions V1.6 à V1.12 afin de réduire
+les régressions et de rendre les prochains développements plus simples.
 
-CAUSE
------
-La vue Budget mélangeait encore deux mécanismes NiceGUI :
-- un conteneur externe budget_box vidé/reconstruit manuellement;
-- des mécanismes refreshable utilisés ailleurs dans Finances.
+AUCUNE DONNÉE N'EST SUPPRIMÉE.
+AUCUN SCRIPT SQL MANUEL.
+AUCUNE NOUVELLE DÉPENDANCE PYTHON.
+AUCUN CHANGEMENT DE SCHÉMA POSTGRESQL.
 
-Le correctif V1.12.5 avait changé l'appel de rafraîchissement sans éliminer ce
-mélange, ce qui n'était donc pas suffisant.
-
-CORRECTION V1.12.6
-------------------
-- suppression du conteneur externe budget_box;
-- render_budget devient lui-même @ui.refreshable;
-- les flèches modifient month_state puis appellent render_budget.refresh();
-- le tri et les autres actions du Budget utilisent le même mécanisme;
-- refresh_all utilise aussi render_budget.refresh();
-- le Tableau demeure synchronisé avec le même month_state.
-
-Ainsi, un clic sur mois précédent/suivant doit immédiatement modifier :
-- le nom du mois;
-- Revenus/Dépenses fixes;
-- Reste mensuel et Reste par paie;
-- Disponible ce mois et nombre de paies;
-- sections Actives / À venir / Archives;
-- Prévisions.
+BASE UTILISÉE
+-------------
+Finances V1.12.6, incluant les correctifs V1.12.1 à V1.12.6 et les fonctions de
+V1.12.0 : Budget/Prévisions, groupes de financements, intérêts, KPI, Prêts
+partagés, Historique, conciliations en cours, etc.
 
 FICHIERS À REMPLACER
 --------------------
+À la racine du dépôt GitHub :
+
 - finances.py
+- finances_data.py
+- finances_shared_loans.py
 - app_versions.py
 - manual.py
 
-Les fichiers finances_data.py et finances_shared_loans.py sont inclus dans le
-ZIP pour cohérence mais sont inchangés par rapport à V1.12.5.
+NOUVEAUX FICHIERS À AJOUTER
+----------------------------
+Toujours à la racine du dépôt GitHub :
+
+- finances_calculations.py
+- finances_validation.py
+- finances_shared_loans_data.py
+- finances_ui_state.py
+
+Le dossier tests/ contenu dans le ZIP est fourni pour référence et n'est pas
+nécessaire au déploiement Canner.
+
+CE QUI A ÉTÉ REFACTORISÉ
+------------------------
+1. Calculs purs centralisés dans finances_calculations.py :
+   - dates et décalages mensuels;
+   - prochaines occurrences de récurrence;
+   - paies aux deux semaines;
+   - estimation de progression des financements;
+   - calcul amorti des versements avec intérêts.
+
+2. Validations communes centralisées dans finances_validation.py :
+   - montants;
+   - décimales;
+   - textes;
+   - dates facultatives.
+
+3. Données des Prêts partagés séparées dans finances_shared_loans_data.py.
+   L'interface reste dans finances_shared_loans.py.
+
+4. Navigation mensuelle centralisée dans finances_ui_state.py avec MonthCursor.
+   Budget, Tableau, Compte et Financements ne manipulent plus chacun un petit
+   dictionnaire de mois différent.
+
+5. finances_data.py ne redéfinit plus plusieurs fois les mêmes fonctions sous le
+   même nom. Les implémentations historiques encore nécessaires portent un nom
+   versionné explicite et les anciennes versions mortes ont été supprimées.
+
+6. Budget et Financements utilisent chacun un composant NiceGUI @ui.refreshable
+   autonome. Le mélange d'un conteneur externe .clear() avec refreshable a été
+   retiré des deux vues mensuelles.
+
+TESTS AUTOMATIQUES EFFECTUÉS
+----------------------------
+- py_compile sur tous les fichiers Python du paquet : OK.
+- compileall sur tout le paquet : OK.
+- import de finances_data avec DB simulée sans ouverture de connexion : OK.
+- les 91 noms importés par finances.py depuis finances_data existent : OK.
+- aucune fonction de premier niveau dupliquée dans finances_data.py : OK.
+- chaîne des migrations V1.9 -> V1.10 -> V1.10.1 -> V1.11 -> V1.12 : vérifiée.
+- export historique chaîné jusqu'à la version courante : vérifié.
+- comparaison V1.12.6 / V1.13.0 des calculs purs : identique.
+- prochaine paie 03/09/2026 aux 2 semaines : octobre = 01, 15 et 29 (3 paies).
+- 828,98 $ x 3 = 2 486,94 $.
+- financement 196,59 / solde 139,19 / versement 8,20 : 7 effectués / 17 restants.
+- amortissement 1 000 $, 12 mois, 12 % : 88,85 $.
+- analyse symbolique de finances_panel : aucune référence globale inconnue.
+- Budget et Financements : aucun budget_box / financing_box externe restant.
 
 INSTALLATION
 ------------
-1. Remplacer finances.py, app_versions.py et manual.py dans GitHub.
-2. Commit changes.
-3. Attendre le redéploiement Canner.
-4. Faire Ctrl+F5 sur ordinateur après le redéploiement.
-5. Vérifier que Finances affiche V1.12.6.
+1. Faire une sauvegarde globale depuis le Centre de maintenance avant le commit.
+2. Remplacer les 5 fichiers indiqués plus haut.
+3. Ajouter les 4 nouveaux modules à la racine du dépôt.
+4. Faire le commit GitHub et attendre le redéploiement Canner.
+5. Faire Ctrl+F5 sur ordinateur après le déploiement.
+6. Vérifier que Finances affiche V1.13.0.
 
-TEST RECOMMANDÉ
----------------
-1. Ouvrir Finances > Budget.
-2. Noter le mois affiché et les montants.
-3. Cliquer une fois sur la flèche du mois suivant.
-4. Vérifier que le nom du mois change immédiatement, sans changer d'onglet.
-5. Vérifier que les KPI et Prévisions se mettent à jour dans le même clic.
-6. Naviguer plusieurs mois avant/arrière.
-7. Pour octobre 2026, vérifier que le nombre de paies est 3 lorsque la
-   récurrence salariale est ancrée au 3 septembre 2026 aux deux semaines.
+TESTS CONSEILLÉS APRÈS DÉPLOIEMENT
+---------------------------------
+A. Ouverture
+- Ouvrir Finances puis chaque onglet au moins une fois.
+- Ouvrir Prêts partagés pour confirmer que le module charge normalement.
 
-VALIDATION TECHNIQUE
---------------------
-- py_compile réussi sur tous les fichiers Python du paquet;
-- compileall réussi;
-- aucune référence à budget_box dans finances.py;
-- render_budget est décoré @ui.refreshable;
-- change_month appelle render_budget.refresh();
-- refresh_all appelle render_budget.refresh();
-- aucun changement de schéma ou de données.
+B. Budget / mois
+- Dans Budget, changer de mois avec les flèches.
+- Le libellé et les KPI doivent changer immédiatement.
+- Octobre 2026 doit indiquer 3 paies dans le cas de référence déjà configuré.
 
-AUCUN SQL MANUEL.
-AUCUNE NOUVELLE DÉPENDANCE PYTHON.
+C. Financements
+- Changer de mois avec les flèches.
+- Septembre 2026 doit additionner les échéances du 5 septembre.
+- Vérifier que le total des soldes restants reste cohérent.
+
+D. Opérations courantes
+- Ajouter/modifier une petite transaction de test puis la supprimer.
+- Ouvrir Historique, Tableau et Conciliation.
+- Vérifier qu'aucune donnée existante n'a changé.
+
+RETOUR ARRIÈRE
+--------------
+Cette version ne modifie pas le schéma de la base. En cas de problème d'interface,
+il est donc possible de remettre les fichiers V1.12.6 sans migration inverse.

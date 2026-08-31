@@ -15,12 +15,33 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.2",
     "blood_pressure": "1.2.1",
-    "finances": "1.12.6",
+    "finances": "1.13.0",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.13.0",
+        "date": "2026-08-31",
+        "title": "Finances — refactorisation et stabilité",
+        "summary": (
+            "Réorganisation interne de Finances pour réduire les dépendances croisées "
+            "et sécuriser les prochaines évolutions sans modifier les données ni les fonctions visibles."
+        ),
+        "changes": [
+            "Centralisation des calculs purs de dates, paies, récurrences et versements dans finances_calculations.py.",
+            "Centralisation des validations communes de montants, textes et dates dans finances_validation.py.",
+            "Séparation de la couche de données des Prêts partagés dans finances_shared_loans_data.py.",
+            "Centralisation de l’état de navigation mensuelle NiceGUI dans finances_ui_state.py pour Tableau/Budget, Compte et Financements.",
+            "Suppression des redéfinitions successives de fonctions dans finances_data.py : les anciennes implémentations nécessaires portent maintenant un nom versionné explicite.",
+            "Suppression d’anciennes implémentations mortes qui étaient déjà masquées par des versions plus récentes.",
+            "Budget et Financements utilisent chacun un composant refreshable autonome, sans conteneur externe clear/refresh mélangé.",
+            "Ajout de tests de non-régression pour les mois à trois paies, les financements, les états mensuels et l’architecture des modules.",
+            "Aucun changement de schéma PostgreSQL, aucune migration manuelle et aucune nouvelle dépendance Python.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.12.6",

@@ -110,6 +110,7 @@ from finances_data import (
     toggle_tag,
 )
 from finances_shared_loans import shared_loans_panel
+from finances_ui_state import MonthCursor, month_label as _month_label, shift_month as _shift_month
 
 
 ADD_CATEGORY_OPTION = "__jf_add_category__"
@@ -869,20 +870,6 @@ def _balance_money(value):
     return sign + _money(amount)
 
 
-def _month_label(month):
-    names = [
-        "", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-        "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
-    ]
-    return f"{names[month.month]} {month.year}"
-
-
-def _shift_month(month, amount):
-    absolute = month.year * 12 + month.month - 1 + amount
-    year, month_index = divmod(absolute, 12)
-    return date(year, month_index + 1, 1)
-
-
 def _category_options(user_id):
     return {
         int(row["id"]): row["full_name"]
@@ -1562,8 +1549,8 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
     except Exception:
         pass
 
-    month_state = {"value": date.today().replace(day=1)}
-    financing_month_state = {"value": date.today().replace(day=1)}
+    month_state = MonthCursor()
+    financing_month_state = MonthCursor()
 
     if show_heading:
         with ui.row().classes(
@@ -1673,18 +1660,18 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
 
                 projection = dashboard_month_projection(
                     user_id,
-                    month_state["value"],
+                    month_state.value,
                 )
                 summary = {
                     "expenses": projection["realized"]["expenses"],
                     "planned_count": projection["upcoming"]["count"],
                 }
                 capacity = projection.get("capacity") or budget_capacity_summary(
-                    user_id, month_state["value"]
+                    user_id, month_state.value
                 )
                 goals = goal_progress(
                     user_id,
-                    month_state["value"],
+                    month_state.value,
                 )
                 kpis = projection["kpis"]
                 predicted_rows = payment_predicted_balance_summary(
@@ -1705,7 +1692,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                     )
                     try:
                         cash_summary = bank_cashflow_month(
-                            user_id, int(primary_account["id"]), month_state["value"]
+                            user_id, int(primary_account["id"]), month_state.value
                         )
                     except Exception:
                         cash_summary = None
@@ -1803,7 +1790,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     )
                                     ui.label(
                                         (
-                                            f"{_month_label(month_state['value'])} — "
+                                            f"{_month_label(month_state.value)} — "
                                             + (
                                                 "Catégorie"
                                                 if dimension == "category"
@@ -2035,9 +2022,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         )
                         ui.label(
                             _month_label(
-                                month_state[
-                                    "value"
-                                ]
+                                month_state.value
                             )
                         ).classes(
                             "font-bold min-w-40 "
@@ -2218,7 +2203,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             set_month_carryover(
                                 user_id,
                                 bool(event.value),
-                                month_state["value"],
+                                month_state.value,
                             )
                         except Exception as error:
                             ui.notify(str(error), type="warning")
@@ -2795,11 +2780,10 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                 offset,
                 reset=False,
             ):
-                month_state["value"] = (
-                    date.today().replace(day=1)
-                    if reset
-                    else _shift_month(month_state["value"], offset)
-                )
+                if reset:
+                    month_state.reset()
+                else:
+                    month_state.shift(offset)
                 # Le Budget est un composant refreshable autonome. Le rafraîchir
                 # directement garantit que le mois, les KPI et les prévisions
                 # visibles suivent immédiatement month_state.
@@ -2811,7 +2795,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
 
         # COMPTE / TRÉSORERIE
         with ui.tab_panel(account_tab).classes("px-0"):
-            account_state = {"month": date.today().replace(day=1)}
+            account_month_state = MonthCursor()
             bank_rows = list_bank_accounts(user_id)
             bank_options = {int(row["id"]): row["name"] for row in bank_rows}
             selected_bank = next(
@@ -2942,7 +2926,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
             account_box = ui.column().classes("w-full gap-2")
 
             def change_account_month(offset):
-                account_state["month"] = _shift_month(account_state["month"], offset)
+                account_month_state.shift(offset)
                 render_account.refresh()
 
             def open_account_row_editor(selected_row):
@@ -3078,14 +3062,14 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             ui.label("Aucun Compte bancaire ni aucune Marge de crédit n’est configuré. Crée-en un dans Organisation > Modes de paiement.").classes("text-sm")
                         return
                     try:
-                        month_data = bank_cashflow_month(user_id, account_selector.value, account_state["month"])
-                        year_data = bank_cashflow_year_summary(user_id, account_selector.value, account_state["month"].year)
+                        month_data = bank_cashflow_month(user_id, account_selector.value, account_month_state.value)
+                        year_data = bank_cashflow_year_summary(user_id, account_selector.value, account_month_state.value.year)
                     except Exception as error:
                         ui.label(str(error)).classes("text-sm jf-finance-expense")
                         return
                     with ui.row().classes("w-full items-center justify-center gap-1"):
                         ui.button(icon="chevron_left", on_click=lambda: change_account_month(-1)).props("flat dense round")
-                        ui.label(_month_label(account_state["month"])).classes("font-bold min-w-40 text-center")
+                        ui.label(_month_label(account_month_state.value)).classes("font-bold min-w-40 text-center")
                         ui.button(icon="chevron_right", on_click=lambda: change_account_month(1)).props("flat dense round")
                     if not month_data.get("available"):
                         with ui.element("div").classes("jf-finance-report-note"):
@@ -3248,7 +3232,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         ).classes("text-xs jf-muted px-1")
                     if year_data.get("available"):
                         with ui.row().classes("w-full items-center justify-between mt-2"):
-                            ui.label(f"Vue annuelle {account_state['month'].year}").classes("text-lg font-bold")
+                            ui.label(f"Vue annuelle {account_month_state.value.year}").classes("text-lg font-bold")
                             ui.label(
                                 "Dette utilisée prévue à la fin de chaque mois"
                                 if is_credit_line
@@ -3257,7 +3241,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         with ui.element("div").classes("jf-finance-year-grid"):
                             for month_row in year_data["months"]:
                                 month_value = month_row["month"]
-                                with ui.element("div").classes("jf-finance-year-card").on("click", lambda _event=None, selected=month_value: (account_state.__setitem__("month", selected), render_account.refresh())):
+                                with ui.element("div").classes("jf-finance-year-card").on("click", lambda _event=None, selected=month_value: (account_month_state.set(selected), render_account.refresh())):
                                     ui.label(_month_label(month_value).split()[0]).classes("text-xs jf-muted")
                                     if not month_row.get("available", True):
                                         ui.label("—").classes("font-bold jf-muted")
@@ -3835,17 +3819,17 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
 
             @ui.refreshable
             def render_budget():
-                summary_budget = budget_summary(user_id, month_state["value"])
-                capacity_budget = budget_capacity_summary(user_id, month_state["value"])
+                summary_budget = budget_summary(user_id, month_state.value)
+                capacity_budget = budget_capacity_summary(user_id, month_state.value)
                 rows = list_budget_items(
-                    user_id, include_inactive=True, month_value=month_state["value"]
+                    user_id, include_inactive=True, month_value=month_state.value
                 )
                 with ui.row().classes("w-full items-start justify-between gap-2 flex-wrap"):
                     with ui.column().classes("gap-0"):
                         ui.label("Budget — structure fixe").classes("text-xl font-bold")
                         ui.label(
                             "Revenus et dépenses fixes applicables à "
-                            + _month_label(month_state["value"])
+                            + _month_label(month_state.value)
                             + ". Le résultat détermine la portion disponible pour les dépenses variables."
                         ).classes("text-xs jf-muted")
                     with ui.row().classes("gap-1 flex-wrap"):
@@ -3854,7 +3838,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             on_click=lambda: change_month(-1),
                         ).props("flat round dense")
                         ui.button(
-                            _month_label(month_state["value"]),
+                            _month_label(month_state.value),
                             on_click=lambda: change_month(0, reset=True),
                         ).props("flat dense")
                         ui.button(
@@ -3964,7 +3948,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         budget_sort_field.on_value_change(change_budget_sort)
                         budget_sort_direction.on_value_change(change_budget_sort)
 
-                displayed_month = month_state["value"]
+                displayed_month = month_state.value
                 displayed_end = _shift_month(displayed_month, 1) - timedelta(days=1)
                 expense_rows = [row for row in rows if row["item_type"] == "expense"]
                 active_expenses = []
@@ -4004,7 +3988,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                 ui.label(
                     "Solde variable de fin de mois = disponible de base + report précédent − dépenses variables prévues/réalisées."
                 ).classes("text-xs jf-muted")
-                forecast_rows = budget_forecast(user_id, month_state["value"], months=6)
+                forecast_rows = budget_forecast(user_id, month_state.value, months=6)
                 with ui.card().classes("w-full p-0 overflow-hidden"):
                     with ui.element("div").classes("jf-finance-cashflow-head").style(
                         "display:grid;grid-template-columns:minmax(8rem,1fr) 7rem 7rem 7rem 8rem;gap:.5rem;"
@@ -4028,7 +4012,6 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
 
         # FINANCEMENTS ET VERSEMENTS
         with ui.tab_panel(financing_tab).classes("px-0"):
-            financing_box = ui.column().classes("w-full gap-2")
 
             def installment_plan_dialog(plan=None):
                 current = dict(plan) if plan else {}
@@ -4293,113 +4276,110 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                 dialog.open()
 
             def change_financing_month(offset, reset=False):
-                financing_month_state["value"] = (
-                    date.today().replace(day=1)
-                    if reset
-                    else _shift_month(financing_month_state["value"], offset)
-                )
+                if reset:
+                    financing_month_state.reset()
+                else:
+                    financing_month_state.shift(offset)
                 render_financing.refresh()
 
             @ui.refreshable
             def render_financing():
-                financing_box.clear()
                 plans = list_installment_plans(user_id, include_inactive=True)
-                financing_summary = financing_month_summary(user_id, financing_month_state["value"])
-                with financing_box:
-                    with ui.row().classes("w-full items-start justify-between gap-2 flex-wrap"):
-                        with ui.column().classes("gap-0"):
-                            ui.label("Financements et achats en versements").classes("text-xl font-bold")
-                            ui.label(
-                                "Magasins et plans de versements sur cartes. Chaque versement est une vraie dépense "
-                                "dans les KPI selon sa catégorie, sauf exclusion explicite."
-                            ).classes("text-xs jf-muted")
-                        with ui.row().classes("gap-1 flex-wrap items-center"):
-                            ui.button(
-                                icon="chevron_left",
-                                on_click=lambda: change_financing_month(-1),
-                            ).props("flat round dense")
-                            ui.button(
-                                _month_label(financing_month_state["value"]),
-                                on_click=lambda: change_financing_month(0, reset=True),
-                            ).props("flat dense")
-                            ui.button(
-                                icon="chevron_right",
-                                on_click=lambda: change_financing_month(1),
-                            ).props("flat round dense")
-                            ui.button("Ajouter un financement", icon="add", on_click=lambda: installment_plan_dialog()).props("color=primary dense")
-                    with ui.element("div").classes("jf-finance-summary-grid"):
-                        for label, value in (
-                            ("Paiements du mois — " + _month_label(financing_month_state["value"]), financing_summary["payments"]),
-                            ("Soldes restants", financing_summary["remaining_balances"]),
-                        ):
-                            with ui.element("div").classes("jf-finance-summary"):
-                                ui.label(label).classes("jf-finance-summary-label")
-                                ui.label(_money(value)).classes("jf-finance-summary-value")
-                    if not plans:
-                        with ui.card().classes("w-full p-4"):
-                            ui.label("Aucun financement enregistré.").classes("text-sm jf-muted")
-                    with ui.element("div").classes("jf-finance-balance-grid"):
-                        for plan in plans:
-                            with ui.element("section").classes("jf-finance-balance-card"):
-                                with ui.row().classes("w-full items-start justify-between gap-2"):
-                                    with ui.column().classes("gap-0 min-w-0"):
-                                        ui.label(plan["description"]).classes("font-bold truncate").tooltip(plan["description"])
-                                        ui.label(
-                                            INSTALLMENT_PLAN_TYPES.get(plan["plan_type"], plan["plan_type"])
-                                            + (" — " + plan["provider_name"] if plan.get("provider_name") else "")
-                                        ).classes("text-xs jf-muted")
-                                    with ui.row().classes("gap-0"):
-                                        ui.switch(
-                                            value=plan["is_active"],
-                                            on_change=lambda event, selected=plan["id"]: (toggle_installment_plan(user_id, selected, event.value), refresh_all()),
-                                        ).props("dense")
-                                        ui.button(icon="edit", on_click=lambda _event=None, selected=plan: installment_plan_dialog(selected)).props("flat dense round size=sm color=primary")
-                                        ui.button(icon="delete", on_click=lambda _event=None, selected=plan["id"]: remove_installment_plan(selected)).props("flat dense round size=sm color=negative")
-                                with ui.element("div").classes("jf-finance-summary-grid mt-2"):
-                                    for label, value in (
-                                        ("Montant initial", plan["original_amount"]),
-                                        ("Payé / estimé", Decimal(plan.get("original_amount", 0)) - Decimal(plan.get("estimated_remaining_balance", 0))),
-                                        ("Solde restant", plan.get("estimated_remaining_balance", plan.get("remaining_balance", 0))),
-                                        ("Versement", plan["installment_amount"]),
-                                    ):
-                                        with ui.element("div").classes("jf-finance-summary"):
-                                            ui.label(label).classes("jf-finance-summary-label")
-                                            ui.label(_money(value)).classes("jf-finance-summary-value")
-                                progress_text = (
-                                    f"{plan.get('display_completed_installments', plan.get('completed_installments', 0))}/{plan['total_installments']} versements effectués — "
-                                    f"{plan.get('display_remaining_installments', 0)} restant(s)"
-                                )
-                                if plan.get("progress_estimated"):
-                                    progress_text += " — estimation"
-                                ui.label(progress_text).classes("text-xs jf-muted mt-1")
-                                modality = plan.get("payment_terms_label") or FREQUENCY_UNITS.get(
-                                    plan.get("frequency_unit"), str(plan.get("frequency_unit") or "")
-                                )
-                                modality += " · " + _money(plan["installment_amount"])
-                                if plan.get("payment_method_name"):
-                                    modality += " · " + str(plan["payment_method_name"])
-                                ui.label("Modalité : " + modality).classes("text-xs jf-muted")
-                                display_next = plan.get("display_next_due_date") or plan.get("next_due_date")
-                                if display_next:
+                financing_summary = financing_month_summary(user_id, financing_month_state.value)
+                with ui.row().classes("w-full items-start justify-between gap-2 flex-wrap"):
+                    with ui.column().classes("gap-0"):
+                        ui.label("Financements et achats en versements").classes("text-xl font-bold")
+                        ui.label(
+                            "Magasins et plans de versements sur cartes. Chaque versement est une vraie dépense "
+                            "dans les KPI selon sa catégorie, sauf exclusion explicite."
+                        ).classes("text-xs jf-muted")
+                    with ui.row().classes("gap-1 flex-wrap items-center"):
+                        ui.button(
+                            icon="chevron_left",
+                            on_click=lambda: change_financing_month(-1),
+                        ).props("flat round dense")
+                        ui.button(
+                            _month_label(financing_month_state.value),
+                            on_click=lambda: change_financing_month(0, reset=True),
+                        ).props("flat dense")
+                        ui.button(
+                            icon="chevron_right",
+                            on_click=lambda: change_financing_month(1),
+                        ).props("flat round dense")
+                        ui.button("Ajouter un financement", icon="add", on_click=lambda: installment_plan_dialog()).props("color=primary dense")
+                with ui.element("div").classes("jf-finance-summary-grid"):
+                    for label, value in (
+                        ("Paiements du mois — " + _month_label(financing_month_state.value), financing_summary["payments"]),
+                        ("Soldes restants", financing_summary["remaining_balances"]),
+                    ):
+                        with ui.element("div").classes("jf-finance-summary"):
+                            ui.label(label).classes("jf-finance-summary-label")
+                            ui.label(_money(value)).classes("jf-finance-summary-value")
+                if not plans:
+                    with ui.card().classes("w-full p-4"):
+                        ui.label("Aucun financement enregistré.").classes("text-sm jf-muted")
+                with ui.element("div").classes("jf-finance-balance-grid"):
+                    for plan in plans:
+                        with ui.element("section").classes("jf-finance-balance-card"):
+                            with ui.row().classes("w-full items-start justify-between gap-2"):
+                                with ui.column().classes("gap-0 min-w-0"):
+                                    ui.label(plan["description"]).classes("font-bold truncate").tooltip(plan["description"])
                                     ui.label(
-                                        "Prochaine échéance : " + display_next.strftime("%d/%m/%Y")
-                                    ).classes("text-xs text-primary")
-                                if plan.get("estimated_end_date"):
-                                    ui.label(
-                                        "Fin prévue : " + plan["estimated_end_date"].strftime("%d/%m/%Y")
-                                    ).classes("text-xs text-primary")
-                                if Decimal(plan.get("annual_interest_rate", 0)) or Decimal(plan.get("fees_total", 0)):
-                                    ui.label(
-                                        f"Intérêt : {plan.get('annual_interest_rate', 0)} % — Frais : {_money(plan.get('fees_total', 0))}"
+                                        INSTALLMENT_PLAN_TYPES.get(plan["plan_type"], plan["plan_type"])
+                                        + (" — " + plan["provider_name"] if plan.get("provider_name") else "")
                                     ).classes("text-xs jf-muted")
-                                    if Decimal(plan.get("annual_interest_rate", 0)) > 0:
-                                        if plan.get("payment_includes_interest", True):
-                                            ui.label("Le versement indiqué inclut déjà les intérêts.").classes("text-xs jf-muted")
-                                        else:
-                                            ui.label(
-                                                "Base hors intérêts : " + _money(plan.get("base_installment_amount", 0))
-                                                + " · total utilisé : " + _money(plan.get("installment_amount", 0))
-                                            ).classes("text-xs text-primary")
+                                with ui.row().classes("gap-0"):
+                                    ui.switch(
+                                        value=plan["is_active"],
+                                        on_change=lambda event, selected=plan["id"]: (toggle_installment_plan(user_id, selected, event.value), refresh_all()),
+                                    ).props("dense")
+                                    ui.button(icon="edit", on_click=lambda _event=None, selected=plan: installment_plan_dialog(selected)).props("flat dense round size=sm color=primary")
+                                    ui.button(icon="delete", on_click=lambda _event=None, selected=plan["id"]: remove_installment_plan(selected)).props("flat dense round size=sm color=negative")
+                            with ui.element("div").classes("jf-finance-summary-grid mt-2"):
+                                for label, value in (
+                                    ("Montant initial", plan["original_amount"]),
+                                    ("Payé / estimé", Decimal(plan.get("original_amount", 0)) - Decimal(plan.get("estimated_remaining_balance", 0))),
+                                    ("Solde restant", plan.get("estimated_remaining_balance", plan.get("remaining_balance", 0))),
+                                    ("Versement", plan["installment_amount"]),
+                                ):
+                                    with ui.element("div").classes("jf-finance-summary"):
+                                        ui.label(label).classes("jf-finance-summary-label")
+                                        ui.label(_money(value)).classes("jf-finance-summary-value")
+                            progress_text = (
+                                f"{plan.get('display_completed_installments', plan.get('completed_installments', 0))}/{plan['total_installments']} versements effectués — "
+                                f"{plan.get('display_remaining_installments', 0)} restant(s)"
+                            )
+                            if plan.get("progress_estimated"):
+                                progress_text += " — estimation"
+                            ui.label(progress_text).classes("text-xs jf-muted mt-1")
+                            modality = plan.get("payment_terms_label") or FREQUENCY_UNITS.get(
+                                plan.get("frequency_unit"), str(plan.get("frequency_unit") or "")
+                            )
+                            modality += " · " + _money(plan["installment_amount"])
+                            if plan.get("payment_method_name"):
+                                modality += " · " + str(plan["payment_method_name"])
+                            ui.label("Modalité : " + modality).classes("text-xs jf-muted")
+                            display_next = plan.get("display_next_due_date") or plan.get("next_due_date")
+                            if display_next:
+                                ui.label(
+                                    "Prochaine échéance : " + display_next.strftime("%d/%m/%Y")
+                                ).classes("text-xs text-primary")
+                            if plan.get("estimated_end_date"):
+                                ui.label(
+                                    "Fin prévue : " + plan["estimated_end_date"].strftime("%d/%m/%Y")
+                                ).classes("text-xs text-primary")
+                            if Decimal(plan.get("annual_interest_rate", 0)) or Decimal(plan.get("fees_total", 0)):
+                                ui.label(
+                                    f"Intérêt : {plan.get('annual_interest_rate', 0)} % — Frais : {_money(plan.get('fees_total', 0))}"
+                                ).classes("text-xs jf-muted")
+                                if Decimal(plan.get("annual_interest_rate", 0)) > 0:
+                                    if plan.get("payment_includes_interest", True):
+                                        ui.label("Le versement indiqué inclut déjà les intérêts.").classes("text-xs jf-muted")
+                                    else:
+                                        ui.label(
+                                            "Base hors intérêts : " + _money(plan.get("base_installment_amount", 0))
+                                            + " · total utilisé : " + _money(plan.get("installment_amount", 0))
+                                        ).classes("text-xs text-primary")
             render_financing()
 
         # PRÊTS PARTAGÉS
@@ -4947,9 +4927,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         start = ui.input(
                             label="Du",
                             value=(
-                                month_state[
-                                    "value"
-                                ].isoformat()
+                                month_state.value.isoformat()
                             ),
                         ).props(
                             "type=date dense outlined"
@@ -5601,7 +5579,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         ).classes("text-sm jf-muted")
                         month_input = ui.input(
                             label="Mois à vérifier",
-                            value=month_state["value"].strftime("%Y-%m"),
+                            value=month_state.value.strftime("%Y-%m"),
                         ).props("type=month dense outlined").classes("w-full max-w-xs")
                         monthly_box = ui.column().classes("w-full gap-2 mt-2")
 

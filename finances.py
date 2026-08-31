@@ -1563,6 +1563,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
         pass
 
     month_state = {"value": date.today().replace(day=1)}
+    financing_month_state = {"value": date.today().replace(day=1)}
 
     if show_heading:
         with ui.row().classes(
@@ -4294,11 +4295,19 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             ui.button("Supprimer", icon="delete", on_click=remove_now).props("color=negative")
                 dialog.open()
 
+            def change_financing_month(offset, reset=False):
+                financing_month_state["value"] = (
+                    date.today().replace(day=1)
+                    if reset
+                    else _shift_month(financing_month_state["value"], offset)
+                )
+                render_financing.refresh()
+
             @ui.refreshable
             def render_financing():
                 financing_box.clear()
                 plans = list_installment_plans(user_id, include_inactive=True)
-                financing_summary = financing_month_summary(user_id, month_state["value"])
+                financing_summary = financing_month_summary(user_id, financing_month_state["value"])
                 with financing_box:
                     with ui.row().classes("w-full items-start justify-between gap-2 flex-wrap"):
                         with ui.column().classes("gap-0"):
@@ -4307,10 +4316,23 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                 "Magasins et plans de versements sur cartes. Chaque versement est une vraie dépense "
                                 "dans les KPI selon sa catégorie, sauf exclusion explicite."
                             ).classes("text-xs jf-muted")
-                        ui.button("Ajouter un financement", icon="add", on_click=lambda: installment_plan_dialog()).props("color=primary dense")
+                        with ui.row().classes("gap-1 flex-wrap items-center"):
+                            ui.button(
+                                icon="chevron_left",
+                                on_click=lambda: change_financing_month(-1),
+                            ).props("flat round dense")
+                            ui.button(
+                                _month_label(financing_month_state["value"]),
+                                on_click=lambda: change_financing_month(0, reset=True),
+                            ).props("flat dense")
+                            ui.button(
+                                icon="chevron_right",
+                                on_click=lambda: change_financing_month(1),
+                            ).props("flat round dense")
+                            ui.button("Ajouter un financement", icon="add", on_click=lambda: installment_plan_dialog()).props("color=primary dense")
                     with ui.element("div").classes("jf-finance-summary-grid"):
                         for label, value in (
-                            ("Paiements du mois — " + _month_label(month_state["value"]), financing_summary["payments"]),
+                            ("Paiements du mois — " + _month_label(financing_month_state["value"]), financing_summary["payments"]),
                             ("Soldes restants", financing_summary["remaining_balances"]),
                         ):
                             with ui.element("div").classes("jf-finance-summary"):

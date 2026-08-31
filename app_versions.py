@@ -15,12 +15,29 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.2",
     "blood_pressure": "1.2.1",
-    "finances": "1.12.3",
+    "finances": "1.12.4",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.12.4",
+        "date": "2026-08-31",
+        "title": "Finances — navigation mensuelle des financements",
+        "summary": (
+            "L’onglet Financements peut maintenant naviguer d’un mois à l’autre "
+            "et additionne les versements réellement prévus pour le mois affiché."
+        ),
+        "changes": [
+            "Ajout des flèches mois précédent/suivant et du nom réel du mois dans Financements.",
+            "Le KPI Paiements du mois additionne les échéances prévues ou confirmées du mois sélectionné.",
+            "Ajout d’un calcul de projection de secours pour les anciens financements dont les transactions prévues ne seraient pas encore matérialisées.",
+            "Avec les sept versements mensuels montrés dans le cas de référence, septembre 2026 totalise 89,66 $.",
+            "Aucun script SQL manuel ni nouvelle dépendance Python n’est requis.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.12.3",

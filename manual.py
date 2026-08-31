@@ -204,7 +204,7 @@ La section **Prévisions** projette jusqu’à six mois avec le disponible de ba
 
 ### Financements
 
-L’onglet **Financements** affiche en haut **Paiements du mois** et **Soldes restants**.
+L’onglet **Financements** affiche en haut **Paiements du mois** et **Soldes restants**. Des flèches permettent maintenant de naviguer d’un mois à l’autre; le KPI **Paiements du mois** additionne les versements prévus ou confirmés qui tombent réellement dans le mois affiché. Si un ancien financement ne possède pas encore ses transactions prévues matérialisées, Finances projette temporairement ses échéances à partir de la prochaine date, de la fréquence et du nombre de versements restants.
 
 Dans Budget, un poste spécial de type **Financements** peut regrouper plusieurs plans existants. Le montant du groupe est recalculé selon les versements applicables au mois affiché. Un financement ne peut normalement appartenir qu’à un seul groupe, ce qui évite le double comptage. Les transactions restent visibles dans l’Historique, les comptes/cartes et la conciliation, mais elles ne sont plus recomptées comme dépenses variables lorsqu’elles sont déjà absorbées par un groupe Budget.
 

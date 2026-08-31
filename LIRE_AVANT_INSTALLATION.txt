@@ -1,46 +1,70 @@
-JF APPS — FINANCES V1.12.3 — CORRECTIF DES PRÉVISIONS DE PAIES
-================================================================
+JF APPS — FINANCES V1.12.4
+Correctif / amélioration de l’onglet Financements
+Date : 31 août 2026
 
-PROBLÈME CORRIGÉ
-----------------
-Dans Budget > Prévisions, certains revenus aux deux semaines pouvaient rester
-à 2 paies pour tous les mois, même lorsqu’un mois contenait réellement 3 paies.
+OBJECTIF
+--------
+Cette version corrige le KPI « Paiements du mois » de l’onglet Financements et
+ajoute une navigation mensuelle indépendante.
 
-Exemple de référence :
-- prochaine paie : jeudi 3 septembre 2026;
-- fréquence : toutes les 2 semaines;
-- septembre : 3 et 17 septembre = 2 paies;
-- octobre : 1er, 15 et 29 octobre = 3 paies.
+CHANGEMENTS
+-----------
+1. Navigation mensuelle dans Financements
+   - flèche mois précédent;
+   - nom réel du mois affiché;
+   - flèche mois suivant;
+   - clic sur le nom du mois pour revenir au mois courant.
 
-CORRECTION
-----------
-- La prochaine date réelle de la récurrence est maintenant l’ancrage prioritaire
-  des fréquences quotidiennes/hebdomadaires.
-- Une ancienne ligne Budget bihebdomadaire non explicitement liée peut maintenant
-  retrouver automatiquement la récurrence active aux deux semaines dont le
-  montant correspond le mieux.
-- Le même calcul est réutilisé par Budget, Tableau et Prévisions.
-- Avec un Reste par paie de 828,98 $, octobre 2026 donne donc 3 paies et
-  2 486,94 $ de disponible de base avant report.
+2. KPI « Paiements du mois »
+   - additionne les transactions de financement prévues ou confirmées qui
+     tombent réellement dans le mois affiché;
+   - si un ancien financement n’a pas encore ses transactions prévues
+     matérialisées, Finances projette les échéances à partir de la prochaine
+     date, de la fréquence et du nombre de versements restants;
+   - aucune transaction n’est créée par ce calcul de secours : il sert seulement
+     au KPI d’affichage.
+
+3. Cas de contrôle
+   Les versements mensuels suivants :
+   9,49 + 8,31 + 8,20 + 8,29 + 29,16 + 11,98 + 14,23
+   donnent 89,66 $ pour septembre 2026 lorsque leur prochaine échéance est le
+   5 septembre 2026.
+   Août 2026 reste correctement à 0,00 $ dans ce cas puisqu’aucune échéance ne
+   tombe en août.
 
 FICHIERS À REMPLACER
 --------------------
+- finances.py
 - finances_data.py
 - app_versions.py
 - manual.py
 
-Le paquet contient aussi finances.py et finances_shared_loans.py inchangés par
-rapport à V1.12.2 pour faciliter un remplacement cohérent si désiré.
+FICHIER INCLUS MAIS INCHANGÉ
+----------------------------
+- finances_shared_loans.py
 
-AUCUN SQL MANUEL.
-AUCUNE NOUVELLE DÉPENDANCE PYTHON.
+INSTALLATION
+------------
+1. Remplacer les quatre fichiers modifiés à la racine du dépôt GitHub.
+2. Faire Commit changes.
+3. Attendre le redéploiement Canner.
+4. Faire Ctrl+F5 sur ordinateur après le déploiement.
+5. Vérifier que Finances affiche V1.12.4.
 
-TESTS RECOMMANDÉS APRÈS DÉPLOIEMENT
------------------------------------
-1. Ouvrir Finances > Budget.
-2. Vérifier Budget > Prévisions.
-3. Septembre 2026 doit afficher 2 paies.
-4. Octobre 2026 doit afficher 3 paies.
-5. Avec 828,98 $ de reste par paie, octobre doit afficher 2 486,94 $ de
-   disponible de base avant report.
-6. Vérifier aussi le Tableau d’octobre afin de confirmer le même nombre de paies.
+TESTS RECOMMANDÉS
+-----------------
+1. Ouvrir Finances > Financements.
+2. Vérifier que le mois courant apparaît entre deux flèches.
+3. Avec des échéances au 05/09/2026, août peut afficher 0,00 $ : c’est normal.
+4. Passer à Septembre 2026 avec la flèche droite.
+5. Vérifier que le KPI Paiements du mois additionne les versements de septembre.
+6. Passer à Octobre puis revenir à Septembre pour vérifier la navigation.
+7. Vérifier que Soldes restants demeure inchangé lorsqu’on change de mois.
+
+VALIDATION TECHNIQUE
+--------------------
+- py_compile réussi sur tous les fichiers Python du paquet.
+- compileall réussi.
+- test ciblé du moteur de projection : total septembre = 89,66 $ pour le cas de référence.
+- aucun SQL manuel.
+- aucune nouvelle dépendance Python.

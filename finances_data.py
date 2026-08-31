@@ -7569,33 +7569,66 @@ def budget_summary(user_id, month_value=None):
 
 
 def _recurrence_dates_between(recurrence, start_date, end_date):
+    """Retourne les occurrences réelles d'une récurrence dans une période.
+
+    Pour les fréquences fixes en jours/semaines, ``next_date`` est l'ancrage
+    opérationnel autoritatif. On peut remonter de cet ancrage pour les mois
+    antérieurs et avancer pour les mois futurs, ce qui conserve exactement le
+    cycle réel d'une paie aux deux semaines.
+    """
     if not recurrence or not recurrence.get("is_active"):
         return []
-    occurrence = recurrence.get("start_date") or recurrence.get("next_date")
-    if not occurrence:
-        return []
+
+    unit = recurrence["frequency_unit"]
+    interval = int(recurrence.get("frequency_interval") or 1)
+    recurrence_start = recurrence.get("start_date")
     recurrence_end = recurrence.get("end_date")
+    next_date = recurrence.get("next_date")
+
     if recurrence_end and recurrence_end < start_date:
         return []
-    while occurrence < start_date:
-        occurrence = _next_date(
-            occurrence,
-            recurrence["frequency_unit"],
-            int(recurrence["frequency_interval"]),
-        )
+
+    if next_date and unit in {"day", "week"}:
+        step_days = interval if unit == "day" else interval * 7
+        occurrence = next_date
+        safety = 0
+
+        # Reculer jusqu'à la première occurrence du mois/période demandée.
+        while occurrence > start_date and safety < 2000:
+            candidate = occurrence - timedelta(days=step_days)
+            if candidate < start_date:
+                break
+            if recurrence_start and candidate < recurrence_start:
+                break
+            occurrence = candidate
+            safety += 1
+
+        # Si l'ancrage est encore avant la période, avancer jusqu'à celle-ci.
+        while occurrence < start_date and safety < 4000:
+            occurrence = occurrence + timedelta(days=step_days)
+            safety += 1
+    else:
+        occurrence = next_date or recurrence_start
+        if not occurrence:
+            return []
+        safety = 0
+        while occurrence < start_date and safety < 2000:
+            occurrence = _next_date(occurrence, unit, interval)
+            safety += 1
+
     dates = []
-    safety = 0
-    while occurrence <= end_date and safety < 1000:
+    while occurrence <= end_date and safety < 6000:
+        if recurrence_start and occurrence < recurrence_start:
+            occurrence = _next_date(occurrence, unit, interval)
+            safety += 1
+            continue
         if recurrence_end and occurrence > recurrence_end:
             break
         dates.append(occurrence)
-        occurrence = _next_date(
-            occurrence,
-            recurrence["frequency_unit"],
-            int(recurrence["frequency_interval"]),
-        )
+        occurrence = _next_date(occurrence, unit, interval)
         safety += 1
     return dates
+
 
 
 def budget_capacity_summary(user_id, month_value):
@@ -7639,16 +7672,46 @@ def budget_capacity_summary(user_id, month_value):
         )
         source = "recurrence"
     else:
-        # À défaut d'une récurrence liée, une ligne réellement saisie aux deux
-        # semaines est considérée comme un budget sur 26 paies. Sans date
-        # d'ancrage fiable, on garde la valeur prudente de 2 paies.
         has_biweekly_income = any(
             row["input_frequency"] == "biweekly"
             for row in income_rows
         )
         if has_biweekly_income:
-            pay_dates = [month, month]
-            source = "fallback_2"
+            # Si le poste Budget n'est pas lié explicitement, chercher une
+            # récurrence de revenu active aux deux semaines. On privilégie
+            # celle dont le montant est le plus proche du principal revenu
+            # bihebdomadaire du Budget. Cela permet de détecter les mois à
+            # trois paies sans exiger une liaison parfaite des anciennes données.
+            target_amount = max(
+                (Decimal(row["biweekly_amount"]) for row in income_rows),
+                default=Decimal("0.00"),
+            )
+            candidates = [
+                row for row in recurrence_by_id.values()
+                if row.get("transaction_type") == "income"
+                and row.get("is_active")
+                and row.get("frequency_unit") == "week"
+                and int(row.get("frequency_interval") or 1) == 2
+            ]
+            if candidates:
+                recurrence = min(
+                    candidates,
+                    key=lambda row: (
+                        abs(Decimal(row.get("amount") or 0) - target_amount),
+                        -Decimal(row.get("amount") or 0),
+                    ),
+                )
+                pay_dates = _recurrence_dates_between(
+                    recurrence,
+                    month,
+                    month_end,
+                )
+                source = "recurrence_detected"
+            else:
+                # Sans aucun ancrage de calendrier fiable, conserver le repli
+                # prudent de deux paies.
+                pay_dates = [month, month]
+                source = "fallback_2"
 
     if pay_dates:
         pay_count = len(pay_dates)
@@ -9742,52 +9805,66 @@ def init_finances_schema():
 
 
 def _recurrence_dates_between(recurrence, start_date, end_date):
-    """Occurrences d'une récurrence en donnant priorité à next_date.
+    """Retourne les occurrences réelles d'une récurrence dans une période.
 
-    `next_date` est l'ancrage opérationnel le plus fiable pour une paie aux
-    deux semaines. Une ancienne `start_date` peut avoir été importée ou
-    modifiée et ne doit pas déphaser le calendrier futur.
+    Pour les fréquences fixes en jours/semaines, ``next_date`` est l'ancrage
+    opérationnel autoritatif. On peut remonter de cet ancrage pour les mois
+    antérieurs et avancer pour les mois futurs, ce qui conserve exactement le
+    cycle réel d'une paie aux deux semaines.
     """
-
     if not recurrence or not recurrence.get("is_active"):
         return []
+
+    unit = recurrence["frequency_unit"]
+    interval = int(recurrence.get("frequency_interval") or 1)
+    recurrence_start = recurrence.get("start_date")
     recurrence_end = recurrence.get("end_date")
+    next_date = recurrence.get("next_date")
+
     if recurrence_end and recurrence_end < start_date:
         return []
 
-    next_anchor = recurrence.get("next_date")
-    start_anchor = recurrence.get("start_date")
-    occurrence = next_anchor or start_anchor
-    if occurrence is None:
-        return []
+    if next_date and unit in {"day", "week"}:
+        step_days = interval if unit == "day" else interval * 7
+        occurrence = next_date
+        safety = 0
 
-    # Pour un mois antérieur au prochain paiement connu, l'ancien début reste
-    # utile pour reconstruire l'historique. Pour le mois du prochain paiement
-    # et les mois suivants, next_date devient l'ancrage autoritaire.
-    if next_anchor and start_date < next_anchor and start_anchor and start_anchor <= end_date:
-        occurrence = start_anchor
+        # Reculer jusqu'à la première occurrence du mois/période demandée.
+        while occurrence > start_date and safety < 2000:
+            candidate = occurrence - timedelta(days=step_days)
+            if candidate < start_date:
+                break
+            if recurrence_start and candidate < recurrence_start:
+                break
+            occurrence = candidate
+            safety += 1
 
-    safety = 0
-    while occurrence < start_date and safety < 5000:
-        occurrence = _next_date(
-            occurrence,
-            recurrence["frequency_unit"],
-            int(recurrence["frequency_interval"]),
-        )
-        safety += 1
+        # Si l'ancrage est encore avant la période, avancer jusqu'à celle-ci.
+        while occurrence < start_date and safety < 4000:
+            occurrence = occurrence + timedelta(days=step_days)
+            safety += 1
+    else:
+        occurrence = next_date or recurrence_start
+        if not occurrence:
+            return []
+        safety = 0
+        while occurrence < start_date and safety < 2000:
+            occurrence = _next_date(occurrence, unit, interval)
+            safety += 1
 
     dates = []
     while occurrence <= end_date and safety < 6000:
+        if recurrence_start and occurrence < recurrence_start:
+            occurrence = _next_date(occurrence, unit, interval)
+            safety += 1
+            continue
         if recurrence_end and occurrence > recurrence_end:
             break
         dates.append(occurrence)
-        occurrence = _next_date(
-            occurrence,
-            recurrence["frequency_unit"],
-            int(recurrence["frequency_interval"]),
-        )
+        occurrence = _next_date(occurrence, unit, interval)
         safety += 1
     return dates
+
 
 
 def _financing_group_plan_ids(cur, user_id, budget_item_id=None):

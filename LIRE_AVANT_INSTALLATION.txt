@@ -1,39 +1,46 @@
-JF APPS — FINANCES V1.12.2 — CORRECTIF DE DÉMARRAGE
+JF APPS — FINANCES V1.12.3 — CORRECTIF DES PRÉVISIONS DE PAIES
+================================================================
 
 PROBLÈME CORRIGÉ
 ----------------
-Finances V1.12.1 pouvait encore afficher une erreur 500 au lancement :
-NameError: name 'user' is not defined
+Dans Budget > Prévisions, certains revenus aux deux semaines pouvaient rester
+à 2 paies pour tous les mois, même lorsqu’un mois contenait réellement 3 paies.
 
-Le nouvel onglet Prêts partagés appelait :
-shared_loans_panel(user, ...)
-alors que finances_panel reçoit l’utilisateur sous le nom current_user.
+Exemple de référence :
+- prochaine paie : jeudi 3 septembre 2026;
+- fréquence : toutes les 2 semaines;
+- septembre : 3 et 17 septembre = 2 paies;
+- octobre : 1er, 15 et 29 octobre = 3 paies.
 
 CORRECTION
 ----------
-Le module reçoit maintenant current_user. Le callback de rafraîchissement demeure différé, ce qui conserve aussi le correctif V1.12.1.
+- La prochaine date réelle de la récurrence est maintenant l’ancrage prioritaire
+  des fréquences quotidiennes/hebdomadaires.
+- Une ancienne ligne Budget bihebdomadaire non explicitement liée peut maintenant
+  retrouver automatiquement la récurrence active aux deux semaines dont le
+  montant correspond le mieux.
+- Le même calcul est réutilisé par Budget, Tableau et Prévisions.
+- Avec un Reste par paie de 828,98 $, octobre 2026 donne donc 3 paies et
+  2 486,94 $ de disponible de base avant report.
 
 FICHIERS À REMPLACER
 --------------------
-- finances.py
+- finances_data.py
 - app_versions.py
 - manual.py
 
-Les fichiers finances_data.py et finances_shared_loans.py sont inclus dans le paquet pour cohérence mais sont inchangés depuis V1.12.1.
+Le paquet contient aussi finances.py et finances_shared_loans.py inchangés par
+rapport à V1.12.2 pour faciliter un remplacement cohérent si désiré.
 
-INSTALLATION
-------------
-1. Remplacer finances.py, app_versions.py et manual.py dans GitHub.
-2. Commit changes.
-3. Laisser Canner redéployer.
-4. Faire Ctrl+F5.
-5. Vérifier que Finances affiche V1.12.2 et ouvre le Tableau sans erreur 500.
-6. Ouvrir ensuite l’onglet Prêts partagés pour confirmer son affichage.
+AUCUN SQL MANUEL.
+AUCUNE NOUVELLE DÉPENDANCE PYTHON.
 
-VALIDATION TECHNIQUE
--------------------
-- py_compile sur tous les fichiers Python : OK.
-- vérification symbolique de finances_panel : aucune référence globale inconnue autre que les builtins Python.
-- aucune référence au nom isolé user dans finances_panel après correction.
-- aucun SQL manuel.
-- aucune nouvelle dépendance Python.
+TESTS RECOMMANDÉS APRÈS DÉPLOIEMENT
+-----------------------------------
+1. Ouvrir Finances > Budget.
+2. Vérifier Budget > Prévisions.
+3. Septembre 2026 doit afficher 2 paies.
+4. Octobre 2026 doit afficher 3 paies.
+5. Avec 828,98 $ de reste par paie, octobre doit afficher 2 486,94 $ de
+   disponible de base avant report.
+6. Vérifier aussi le Tableau d’octobre afin de confirmer le même nombre de paies.

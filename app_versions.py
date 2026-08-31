@@ -15,12 +15,29 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.2",
     "blood_pressure": "1.2.1",
-    "finances": "1.12.2",
+    "finances": "1.12.3",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.12.3",
+        "date": "2026-08-31",
+        "title": "Finances — correction des mois à trois paies",
+        "summary": (
+            "Les prévisions du Budget utilisent maintenant la prochaine occurrence réelle "
+            "de la paie aux deux semaines pour compter correctement les paies de chaque mois."
+        ),
+        "changes": [
+            "La prochaine date de la récurrence devient l’ancrage prioritaire pour les fréquences quotidiennes et hebdomadaires.",
+            "Avec une prochaine paie le 3 septembre 2026, octobre détecte désormais les 1er, 15 et 29 octobre, soit trois paies.",
+            "Si un revenu Budget bihebdomadaire n’est pas explicitement lié, Finances peut détecter la récurrence active aux deux semaines dont le montant correspond le mieux.",
+            "Le même calcul alimente le Budget, le Tableau et la section Prévisions.",
+            "Aucun script SQL manuel ni nouvelle dépendance Python n’est requis.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.12.2",

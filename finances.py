@@ -2800,11 +2800,13 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                     if reset
                     else _shift_month(month_state["value"], offset)
                 )
-                render_dashboard.refresh()
+                # Le Budget est rendu dans un conteneur externe. Un rendu direct
+                # garantit que le changement de mois est visible immédiatement.
                 try:
-                    render_budget.refresh()
+                    render_budget()
                 except (NameError, UnboundLocalError):
                     pass
+                render_dashboard.refresh()
 
             render_dashboard()
 
@@ -3832,9 +3834,8 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                     move_budget_item(user_id, item_id, direction)
                 except Exception as error:
                     ui.notify(str(error), type="warning")
-                render_budget.refresh()
+                render_budget()
 
-            @ui.refreshable
             def render_budget():
                 budget_box.clear()
                 summary_budget = budget_summary(user_id, month_state["value"])
@@ -3963,7 +3964,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             def change_budget_sort(_event=None):
                                 budget_sort_state["field"] = budget_sort_field.value or "monthly_amount"
                                 budget_sort_state["direction"] = budget_sort_direction.value or "desc"
-                                render_budget.refresh()
+                                render_budget()
                             budget_sort_field.on_value_change(change_budget_sort)
                             budget_sort_direction.on_value_change(change_budget_sort)
 
@@ -8795,7 +8796,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
             account_selector.value = next(iter(account_selector.options), None)
         account_selector.update()
         render_account.refresh()
-        render_budget.refresh()
+        render_budget()
         render_financing.refresh()
 
         reconciliation_payment.options = _payment_options(

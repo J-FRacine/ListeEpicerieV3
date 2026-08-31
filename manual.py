@@ -190,7 +190,7 @@ Dans la liste des catégories et des étiquettes, choisissez **+ Ajouter une cat
 
 ### Budget
 
-La navigation affiche maintenant le **mois réellement consulté** entre les flèches. Pour un revenu lié à une récurrence aux deux semaines, le nombre de paies est calculé avec les occurrences réelles : un mois peut donc contenir 2 ou 3 paies.
+La navigation affiche maintenant le **mois réellement consulté** entre les flèches. Le changement de mois est appliqué et affiché immédiatement, sans devoir quitter l’onglet Budget puis y revenir. Pour un revenu lié à une récurrence aux deux semaines, le nombre de paies est calculé avec les occurrences réelles : un mois peut donc contenir 2 ou 3 paies.
 
 Les dépenses fixes sont séparées en :
 

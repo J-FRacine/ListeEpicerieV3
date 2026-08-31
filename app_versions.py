@@ -15,12 +15,28 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.2",
     "blood_pressure": "1.2.1",
-    "finances": "1.12.4",
+    "finances": "1.12.5",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.12.5",
+        "date": "2026-08-31",
+        "title": "Finances — rafraîchissement immédiat du mois du Budget",
+        "summary": (
+            "La navigation mensuelle du Budget redessine maintenant immédiatement "
+            "les montants, les sections et les prévisions du mois sélectionné."
+        ),
+        "changes": [
+            "Les flèches précédent/suivant du Budget appliquent le changement de mois sans devoir quitter l’onglet.",
+            "Le rendu du Budget utilise désormais directement son conteneur dédié au lieu de dépendre d’un rafraîchissement différé.",
+            "Le Tableau reste synchronisé avec le mois sélectionné.",
+            "Aucun script SQL manuel ni nouvelle dépendance Python n’est requis.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.12.4",

@@ -4385,7 +4385,14 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
 
         # PRÊTS PARTAGÉS
         with ui.tab_panel(shared_loans_tab).classes("px-0"):
-            shared_loans_panel(user, refresh_parent=refresh_all)
+            # refresh_all est défini plus bas dans finances_panel.
+            # Le passer directement ici l'évaluait pendant la construction
+            # de la page et faisait échouer l'ouverture de Finances.
+            # La lambda retarde sa résolution jusqu'au clic/rafraîchissement.
+            shared_loans_panel(
+                user,
+                refresh_parent=lambda: refresh_all(),
+            )
 
 
         # SAISIE

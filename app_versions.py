@@ -15,12 +15,28 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.2",
     "blood_pressure": "1.2.1",
-    "finances": "1.12.0",
+    "finances": "1.12.1",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.12.1",
+        "date": "2026-08-31",
+        "title": "Finances — correctif de démarrage des prêts partagés",
+        "summary": (
+            "Correction d’une référence prématurée à la fonction de rafraîchissement "
+            "qui empêchait l’ouverture de Finances V1.12.0."
+        ),
+        "changes": [
+            "Correction de l’ouverture de l’onglet Prêts partagés pendant la construction de l’écran Finances.",
+            "Le rafraîchissement parent est maintenant résolu seulement lorsqu’il est réellement déclenché.",
+            "Toutes les fonctions de Finances V1.12.0 sont conservées sans changement fonctionnel.",
+            "Aucun script SQL manuel ni nouvelle dépendance Python n’est requis.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.12.0",

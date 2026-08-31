@@ -164,7 +164,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.12.0",
+        "title": "Finances — V1.12.1",
         "icon": "account_balance_wallet",
         "caption": "Prévisions, Budget, financements et prêts partagés",
         "keywords": (
@@ -172,6 +172,10 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "archives à venir paies prêts partagés catégorie étiquette saisie rapide"
         ),
         "content": """
+### Correctif V1.12.1
+
+V1.12.1 corrige l’ouverture de Finances après l’ajout du module **Prêts partagés**. La V1.12.0 pouvait échouer pendant la construction de l’écran parce que la fonction globale de rafraîchissement était transmise avant sa définition. Le correctif retarde cette résolution jusqu’au moment où un rafraîchissement est réellement demandé.
+
 ### KPI du Tableau
 
 Les KPI de dépenses affichent maintenant la part en **% du total prévu** de chaque catégorie. La ligne **Total des KPI affichés** vaut 100 %. Pour les étiquettes, le pourcentage reste indicatif puisque plusieurs étiquettes peuvent s’appliquer à une même transaction.

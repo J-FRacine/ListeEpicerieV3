@@ -9461,18 +9461,45 @@ def dashboard_month_projection(
 
 
 
-def budget_forecast(user_id, start_month, months=6):
-    """Prévision simple de la capacité variable et du solde de fin de mois."""
+def budget_forecast(user_id, start_month, months=6, initial_capacity=None):
+    """Prévision légère de la capacité variable et du solde de fin de mois.
+
+    Contrairement au Tableau, cette vue n'a besoin ni des KPI par catégorie/
+    étiquette ni du détail de toutes les transactions. On évite donc de bâtir
+    six fois ``dashboard_month_projection`` lors d'un simple changement de mois.
+    Le report est propagé séquentiellement à partir du premier mois affiché.
+    """
 
     start = _month_start(start_month)
+    month_count = max(1, min(int(months or 6), 24))
+    settings = get_finance_settings(user_id)
+    carry_enabled = bool(settings.get("carry_month_balance"))
+    carry_start = settings.get("carry_start_month")
+    carry_start = _month_start(carry_start) if carry_start else None
+
+    first_capacity = (
+        dict(initial_capacity)
+        if initial_capacity is not None
+        else budget_capacity_summary(user_id, start)
+    )
+    carry = Decimal(first_capacity.get("carry_in", 0) or 0)
     result = []
-    for offset in range(max(1, min(int(months or 6), 24))):
+
+    for offset in range(month_count):
         month = _add_months(start, offset)
-        projection = dashboard_month_projection(user_id, month, kpi_limit=1000)
-        capacity = projection["capacity"]
-        base = Decimal(capacity.get("available_month_base", capacity["available_month"]))
-        carry = Decimal(capacity.get("carry_in", 0))
-        expenses = Decimal(projection["total"]["expenses"])
+        if offset == 0:
+            capacity = first_capacity
+        else:
+            # Les mois suivants n'ont besoin que de la capacité de base.
+            # Le report est déjà connu grâce au solde du mois précédent.
+            capacity = _budget_capacity_summary_v110(user_id, month)
+            if not (carry_enabled and carry_start and month > carry_start):
+                carry = Decimal("0.00")
+
+        base = Decimal(
+            capacity.get("available_month_base", capacity["available_month"])
+        )
+        expenses = _variable_expense_total_for_month(user_id, month)
         ending = (base + carry - expenses).quantize(Decimal("0.01"))
         result.append(
             {
@@ -9484,6 +9511,14 @@ def budget_forecast(user_id, start_month, months=6):
                 "pay_count": int(capacity.get("pay_count", 0)),
             }
         )
+
+        # Le résultat d'un mois devient le report du mois suivant seulement à
+        # partir du mois d'activation du report.
+        if carry_enabled and carry_start and month >= carry_start:
+            carry = ending
+        else:
+            carry = Decimal("0.00")
+
     return result
 
 
@@ -9815,8 +9850,24 @@ def _variable_expense_total_for_month(user_id, month_value):
         month,
         kpi_limit=1000,
     )
-    fixed_recurrence_ids = _fixed_budget_recurrence_ids(user_id, month)
-    fixed_plan_ids = _fixed_budget_installment_plan_ids(user_id, month)
+    # Une seule lecture des postes Budget suffit pour déterminer à la fois les
+    # récurrences fixes et les financements regroupés à exclure des variables.
+    fixed_rows = list_budget_items(
+        user_id,
+        month_value=month,
+        effective_only=True,
+    )
+    fixed_recurrence_ids = {
+        int(row["recurrence_id"])
+        for row in fixed_rows
+        if row.get("item_type") == "expense" and row.get("recurrence_id")
+    }
+    fixed_plan_ids = set()
+    for row in fixed_rows:
+        if row.get("budget_financing_group"):
+            fixed_plan_ids.update(
+                int(value) for value in (row.get("financing_plan_ids") or [])
+            )
     return sum(
         (
             Decimal(row["amount"])

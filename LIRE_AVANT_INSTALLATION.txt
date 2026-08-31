@@ -1,123 +1,111 @@
-JF APPS — FINANCES V1.13.0 — REFACTORISATION ET STABILITÉ
-Date : 31 août 2026
+JF APPS — FINANCES V1.13.1
+OPTIMISATION DE LA NAVIGATION DU BUDGET
+31 août 2026
 
 OBJECTIF
 --------
-Cette version ne cherche pas à ajouter une grosse fonction. Elle remet en ordre
-le code de Finances après les nombreuses évolutions V1.6 à V1.12 afin de réduire
-les régressions et de rendre les prochains développements plus simples.
+Réduire le délai observé lors du changement de mois dans Finances > Budget
+(environ 20 secondes dans le déploiement réel) et afficher un indicateur clair
+si le serveur ou PostgreSQL a encore besoin de quelques secondes.
 
-AUCUNE DONNÉE N'EST SUPPRIMÉE.
-AUCUN SCRIPT SQL MANUEL.
-AUCUNE NOUVELLE DÉPENDANCE PYTHON.
-AUCUN CHANGEMENT DE SCHÉMA POSTGRESQL.
+CORRECTIONS / OPTIMISATIONS
+---------------------------
+1. Le changement de mois dans Budget ne reconstruit plus le Tableau en même
+   temps lorsqu'il n'est pas l'écran utilisé.
 
-BASE UTILISÉE
--------------
-Finances V1.12.6, incluant les correctifs V1.12.1 à V1.12.6 et les fonctions de
-V1.12.0 : Budget/Prévisions, groupes de financements, intérêts, KPI, Prêts
-partagés, Historique, conciliations en cours, etc.
+2. Le calcul de capacité Budget contient déjà le résumé du mois. V1.13.1 le
+   réutilise au lieu de relancer une seconde lecture complète via budget_summary().
 
-FICHIERS À REMPLACER
---------------------
-À la racine du dépôt GitHub :
+3. La section Prévisions a été allégée :
+   - elle ne reconstruit plus dashboard_month_projection() six fois;
+   - elle ne recalcule plus les KPI de catégories/étiquettes dont Prévisions
+     n'a pas besoin;
+   - elle calcule seulement la capacité de base, le report, les dépenses
+     variables et le solde de fin;
+   - le report est propagé séquentiellement d'un mois au suivant.
 
+4. Pour déterminer les dépenses variables d'un mois de prévision, une seule
+   lecture des postes Budget sert maintenant à identifier à la fois les
+   récurrences fixes et les groupes de financements à exclure.
+
+5. Un indicateur avec spinner et le texte :
+      « Calcul du mois et des prévisions… »
+   apparaît pendant le changement de mois. Le navigateur reçoit l'indicateur
+   avant le calcul lourd afin que l'interface ne donne plus l'impression que
+   le clic n'a pas fonctionné.
+
+IMPORTANT
+---------
+Cette version ne change :
+- aucune transaction;
+- aucun poste Budget;
+- aucune récurrence;
+- aucun financement;
+- aucun prêt partagé;
+- aucun schéma PostgreSQL.
+
+Aucun SQL manuel.
+Aucune nouvelle dépendance Python.
+
+FICHIERS MODIFIÉS
+-----------------
+À remplacer :
 - finances.py
 - finances_data.py
-- finances_shared_loans.py
 - app_versions.py
 - manual.py
 
-NOUVEAUX FICHIERS À AJOUTER
-----------------------------
-Toujours à la racine du dépôt GitHub :
-
+Les fichiers suivants sont inclus dans le paquet pour conserver un ensemble
+V1.13 complet, mais sont inchangés par rapport à V1.13.0 :
 - finances_calculations.py
 - finances_validation.py
-- finances_shared_loans_data.py
 - finances_ui_state.py
+- finances_shared_loans.py
+- finances_shared_loans_data.py
 
-Le dossier tests/ contenu dans le ZIP est fourni pour référence et n'est pas
-nécessaire au déploiement Canner.
-
-CE QUI A ÉTÉ REFACTORISÉ
-------------------------
-1. Calculs purs centralisés dans finances_calculations.py :
-   - dates et décalages mensuels;
-   - prochaines occurrences de récurrence;
-   - paies aux deux semaines;
-   - estimation de progression des financements;
-   - calcul amorti des versements avec intérêts.
-
-2. Validations communes centralisées dans finances_validation.py :
-   - montants;
-   - décimales;
-   - textes;
-   - dates facultatives.
-
-3. Données des Prêts partagés séparées dans finances_shared_loans_data.py.
-   L'interface reste dans finances_shared_loans.py.
-
-4. Navigation mensuelle centralisée dans finances_ui_state.py avec MonthCursor.
-   Budget, Tableau, Compte et Financements ne manipulent plus chacun un petit
-   dictionnaire de mois différent.
-
-5. finances_data.py ne redéfinit plus plusieurs fois les mêmes fonctions sous le
-   même nom. Les implémentations historiques encore nécessaires portent un nom
-   versionné explicite et les anciennes versions mortes ont été supprimées.
-
-6. Budget et Financements utilisent chacun un composant NiceGUI @ui.refreshable
-   autonome. Le mélange d'un conteneur externe .clear() avec refreshable a été
-   retiré des deux vues mensuelles.
-
-TESTS AUTOMATIQUES EFFECTUÉS
-----------------------------
-- py_compile sur tous les fichiers Python du paquet : OK.
-- compileall sur tout le paquet : OK.
-- import de finances_data avec DB simulée sans ouverture de connexion : OK.
-- les 91 noms importés par finances.py depuis finances_data existent : OK.
-- aucune fonction de premier niveau dupliquée dans finances_data.py : OK.
-- chaîne des migrations V1.9 -> V1.10 -> V1.10.1 -> V1.11 -> V1.12 : vérifiée.
-- export historique chaîné jusqu'à la version courante : vérifié.
-- comparaison V1.12.6 / V1.13.0 des calculs purs : identique.
-- prochaine paie 03/09/2026 aux 2 semaines : octobre = 01, 15 et 29 (3 paies).
-- 828,98 $ x 3 = 2 486,94 $.
-- financement 196,59 / solde 139,19 / versement 8,20 : 7 effectués / 17 restants.
-- amortissement 1 000 $, 12 mois, 12 % : 88,85 $.
-- analyse symbolique de finances_panel : aucune référence globale inconnue.
-- Budget et Financements : aucun budget_box / financing_box externe restant.
+Le dossier tests/ est facultatif sur Canner.
 
 INSTALLATION
 ------------
-1. Faire une sauvegarde globale depuis le Centre de maintenance avant le commit.
-2. Remplacer les 5 fichiers indiqués plus haut.
-3. Ajouter les 4 nouveaux modules à la racine du dépôt.
-4. Faire le commit GitHub et attendre le redéploiement Canner.
-5. Faire Ctrl+F5 sur ordinateur après le déploiement.
-6. Vérifier que Finances affiche V1.13.0.
+1. Conserver la sauvegarde habituelle avant le déploiement.
+2. Remplacer au minimum les quatre fichiers modifiés ci-dessus dans GitHub.
+3. Conserver les quatre nouveaux modules de V1.13.0 déjà présents à la racine.
+4. Commit changes.
+5. Attendre le redéploiement Canner.
+6. Faire Ctrl+F5 sur ordinateur si nécessaire.
+7. Vérifier que Finances affiche V1.13.1.
 
-TESTS CONSEILLÉS APRÈS DÉPLOIEMENT
----------------------------------
-A. Ouverture
-- Ouvrir Finances puis chaque onglet au moins une fois.
-- Ouvrir Prêts partagés pour confirmer que le module charge normalement.
+TEST PRINCIPAL APRÈS DÉPLOIEMENT
+--------------------------------
+1. Ouvrir Finances > Budget.
+2. Cliquer une fois sur la flèche du mois suivant.
+3. Vérifier que l'indicateur « Calcul du mois et des prévisions… » apparaît
+   pendant le traitement si celui-ci n'est pas instantané.
+4. Noter le temps avant l'affichage complet du nouveau mois.
+5. Passer par exemple de septembre à octobre 2026.
+6. Vérifier qu'octobre affiche toujours 3 paies si la prochaine paie de la
+   récurrence est le 3 septembre 2026.
+7. Vérifier que les Prévisions, les sections Actives / À venir / Archives et
+   les totaux correspondent au mois choisi.
+8. Revenir au Tableau et vérifier que celui-ci se recalcule normalement lors
+   de son utilisation.
 
-B. Budget / mois
-- Dans Budget, changer de mois avec les flèches.
-- Le libellé et les KPI doivent changer immédiatement.
-- Octobre 2026 doit indiquer 3 paies dans le cas de référence déjà configuré.
+VALIDATIONS EFFECTUÉES
+----------------------
+- py_compile : OK
+- compileall : OK
+- 10 tests unittest de non-régression : OK
+- octobre 2026 = 1er, 15 et 29 octobre : OK
+- 828,98 $ x 3 = 2 486,94 $ : OK
+- aucun appel à dashboard_month_projection() dans budget_forecast() : OK
+- indicateur de chargement présent dans la navigation Budget : OK
+- navigation Budget et Tableau différenciée pour éviter les recalculs hors écran : OK
+- aucune fonction top-level dupliquée dans finances_data.py : OK
 
-C. Financements
-- Changer de mois avec les flèches.
-- Septembre 2026 doit additionner les échéances du 5 septembre.
-- Vérifier que le total des soldes restants reste cohérent.
-
-D. Opérations courantes
-- Ajouter/modifier une petite transaction de test puis la supprimer.
-- Ouvrir Historique, Tableau et Conciliation.
-- Vérifier qu'aucune donnée existante n'a changé.
-
-RETOUR ARRIÈRE
---------------
-Cette version ne modifie pas le schéma de la base. En cas de problème d'interface,
-il est donc possible de remettre les fichiers V1.12.6 sans migration inverse.
+PERFORMANCE
+-----------
+La réduction du travail est vérifiée structurellement, mais le temps exact ne
+peut être mesuré sans la base PostgreSQL et le runtime Canner réels. Si le
+changement de mois reste anormalement long après ce correctif, le sablier
+permettra au moins de confirmer que le clic a été reçu; il faudra alors mesurer
+les requêtes PostgreSQL restantes dans le déploiement réel.

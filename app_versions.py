@@ -15,12 +15,30 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.2",
     "blood_pressure": "1.2.1",
-    "finances": "1.13.0",
+    "finances": "1.13.1",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.13.1",
+        "date": "2026-08-31",
+        "title": "Finances — navigation Budget optimisée",
+        "summary": (
+            "Le changement de mois du Budget évite maintenant les recalculs inutiles "
+            "et affiche un indicateur pendant les prévisions plus longues."
+        ),
+        "changes": [
+            "Un changement de mois dans Budget ne reconstruit plus en même temps le Tableau qui n’est pas visible.",
+            "Le résumé Budget n’est plus lu une seconde fois : le calcul de capacité réutilise les mêmes données du mois.",
+            "Les Prévisions utilisent un calcul allégé qui ne reconstruit plus six fois tous les KPI du Tableau.",
+            "Les exclusions des dépenses fixes et des groupes de financements sont déterminées avec une seule lecture des postes Budget par mois de prévision.",
+            "Un sablier avec le message « Calcul du mois et des prévisions… » s’affiche pendant un changement de mois qui nécessite encore du calcul.",
+            "Aucun changement de schéma PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance Python.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.13.0",

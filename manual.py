@@ -164,7 +164,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.13.0",
+        "title": "Finances — V1.13.1",
         "icon": "account_balance_wallet",
         "caption": "Prévisions, Budget, financements et prêts partagés",
         "keywords": (
@@ -172,6 +172,10 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "archives à venir paies prêts partagés catégorie étiquette saisie rapide"
         ),
         "content": """
+### V1.13.1 — navigation Budget optimisée
+
+Le changement de mois du **Budget** est maintenant plus léger. Finances ne reconstruit plus le Tableau en arrière-plan lorsqu’il n’est pas affiché, réutilise le résumé déjà calculé pour la capacité du mois et utilise une version allégée des **Prévisions** qui ne recalcule pas tous les KPI de catégorie et d’étiquette pour chacun des six mois. Un indicateur **« Calcul du mois et des prévisions… »** apparaît pendant le traitement lorsque le serveur ou la base de données prend encore quelques secondes.
+
 ### V1.13.0 — refactorisation et stabilité
 
 Finances V1.13.0 conserve les écrans, les données et les calculs fonctionnels de la série V1.12, mais réorganise le code pour rendre les prochaines modifications plus sûres. Les calculs de dates, paies, récurrences et versements sont regroupés dans un module commun; les validations de saisie et la couche de données des Prêts partagés sont séparées; les sélecteurs mensuels utilisent un même objet d’état; et les anciennes redéfinitions successives de fonctions dans `finances_data.py` ont été remplacées par des implémentations versionnées explicites.
@@ -198,7 +202,7 @@ Dans la liste des catégories et des étiquettes, choisissez **+ Ajouter une cat
 
 ### Budget
 
-La navigation affiche le **mois réellement consulté** entre les flèches. Depuis Finances V1.12.6, toute la vue Budget est un composant rafraîchissable autonome : le libellé du mois, les KPI, le nombre de paies, les sections Actives/À venir/Archives et les Prévisions se redessinent immédiatement au clic, sans devoir quitter l’onglet puis y revenir. Pour un revenu lié à une récurrence aux deux semaines, le nombre de paies est calculé avec les occurrences réelles : un mois peut donc contenir 2 ou 3 paies.
+La navigation affiche le **mois réellement consulté** entre les flèches. Depuis Finances V1.12.6, toute la vue Budget est un composant rafraîchissable autonome. Depuis V1.13.1, la navigation mensuelle évite en plus les recalculs du Tableau qui n’est pas visible et allège fortement le calcul des Prévisions; un sablier est affiché pendant le traitement si nécessaire. Le libellé du mois, les KPI, le nombre de paies, les sections Actives/À venir/Archives et les Prévisions suivent le mois sélectionné sans devoir quitter l’onglet. Pour un revenu lié à une récurrence aux deux semaines, le nombre de paies est calculé avec les occurrences réelles : un mois peut donc contenir 2 ou 3 paies.
 
 Les dépenses fixes sont séparées en :
 

@@ -2015,7 +2015,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         ui.button(
                             icon="chevron_left",
                             on_click=lambda: (
-                                change_month(-1)
+                                change_month(-1, source="dashboard")
                             ),
                         ).props(
                             "flat dense round"
@@ -2031,7 +2031,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                         ui.button(
                             icon="chevron_right",
                             on_click=lambda: (
-                                change_month(1)
+                                change_month(1, source="dashboard")
                             ),
                         ).props(
                             "flat dense round"
@@ -2776,19 +2776,33 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                         "flat dense color=primary"
                                     ).classes("mt-1")
 
-            def change_month(
+            async def change_month(
                 offset,
                 reset=False,
+                source="budget",
             ):
                 if reset:
                     month_state.reset()
                 else:
                     month_state.shift(offset)
-                # Le Budget est un composant refreshable autonome. Le rafraîchir
-                # directement garantit que le mois, les KPI et les prévisions
-                # visibles suivent immédiatement month_state.
-                render_budget.refresh()
-                render_dashboard.refresh()
+
+                # Ne recalculer que l'écran réellement utilisé. Auparavant, un
+                # clic dans Budget reconstruisait aussi tout le Tableau, ce qui
+                # doublait inutilement une partie importante du travail.
+                if source == "dashboard":
+                    render_dashboard.refresh()
+                    return
+
+                budget_loading.set_visibility(True)
+                try:
+                    # Laisser le navigateur afficher le sablier avant les
+                    # calculs synchrones du Budget et des prévisions.
+                    await ui.run_javascript(
+                        "await new Promise(requestAnimationFrame); return true;"
+                    )
+                    render_budget.refresh()
+                finally:
+                    budget_loading.set_visibility(False)
 
             render_dashboard()
 
@@ -3267,6 +3281,15 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
 
         # BUDGET GLOBAL
         with ui.tab_panel(budget_tab).classes("px-0"):
+            with ui.row().classes(
+                "w-full items-center justify-center gap-2 py-2"
+            ) as budget_loading:
+                ui.spinner(size="sm")
+                ui.label("Calcul du mois et des prévisions…").classes(
+                    "text-sm jf-muted"
+                )
+            budget_loading.set_visibility(False)
+
             budget_sort_state = {
                 "field": "monthly_amount",
                 "direction": "desc",
@@ -3819,8 +3842,10 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
 
             @ui.refreshable
             def render_budget():
-                summary_budget = budget_summary(user_id, month_state.value)
                 capacity_budget = budget_capacity_summary(user_id, month_state.value)
+                # budget_capacity_summary contient déjà le résumé du mois; ne
+                # pas relancer budget_summary évite une lecture DB complète.
+                summary_budget = capacity_budget
                 rows = list_budget_items(
                     user_id, include_inactive=True, month_value=month_state.value
                 )
@@ -3835,15 +3860,15 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                     with ui.row().classes("gap-1 flex-wrap"):
                         ui.button(
                             icon="chevron_left",
-                            on_click=lambda: change_month(-1),
+                            on_click=lambda: change_month(-1, source="budget"),
                         ).props("flat round dense")
                         ui.button(
                             _month_label(month_state.value),
-                            on_click=lambda: change_month(0, reset=True),
+                            on_click=lambda: change_month(0, reset=True, source="budget"),
                         ).props("flat dense")
                         ui.button(
                             icon="chevron_right",
-                            on_click=lambda: change_month(1),
+                            on_click=lambda: change_month(1, source="budget"),
                         ).props("flat round dense")
                         ui.button(
                             "Ajouter un poste", icon="add",
@@ -3988,7 +4013,12 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                 ui.label(
                     "Solde variable de fin de mois = disponible de base + report précédent − dépenses variables prévues/réalisées."
                 ).classes("text-xs jf-muted")
-                forecast_rows = budget_forecast(user_id, month_state.value, months=6)
+                forecast_rows = budget_forecast(
+                    user_id,
+                    month_state.value,
+                    months=6,
+                    initial_capacity=capacity_budget,
+                )
                 with ui.card().classes("w-full p-0 overflow-hidden"):
                     with ui.element("div").classes("jf-finance-cashflow-head").style(
                         "display:grid;grid-template-columns:minmax(8rem,1fr) 7rem 7rem 7rem 8rem;gap:.5rem;"

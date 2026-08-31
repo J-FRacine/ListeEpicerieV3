@@ -15,12 +15,35 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.2",
     "blood_pressure": "1.2.1",
-    "finances": "1.11.0",
+    "finances": "1.12.0",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.12.0",
+        "date": "2026-08-31",
+        "title": "Finances — prévisions, groupes de financements et prêts partagés",
+        "summary": (
+            "Le Budget et les financements gagnent une vision prospective, "
+            "des regroupements dynamiques et un premier module de prêts partagés."
+        ),
+        "changes": [
+            "Pourcentage du total prévu affiché dans les KPI par catégorie et par étiquette.",
+            "Un clic sur une catégorie ou une étiquette des KPI ouvre les transactions correspondantes du mois affiché.",
+            "La Saisie rapide permet de créer une catégorie ou une étiquette puis de la sélectionner immédiatement.",
+            "Budget séparé en dépenses actives, À venir et Archives, avec total mensuel et par paie pour chaque section.",
+            "Navigation Budget affichant le mois réel et calcul des paies bihebdomadaires à partir des occurrences réelles.",
+            "Nouvelle section Prévisions avec disponible de base, report, dépenses variables et solde prévu de fin de mois.",
+            "KPI Financements : paiements du mois et soldes restants.",
+            "Groupes de financements dans le Budget avec sélection de plusieurs plans et prévention du double comptage.",
+            "Pour les financements avec intérêts, choix indiquant si le versement inclut déjà les intérêts et calcul amorti lorsqu’il ne les inclut pas.",
+            "Premier module Prêts partagés avec permissions propres à chaque prêt, mouvements et aperçu d’amortissement.",
+            "Aucun script SQL manuel ni nouvelle dépendance Python n’est requis.",
+        ],
+    },
     {
         "app_key": "portal",
         "version": "1.3.3",

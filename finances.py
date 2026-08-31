@@ -32,7 +32,9 @@ from finances_data import (
     analyze_installment_progress,
     budget_summary,
     budget_capacity_summary,
+    budget_forecast,
     bulk_assign_payment_method,
+    calculate_installment_payment,
     cancel_reconciliation_session,
     count_unassigned_confirmed_transactions,
     create_reconciliation_session,
@@ -40,12 +42,14 @@ from finances_data import (
     dashboard_summary,
     delete_recurrence,
     delete_installment_plan,
+    delete_financing_budget_group,
     delete_reconciliation_draft,
     delete_transaction,
     ensure_default_finance_categories,
     ensure_default_finance_payment_methods,
     export_finances,
     find_potential_duplicate_transactions,
+    financing_month_summary,
     generate_due_recurrences,
     get_or_create_finance_category,
     get_or_create_finance_tag,
@@ -64,6 +68,7 @@ from finances_data import (
     list_categories,
     list_goals,
     list_installment_plans,
+    list_financing_budget_groups,
     list_month_unreconciled_transactions,
     list_payment_methods,
     list_reconciliation_sessions,
@@ -80,6 +85,7 @@ from finances_data import (
     prepare_finance_import,
     remove_transaction_from_reconciliation_session,
     save_budget_item,
+    save_financing_budget_group,
     save_card_payment_transfer,
     save_category,
     save_goal,
@@ -103,6 +109,7 @@ from finances_data import (
     toggle_recurrence,
     toggle_tag,
 )
+from finances_shared_loans import shared_loans_panel
 
 
 ADD_CATEGORY_OPTION = "__jf_add_category__"
@@ -256,7 +263,8 @@ FINANCE_CSS = r"""
         minmax(0, 1.35fr)
         minmax(5.4rem, .72fr)
         minmax(5.4rem, .72fr)
-        minmax(5.8rem, .78fr);
+        minmax(5.8rem, .78fr)
+        minmax(4.2rem, .50fr);
     align-items: center;
     gap: .42rem;
     width: 100%;
@@ -661,9 +669,10 @@ FINANCE_CSS = r"""
     .jf-finance-kpi-row {
         grid-template-columns:
             minmax(0, 1fr)
+            4.1rem
+            4.1rem
             4.45rem
-            4.45rem
-            4.75rem;
+            3.65rem;
         gap: .25rem;
     }
     .jf-finance-kpi-header {
@@ -1604,6 +1613,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
         account_tab = ui.tab("Compte", icon="account_balance")
         budget_tab = ui.tab("Budget", icon="savings")
         financing_tab = ui.tab("Financements", icon="payments")
+        shared_loans_tab = ui.tab("Prêts partagés", icon="handshake")
         entry_tab = ui.tab("Saisie", icon="add_circle")
         history_tab = ui.tab("Historique", icon="history")
         recurring_tab = ui.tab("Récurrences", icon="repeat")
@@ -1621,6 +1631,10 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
         "financements": financing_tab,
         "financement": financing_tab,
         "versements": financing_tab,
+        "prets": shared_loans_tab,
+        "prêts": shared_loans_tab,
+        "prets-partages": shared_loans_tab,
+        "prêts-partagés": shared_loans_tab,
         "saisie": entry_tab,
         "historique": history_tab,
         "recurrences": recurring_tab,
@@ -2504,6 +2518,14 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     ui.label("Total prévu").classes(
                                         "text-right"
                                     )
+                                    ui.label("% du total").classes(
+                                        "text-right"
+                                    )
+
+                                displayed_total = sum(
+                                    (Decimal(row["total"]) for row in rows),
+                                    Decimal("0.00"),
+                                )
 
                                 for row in rows:
                                     with ui.element("div").classes(
@@ -2550,6 +2572,13 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                             "jf-finance-kpi-total "
                                             + color_class
                                         )
+                                        percent = (
+                                            Decimal(row["total"]) * Decimal("100") / displayed_total
+                                            if displayed_total else Decimal("0")
+                                        )
+                                        ui.label(
+                                            f"{percent:.1f} %".replace(".", ",")
+                                        ).classes("jf-finance-kpi-value jf-muted")
 
                                 displayed_realized = sum(
                                     (Decimal(row["realized"]) for row in rows),
@@ -2557,10 +2586,6 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                 )
                                 displayed_upcoming = sum(
                                     (Decimal(row["upcoming"]) for row in rows),
-                                    Decimal("0.00"),
-                                )
-                                displayed_total = sum(
-                                    (Decimal(row["total"]) for row in rows),
                                     Decimal("0.00"),
                                 )
                                 with ui.element("div").classes(
@@ -2579,6 +2604,14 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                         "jf-finance-kpi-value jf-finance-kpi-total "
                                         + color_class
                                     )
+                                    ui.label(
+                                        "100,0 %" if displayed_total else "0,0 %"
+                                    ).classes("jf-finance-kpi-value font-bold")
+
+                            if dimension == "tag":
+                                ui.label(
+                                    "Les étiquettes peuvent se chevaucher : leurs pourcentages ne représentent pas nécessairement des parts exclusives du total général."
+                                ).classes("text-[0.65rem] jf-muted mt-1")
 
                     for transaction_type, heading, color_class in (
                         (
@@ -3702,6 +3735,90 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             ).props("color=primary")
                 dialog.open()
 
+            def financing_budget_group_dialog(row=None):
+                current = dict(row or {})
+                plans = list_installment_plans(user_id, include_inactive=True)
+                options = {
+                    int(plan["id"]): (
+                        str(plan.get("provider_name") or "") + " — " + str(plan.get("description") or "")
+                    ).strip(" —")
+                    for plan in plans
+                }
+                with ui.dialog() as dialog:
+                    with ui.card().classes("w-full max-w-3xl p-4"):
+                        ui.label(
+                            "Modifier le groupe de financements" if current else "Nouveau groupe de financements"
+                        ).classes("text-xl font-bold")
+                        ui.label(
+                            "Ce poste devient une dépense fixe du Budget. Ses versements restent visibles dans l’Historique et la conciliation, mais ne sont pas recomptés comme dépenses variables du Tableau."
+                        ).classes("text-xs jf-muted")
+                        group_name = ui.input(
+                            label="Nom du poste",
+                            value=current.get("description", ""),
+                            placeholder="Ex. Financement MC CDN TIRE",
+                        ).props("dense outlined maxlength=160").classes("w-full")
+                        selected_plans = ui.select(
+                            options,
+                            value=current.get("financing_plan_ids") or [],
+                            label="Financements associés",
+                            multiple=True,
+                        ).props("dense outlined use-chips clearable options-dense").classes("w-full")
+                        ui.label(
+                            "Un financement ne peut appartenir qu’à un seul groupe Budget à la fois."
+                        ).classes("text-xs jf-muted")
+                        with ui.row().classes("w-full gap-2 flex-wrap"):
+                            start_group = ui.input(
+                                label="Début — facultatif",
+                                value=current.get("effective_start").isoformat() if current.get("effective_start") else "",
+                            ).props("type=date dense outlined clearable").classes("grow min-w-44")
+                            end_group = ui.input(
+                                label="Fin — facultatif",
+                                value=current.get("effective_end").isoformat() if current.get("effective_end") else "",
+                            ).props("type=date dense outlined clearable").classes("grow min-w-44")
+                        note_group = ui.textarea(
+                            label="Note facultative", value=current.get("note") or ""
+                        ).props("dense outlined autogrow maxlength=1000").classes("w-full")
+
+                        def save_group_now():
+                            try:
+                                save_financing_budget_group(
+                                    user_id,
+                                    budget_item_id=current.get("id"),
+                                    description=group_name.value,
+                                    plan_ids=selected_plans.value or [],
+                                    effective_start=start_group.value or None,
+                                    effective_end=end_group.value or None,
+                                    note=note_group.value,
+                                )
+                            except Exception as error:
+                                ui.notify(str(error), type="warning")
+                                return
+                            dialog.close()
+                            ui.notify("Groupe de financements enregistré.", type="positive")
+                            refresh_all()
+
+                        def delete_group_now():
+                            try:
+                                delete_financing_budget_group(user_id, current["id"])
+                            except Exception as error:
+                                ui.notify(str(error), type="warning")
+                                return
+                            dialog.close()
+                            ui.notify("Groupe de financements supprimé.", type="positive")
+                            refresh_all()
+
+                        with ui.row().classes("w-full justify-between gap-2 mt-2"):
+                            if current:
+                                ui.button(
+                                    "Supprimer le groupe", icon="delete", on_click=delete_group_now
+                                ).props("flat color=negative")
+                            else:
+                                ui.element("span")
+                            with ui.row().classes("gap-2"):
+                                ui.button("Annuler", on_click=dialog.close).props("flat")
+                                ui.button("Enregistrer", icon="save", on_click=save_group_now).props("color=primary")
+                dialog.open()
+
             def change_budget_state(item_id, value):
                 try:
                     toggle_budget_item(user_id, item_id, value)
@@ -3739,7 +3856,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                 on_click=lambda: change_month(-1),
                             ).props("flat round dense")
                             ui.button(
-                                "Mois courant",
+                                _month_label(month_state["value"]),
                                 on_click=lambda: change_month(0, reset=True),
                             ).props("flat dense")
                             ui.button(
@@ -3750,6 +3867,10 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                 "Ajouter un poste", icon="add",
                                 on_click=lambda: budget_item_dialog(),
                             ).props("color=primary dense")
+                            ui.button(
+                                "Groupe de financements", icon="payments",
+                                on_click=lambda: financing_budget_group_dialog(),
+                            ).props("outline color=primary dense")
 
                     with ui.element("div").classes("jf-finance-summary-grid"):
                         for label, value, css in (
@@ -3763,66 +3884,25 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                 ui.label(label).classes("jf-finance-summary-label")
                                 ui.label(_balance_money(value)).classes("jf-finance-summary-value " + css)
 
-                    for section_type, section_label in (("income", "Revenus fixes"), ("expense", "Dépenses fixes")):
-                        if section_type == "expense":
-                            with ui.row().classes(
-                                "w-full items-end justify-between gap-2 flex-wrap mt-2"
-                            ):
-                                ui.label(section_label).classes("text-lg font-bold")
-                                with ui.row().classes("items-end gap-2 flex-wrap"):
-                                    budget_sort_field = ui.select(
-                                        BUDGET_SORT_FIELDS,
-                                        value=budget_sort_state["field"],
-                                        label="Trier par",
-                                    ).props(
-                                        "dense outlined options-dense"
-                                    ).classes("min-w-44")
-                                    budget_sort_direction = ui.select(
-                                        BUDGET_SORT_DIRECTIONS,
-                                        value=budget_sort_state["direction"],
-                                        label="Sens",
-                                    ).props(
-                                        "dense outlined options-dense"
-                                    ).classes("min-w-32")
-
-                                    def change_budget_sort(_event=None):
-                                        budget_sort_state["field"] = (
-                                            budget_sort_field.value or "monthly_amount"
-                                        )
-                                        budget_sort_state["direction"] = (
-                                            budget_sort_direction.value or "desc"
-                                        )
-                                        render_budget.refresh()
-
-                                    budget_sort_field.on_value_change(
-                                        change_budget_sort
-                                    )
-                                    budget_sort_direction.on_value_change(
-                                        change_budget_sort
-                                    )
-                        else:
-                            ui.label(section_label).classes("text-lg font-bold mt-2")
-
-                        section_rows = sorted_budget_rows(
-                            [row for row in rows if row["item_type"] == section_type],
-                            section_type,
-                        )
+                    def render_budget_rows_card(section_rows, section_type, *, empty="Aucun poste."):
+                        ordered_rows = sorted_budget_rows(section_rows, section_type)
                         with ui.card().classes("w-full p-0 overflow-hidden"):
-                            if not section_rows:
-                                ui.label("Aucun poste.").classes("p-4 text-sm jf-muted")
-                            for row in section_rows:
+                            if not ordered_rows:
+                                ui.label(empty).classes("p-4 text-sm jf-muted")
+                            for row in ordered_rows:
                                 active_month = bool(row.get("effective_for_month", True))
-                                row_class = "jf-finance-budget-row" + (" opacity-50" if not active_month else "")
+                                row_class = "jf-finance-budget-row" + (" opacity-50" if not row.get("is_active", True) else "")
                                 with ui.element("div").classes(row_class):
                                     with ui.column().classes("gap-0 min-w-0"):
                                         ui.label(row["description"]).classes("font-semibold truncate").tooltip(row["description"])
-                                        detail = BUDGET_INPUT_FREQUENCIES.get(row["input_frequency"], row["input_frequency"])
+                                        if row.get("budget_financing_group"):
+                                            detail = "Groupe de financements"
+                                        else:
+                                            detail = BUDGET_INPUT_FREQUENCIES.get(row["input_frequency"], row["input_frequency"])
                                         if row.get("biweekly_is_override"):
                                             detail += " • montant par paie personnalisé"
-                                        if not row["is_active"]:
+                                        if not row.get("is_active", True):
                                             detail += " • désactivé"
-                                        if not active_month:
-                                            detail += " • hors période pour ce mois"
                                         ui.label(detail).classes("text-xs jf-muted")
                                         start_value = row.get("effective_start")
                                         end_value = row.get("effective_end")
@@ -3834,7 +3914,12 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                             else:
                                                 period_text = f"Jusqu’au {end_value.strftime('%d/%m/%Y')}"
                                             ui.label(period_text).classes("text-xs text-primary")
-                                        if row.get("recurrence_id"):
+                                        if row.get("budget_financing_group"):
+                                            names = row.get("financing_plan_names") or []
+                                            ui.label(
+                                                f"{len(names)} financement(s) : " + ", ".join(names)
+                                            ).classes("text-xs text-primary").tooltip(", ".join(names))
+                                        elif row.get("recurrence_id"):
                                             link_text = "Lié à « " + str(row.get("recurrence_description") or "récurrence") + " »"
                                             if row.get("sync_from_recurrence"):
                                                 link_text += " • synchronisé"
@@ -3842,15 +3927,105 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     ui.label(_money(row["monthly_amount"]) + " / mois").classes("jf-finance-budget-money")
                                     ui.label(_money(row["biweekly_amount"]) + " / paie").classes("jf-finance-budget-money")
                                     with ui.row().classes("gap-0 shrink-0"):
-                                        if (
-                                            section_type == "income"
-                                            or budget_sort_state["field"] == "custom"
-                                        ):
+                                        if section_type == "income" or budget_sort_state["field"] == "custom":
                                             ui.button(icon="keyboard_arrow_up", on_click=lambda _event=None, selected=row["id"]: change_budget_order(selected, "up")).props("flat dense round size=sm")
                                             ui.button(icon="keyboard_arrow_down", on_click=lambda _event=None, selected=row["id"]: change_budget_order(selected, "down")).props("flat dense round size=sm")
                                         ui.switch(value=row["is_active"], on_change=lambda event, selected=row["id"]: change_budget_state(selected, event.value)).props("dense")
-                                        ui.button(icon="event_repeat", on_click=lambda _event=None, selected=row: budget_item_dialog(selected, clone_period=True)).props("flat dense round size=sm color=secondary").tooltip("Créer une nouvelle période")
-                                        ui.button(icon="edit", on_click=lambda _event=None, selected=row: budget_item_dialog(selected)).props("flat dense round size=sm color=primary")
+                                        if row.get("budget_financing_group"):
+                                            ui.button(icon="edit", on_click=lambda _event=None, selected=row: financing_budget_group_dialog(selected)).props("flat dense round size=sm color=primary")
+                                        else:
+                                            ui.button(icon="event_repeat", on_click=lambda _event=None, selected=row: budget_item_dialog(selected, clone_period=True)).props("flat dense round size=sm color=secondary").tooltip("Créer une nouvelle période")
+                                            ui.button(icon="edit", on_click=lambda _event=None, selected=row: budget_item_dialog(selected)).props("flat dense round size=sm color=primary")
+                            if ordered_rows:
+                                total_month = sum((Decimal(row.get("monthly_amount") or 0) for row in ordered_rows), Decimal("0.00"))
+                                total_pay = sum((Decimal(row.get("biweekly_amount") or 0) for row in ordered_rows), Decimal("0.00"))
+                                with ui.element("div").classes("jf-finance-budget-row font-bold bg-grey-1"):
+                                    ui.label("Total de la section").classes("font-bold")
+                                    ui.label(_money(total_month) + " / mois").classes("jf-finance-budget-money")
+                                    ui.label(_money(total_pay) + " / paie").classes("jf-finance-budget-money")
+                                    ui.element("span")
+
+                    # Revenus : même présentation compacte, uniquement selon la période consultée.
+                    income_rows = [row for row in rows if row["item_type"] == "income"]
+                    ui.label("Revenus fixes").classes("text-lg font-bold mt-2")
+                    render_budget_rows_card(income_rows, "income")
+
+                    with ui.row().classes("w-full items-end justify-between gap-2 flex-wrap mt-2"):
+                        ui.label("Dépenses fixes actives").classes("text-lg font-bold")
+                        with ui.row().classes("items-end gap-2 flex-wrap"):
+                            budget_sort_field = ui.select(
+                                BUDGET_SORT_FIELDS, value=budget_sort_state["field"], label="Trier par"
+                            ).props("dense outlined options-dense").classes("min-w-44")
+                            budget_sort_direction = ui.select(
+                                BUDGET_SORT_DIRECTIONS, value=budget_sort_state["direction"], label="Sens"
+                            ).props("dense outlined options-dense").classes("min-w-32")
+                            def change_budget_sort(_event=None):
+                                budget_sort_state["field"] = budget_sort_field.value or "monthly_amount"
+                                budget_sort_state["direction"] = budget_sort_direction.value or "desc"
+                                render_budget.refresh()
+                            budget_sort_field.on_value_change(change_budget_sort)
+                            budget_sort_direction.on_value_change(change_budget_sort)
+
+                    displayed_month = month_state["value"]
+                    displayed_end = _shift_month(displayed_month, 1) - timedelta(days=1)
+                    expense_rows = [row for row in rows if row["item_type"] == "expense"]
+                    active_expenses = []
+                    future_expenses = []
+                    archived_expenses = []
+                    for row in expense_rows:
+                        start_value = row.get("effective_start")
+                        end_value = row.get("effective_end")
+                        if end_value and end_value < displayed_month:
+                            archived_expenses.append(row)
+                        elif start_value and start_value > displayed_end:
+                            future_expenses.append(row)
+                        else:
+                            active_expenses.append(row)
+
+                    render_budget_rows_card(active_expenses, "expense", empty="Aucune dépense fixe active pour ce mois.")
+
+                    if future_expenses:
+                        with ui.expansion(
+                            f"À venir ({len(future_expenses)})", icon="event_upcoming", value=True
+                        ).classes("w-full mt-2"):
+                            ui.label(
+                                "Ces postes ne réduisent pas le disponible du mois affiché tant que leur période n’a pas commencé."
+                            ).classes("text-xs jf-muted mb-1")
+                            render_budget_rows_card(future_expenses, "expense")
+
+                    if archived_expenses:
+                        with ui.expansion(
+                            f"Archives ({len(archived_expenses)})", icon="inventory_2", value=False
+                        ).classes("w-full mt-2"):
+                            ui.label(
+                                "Ces postes sont conservés pour l’historique et ne sont pas inclus dans le Budget du mois affiché."
+                            ).classes("text-xs jf-muted mb-1")
+                            render_budget_rows_card(archived_expenses, "expense")
+
+                    ui.label("Prévisions").classes("text-lg font-bold mt-3")
+                    ui.label(
+                        "Solde variable de fin de mois = disponible de base + report précédent − dépenses variables prévues/réalisées."
+                    ).classes("text-xs jf-muted")
+                    forecast_rows = budget_forecast(user_id, month_state["value"], months=6)
+                    with ui.card().classes("w-full p-0 overflow-hidden"):
+                        with ui.element("div").classes("jf-finance-cashflow-head").style(
+                            "display:grid;grid-template-columns:minmax(8rem,1fr) 7rem 7rem 7rem 8rem;gap:.5rem;"
+                        ):
+                            ui.label("Mois")
+                            ui.label("Disponible").classes("text-right")
+                            ui.label("Report").classes("text-right")
+                            ui.label("Variables").classes("text-right")
+                            ui.label("Solde fin").classes("text-right")
+                        for forecast in forecast_rows:
+                            with ui.element("div").classes("jf-finance-cashflow-row").style(
+                                "display:grid;grid-template-columns:minmax(8rem,1fr) 7rem 7rem 7rem 8rem;gap:.5rem;"
+                            ):
+                                ui.label(_month_label(forecast["month"]) + f" · {forecast['pay_count']} paie(s)")
+                                ui.label(_balance_money(forecast["available_base"])).classes("text-right")
+                                ui.label(_balance_money(forecast["carry_in"])).classes("text-right")
+                                ui.label(_money(forecast["variable_expenses"])).classes("text-right")
+                                css = "jf-finance-income" if forecast["ending_balance"] >= 0 else "jf-finance-expense"
+                                ui.label(_balance_money(forecast["ending_balance"])).classes("text-right font-bold " + css)
             render_budget()
 
         # FINANCEMENTS ET VERSEMENTS
@@ -3908,6 +4083,11 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             fees_total = ui.number(
                                 label="Frais totaux", value=current.get("fees_total", 0), min=0, step=.01
                             ).props("dense outlined").classes("jf-finance-field")
+                            payment_includes_interest = ui.select(
+                                {True: "Oui — le versement est déjà le total", False: "Non — calculer le total avec intérêts"},
+                                value=bool(current.get("payment_includes_interest", True)),
+                                label="Le versement indiqué inclut-il les intérêts ?",
+                            ).props("dense outlined options-dense").classes("jf-finance-field")
                             frequency_unit = ui.select(
                                 FREQUENCY_UNITS, value=current.get("frequency_unit", "month"), label="Fréquence"
                             ).props("dense outlined options-dense").classes("jf-finance-field")
@@ -3945,6 +4125,64 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                             "Finances l’estimera à partir du montant initial, du solde restant et du montant du versement. "
                             "L’historique passé n’est jamais recréé automatiquement."
                         ).classes("text-xs jf-muted")
+                        interest_preview = ui.label("").classes("text-xs text-primary font-semibold")
+
+                        def update_interest_preview(_event=None):
+                            rate = Decimal(str(annual_interest_rate.value or 0))
+                            payment_includes_interest.visible = rate > 0
+                            if rate <= 0 or payment_includes_interest.value is not False:
+                                interest_preview.set_text(
+                                    "Le montant saisi sera utilisé comme versement total." if rate > 0 else ""
+                                )
+                                return
+                            try:
+                                total_count = int(total_installments.value or 0)
+                                if completed_installments.value not in (None, ""):
+                                    completed_count = int(completed_installments.value or 0)
+                                elif (
+                                    total_count > 0
+                                    and remaining_balance.value not in (None, "")
+                                    and installment_amount.value not in (None, "")
+                                ):
+                                    progress_preview = analyze_installment_progress(
+                                        original_amount=original_amount.value or 0,
+                                        remaining_balance=remaining_balance.value,
+                                        installment_amount=installment_amount.value,
+                                        total_installments=total_count,
+                                        completed_installments=None,
+                                    )
+                                    completed_count = int(
+                                        progress_preview["estimated_completed_installments"] or 0
+                                    )
+                                else:
+                                    completed_count = 0
+                                remaining_count = max(1, total_count - completed_count)
+                                principal_value = remaining_balance.value if remaining_balance.value not in (None, "") else original_amount.value
+                                total_payment = calculate_installment_payment(
+                                    principal_value or 0,
+                                    remaining_count,
+                                    rate,
+                                    frequency_unit.value,
+                                    int(frequency_interval.value or 1),
+                                    fees_total.value or 0,
+                                )
+                                base_value = Decimal(str(installment_amount.value or 0))
+                                estimated_interest = max(Decimal("0"), total_payment - base_value)
+                                interest_preview.set_text(
+                                    "Versement de base : " + _money(base_value)
+                                    + " · intérêts estimés : " + _money(estimated_interest)
+                                    + " · versement total calculé : " + _money(total_payment)
+                                )
+                            except Exception:
+                                interest_preview.set_text("Le versement total sera calculé à l’enregistrement.")
+
+                        for control in (
+                            annual_interest_rate, payment_includes_interest, remaining_balance,
+                            original_amount, total_installments, completed_installments,
+                            installment_amount, fees_total, frequency_unit, frequency_interval,
+                        ):
+                            control.on_value_change(update_interest_preview)
+                        update_interest_preview()
 
                         def perform_plan_save():
                             try:
@@ -3966,6 +4204,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     installment_amount=installment_amount.value,
                                     annual_interest_rate=annual_interest_rate.value or 0,
                                     fees_total=fees_total.value or 0,
+                                    payment_includes_interest=payment_includes_interest.value,
                                     frequency_unit=frequency_unit.value,
                                     frequency_interval=int(frequency_interval.value or 1),
                                     next_due_date=next_due_date.value,
@@ -4059,6 +4298,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
             def render_financing():
                 financing_box.clear()
                 plans = list_installment_plans(user_id, include_inactive=True)
+                financing_summary = financing_month_summary(user_id, month_state["value"])
                 with financing_box:
                     with ui.row().classes("w-full items-start justify-between gap-2 flex-wrap"):
                         with ui.column().classes("gap-0"):
@@ -4068,6 +4308,14 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                 "dans les KPI selon sa catégorie, sauf exclusion explicite."
                             ).classes("text-xs jf-muted")
                         ui.button("Ajouter un financement", icon="add", on_click=lambda: installment_plan_dialog()).props("color=primary dense")
+                    with ui.element("div").classes("jf-finance-summary-grid"):
+                        for label, value in (
+                            ("Paiements du mois — " + _month_label(month_state["value"]), financing_summary["payments"]),
+                            ("Soldes restants", financing_summary["remaining_balances"]),
+                        ):
+                            with ui.element("div").classes("jf-finance-summary"):
+                                ui.label(label).classes("jf-finance-summary-label")
+                                ui.label(_money(value)).classes("jf-finance-summary-value")
                     if not plans:
                         with ui.card().classes("w-full p-4"):
                             ui.label("Aucun financement enregistré.").classes("text-sm jf-muted")
@@ -4125,7 +4373,19 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
                                     ui.label(
                                         f"Intérêt : {plan.get('annual_interest_rate', 0)} % — Frais : {_money(plan.get('fees_total', 0))}"
                                     ).classes("text-xs jf-muted")
+                                    if Decimal(plan.get("annual_interest_rate", 0)) > 0:
+                                        if plan.get("payment_includes_interest", True):
+                                            ui.label("Le versement indiqué inclut déjà les intérêts.").classes("text-xs jf-muted")
+                                        else:
+                                            ui.label(
+                                                "Base hors intérêts : " + _money(plan.get("base_installment_amount", 0))
+                                                + " · total utilisé : " + _money(plan.get("installment_amount", 0))
+                                            ).classes("text-xs text-primary")
             render_financing()
+
+        # PRÊTS PARTAGÉS
+        with ui.tab_panel(shared_loans_tab).classes("px-0"):
+            shared_loans_panel(user, refresh_parent=refresh_all)
 
 
         # SAISIE

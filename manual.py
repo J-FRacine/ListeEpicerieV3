@@ -164,6 +164,52 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
+        "title": "Finances — V1.12.0",
+        "icon": "account_balance_wallet",
+        "caption": "Prévisions, Budget, financements et prêts partagés",
+        "keywords": (
+            "finances budget prévisions pourcentage kpi financement intérêts "
+            "archives à venir paies prêts partagés catégorie étiquette saisie rapide"
+        ),
+        "content": """
+### KPI du Tableau
+
+Les KPI de dépenses affichent maintenant la part en **% du total prévu** de chaque catégorie. La ligne **Total des KPI affichés** vaut 100 %. Pour les étiquettes, le pourcentage reste indicatif puisque plusieurs étiquettes peuvent s’appliquer à une même transaction.
+
+Le nom d’une catégorie ou d’une étiquette est cliquable : il ouvre la liste des transactions correspondantes pour le mois affiché, séparées entre réalisé et à venir, avec accès à la modification des transactions réelles.
+
+### Saisie rapide
+
+Dans la liste des catégories et des étiquettes, choisissez **+ Ajouter une catégorie…** ou **+ Ajouter une étiquette…** pour créer l’élément directement depuis la Saisie rapide. Après création, il est automatiquement sélectionné pour la transaction en cours.
+
+### Budget
+
+La navigation affiche maintenant le **mois réellement consulté** entre les flèches. Pour un revenu lié à une récurrence aux deux semaines, le nombre de paies est calculé avec les occurrences réelles : un mois peut donc contenir 2 ou 3 paies.
+
+Les dépenses fixes sont séparées en :
+
+- **Dépenses fixes actives** : postes applicables au mois affiché;
+- **À venir** : postes dont la période n’a pas encore commencé;
+- **Archives** : postes dont la date de fin est antérieure au mois affiché.
+
+Chaque section affiche son propre **total / mois** et **total / paie**. Les totaux À venir et Archives sont informatifs et ne sont pas réintégrés au disponible courant.
+
+La section **Prévisions** projette jusqu’à six mois avec le disponible de base, le report du mois précédent, les dépenses variables prévues/réalisées et le solde estimé de fin de mois. Les dépenses fixes ne sont pas recomptées puisqu’elles sont déjà absorbées dans le Reste par paie.
+
+### Financements
+
+L’onglet **Financements** affiche en haut **Paiements du mois** et **Soldes restants**.
+
+Dans Budget, un poste spécial de type **Financements** peut regrouper plusieurs plans existants. Le montant du groupe est recalculé selon les versements applicables au mois affiché. Un financement ne peut normalement appartenir qu’à un seul groupe, ce qui évite le double comptage. Les transactions restent visibles dans l’Historique, les comptes/cartes et la conciliation, mais elles ne sont plus recomptées comme dépenses variables lorsqu’elles sont déjà absorbées par un groupe Budget.
+
+Lorsqu’un taux d’intérêt est supérieur à 0 %, le formulaire demande si le versement saisi **inclut déjà les intérêts**. Si la réponse est Non, Finances calcule un versement total estimé à partir du solde, du taux annuel, de la fréquence et du nombre de versements restants. Les produits à taux variable, intérêts différés, frais particuliers ou promotions non standards peuvent nécessiter un ajustement manuel.
+
+### Prêts partagés
+
+L’onglet **Prêts partagés** crée un prêt indépendant des autres données Finances. Seuls le propriétaire et les utilisateurs explicitement associés au prêt peuvent le consulter. Chaque participant peut avoir un rôle et une permission propres au prêt. Le module conserve le solde, les mouvements et une projection d’amortissement sans donner accès aux comptes, cartes, Budget, transactions ou autres prêts.
+""",
+    },
+    {
         "title": "Finances — V1.11.0",
         "icon": "account_balance_wallet",
         "caption": "Budget, trésorerie, dépenses, prévisions et conciliation",

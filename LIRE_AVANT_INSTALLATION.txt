@@ -1,61 +1,39 @@
-JF APPS — FINANCES V1.12.1 — CORRECTIF DE DÉMARRAGE
-=====================================================
+JF APPS — FINANCES V1.12.2 — CORRECTIF DE DÉMARRAGE
 
 PROBLÈME CORRIGÉ
 ----------------
-Finances V1.12.0 pouvait échouer dès l'ouverture avec une erreur indiquant que
-la variable locale `refresh_all` était utilisée avant d'être définie.
+Finances V1.12.1 pouvait encore afficher une erreur 500 au lancement :
+NameError: name 'user' is not defined
 
-La cause se trouvait dans le nouvel onglet « Prêts partagés » : pendant la
-construction de l'écran, le code transmettait directement `refresh_all` à
-`shared_loans_panel`, alors que cette fonction de rafraîchissement est définie
-plus bas dans `finances_panel`.
+Le nouvel onglet Prêts partagés appelait :
+shared_loans_panel(user, ...)
+alors que finances_panel reçoit l’utilisateur sous le nom current_user.
 
 CORRECTION
 ----------
-Le callback de rafraîchissement est maintenant transmis sous forme différée :
-`lambda: refresh_all()`.
-
-Il n'est donc résolu que lorsqu'un rafraîchissement est réellement demandé,
-après la construction complète de l'écran.
-
-Aucune fonction de Finances V1.12.0 n'est retirée ou modifiée autrement.
+Le module reçoit maintenant current_user. Le callback de rafraîchissement demeure différé, ce qui conserve aussi le correctif V1.12.1.
 
 FICHIERS À REMPLACER
 --------------------
-À la racine du dépôt GitHub :
+- finances.py
+- app_versions.py
+- manual.py
 
-- finances.py       (remplacer — correctif principal)
-- app_versions.py   (remplacer — Finances passe à V1.12.1)
-- manual.py         (remplacer — documentation du correctif)
-
-Le paquet contient aussi, inchangés par rapport à V1.12.0 :
-
-- finances_data.py
-- finances_shared_loans.py
-
-Si ces deux fichiers V1.12.0 sont déjà présents dans GitHub, il n'est pas
-nécessaire de les remplacer. Ils sont inclus dans le ZIP pour conserver un
-paquet Finances complet et cohérent.
+Les fichiers finances_data.py et finances_shared_loans.py sont inclus dans le paquet pour cohérence mais sont inchangés depuis V1.12.1.
 
 INSTALLATION
 ------------
-1. Dans GitHub, remplacer finances.py, app_versions.py et manual.py.
-2. Vérifier que finances_shared_loans.py de V1.12.0 est toujours présent.
-3. Faire Commit changes.
-4. Laisser Canner redéployer.
-5. Ouvrir JF Apps puis Finances.
-6. Vérifier que Finances affiche V1.12.1.
-7. Ouvrir aussi l'onglet « Prêts partagés ».
+1. Remplacer finances.py, app_versions.py et manual.py dans GitHub.
+2. Commit changes.
+3. Laisser Canner redéployer.
+4. Faire Ctrl+F5.
+5. Vérifier que Finances affiche V1.12.2 et ouvre le Tableau sans erreur 500.
+6. Ouvrir ensuite l’onglet Prêts partagés pour confirmer son affichage.
 
-VALIDATION TECHNIQUE EFFECTUÉE
-------------------------------
-- py_compile réussi sur tous les fichiers Python du paquet.
-- Analyse AST : aucune lecture de `refresh_all` pendant la construction de
-  finances_panel avant sa définition.
-- Vérification spécifique : shared_loans_panel reçoit maintenant
-  `refresh_parent=lambda: refresh_all()`.
-- Versions et Manuel mis à jour.
-
-AUCUN SCRIPT SQL MANUEL.
-AUCUNE NOUVELLE DÉPENDANCE PYTHON.
+VALIDATION TECHNIQUE
+-------------------
+- py_compile sur tous les fichiers Python : OK.
+- vérification symbolique de finances_panel : aucune référence globale inconnue autre que les builtins Python.
+- aucune référence au nom isolé user dans finances_panel après correction.
+- aucun SQL manuel.
+- aucune nouvelle dépendance Python.

@@ -164,7 +164,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.12.1",
+        "title": "Finances — V1.12.2",
         "icon": "account_balance_wallet",
         "caption": "Prévisions, Budget, financements et prêts partagés",
         "keywords": (
@@ -172,9 +172,11 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "archives à venir paies prêts partagés catégorie étiquette saisie rapide"
         ),
         "content": """
-### Correctif V1.12.1
+### Correctifs V1.12.2 et V1.12.1
 
-V1.12.1 corrige l’ouverture de Finances après l’ajout du module **Prêts partagés**. La V1.12.0 pouvait échouer pendant la construction de l’écran parce que la fonction globale de rafraîchissement était transmise avant sa définition. Le correctif retarde cette résolution jusqu’au moment où un rafraîchissement est réellement demandé.
+V1.12.2 corrige une seconde erreur de démarrage dans le nouvel onglet **Prêts partagés** : l’écran transmettait un nom `user` inexistant au lieu du paramètre `current_user` reçu par `finances_panel`. Le module reçoit maintenant correctement l’utilisateur courant.
+
+V1.12.1 avait déjà corrigé la référence prématurée à la fonction globale de rafraîchissement en retardant sa résolution jusqu’au moment où un rafraîchissement est réellement demandé.
 
 ### KPI du Tableau
 

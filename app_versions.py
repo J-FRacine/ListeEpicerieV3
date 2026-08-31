@@ -15,12 +15,28 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.2",
     "blood_pressure": "1.2.1",
-    "finances": "1.12.1",
+    "finances": "1.12.2",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.12.2",
+        "date": "2026-08-31",
+        "title": "Finances — correctif du contexte utilisateur des prêts partagés",
+        "summary": (
+            "Correction d’une référence au nom user dans l’onglet Prêts partagés "
+            "qui empêchait encore l’ouverture de Finances V1.12.1."
+        ),
+        "changes": [
+            "Le module Prêts partagés reçoit maintenant current_user, le paramètre réel de finances_panel.",
+            "Le callback de rafraîchissement reste différé afin d’éviter la référence prématurée corrigée en V1.12.1.",
+            "Toutes les fonctions de Finances V1.12.0/V1.12.1 sont conservées.",
+            "Aucun script SQL manuel ni nouvelle dépendance Python n’est requis.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.12.1",

@@ -4390,7 +4390,7 @@ def finances_panel(current_user, initial_section=None, show_heading=True):
             # de la page et faisait échouer l'ouverture de Finances.
             # La lambda retarde sa résolution jusqu'au clic/rafraîchissement.
             shared_loans_panel(
-                user,
+                current_user,
                 refresh_parent=lambda: refresh_all(),
             )
 

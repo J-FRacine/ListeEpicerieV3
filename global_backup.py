@@ -20,7 +20,7 @@ from finances_data import export_finances
 
 
 GLOBAL_BACKUP_FORMAT = "jf-apps-global-backup"
-GLOBAL_BACKUP_VERSION = 1
+GLOBAL_BACKUP_VERSION = 2
 
 
 def _json_value(value):
@@ -212,10 +212,11 @@ def build_global_backup(user):
         },
         "applications": {},
         "restore": {
-            "global_restore_available": False,
+            "global_restore_available": True,
+            "mode": "selective_merge",
             "note": (
-                "Cette version fournit la sauvegarde globale. "
-                "La restauration globale contrôlée sera ajoutée séparément."
+                "Le Centre de maintenance peut prévisualiser cette archive et "
+                "restaurer seulement les applications sélectionnées par fusion non destructive."
             ),
         },
     }
@@ -227,10 +228,12 @@ def build_global_backup(user):
             family_ids = [int(row["id"]) for row in families]
             exported_families = []
             for family in families:
-                family_data = export_family_backup(user_id, int(family["id"]))
-                family_name = _safe_filename(family.get("name") or f"famille_{family['id']}")
+                family_id = int(family["id"])
+                family_data = export_family_backup(user_id, family_id)
+                family_name = _safe_filename(family.get("name") or f"famille_{family_id}")
+                family_path = f"liste_epicerie/{family_name}_{family_id}.json"
                 archive.writestr(
-                    f"liste_epicerie/{family_name}.json",
+                    family_path,
                     _json_bytes({
                         "format": "jf-apps-liste-epicerie",
                         "version": 3,
@@ -238,7 +241,11 @@ def build_global_backup(user):
                         "data": family_data,
                     }),
                 )
-                exported_families.append(family.get("name") or family_name)
+                exported_families.append({
+                    "name": family.get("name") or family_name,
+                    "original_id": family_id,
+                    "file": family_path,
+                })
             archive.writestr(
                 "liste_epicerie/reglages_familles.json",
                 _json_bytes(_export_grocery_preferences(family_ids)),
@@ -302,8 +309,9 @@ def build_global_backup(user):
                 "Cette archive contient uniquement les données auxquelles le compte "
                 "avait accès au moment de la sauvegarde. Les dossiers sont séparés par "
                 "application. Le fichier manifest.json indique les versions.\n\n"
-                "La restauration globale n'est pas encore activée dans cette version; "
-                "conservez cette archive comme copie de sécurité.\n"
+                "Cette archive peut être chargée dans le Centre de maintenance de JF Apps "
+                "pour une restauration sélective par application. La restauration est, par "
+                "défaut, une fusion non destructive : les données actuelles ne sont pas effacées.\n"
             ).encode("utf-8"),
         )
 

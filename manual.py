@@ -96,6 +96,8 @@ Le logo et le bouton **Portail** ramènent tous deux au Portail principal.
 
 JF Apps charge le script officiel **Canner Web Vitals** dans l’en-tête commun afin de permettre à l’hébergeur d’afficher ses statistiques techniques et de performance. Le script est chargé de façon asynchrone sur toutes les pages et ne modifie pas les données des applications ni les données PostgreSQL.
 
+Le Portail charge aussi le script de statistiques Canner `https://canner.ca/t.js` avec `defer`, le `data-site-id` configuré pour JF Apps et le domaine `liste-jfr-v1.canner.app`. Il est ajouté une seule fois dans l’en-tête partagé.
+
 Sur téléphone, l’en-tête est volontairement réduit à :
 
 - le logo;
@@ -110,7 +112,17 @@ Le menu Plus contient Commentaires, Aide, Mon compte, Nouveautés, Installer JF 
 
 L’action **Sauvegarder toutes mes données** se trouve maintenant dans le **Centre de maintenance**. Depuis l’accueil du Portail, ouvrez **Centre de maintenance**, puis utilisez **Créer la sauvegarde**. Une seule archive ZIP privée est créée avec les données des applications auxquelles le compte a accès. Les fichiers sont séparés par application et un `manifest.json` conserve la date de sauvegarde et les versions.
 
-Le Centre de maintenance est accessible à tous les utilisateurs pour cette sauvegarde privée. Les diagnostics de la base de données restent réservés aux administrateurs. Pour la Liste d’épicerie, seules les familles accessibles au compte sont incluses. Aucune donnée d’une famille ou d’un utilisateur non autorisé n’est exportée. La restauration globale contrôlée reste une évolution future.
+Le Centre de maintenance est accessible à tous les utilisateurs pour cette sauvegarde privée. Les diagnostics de la base de données restent réservés aux administrateurs. Pour la Liste d’épicerie, seules les familles accessibles au compte sont incluses. Aucune donnée d’une famille ou d’un utilisateur non autorisé n’est exportée.
+
+### Restaurer une sauvegarde globale
+
+Sous la sauvegarde se trouve maintenant **Restaurer une sauvegarde globale**. Choisissez une archive ZIP créée par JF Apps. Le Portail valide le `manifest.json`, vérifie la structure de l’archive et affiche une prévisualisation avant toute écriture.
+
+Vous pouvez cocher seulement les applications que vous voulez restaurer. Une archive peut donc servir, par exemple, à restaurer **Finances seulement** sans toucher au Journal de pression, aux personnages ou à l’épicerie. Pour la Liste d’épicerie, chaque famille contenue dans l’archive peut être dirigée vers une famille à laquelle votre compte a actuellement accès.
+
+La restauration globale fonctionne volontairement en **fusion non destructive** : elle n’efface pas les données actuelles. Les doublons reconnus sont ignorés ou fusionnés selon les règles propres à l’application. Les conflits incertains du Journal de pression ne sont pas importés automatiquement. Un personnage JDR portant déjà le même nom n’est pas écrasé et ses lignes enfants ne sont pas fusionnées silencieusement.
+
+Les sauvegardes globales créées à partir du Portail V1.4.0 utilisent le format V2, qui contient davantage d’informations pour la restauration sélective. Les archives globales V1 produites par les versions précédentes restent acceptées lorsque leur structure est valide.
 
 ### Applications
 

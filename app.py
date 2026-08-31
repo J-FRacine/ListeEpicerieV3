@@ -50,6 +50,7 @@ from feedback_data import (
 from finances import finances_panel
 from finances_data import init_finances_schema
 from global_backup import download_global_backup
+from global_restore import global_restore_panel
 from grocery_preferences import (
     categories_are_enabled,
     init_grocery_preferences_schema,
@@ -244,6 +245,15 @@ configure_pwa(BASE_DIR)
 # Le script est ajouté une seule fois au <head> partagé de toutes les pages JF Apps.
 ui.add_head_html(
     '<script src="https://api.canner.ca/_canner/vitals.js" async></script>',
+    shared=True,
+)
+
+# Statistiques de fréquentation Canner. Conservé exactement avec defer et les
+# attributs fournis afin que le suivi s'applique à toutes les pages JF Apps.
+ui.add_head_html(
+    '<script defer src="https://canner.ca/t.js" '
+    'data-site-id="2dd1f6d1-013b-4ec9-a990-4770b46f3277" '
+    'data-domains="liste-jfr-v1.canner.app"></script>',
     shared=True,
 )
 
@@ -2629,6 +2639,15 @@ def index(
                     action_label="Créer la sauvegarde",
                     on_click=lambda: download_global_backup(user),
                 )
+
+            portal_section(
+                "Restauration globale",
+                (
+                    "Chargez une sauvegarde globale, vérifiez son contenu et "
+                    "choisissez seulement les applications à restaurer."
+                ),
+            )
+            global_restore_panel(user)
 
             if user["is_admin"]:
                 portal_section(

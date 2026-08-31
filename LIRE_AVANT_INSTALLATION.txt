@@ -1,111 +1,122 @@
-JF APPS — FINANCES V1.13.1
-OPTIMISATION DE LA NAVIGATION DU BUDGET
-31 août 2026
+JF APPS — PORTAIL V1.4.0
+RESTAURATION GLOBALE SÉLECTIVE + STATISTIQUES CANNER
+Date : 31 août 2026
 
 OBJECTIF
 --------
-Réduire le délai observé lors du changement de mois dans Finances > Budget
-(environ 20 secondes dans le déploiement réel) et afficher un indicateur clair
-si le serveur ou PostgreSQL a encore besoin de quelques secondes.
+Cette livraison concerne le Portail JF Apps. Elle conserve Finances V1.13.1 et
+les versions actuelles des autres applications.
 
-CORRECTIONS / OPTIMISATIONS
----------------------------
-1. Le changement de mois dans Budget ne reconstruit plus le Tableau en même
-   temps lorsqu'il n'est pas l'écran utilisé.
+NOUVEAUTÉS
+----------
+1. Centre de maintenance — restauration globale sélective
+   - chargement d'une archive ZIP créée par « Sauvegarder toutes mes données »;
+   - validation du manifest et de la structure avant toute écriture;
+   - prévisualisation du contenu de chaque application;
+   - choix des applications à restaurer individuellement;
+   - possibilité de restaurer uniquement Finances, par exemple, sans toucher aux
+     autres applications;
+   - pour Liste d'épicerie, choix de la famille de destination pour chacune des
+     familles présentes dans l'archive;
+   - restauration par fusion non destructive : aucune donnée actuelle n'est
+     supprimée automatiquement;
+   - doublons reconnus ignorés selon les règles de chaque application;
+   - respect des droits d'accès actuels de l'utilisateur.
 
-2. Le calcul de capacité Budget contient déjà le résumé du mois. V1.13.1 le
-   réutilise au lieu de relancer une seconde lecture complète via budget_summary().
+2. Sauvegarde globale V2
+   - le manifest indique maintenant que la restauration sélective est disponible;
+   - les familles de Liste d'épicerie possèdent un chemin explicite et leur
+     identifiant source dans le manifest;
+   - les anciennes archives globales V1 restent acceptées par la restauration.
 
-3. La section Prévisions a été allégée :
-   - elle ne reconstruit plus dashboard_month_projection() six fois;
-   - elle ne recalcule plus les KPI de catégories/étiquettes dont Prévisions
-     n'a pas besoin;
-   - elle calcule seulement la capacité de base, le report, les dépenses
-     variables et le solde de fin;
-   - le report est propagé séquentiellement d'un mois au suivant.
+3. Statistiques Canner
+   Le script suivant est ajouté une seule fois dans le <head> partagé, en plus
+   du script Web Vitals déjà installé :
 
-4. Pour déterminer les dépenses variables d'un mois de prévision, une seule
-   lecture des postes Budget sert maintenant à identifier à la fois les
-   récurrences fixes et les groupes de financements à exclure.
+   <script defer src="https://canner.ca/t.js"
+           data-site-id="2dd1f6d1-013b-4ec9-a990-4770b46f3277"
+           data-domains="liste-jfr-v1.canner.app"></script>
 
-5. Un indicateur avec spinner et le texte :
-      « Calcul du mois et des prévisions… »
-   apparaît pendant le changement de mois. Le navigateur reçoit l'indicateur
-   avant le calcul lourd afin que l'interface ne donne plus l'impression que
-   le clic n'a pas fonctionné.
-
-IMPORTANT
----------
-Cette version ne change :
-- aucune transaction;
-- aucun poste Budget;
-- aucune récurrence;
-- aucun financement;
-- aucun prêt partagé;
-- aucun schéma PostgreSQL.
-
-Aucun SQL manuel.
-Aucune nouvelle dépendance Python.
-
-FICHIERS MODIFIÉS
------------------
-À remplacer :
-- finances.py
-- finances_data.py
+FICHIERS À REMPLACER
+--------------------
+- app.py
+- global_backup.py
 - app_versions.py
 - manual.py
 
-Les fichiers suivants sont inclus dans le paquet pour conserver un ensemble
-V1.13 complet, mais sont inchangés par rapport à V1.13.0 :
-- finances_calculations.py
-- finances_validation.py
-- finances_ui_state.py
-- finances_shared_loans.py
-- finances_shared_loans_data.py
+NOUVEAU FICHIER À AJOUTER
+-------------------------
+- global_restore.py
 
-Le dossier tests/ est facultatif sur Canner.
+AUCUN AUTRE FICHIER N'EST À REMPLACER.
+Finances V1.13.1 et ses modules restent tels quels.
 
 INSTALLATION
 ------------
-1. Conserver la sauvegarde habituelle avant le déploiement.
-2. Remplacer au minimum les quatre fichiers modifiés ci-dessus dans GitHub.
-3. Conserver les quatre nouveaux modules de V1.13.0 déjà présents à la racine.
-4. Commit changes.
-5. Attendre le redéploiement Canner.
-6. Faire Ctrl+F5 sur ordinateur si nécessaire.
-7. Vérifier que Finances affiche V1.13.1.
+1. Faire une sauvegarde de sécurité de l'installation actuellement en ligne.
+2. Dans GitHub, remplacer les quatre fichiers indiqués ci-dessus.
+3. Ajouter global_restore.py à la racine, au même niveau que app.py.
+4. Faire Commit changes.
+5. Laisser Canner terminer le redéploiement.
+6. Faire Ctrl+F5 sur ordinateur si l'ancienne interface reste en cache.
+7. Vérifier que le Portail affiche V1.4.0 et Finances V1.13.1.
 
-TEST PRINCIPAL APRÈS DÉPLOIEMENT
---------------------------------
-1. Ouvrir Finances > Budget.
-2. Cliquer une fois sur la flèche du mois suivant.
-3. Vérifier que l'indicateur « Calcul du mois et des prévisions… » apparaît
-   pendant le traitement si celui-ci n'est pas instantané.
-4. Noter le temps avant l'affichage complet du nouveau mois.
-5. Passer par exemple de septembre à octobre 2026.
-6. Vérifier qu'octobre affiche toujours 3 paies si la prochaine paie de la
-   récurrence est le 3 septembre 2026.
-7. Vérifier que les Prévisions, les sections Actives / À venir / Archives et
-   les totaux correspondent au mois choisi.
-8. Revenir au Tableau et vérifier que celui-ci se recalcule normalement lors
-   de son utilisation.
+TESTS CONSEILLÉS APRÈS DÉPLOIEMENT
+---------------------------------
+A. Nouvelle sauvegarde
+1. Ouvrir Portail > Centre de maintenance.
+2. Cliquer « Créer la sauvegarde ».
+3. Conserver le ZIP obtenu comme sauvegarde de test.
 
-VALIDATIONS EFFECTUÉES
-----------------------
-- py_compile : OK
-- compileall : OK
-- 10 tests unittest de non-régression : OK
-- octobre 2026 = 1er, 15 et 29 octobre : OK
-- 828,98 $ x 3 = 2 486,94 $ : OK
-- aucun appel à dashboard_month_projection() dans budget_forecast() : OK
-- indicateur de chargement présent dans la navigation Budget : OK
-- navigation Budget et Tableau différenciée pour éviter les recalculs hors écran : OK
-- aucune fonction top-level dupliquée dans finances_data.py : OK
+B. Prévisualisation sans restauration
+1. Dans « Restauration globale », charger le ZIP de test.
+2. Vérifier que le Portail affiche les applications présentes.
+3. Vérifier qu'aucune donnée n'est modifiée à cette étape.
+4. Décocher toutes les applications sauf une application de test.
 
-PERFORMANCE
------------
-La réduction du travail est vérifiée structurellement, mais le temps exact ne
-peut être mesuré sans la base PostgreSQL et le runtime Canner réels. Si le
-changement de mois reste anormalement long après ce correctif, le sablier
-permettra au moins de confirmer que le clic a été reçu; il faudra alors mesurer
-les requêtes PostgreSQL restantes dans le déploiement réel.
+C. Restauration sélective
+1. Choisir une application dont les données existent déjà.
+2. Lancer « Restaurer la sélection ».
+3. Vérifier que les doublons connus ne sont pas recréés.
+4. Vérifier que les autres applications non cochées n'ont pas été modifiées.
+
+D. Liste d'épicerie
+1. Charger une sauvegarde contenant une ou plusieurs familles.
+2. Vérifier que chaque famille source peut être activée/désactivée et associée
+   seulement à une famille actuellement accessible au compte.
+
+E. Finances
+La restauration Finances est une fusion non destructive. Elle restaure les
+transactions et postes Budget compatibles ainsi que les modules complémentaires
+pris en charge (financements, groupes de financements et prêts partagés). Elle
+ne supprime pas les données actuelles et évite les doublons reconnus.
+
+SÉCURITÉ
+--------
+- Archives acceptées : sauvegardes globales JF Apps V1 et V2 seulement.
+- Taille ZIP maximale : 40 Mo.
+- Taille décompressée maximale : 120 Mo.
+- Protection contre les chemins ZIP non sécuritaires (« ../ » etc.).
+- Une application non autorisée pour le compte n'est pas restaurable.
+- Une famille d'épicerie devenue inaccessible n'est pas restaurable.
+- Aucun remplacement global destructif n'est proposé dans cette version.
+
+VALIDATION TECHNIQUE EFFECTUÉE
+------------------------------
+- py_compile réussi sur tous les fichiers Python du paquet.
+- compileall réussi.
+- 12 tests unittest réussis :
+  * sauvegarde globale V2;
+  * compatibilité des archives V1 et V2;
+  * rejet des formats inconnus;
+  * rejet des chemins ZIP non sécuritaires;
+  * rejet d'une application déclarée dont le fichier est absent;
+  * prévisualisation Finances et Liste d'épicerie;
+  * restauration réellement sélective;
+  * script Canner avec les attributs exacts;
+  * intégration de la restauration au Centre de maintenance;
+  * conservation de Finances V1.13.1;
+  * présence des API de restauration nécessaires dans Finances V1.13.1.
+
+Aucun script SQL manuel.
+Aucune nouvelle dépendance Python.

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-PORTAL_VERSION = "1.3.3"
+PORTAL_VERSION = "1.4.0"
 
 APP_LABELS = {
     "portal": "Portail JF Apps",
@@ -21,6 +21,29 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "portal",
+        "version": "1.4.0",
+        "date": "2026-08-31",
+        "title": "Portail JF Apps — restauration globale sélective",
+        "summary": (
+            "Le Centre de maintenance peut maintenant prévisualiser une sauvegarde globale "
+            "et restaurer seulement les applications choisies, sans effacer les données actuelles."
+        ),
+        "changes": [
+            "Chargement et validation sécurisée des archives ZIP de sauvegarde globale JF Apps V1 et V2.",
+            "Prévisualisation du manifest et du contenu disponible avant toute écriture.",
+            "Sélection application par application : Finances, Liste d’épicerie, Journal de pression, Personnages JDR et Commentaires lorsqu’ils sont présents et autorisés.",
+            "Pour Liste d’épicerie, choix de la famille de destination pour chaque famille contenue dans l’archive.",
+            "Restauration par fusion non destructive : les doublons reconnus sont ignorés et aucune donnée actuelle n’est effacée automatiquement.",
+            "Finances restaure transactions, Budget et modules complémentaires compatibles, dont financements, groupes et prêts partagés.",
+            "Journal de pression restaure les mesures non dupliquées et les réglages de rappel lorsque disponibles.",
+            "Personnages JDR restaure les nouveaux personnages et leurs données associées sans fusion silencieuse dans un personnage portant déjà le même nom.",
+            "Les sauvegardes globales passent au format V2 avec informations de restauration et chemins de familles explicites; les anciennes archives V1 restent reconnues.",
+            "Ajout du script Canner t.js dans le head partagé avec defer, data-site-id et data-domains fournis.",
+            "Aucun SQL manuel ni nouvelle dépendance Python n’est requis.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.13.1",

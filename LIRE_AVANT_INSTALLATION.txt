@@ -1,27 +1,38 @@
-JF APPS — FINANCES V1.12.5
-Correctif : navigation mensuelle du Budget
-Date : 31 août 2026
+JF APPS — FINANCES V1.12.6
+CORRECTIF NAVIGATION MENSUELLE DU BUDGET
+31 août 2026
 
 PROBLÈME CORRIGÉ
 ----------------
-Dans Budget, cliquer sur les flèches précédent/suivant changeait bien le mois
-interne, mais l’écran ne se redessinait pas immédiatement. Il fallait quitter
-l’onglet Budget puis y revenir pour voir le bon mois et les bons calculs.
+Dans V1.12.5, le mois interne changeait bien au clic sur les flèches du Budget,
+mais l'écran visible pouvait rester sur l'ancien mois jusqu'à ce que l'utilisateur
+quitte l'onglet puis y revienne.
 
 CAUSE
 -----
-Le contenu Budget est construit dans un conteneur dédié (budget_box), alors que
-la navigation utilisait un refresh() de fonction décorée. L’état était donc mis
-à jour, mais le conteneur visible n’était pas reconstruit de façon fiable.
+La vue Budget mélangeait encore deux mécanismes NiceGUI :
+- un conteneur externe budget_box vidé/reconstruit manuellement;
+- des mécanismes refreshable utilisés ailleurs dans Finances.
 
-CORRECTION V1.12.5
------------------
-- le changement de mois déclenche maintenant directement le rendu du conteneur
-  Budget;
-- le nom du mois, les KPI, le nombre de paies, les sections Actives/À venir/
-  Archives et les Prévisions changent immédiatement;
-- le Tableau demeure synchronisé avec le mois sélectionné;
-- aucun changement de données ni de schéma.
+Le correctif V1.12.5 avait changé l'appel de rafraîchissement sans éliminer ce
+mélange, ce qui n'était donc pas suffisant.
+
+CORRECTION V1.12.6
+------------------
+- suppression du conteneur externe budget_box;
+- render_budget devient lui-même @ui.refreshable;
+- les flèches modifient month_state puis appellent render_budget.refresh();
+- le tri et les autres actions du Budget utilisent le même mécanisme;
+- refresh_all utilise aussi render_budget.refresh();
+- le Tableau demeure synchronisé avec le même month_state.
+
+Ainsi, un clic sur mois précédent/suivant doit immédiatement modifier :
+- le nom du mois;
+- Revenus/Dépenses fixes;
+- Reste mensuel et Reste par paie;
+- Disponible ce mois et nombre de paies;
+- sections Actives / À venir / Archives;
+- Prévisions.
 
 FICHIERS À REMPLACER
 --------------------
@@ -30,33 +41,36 @@ FICHIERS À REMPLACER
 - manual.py
 
 Les fichiers finances_data.py et finances_shared_loans.py sont inclus dans le
-paquet complet mais sont inchangés par rapport à V1.12.4.
+ZIP pour cohérence mais sont inchangés par rapport à V1.12.5.
 
 INSTALLATION
 ------------
 1. Remplacer finances.py, app_versions.py et manual.py dans GitHub.
-2. Faire Commit changes.
+2. Commit changes.
 3. Attendre le redéploiement Canner.
-4. Faire Ctrl+F5.
-5. Vérifier que Finances affiche V1.12.5.
+4. Faire Ctrl+F5 sur ordinateur après le redéploiement.
+5. Vérifier que Finances affiche V1.12.6.
 
 TEST RECOMMANDÉ
 ---------------
 1. Ouvrir Finances > Budget.
 2. Noter le mois affiché et les montants.
 3. Cliquer une fois sur la flèche du mois suivant.
-4. Vérifier immédiatement, sans changer d’onglet, que :
-   - le nom du mois change;
-   - Disponible ce mois et le nombre de paies changent si nécessaire;
-   - les sections Actives / À venir / Archives se recalculent;
-   - la section Prévisions est recalculée.
-5. Revenir au mois précédent et confirmer le même comportement.
+4. Vérifier que le nom du mois change immédiatement, sans changer d'onglet.
+5. Vérifier que les KPI et Prévisions se mettent à jour dans le même clic.
+6. Naviguer plusieurs mois avant/arrière.
+7. Pour octobre 2026, vérifier que le nombre de paies est 3 lorsque la
+   récurrence salariale est ancrée au 3 septembre 2026 aux deux semaines.
 
 VALIDATION TECHNIQUE
 --------------------
-- py_compile : OK sur tous les fichiers Python du paquet;
-- compileall : OK;
-- analyse AST : le changement de mois appelle bien directement render_budget();
-- aucune référence render_budget.refresh restante;
-- aucun SQL manuel;
-- aucune nouvelle dépendance Python.
+- py_compile réussi sur tous les fichiers Python du paquet;
+- compileall réussi;
+- aucune référence à budget_box dans finances.py;
+- render_budget est décoré @ui.refreshable;
+- change_month appelle render_budget.refresh();
+- refresh_all appelle render_budget.refresh();
+- aucun changement de schéma ou de données.
+
+AUCUN SQL MANUEL.
+AUCUNE NOUVELLE DÉPENDANCE PYTHON.

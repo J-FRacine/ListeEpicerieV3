@@ -190,7 +190,7 @@ Dans la liste des catégories et des étiquettes, choisissez **+ Ajouter une cat
 
 ### Budget
 
-La navigation affiche maintenant le **mois réellement consulté** entre les flèches. Le changement de mois est appliqué et affiché immédiatement, sans devoir quitter l’onglet Budget puis y revenir. Pour un revenu lié à une récurrence aux deux semaines, le nombre de paies est calculé avec les occurrences réelles : un mois peut donc contenir 2 ou 3 paies.
+La navigation affiche le **mois réellement consulté** entre les flèches. Depuis Finances V1.12.6, toute la vue Budget est un composant rafraîchissable autonome : le libellé du mois, les KPI, le nombre de paies, les sections Actives/À venir/Archives et les Prévisions se redessinent immédiatement au clic, sans devoir quitter l’onglet puis y revenir. Pour un revenu lié à une récurrence aux deux semaines, le nombre de paies est calculé avec les occurrences réelles : un mois peut donc contenir 2 ou 3 paies.
 
 Les dépenses fixes sont séparées en :
 

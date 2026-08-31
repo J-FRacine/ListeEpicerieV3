@@ -15,12 +15,29 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.2",
     "blood_pressure": "1.2.1",
-    "finances": "1.12.5",
+    "finances": "1.12.6",
     "rpg": "1.2.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.12.6",
+        "date": "2026-08-31",
+        "title": "Finances — navigation Budget rendue réellement réactive",
+        "summary": (
+            "La vue Budget est maintenant un composant NiceGUI refreshable autonome, "
+            "sans conteneur externe à vider manuellement."
+        ),
+        "changes": [
+            "Les flèches précédent/suivant rafraîchissent directement tout le composant Budget.",
+            "Suppression du mélange entre budget_box.clear() et refreshable qui empêchait le rendu visible de suivre immédiatement l’état du mois.",
+            "Le libellé du mois, les KPI, le nombre de paies, Actifs/À venir/Archives et les Prévisions sont recréés dans le même rafraîchissement.",
+            "Le Tableau demeure synchronisé avec le même month_state.",
+            "Aucun script SQL manuel ni nouvelle dépendance Python n’est requis.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.12.5",

@@ -30,7 +30,12 @@ def decimal_value(value, label, *, allow_blank=False):
         raise ValueError(f"{label} est invalide.")
 
 
-def text_value(value, label, maximum, *, required=False):
+def text_value(value, label, maximum, required=False):
+    """Valide un texte court.
+
+    ``required`` accepte volontairement un argument positionnel ou nommé afin
+    de rester compatible avec les appels historiques de Finances.
+    """
     cleaned = str(value or "").strip()
     if required and not cleaned:
         raise ValueError(f"{label} est obligatoire.")

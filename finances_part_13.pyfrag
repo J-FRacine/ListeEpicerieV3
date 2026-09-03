@@ -1,0 +1,650 @@
+                            ):
+                                roots[int(candidate["id"])] = candidate["name"]
+
+                        with ui.dialog() as dialog:
+                            with ui.card().classes("w-full max-w-xl p-4"):
+                                ui.label(
+                                    "Modifier la catégorie"
+                                    if row else "Nouvelle catégorie"
+                                ).classes("text-xl font-bold")
+                                name = ui.input(
+                                    label="Nom",
+                                    value=row["name"] if row else "",
+                                ).props("dense outlined maxlength=100").classes(
+                                    "w-full"
+                                )
+                                parent = ui.select(
+                                    roots,
+                                    value=row["parent_id"] if row else None,
+                                    label="Catégorie parente",
+                                ).props(
+                                    "dense outlined clearable options-dense"
+                                ).classes("w-full")
+                                category_type = ui.select(
+                                    {
+                                        "expense": "Dépenses",
+                                        "income": "Revenus",
+                                        "both": "Dépenses et revenus",
+                                    },
+                                    value=row["category_type"] if row else "both",
+                                    label="Utilisation",
+                                ).props("dense outlined options-dense").classes(
+                                    "w-full"
+                                )
+
+                                def save_category_now():
+                                    try:
+                                        save_category(
+                                            user_id=user_id,
+                                            category_id=row["id"] if row else None,
+                                            name=name.value,
+                                            parent_id=parent.value,
+                                            category_type=category_type.value,
+                                        )
+                                    except Exception as error:
+                                        ui.notify(str(error), type="warning")
+                                        return
+                                    dialog.close()
+                                    ui.notify("Catégorie enregistrée.", type="positive")
+                                    refresh_all()
+
+                                with ui.row().classes(
+                                    "w-full justify-end gap-2"
+                                ):
+                                    ui.button(
+                                        "Annuler", on_click=dialog.close
+                                    ).props("flat")
+                                    ui.button(
+                                        "Enregistrer",
+                                        icon="save",
+                                        on_click=save_category_now,
+                                    ).props("color=primary")
+                        dialog.open()
+
+                    def change_category_dashboard(category_id, value):
+                        try:
+                            set_category_dashboard_visible(
+                                user_id, category_id, value
+                            )
+                        except Exception as error:
+                            ui.notify(str(error), type="warning")
+                            return
+                        render_dashboard.refresh()
+
+                    @ui.refreshable
+                    def render_categories():
+                        category_box.clear()
+                        rows = list_categories(
+                            user_id, include_inactive=True
+                        )
+                        with category_box:
+                            with ui.row().classes(
+                                "w-full items-center justify-between"
+                            ):
+                                with ui.column().classes("gap-0"):
+                                    ui.label(
+                                        "Catégories et sous-catégories"
+                                    ).classes("text-xl font-bold")
+                                    ui.label(
+                                        "La case Tableau choisit les catégories affichées dans les KPI du Tableau de bord."
+                                    ).classes("text-xs jf-muted")
+                                ui.button(
+                                    "Ajouter",
+                                    icon="add",
+                                    on_click=lambda: category_dialog(),
+                                ).props("color=primary dense")
+                            for row in rows:
+                                with ui.element("div").classes("jf-finance-card"):
+                                    with ui.row().classes(
+                                        "w-full items-center justify-between gap-2"
+                                    ):
+                                        ui.label(row["full_name"]).classes(
+                                            "text-sm font-bold"
+                                        )
+                                        with ui.row().classes("gap-1 items-center"):
+                                            ui.checkbox(
+                                                "Tableau",
+                                                value=bool(
+                                                    row.get(
+                                                        "dashboard_visible", True
+                                                    )
+                                                ),
+                                                on_change=(
+                                                    lambda event,
+                                                    selected=row["id"]:
+                                                    change_category_dashboard(
+                                                        selected, event.value
+                                                    )
+                                                ),
+                                            ).props("dense").tooltip(
+                                                "Afficher cette catégorie dans les KPI du Tableau"
+                                            )
+                                            ui.switch(
+                                                value=row["is_active"],
+                                                on_change=(
+                                                    lambda event,
+                                                    selected=row["id"]:
+                                                    change_category_state(
+                                                        selected, event.value
+                                                    )
+                                                ),
+                                            ).props("dense")
+                                            ui.button(
+                                                icon="edit",
+                                                on_click=(
+                                                    lambda _event=None,
+                                                    selected=row:
+                                                    category_dialog(selected)
+                                                ),
+                                            ).props(
+                                                "flat dense round size=sm color=primary"
+                                            )
+
+                    def change_category_state(category_id, value):
+                        toggle_category(user_id, category_id, value)
+                        refresh_all()
+
+                    render_categories()
+
+                with ui.tab_panel(tags_tab).classes("px-0"):
+                    tag_box = ui.column().classes("w-full gap-2")
+
+                    def tag_dialog(row=None):
+                        with ui.dialog() as dialog:
+                            with ui.card().classes("w-full max-w-md p-4"):
+                                ui.label(
+                                    "Modifier l’étiquette"
+                                    if row else "Nouvelle étiquette"
+                                ).classes("text-xl font-bold")
+                                name = ui.input(
+                                    label="Nom",
+                                    value=row["name"] if row else "",
+                                ).props("dense outlined maxlength=80").classes(
+                                    "w-full"
+                                )
+
+                                def save_tag_now():
+                                    try:
+                                        save_tag(
+                                            user_id=user_id,
+                                            tag_id=row["id"] if row else None,
+                                            name=name.value,
+                                        )
+                                    except Exception as error:
+                                        ui.notify(str(error), type="warning")
+                                        return
+                                    dialog.close()
+                                    ui.notify("Étiquette enregistrée.", type="positive")
+                                    refresh_all()
+
+                                with ui.row().classes(
+                                    "w-full justify-end gap-2"
+                                ):
+                                    ui.button(
+                                        "Annuler", on_click=dialog.close
+                                    ).props("flat")
+                                    ui.button(
+                                        "Enregistrer",
+                                        icon="save",
+                                        on_click=save_tag_now,
+                                    ).props("color=primary")
+                        dialog.open()
+
+                    def change_tag_dashboard(tag_id, value):
+                        try:
+                            set_tag_dashboard_visible(
+                                user_id, tag_id, value
+                            )
+                        except Exception as error:
+                            ui.notify(str(error), type="warning")
+                            return
+                        render_dashboard.refresh()
+
+                    @ui.refreshable
+                    def render_tags():
+                        tag_box.clear()
+                        rows = list_tags(user_id, include_inactive=True)
+                        with tag_box:
+                            with ui.row().classes(
+                                "w-full items-center justify-between"
+                            ):
+                                with ui.column().classes("gap-0"):
+                                    ui.label("Étiquettes").classes(
+                                        "text-xl font-bold"
+                                    )
+                                    ui.label(
+                                        "La case Tableau choisit les étiquettes affichées dans les KPI du Tableau de bord."
+                                    ).classes("text-xs jf-muted")
+                                ui.button(
+                                    "Ajouter",
+                                    icon="add",
+                                    on_click=lambda: tag_dialog(),
+                                ).props("color=primary dense")
+                            for row in rows:
+                                with ui.element("div").classes("jf-finance-card"):
+                                    with ui.row().classes(
+                                        "w-full items-center justify-between gap-2"
+                                    ):
+                                        ui.label(row["name"]).classes(
+                                            "text-sm font-bold"
+                                        )
+                                        with ui.row().classes("gap-1 items-center"):
+                                            ui.checkbox(
+                                                "Tableau",
+                                                value=bool(
+                                                    row.get(
+                                                        "dashboard_visible", True
+                                                    )
+                                                ),
+                                                on_change=(
+                                                    lambda event,
+                                                    selected=row["id"]:
+                                                    change_tag_dashboard(
+                                                        selected, event.value
+                                                    )
+                                                ),
+                                            ).props("dense").tooltip(
+                                                "Afficher cette étiquette dans les KPI du Tableau"
+                                            )
+                                            ui.switch(
+                                                value=row["is_active"],
+                                                on_change=(
+                                                    lambda event,
+                                                    selected=row["id"]:
+                                                    change_tag_state(
+                                                        selected, event.value
+                                                    )
+                                                ),
+                                            ).props("dense")
+                                            ui.button(
+                                                icon="edit",
+                                                on_click=(
+                                                    lambda _event=None,
+                                                    selected=row:
+                                                    tag_dialog(selected)
+                                                ),
+                                            ).props(
+                                                "flat dense round size=sm color=primary"
+                                            )
+
+                    def change_tag_state(tag_id, value):
+                        toggle_tag(user_id, tag_id, value)
+                        refresh_all()
+
+                    render_tags()
+
+                with ui.tab_panel(
+                    payment_methods_tab
+                ).classes(
+                    "px-0"
+                ):
+                    payment_box = ui.column().classes(
+                        "w-full gap-2"
+                    )
+
+                    def payment_method_dialog(
+                        row=None,
+                    ):
+                        with ui.dialog() as dialog:
+                            with ui.card().classes(
+                                "w-full max-w-2xl p-4"
+                            ):
+                                ui.label(
+                                    (
+                                        "Modifier le mode de paiement"
+                                        if row
+                                        else "Nouveau mode de paiement"
+                                    )
+                                ).classes("text-xl font-bold")
+
+                                name = ui.input(
+                                    label="Nom",
+                                    value=row["name"] if row else "",
+                                ).props(
+                                    "dense outlined maxlength=100"
+                                ).classes("w-full")
+
+                                method_type = ui.select(
+                                    PAYMENT_METHOD_TYPES,
+                                    value=(
+                                        row["method_type"]
+                                        if row
+                                        else "credit_card"
+                                    ),
+                                    label="Type",
+                                ).props(
+                                    "dense outlined options-dense"
+                                ).classes("w-full")
+
+                                with ui.element("div").classes(
+                                    "jf-finance-form-grid"
+                                ):
+                                    statement_day = ui.number(
+                                        label="Fermeture habituelle — jour",
+                                        value=(
+                                            row["statement_day"]
+                                            if row
+                                            else None
+                                        ),
+                                        min=1,
+                                        max=31,
+                                        step=1,
+                                    ).props(
+                                        "dense outlined clearable"
+                                    ).classes("jf-finance-field")
+
+                                    payment_day = ui.number(
+                                        label="Paiement habituel — jour",
+                                        value=(
+                                            row["payment_day"]
+                                            if row
+                                            else None
+                                        ),
+                                        min=1,
+                                        max=31,
+                                        step=1,
+                                    ).props(
+                                        "dense outlined clearable"
+                                    ).classes("jf-finance-field")
+
+                                    opening_date = ui.input(
+                                        label="Date du solde initial",
+                                        value=(
+                                            row[
+                                                "opening_balance_date"
+                                            ].isoformat()
+                                            if row
+                                            and row[
+                                                "opening_balance_date"
+                                            ]
+                                            else ""
+                                        ),
+                                    ).props(
+                                        "type=date dense outlined"
+                                    ).classes(
+                                        "jf-finance-field "
+                                        "jf-finance-description"
+                                    )
+
+                                opening_balance = ui.number(
+                                    label="Solde initial ou ajustement",
+                                    value=(
+                                        row["opening_balance"]
+                                        if row
+                                        else 0
+                                    ),
+                                    step=.01,
+                                ).props(
+                                    "dense outlined"
+                                ).classes("w-full")
+
+                                credit_limit = ui.number(
+                                    label="Limite de crédit — facultative",
+                                    value=(
+                                        row.get("credit_limit")
+                                        if row
+                                        else None
+                                    ),
+                                    min=0,
+                                    step=.01,
+                                ).props(
+                                    "dense outlined clearable"
+                                ).classes("w-full")
+
+                                payment_help = ui.label(
+                                    "Pour une carte, le solde initial sert à la conciliation. Pour un Compte bancaire, il devient le solde de référence utilisé par l’onglet Compte et le Tableau; indique aussi la date de référence."
+                                ).classes("text-xs jf-muted")
+
+                                def update_payment_type_fields(_event=None):
+                                    is_credit_line = method_type.value == "credit_line"
+                                    credit_limit.visible = is_credit_line
+                                    payment_help.set_text(
+                                        (
+                                            "Pour une Marge de crédit, le solde initial représente la dette utilisée à la date de référence. La limite permet de calculer le crédit disponible; une dépense augmente la dette et un remboursement la réduit."
+                                            if is_credit_line
+                                            else "Pour une carte, le solde initial sert à la conciliation. Pour un Compte bancaire, il devient le solde de référence utilisé par l’onglet Compte et le Tableau; indique aussi la date de référence."
+                                        )
+                                    )
+
+                                method_type.on_value_change(update_payment_type_fields)
+                                update_payment_type_fields()
+
+                                note = ui.textarea(
+                                    label="Note facultative",
+                                    value=row["note"] if row else "",
+                                ).props(
+                                    "dense outlined autogrow maxlength=1000"
+                                ).classes("w-full")
+
+                                def save_payment_now():
+                                    try:
+                                        save_payment_method(
+                                            user_id=user_id,
+                                            payment_method_id=(
+                                                row["id"]
+                                                if row
+                                                else None
+                                            ),
+                                            name=name.value,
+                                            method_type=method_type.value,
+                                            statement_day=(
+                                                statement_day.value
+                                            ),
+                                            payment_day=payment_day.value,
+                                            opening_balance=(
+                                                opening_balance.value
+                                            ),
+                                            opening_balance_date=(
+                                                opening_date.value or None
+                                            ),
+                                            credit_limit=(
+                                                credit_limit.value
+                                                if method_type.value == "credit_line"
+                                                else None
+                                            ),
+                                            note=note.value,
+                                        )
+                                    except Exception as error:
+                                        ui.notify(
+                                            str(error),
+                                            type="warning",
+                                        )
+                                        return
+
+                                    dialog.close()
+                                    ui.notify(
+                                        "Mode de paiement enregistré.",
+                                        type="positive",
+                                    )
+                                    refresh_all()
+
+                                with ui.row().classes(
+                                    "w-full justify-end gap-2"
+                                ):
+                                    ui.button(
+                                        "Annuler",
+                                        on_click=dialog.close,
+                                    ).props("flat")
+                                    ui.button(
+                                        "Enregistrer",
+                                        icon="save",
+                                        on_click=save_payment_now,
+                                    ).props("color=primary")
+
+                        dialog.open()
+
+                    def change_payment_state(
+                        payment_method_id,
+                        value,
+                    ):
+                        try:
+                            toggle_payment_method(
+                                user_id,
+                                payment_method_id,
+                                value,
+                            )
+                        except Exception as error:
+                            ui.notify(
+                                str(error),
+                                type="warning",
+                            )
+                            return
+
+                        refresh_all()
+
+                    def change_payment_order(
+                        payment_method_id,
+                        direction,
+                    ):
+                        try:
+                            move_payment_method(
+                                user_id,
+                                payment_method_id,
+                                direction,
+                            )
+                        except Exception as error:
+                            ui.notify(
+                                str(error),
+                                type="warning",
+                            )
+                            return
+
+                        render_payment_methods.refresh()
+
+                    @ui.refreshable
+                    def render_payment_methods():
+                        payment_box.clear()
+                        rows = list_payment_methods(
+                            user_id,
+                            include_inactive=True,
+                        )
+
+                        with payment_box:
+                            with ui.row().classes(
+                                "w-full items-center "
+                                "justify-between gap-2"
+                            ):
+                                with ui.column().classes(
+                                    "gap-0"
+                                ):
+                                    ui.label(
+                                        "Modes de paiement"
+                                    ).classes(
+                                        "text-xl font-bold"
+                                    )
+                                    ui.label(
+                                        (
+                                            "Une transaction utilise "
+                                            "un seul mode de paiement."
+                                        )
+                                    ).classes(
+                                        "text-xs jf-muted"
+                                    )
+
+                                ui.button(
+                                    "Ajouter",
+                                    icon="add",
+                                    on_click=lambda: (
+                                        payment_method_dialog()
+                                    ),
+                                ).props(
+                                    "color=primary dense"
+                                )
+
+                            for row in rows:
+                                with ui.element(
+                                    "div"
+                                ).classes(
+                                    "jf-finance-card"
+                                ):
+                                    with ui.element(
+                                        "div"
+                                    ).classes(
+                                        "jf-finance-payment-row"
+                                    ):
+                                        with ui.element(
+                                            "div"
+                                        ).classes(
+                                            "jf-finance-payment-order"
+                                        ):
+                                            ui.button(
+                                                icon="keyboard_arrow_up",
+                                                on_click=(
+                                                    lambda _event=None,
+                                                    selected=row["id"]:
+                                                    change_payment_order(
+                                                        selected,
+                                                        "up",
+                                                    )
+                                                ),
+                                            ).props(
+                                                "flat dense round "
+                                                "size=sm color=primary"
+                                            ).tooltip(
+                                                "Monter"
+                                            )
+                                            ui.button(
+                                                icon="keyboard_arrow_down",
+                                                on_click=(
+                                                    lambda _event=None,
+                                                    selected=row["id"]:
+                                                    change_payment_order(
+                                                        selected,
+                                                        "down",
+                                                    )
+                                                ),
+                                            ).props(
+                                                "flat dense round "
+                                                "size=sm color=primary"
+                                            ).tooltip(
+                                                "Descendre"
+                                            )
+
+                                        with ui.column().classes(
+                                            "gap-0 min-w-0"
+                                        ):
+                                            ui.label(
+                                                row["name"]
+                                            ).classes(
+                                                "text-sm font-bold"
+                                            )
+                                            ui.label(
+                                                (
+                                                    PAYMENT_METHOD_TYPES.get(
+                                                        row["method_type"],
+                                                        "Autre",
+                                                    )
+                                                    + " — "
+                                                    + f"{row['transaction_count']} "
+                                                    "transaction(s)"
+                                                )
+                                            ).classes(
+                                                "text-xs jf-muted"
+                                            )
+                                            schedule_parts = []
+                                            if row["statement_day"]:
+                                                schedule_parts.append(
+                                                    "relevé vers le "
+                                                    + str(row["statement_day"])
+                                                )
+                                            if row["payment_day"]:
+                                                schedule_parts.append(
+                                                    "paiement vers le "
+                                                    + str(row["payment_day"])
+                                                )
+                                            if schedule_parts:
+                                                ui.label(
+                                                    " — ".join(
+                                                        schedule_parts
+                                                    )
+                                                ).classes(
+                                                    "text-xs jf-muted"
+                                                )
+                                            if row.get("method_type") == "credit_line":
+                                                used = Decimal(
+                                                    row.get("opening_balance") or 0
+                                                )
+                                                limit = (
+                                                    Decimal(row["credit_limit"])
+                                                    if row.get("credit_limit") is not None
+                                                    else None

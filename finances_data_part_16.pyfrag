@@ -1,0 +1,369 @@
+                    calculated_installment_amount=%s,
+                    completed_installments_estimated=CASE
+                        WHEN %s THEN TRUE
+                        ELSE completed_installments_estimated
+                    END,
+                    updated_at=NOW()
+                WHERE id=%s AND user_id=%s;
+                """,
+                (
+                    includes,
+                    base_payment if base_payment is not None else actual_payment,
+                    calculated,
+                    completed_was_estimated_here,
+                    saved_id,
+                    user_id,
+                ),
+            )
+            conn.commit()
+    return saved_id
+
+
+def list_installment_plans(user_id, include_inactive=True):
+    rows = [dict(row) for row in _list_installment_plans_v111(user_id, include_inactive)]
+    for row in rows:
+        rate = Decimal(row.get("annual_interest_rate") or 0)
+        row["payment_includes_interest"] = bool(row.get("payment_includes_interest", True))
+        row["base_installment_amount"] = Decimal(
+            row.get("base_installment_amount") or row.get("installment_amount") or 0
+        )
+        row["calculated_installment_amount"] = (
+            Decimal(row["calculated_installment_amount"])
+            if row.get("calculated_installment_amount") is not None
+            else None
+        )
+        if rate > 0 and not row["payment_includes_interest"]:
+            total_payment = Decimal(row.get("installment_amount") or 0)
+            base = Decimal(row.get("base_installment_amount") or 0)
+            row["estimated_interest_per_payment"] = max(
+                Decimal("0.00"), total_payment - base
+            ).quantize(Decimal("0.01"))
+        else:
+            row["estimated_interest_per_payment"] = None
+    return rows
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def export_finances(user_id):
+    csv_bytes, json_bytes = _export_finances_v1110(user_id)
+    try:
+        payload = json.loads(json_bytes.decode("utf-8"))
+    except Exception:
+        return csv_bytes, json_bytes
+
+    def serial(value):
+        if isinstance(value, (date, datetime, time, Decimal)):
+            return str(value)
+        if isinstance(value, list):
+            return [serial(item) for item in value]
+        if isinstance(value, dict):
+            return {key: serial(item) for key, item in value.items()}
+        return value
+
+    payload["version"] = "1.12.0"
+    payload["installment_plans"] = [
+        serial(dict(row)) for row in list_installment_plans(user_id, include_inactive=True)
+    ]
+    payload["budget_items"] = [
+        serial(dict(row)) for row in list_budget_items(user_id, include_inactive=True)
+    ]
+    payload["financing_budget_groups"] = [
+        serial(dict(row)) for row in list_financing_budget_groups(user_id)
+    ]
+    payload["shared_loans"] = []
+    for loan in list_shared_loans(user_id):
+        if loan.get("is_owner"):
+            payload["shared_loans"].append(serial(get_shared_loan(user_id, loan["id"])))
+    return (
+        csv_bytes,
+        json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
+    )
+
+# Évite une récursion entre le calcul de report mensuel et le Tableau.
+def _variable_expense_total_for_month(user_id, month_value):
+    month = _month_start(month_value)
+    projection = _dashboard_month_projection_v190(
+        user_id,
+        month,
+        kpi_limit=1000,
+    )
+    # Une seule lecture des postes Budget suffit pour déterminer à la fois les
+    # récurrences fixes et les financements regroupés à exclure des variables.
+    fixed_rows = list_budget_items(
+        user_id,
+        month_value=month,
+        effective_only=True,
+    )
+    fixed_recurrence_ids = {
+        int(row["recurrence_id"])
+        for row in fixed_rows
+        if row.get("item_type") == "expense" and row.get("recurrence_id")
+    }
+    fixed_plan_ids = set()
+    for row in fixed_rows:
+        if row.get("budget_financing_group"):
+            fixed_plan_ids.update(
+                int(value) for value in (row.get("financing_plan_ids") or [])
+            )
+    return sum(
+        (
+            Decimal(row["amount"])
+            for row in projection["transactions"]
+            if row["transaction_type"] == "expense"
+            and not bool(row.get("budget_excluded"))
+            and not (
+                row.get("recurrence_id")
+                and int(row["recurrence_id"]) in fixed_recurrence_ids
+            )
+            and not (
+                row.get("installment_plan_id")
+                and int(row["installment_plan_id"]) in fixed_plan_ids
+            )
+        ),
+        Decimal("0.00"),
+    ).quantize(Decimal("0.01"))
+
+
+def calculate_installment_payment(
+    principal,
+    remaining_count,
+    annual_interest_rate,
+    frequency_unit="month",
+    frequency_interval=1,
+    fees_total=0,
+):
+    """Calcul public utilisé par le formulaire pour prévisualiser un versement total."""
+    principal_value = _money(principal, allow_zero=True)
+    count = int(remaining_count or 0)
+    rate = _decimal_value(
+        annual_interest_rate,
+        "Le taux d’intérêt",
+        allow_blank=True,
+    ) or Decimal("0.00")
+    fees = _decimal_value(fees_total, "Les frais", allow_blank=True) or Decimal("0.00")
+    if count <= 0:
+        return Decimal("0.00")
+    return _automatic_installment_amount(
+        principal_value,
+        count,
+        rate,
+        fees,
+        frequency_unit,
+        int(frequency_interval or 1),
+    )
+
+
+def restore_finance_supplement(user_id, payload):
+    """Restaure les modules V1.12 absents de l'import transactionnel historique.
+
+    La fusion est non destructive : un financement/groupe/prêt manifestement déjà
+    présent est ignoré. Les identifiants de la sauvegarde ne sont jamais réutilisés.
+    """
+    if not isinstance(payload, dict):
+        return {"installment_plans": 0, "financing_groups": 0, "shared_loans": 0}
+
+    methods = {str(row["name"]).strip().casefold(): int(row["id"]) for row in list_payment_methods(user_id, include_inactive=True)}
+    categories = {str(row["full_name"]).strip().casefold(): int(row["id"]) for row in list_categories(user_id, include_inactive=True)}
+    tags = {str(row["name"]).strip().casefold(): int(row["id"]) for row in list_tags(user_id, include_inactive=True)}
+    existing_plans = list_installment_plans(user_id, include_inactive=True)
+    existing_plan_keys = {
+        (
+            str(row.get("provider_name") or "").strip().casefold(),
+            str(row.get("description") or "").strip().casefold(),
+            Decimal(row.get("original_amount") or 0).quantize(Decimal("0.01")),
+        ): int(row["id"])
+        for row in existing_plans
+    }
+    plan_map = {}
+    imported_plans = 0
+
+    for raw in payload.get("installment_plans") or []:
+        try:
+            old_id = int(raw.get("id")) if raw.get("id") is not None else None
+            key = (
+                str(raw.get("provider_name") or "").strip().casefold(),
+                str(raw.get("description") or "").strip().casefold(),
+                Decimal(str(raw.get("original_amount") or 0)).quantize(Decimal("0.01")),
+            )
+            if key in existing_plan_keys:
+                if old_id is not None:
+                    plan_map[old_id] = existing_plan_keys[key]
+                continue
+            method_name = str(raw.get("payment_method_name") or "").strip().casefold()
+            method_id = methods.get(method_name)
+            if method_id is None:
+                # Un financement sans mode de paiement valide ne peut pas générer
+                # ses versements de façon sécuritaire.
+                continue
+            category_id = categories.get(str(raw.get("category_full_name") or "").strip().casefold())
+            tag_ids = [
+                tags[name.strip().casefold()]
+                for name in (raw.get("tag_names") or [])
+                if name.strip().casefold() in tags
+            ]
+            saved = save_installment_plan(
+                user_id,
+                plan_type=raw.get("plan_type") or "merchant",
+                provider_name=raw.get("provider_name") or "Financement",
+                description=raw.get("description") or "Financement restauré",
+                original_amount=raw.get("original_amount") or 0,
+                purchase_date=raw.get("purchase_date"),
+                total_installments=raw.get("total_installments") or 1,
+                completed_installments=(
+                    None if raw.get("completed_installments_estimated")
+                    else raw.get("completed_installments")
+                ),
+                remaining_balance=raw.get("remaining_balance"),
+                installment_amount=(
+                    raw.get("base_installment_amount")
+                    if raw.get("payment_includes_interest") is False
+                    else raw.get("installment_amount")
+                ),
+                annual_interest_rate=raw.get("annual_interest_rate") or 0,
+                fees_total=raw.get("fees_total") or 0,
+                payment_includes_interest=raw.get("payment_includes_interest", True),
+                frequency_unit=raw.get("frequency_unit") or "month",
+                frequency_interval=raw.get("frequency_interval") or 1,
+                next_due_date=raw.get("next_due_date"),
+                payment_method_id=method_id,
+                category_id=category_id,
+                tag_ids=tag_ids,
+                budget_excluded=bool(raw.get("budget_excluded", False)),
+                note=raw.get("note"),
+            )
+            existing_plan_keys[key] = saved
+            if old_id is not None:
+                plan_map[old_id] = saved
+            imported_plans += 1
+        except Exception:
+            continue
+
+    imported_groups = 0
+    existing_group_names = {
+        str(row.get("description") or "").strip().casefold()
+        for row in list_financing_budget_groups(user_id)
+    }
+    for raw in payload.get("financing_budget_groups") or []:
+        try:
+            name = str(raw.get("description") or "").strip()
+            if not name or name.casefold() in existing_group_names:
+                continue
+            mapped = [
+                plan_map[int(old_id)]
+                for old_id in (raw.get("financing_plan_ids") or [])
+                if int(old_id) in plan_map
+            ]
+            if not mapped:
+                continue
+            save_financing_budget_group(
+                user_id,
+                description=name,
+                plan_ids=mapped,
+                effective_start=raw.get("effective_start"),
+                effective_end=raw.get("effective_end"),
+                note=raw.get("note"),
+            )
+            existing_group_names.add(name.casefold())
+            imported_groups += 1
+        except Exception:
+            continue
+
+    imported_loans = 0
+    owned_existing = {
+        (
+            str(row.get("title") or "").strip().casefold(),
+            Decimal(row.get("original_balance") or 0).quantize(Decimal("0.01")),
+        )
+        for row in list_shared_loans(user_id)
+        if row.get("is_owner")
+    }
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id,email FROM users WHERE is_active=TRUE;")
+            user_by_email = {
+                str(row["email"]).strip().casefold(): int(row["id"])
+                for row in cur.fetchall()
+            }
+    for raw in payload.get("shared_loans") or []:
+        try:
+            key = (
+                str(raw.get("title") or "").strip().casefold(),
+                Decimal(str(raw.get("original_balance") or 0)).quantize(Decimal("0.01")),
+            )
+            if key in owned_existing:
+                continue
+            members = []
+            for member in raw.get("members") or []:
+                member_id = user_by_email.get(str(member.get("email") or "").strip().casefold())
+                if member_id and member_id != int(user_id):
+                    members.append(
+                        {
+                            "user_id": member_id,
+                            "role": member.get("role") or "observer",
+                            "permission": member.get("permission") or "view",
+                        }
+                    )
+            loan_id = save_shared_loan(
+                user_id,
+                title=raw.get("title") or "Prêt restauré",
+                lender_name=raw.get("lender_name"),
+                borrower_name=raw.get("borrower_name"),
+                original_balance=raw.get("original_balance") or 0,
+                current_balance=raw.get("current_balance"),
+                annual_interest_rate=raw.get("annual_interest_rate") or 0,
+                payment_amount=raw.get("payment_amount"),
+                frequency_unit=raw.get("frequency_unit") or "month",
+                frequency_interval=raw.get("frequency_interval") or 1,
+                start_date=raw.get("start_date"),
+                next_due_date=raw.get("next_due_date"),
+                end_date=raw.get("end_date"),
+                note=raw.get("note"),
+                status=raw.get("status") or "active",
+                members=members,
+            )
+            # L'historique d'un prêt restauré est volontairement reconstitué en
+            # lecture seulement par une note synthétique; le solde actuel reste
+            # celui du fichier et aucun ancien mouvement n'est rejoué deux fois.
+            if raw.get("events"):
+                with get_connection() as conn:
+                    with conn.cursor() as cur:
+                        for event in reversed(raw.get("events") or []):
+                            cur.execute(
+                                """
+                                INSERT INTO finance_shared_loan_events (
+                                    loan_id,created_by_user_id,event_date,event_type,amount,
+                                    interest_amount,principal_amount,balance_after,note,created_at
+                                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,COALESCE(%s,NOW()));
+                                """,
+                                (
+                                    loan_id,user_id,event.get("event_date") or date.today(),
+                                    event.get("event_type") or "note",event.get("amount") or 0,
+                                    event.get("interest_amount") or 0,event.get("principal_amount") or 0,
+                                    event.get("balance_after") or raw.get("current_balance") or 0,
+                                    event.get("note"),event.get("created_at"),
+                                ),
+                            )
+                        conn.commit()
+            owned_existing.add(key)
+            imported_loans += 1
+        except Exception:
+            continue
+
+    return {
+        "installment_plans": imported_plans,
+        "financing_groups": imported_groups,
+        "shared_loans": imported_loans,
+    }

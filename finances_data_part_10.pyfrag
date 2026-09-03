@@ -1,0 +1,650 @@
+                            """,
+                            (
+                                user_id,item["item_type"],item["description"],
+                                item["input_frequency"],item["input_amount"],
+                                item.get("biweekly_override"),item.get("note"),
+                                item.get("sort_order") or 0,bool(item.get("is_active", True)),
+                                bool(item.get("sync_from_recurrence", True)),
+                                item.get("effective_start"), item.get("effective_end"),
+                            ),
+                        )
+                    budget_items_imported += 1
+                except Exception as error:
+                    failures.append(f"Budget : {item.get('description', '?')} : {error}")
+
+            conn.commit()
+
+    return {
+        "imported": imported_count,
+        "skipped": skipped_count,
+        "categories_created": categories_created,
+        "tags_created": tags_created,
+        "payment_methods_created": payment_methods_created,
+        "budget_items_imported": budget_items_imported,
+        "failures": failures,
+    }
+
+
+
+def payment_predicted_balance_summary(user_id):
+    """Soldes cumulatifs sans remise à zéro mensuelle."""
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    method.id AS payment_method_id,
+                    method.name AS payment_method_name,
+                    method.method_type,
+                    method.statement_day,
+                    method.payment_day,
+                    method.opening_balance,
+                    method.opening_balance_date,
+                    method.opening_balance_reconciled,
+                    method.is_active,
+                    method.sort_order,
+                    CASE
+                        WHEN method.opening_balance_reconciled = FALSE
+                        THEN method.opening_balance
+                        ELSE 0
+                    END AS opening_balance_pending,
+                    COALESCE(
+                        SUM(transaction.amount) FILTER (
+                            WHERE transaction.reconciliation_status = 'unreconciled'
+                              AND transaction.status = 'confirmed'
+                              AND transaction.transaction_type = 'expense'
+                        ),
+                        0
+                    ) AS confirmed_expenses,
+                    COALESCE(
+                        SUM(transaction.amount) FILTER (
+                            WHERE transaction.reconciliation_status = 'unreconciled'
+                              AND transaction.status = 'confirmed'
+                              AND transaction.transaction_type = 'income'
+                        ),
+                        0
+                    ) AS confirmed_incomes,
+                    COALESCE(
+                        SUM(transaction.amount) FILTER (
+                            WHERE transaction.reconciliation_status = 'unreconciled'
+                              AND transaction.status = 'planned'
+                              AND transaction.transaction_type = 'expense'
+                        ),
+                        0
+                    ) AS planned_expenses,
+                    COALESCE(
+                        SUM(transaction.amount) FILTER (
+                            WHERE transaction.reconciliation_status = 'unreconciled'
+                              AND transaction.status = 'planned'
+                              AND transaction.transaction_type = 'income'
+                        ),
+                        0
+                    ) AS planned_incomes,
+                    COUNT(transaction.id) FILTER (
+                        WHERE transaction.reconciliation_status = 'unreconciled'
+                          AND transaction.status = 'confirmed'
+                    ) AS confirmed_count,
+                    COUNT(transaction.id) FILTER (
+                        WHERE transaction.reconciliation_status = 'unreconciled'
+                          AND transaction.status = 'planned'
+                    ) AS planned_count,
+                    MIN(transaction.transaction_date) FILTER (
+                        WHERE transaction.reconciliation_status = 'unreconciled'
+                          AND transaction.status = 'confirmed'
+                    ) AS oldest_unreconciled_date,
+                    (
+                        SELECT MAX(session.reconciliation_date)
+                        FROM finance_reconciliation_sessions AS session
+                        WHERE session.user_id = method.user_id
+                          AND session.payment_method_id = method.id
+                          AND session.status = 'completed'
+                    ) AS last_reconciliation_date
+                FROM finance_payment_methods AS method
+                LEFT JOIN finance_transactions AS transaction
+                    ON transaction.user_id = method.user_id
+                   AND transaction.payment_method_id = method.id
+                WHERE method.user_id = %s
+                GROUP BY method.id
+                ORDER BY
+                    method.is_active DESC,
+                    method.sort_order,
+                    LOWER(method.name),
+                    method.id;
+                """,
+                (user_id,),
+            )
+            rows = cur.fetchall()
+
+    result = []
+    for row in rows:
+        current_balance = (
+            Decimal(row["opening_balance_pending"])
+            + Decimal(row["confirmed_expenses"])
+            - Decimal(row["confirmed_incomes"])
+        )
+        planned_impact = (
+            Decimal(row["planned_expenses"])
+            - Decimal(row["planned_incomes"])
+        )
+        result.append(
+            {
+                **dict(row),
+                "current_balance": current_balance,
+                "planned_impact": planned_impact,
+                "predicted_balance": current_balance + planned_impact,
+            }
+        )
+    return result
+
+
+def count_unassigned_confirmed_transactions(user_id):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) AS total
+                FROM finance_transactions
+                WHERE user_id = %s
+                  AND status = 'confirmed'
+                  AND payment_method_id IS NULL;
+                """,
+                (user_id,),
+            )
+            return int(cur.fetchone()["total"])
+
+
+def list_unreconciled_transactions(
+    user_id,
+    payment_method_id,
+    start_date=None,
+    end_date=None,
+    query=None,
+):
+    return list_transactions(
+        user_id,
+        start_date=start_date,
+        end_date=end_date,
+        status="confirmed",
+        payment_method_id=payment_method_id,
+        reconciliation_status="unreconciled",
+        query=query,
+        limit=10000,
+    )
+
+
+def bulk_assign_payment_method(
+    user_id,
+    transaction_ids,
+    payment_method_id,
+):
+    ids = sorted({int(value) for value in (transaction_ids or [])})
+    if not ids:
+        raise ValueError("Sélectionnez au moins une transaction.")
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            validated_method = _validate_payment_method(
+                cur,
+                user_id,
+                payment_method_id,
+            )
+            cur.execute(
+                """
+                UPDATE finance_transactions
+                SET payment_method_id = %s,
+                    updated_at = NOW()
+                WHERE user_id = %s
+                  AND id = ANY(%s);
+                """,
+                (validated_method, user_id, ids),
+            )
+            if cur.rowcount != len(ids):
+                raise ValueError(
+                    "Certaines transactions sélectionnées sont introuvables."
+                )
+            conn.commit()
+    return len(ids)
+
+
+def list_unassigned_transactions(
+    user_id,
+    query=None,
+    limit=500,
+):
+    rows = list_transactions(
+        user_id,
+        status="confirmed",
+        query=query,
+        limit=max(int(limit) * 5, 1000),
+    )
+    return [
+        row
+        for row in rows
+        if row["payment_method_id"] is None
+    ][: int(limit)]
+
+
+def create_reconciliation_session(
+    user_id,
+    payment_method_id,
+    transaction_ids,
+    statement_date,
+    statement_balance=None,
+    due_date=None,
+    reconciliation_date=None,
+    note=None,
+    include_opening_balance=False,
+    difference_resolution="balanced",
+    difference_explanation=None,
+):
+    ids = sorted({int(value) for value in (transaction_ids or [])})
+    parsed_statement_date = (
+        statement_date
+        if isinstance(statement_date, date)
+        else date.fromisoformat(str(statement_date))
+    )
+    parsed_due_date = (
+        due_date
+        if isinstance(due_date, date)
+        else (date.fromisoformat(str(due_date)) if due_date else None)
+    )
+    parsed_reconciliation_date = (
+        reconciliation_date
+        if isinstance(reconciliation_date, date)
+        else (
+            date.fromisoformat(str(reconciliation_date))
+            if reconciliation_date
+            else date.today()
+        )
+    )
+    parsed_statement_balance = _decimal_value(
+        statement_balance, "Le solde du relevé", allow_blank=True
+    )
+    cleaned_note = _text(note, "La note", 1000)
+    cleaned_explanation = _text(
+        difference_explanation, "L’explication de l’écart", 1000
+    )
+    resolution = str(difference_resolution or "balanced").strip().lower()
+    if resolution not in {"balanced", "justified", "carry"}:
+        raise ValueError("Traitement de la différence invalide.")
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            payment_method_id = _validate_payment_method(
+                cur, user_id, payment_method_id
+            )
+            cur.execute(
+                """
+                SELECT *
+                FROM finance_payment_methods
+                WHERE id = %s AND user_id = %s
+                FOR UPDATE;
+                """,
+                (payment_method_id, user_id),
+            )
+            method = cur.fetchone()
+            if not method:
+                raise ValueError("Mode de paiement introuvable.")
+
+            # Le dernier relevé finalisé devient la référence du suivant.
+            cur.execute(
+                """
+                SELECT
+                    id, statement_date, statement_balance, expected_balance,
+                    closing_reference_balance
+                FROM finance_reconciliation_sessions
+                WHERE user_id = %s
+                  AND payment_method_id = %s
+                  AND status = 'completed'
+                ORDER BY statement_date DESC, id DESC
+                LIMIT 1
+                FOR UPDATE;
+                """,
+                (user_id, payment_method_id),
+            )
+            previous = cur.fetchone()
+            if previous:
+                reference_balance = previous.get("closing_reference_balance")
+                if reference_balance is None:
+                    reference_balance = previous.get("statement_balance")
+                if reference_balance is None:
+                    reference_balance = previous.get("expected_balance")
+                reference_balance = Decimal(reference_balance or 0)
+                reference_date = previous.get("statement_date")
+            else:
+                reference_balance = Decimal(method.get("opening_balance") or 0)
+                reference_date = method.get("opening_balance_date")
+
+            opening_amount = Decimal("0.00")
+            # Dès la première séance V1.9, le solde initial devient le point
+            # de référence du relevé et ne doit plus rester artificiellement
+            # dans le solde « à concilier » des mois suivants.
+            if (
+                previous is None
+                and not method["opening_balance_reconciled"]
+                and Decimal(method["opening_balance"] or 0) != 0
+            ):
+                include_opening_balance = True
+
+            if include_opening_balance:
+                if method["opening_balance_reconciled"]:
+                    raise ValueError("Le solde initial est déjà concilié.")
+                opening_amount = Decimal(method["opening_balance"] or 0)
+                if opening_amount == 0:
+                    include_opening_balance = False
+
+            transaction_total = Decimal("0.00")
+            if ids:
+                cur.execute(
+                    """
+                    SELECT id, transaction_type, amount
+                    FROM finance_transactions
+                    WHERE user_id = %s
+                      AND payment_method_id = %s
+                      AND id = ANY(%s)
+                      AND status = 'confirmed'
+                      AND reconciliation_status = 'unreconciled'
+                    FOR UPDATE;
+                    """,
+                    (user_id, payment_method_id, ids),
+                )
+                selected = cur.fetchall()
+                if len(selected) != len(ids):
+                    raise ValueError(
+                        "Une transaction sélectionnée n’est plus disponible "
+                        "pour cette conciliation."
+                    )
+                for row in selected:
+                    transaction_total += (
+                        Decimal(row["amount"])
+                        if row["transaction_type"] == "expense"
+                        else -Decimal(row["amount"])
+                    )
+
+            if not ids and not include_opening_balance:
+                raise ValueError(
+                    "Sélectionnez au moins une transaction ou le solde initial."
+                )
+
+            selected_total = transaction_total
+            expected_balance = reference_balance + transaction_total
+            difference = (
+                parsed_statement_balance - expected_balance
+                if parsed_statement_balance is not None
+                else None
+            )
+
+            if difference is None or abs(difference) < Decimal(".01"):
+                resolution = "balanced"
+                cleaned_explanation = None
+            elif resolution == "justified":
+                if not cleaned_explanation:
+                    raise ValueError(
+                        "Expliquez la différence avant de la clore comme écart justifié."
+                    )
+            elif resolution == "balanced":
+                raise ValueError(
+                    "La conciliation ne balance pas. Choisissez de justifier ou de reporter l’écart."
+                )
+
+            if resolution == "carry":
+                closing_reference_balance = expected_balance
+            elif parsed_statement_balance is not None:
+                closing_reference_balance = parsed_statement_balance
+            else:
+                closing_reference_balance = expected_balance
+
+            cur.execute(
+                """
+                INSERT INTO finance_reconciliation_sessions (
+                    user_id, payment_method_id, statement_date,
+                    statement_balance, due_date, reconciliation_date, note,
+                    selected_total, difference, included_opening_balance,
+                    opening_balance_amount, reference_balance, reference_date,
+                    expected_balance, closing_reference_balance,
+                    difference_resolution, difference_explanation
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                )
+                RETURNING id;
+                """,
+                (
+                    user_id, payment_method_id, parsed_statement_date,
+                    parsed_statement_balance, parsed_due_date,
+                    parsed_reconciliation_date, cleaned_note, selected_total,
+                    difference, bool(include_opening_balance), opening_amount,
+                    reference_balance, reference_date, expected_balance,
+                    closing_reference_balance, resolution, cleaned_explanation,
+                ),
+            )
+            session_id = int(cur.fetchone()["id"])
+
+            for transaction_id in ids:
+                cur.execute(
+                    """
+                    INSERT INTO finance_reconciliation_session_transactions (
+                        session_id, transaction_id
+                    )
+                    VALUES (%s, %s);
+                    """,
+                    (session_id, transaction_id),
+                )
+
+            if ids:
+                cur.execute(
+                    """
+                    UPDATE finance_transactions
+                    SET reconciliation_status = 'reconciled',
+                        reconciliation_date = %s,
+                        reconciliation_session_id = %s,
+                        updated_at = NOW()
+                    WHERE user_id = %s
+                      AND id = ANY(%s);
+                    """,
+                    (
+                        parsed_reconciliation_date, session_id, user_id, ids,
+                    ),
+                )
+
+            if include_opening_balance:
+                cur.execute(
+                    """
+                    UPDATE finance_payment_methods
+                    SET opening_balance_reconciled = TRUE,
+                        updated_at = NOW()
+                    WHERE id = %s AND user_id = %s;
+                    """,
+                    (payment_method_id, user_id),
+                )
+
+            # Une finalisation réussie remplace le brouillon éventuel de la carte.
+            cur.execute(
+                """
+                DELETE FROM finance_reconciliation_drafts
+                WHERE user_id=%s AND payment_method_id=%s;
+                """,
+                (user_id, payment_method_id),
+            )
+
+            conn.commit()
+
+    return {
+        "session_id": session_id,
+        "selected_total": selected_total,
+        "reference_balance": reference_balance,
+        "expected_balance": expected_balance,
+        "statement_balance": parsed_statement_balance,
+        "difference": difference,
+        "difference_resolution": resolution,
+        "closing_reference_balance": closing_reference_balance,
+        "transaction_count": len(ids),
+    }
+
+
+def list_reconciliation_sessions(
+    user_id,
+    payment_method_id=None,
+    include_cancelled=True,
+    limit=100,
+):
+    conditions = ["session.user_id = %s"]
+    params = [user_id]
+    if payment_method_id:
+        conditions.append("session.payment_method_id = %s")
+        params.append(payment_method_id)
+    if not include_cancelled:
+        conditions.append("session.status = 'completed'")
+    params.append(int(limit))
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT
+                    session.*,
+                    method.name AS payment_method_name,
+                    COUNT(link.transaction_id)
+                        FILTER (WHERE link.is_active = TRUE)
+                        AS active_transaction_count,
+                    COUNT(link.transaction_id)
+                        FILTER (WHERE link.is_active = FALSE)
+                        AS removed_transaction_count
+                FROM finance_reconciliation_sessions AS session
+                JOIN finance_payment_methods AS method
+                    ON method.id = session.payment_method_id
+                LEFT JOIN finance_reconciliation_session_transactions AS link
+                    ON link.session_id = session.id
+                WHERE {" AND ".join(conditions)}
+                GROUP BY session.id, method.id
+                ORDER BY
+                    session.statement_date DESC,
+                    session.id DESC
+                LIMIT %s;
+                """,
+                params,
+            )
+            return cur.fetchall()
+
+
+def get_reconciliation_session(
+    user_id,
+    session_id,
+):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    session.*,
+                    method.name AS payment_method_name
+                FROM finance_reconciliation_sessions AS session
+                JOIN finance_payment_methods AS method
+                    ON method.id = session.payment_method_id
+                WHERE session.id = %s
+                  AND session.user_id = %s;
+                """,
+                (session_id, user_id),
+            )
+            session = cur.fetchone()
+            if not session:
+                raise ValueError("Séance de conciliation introuvable.")
+
+            cur.execute(
+                """
+                SELECT
+                    transaction.id,
+                    transaction.transaction_date,
+                    transaction.transaction_type,
+                    transaction.amount,
+                    transaction.description,
+                    transaction.reconciliation_date,
+                    link.is_active,
+                    link.removed_at
+                FROM finance_reconciliation_session_transactions AS link
+                JOIN finance_transactions AS transaction
+                    ON transaction.id = link.transaction_id
+                WHERE link.session_id = %s
+                ORDER BY
+                    transaction.transaction_date,
+                    transaction.id;
+                """,
+                (session_id,),
+            )
+            transactions = cur.fetchall()
+
+    return {
+        "session": session,
+        "transactions": transactions,
+    }
+
+
+def remove_transaction_from_reconciliation_session(
+    user_id,
+    session_id,
+    transaction_id,
+):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT status
+                FROM finance_reconciliation_sessions
+                WHERE id = %s AND user_id = %s
+                FOR UPDATE;
+                """,
+                (session_id, user_id),
+            )
+            session = cur.fetchone()
+            if not session:
+                raise ValueError("Séance de conciliation introuvable.")
+            if session["status"] != "completed":
+                raise ValueError("Cette séance est déjà annulée.")
+
+            cur.execute(
+                """
+                UPDATE finance_reconciliation_session_transactions
+                SET is_active = FALSE,
+                    removed_at = NOW()
+                WHERE session_id = %s
+                  AND transaction_id = %s
+                  AND is_active = TRUE;
+                """,
+                (session_id, transaction_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError(
+                    "Cette transaction ne fait plus partie de la séance."
+                )
+
+            cur.execute(
+                """
+                UPDATE finance_transactions
+                SET reconciliation_status = 'unreconciled',
+                    reconciliation_date = NULL,
+                    reconciliation_session_id = NULL,
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND user_id = %s;
+                """,
+                (transaction_id, user_id),
+            )
+            _refresh_reconciliation_session_totals(cur, session_id)
+            conn.commit()
+
+
+def cancel_reconciliation_session(
+    user_id,
+    session_id,
+):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM finance_reconciliation_sessions
+                WHERE id = %s AND user_id = %s
+                FOR UPDATE;
+                """,

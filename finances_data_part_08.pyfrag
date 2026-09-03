@@ -1,0 +1,650 @@
+    end_month=None,
+    max_carry=None,
+    goal_id=None,
+):
+    if goal_type not in {"category", "tag"}:
+        raise ValueError("Type d’objectif invalide.")
+    if carry_policy not in CARRY_POLICIES:
+        raise ValueError("Politique de report invalide.")
+    amount = _money(monthly_amount)
+    start = _month_start(start_month)
+    end = _month_start(end_month) if end_month else None
+    max_value = (
+        _money(max_carry, allow_zero=True)
+        if max_carry not in (None, "")
+        else None
+    )
+    category_id = int(target_id) if goal_type == "category" else None
+    tag_id = int(target_id) if goal_type == "tag" else None
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            _validate_links(
+                cur,
+                user_id,
+                category_id,
+                [tag_id] if tag_id else [],
+            )
+            if goal_id:
+                cur.execute("""
+                    UPDATE finance_goals
+                    SET goal_type=%s,category_id=%s,tag_id=%s,
+                        monthly_amount=%s,carry_policy=%s,max_carry=%s,
+                        start_month=%s,end_month=%s,is_active=TRUE,updated_at=NOW()
+                    WHERE id=%s AND user_id=%s;
+                """, (
+                    goal_type, category_id, tag_id, amount, carry_policy,
+                    max_value, start, end, goal_id, user_id,
+                ))
+            else:
+                cur.execute("""
+                    INSERT INTO finance_goals
+                        (user_id,goal_type,category_id,tag_id,monthly_amount,
+                         carry_policy,max_carry,start_month,end_month)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s);
+                """, (
+                    user_id, goal_type, category_id, tag_id, amount,
+                    carry_policy, max_value, start, end,
+                ))
+            conn.commit()
+
+
+def list_goals(user_id):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    g.*,
+                    CASE WHEN g.goal_type='tag' THEN tag.name
+                         WHEN parent.id IS NULL THEN category.name
+                         ELSE parent.name || ' › ' || category.name
+                    END AS target_name
+                FROM finance_goals g
+                LEFT JOIN finance_categories category ON category.id=g.category_id
+                LEFT JOIN finance_categories parent ON parent.id=category.parent_id
+                LEFT JOIN finance_tags tag ON tag.id=g.tag_id
+                WHERE g.user_id=%s
+                ORDER BY g.is_active DESC,target_name;
+            """, (user_id,))
+            return cur.fetchall()
+
+
+def toggle_goal(user_id, goal_id, is_active):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE finance_goals SET is_active=%s,updated_at=NOW()
+                WHERE id=%s AND user_id=%s;
+            """, (bool(is_active), goal_id, user_id))
+            conn.commit()
+
+
+def _goal_spent(cur, goal, month):
+    next_month = _add_months(month, 1)
+    realized_end = min(
+        next_month,
+        date.today() + timedelta(days=1),
+    )
+
+    if realized_end <= month:
+        return Decimal("0.00")
+
+    if goal["goal_type"] == "tag":
+        cur.execute("""
+            SELECT COALESCE(SUM(t.amount),0) AS total
+            FROM finance_transactions t
+            JOIN finance_transaction_tags tt ON tt.transaction_id=t.id
+            WHERE t.user_id=%s AND t.transaction_type='expense'
+              AND t.status='confirmed'
+              AND COALESCE(t.budget_excluded, FALSE) = FALSE
+              AND t.transaction_date>=%s AND t.transaction_date<%s
+              AND tt.tag_id=%s;
+        """, (
+            goal["user_id"],
+            month,
+            realized_end,
+            goal["tag_id"],
+        ))
+    else:
+        cur.execute("""
+            SELECT COALESCE(SUM(t.amount),0) AS total
+            FROM finance_transactions t
+            LEFT JOIN finance_categories c ON c.id=t.category_id
+            WHERE t.user_id=%s AND t.transaction_type='expense'
+              AND t.status='confirmed'
+              AND COALESCE(t.budget_excluded, FALSE) = FALSE
+              AND t.transaction_date>=%s AND t.transaction_date<%s
+              AND (t.category_id=%s OR c.parent_id=%s);
+        """, (
+            goal["user_id"],
+            month,
+            realized_end,
+            goal["category_id"],
+            goal["category_id"],
+        ))
+    return Decimal(cur.fetchone()["total"])
+
+
+def goal_progress(user_id, month_value):
+    month = _month_start(month_value)
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    g.*,
+                    CASE WHEN g.goal_type='tag' THEN tag.name
+                         WHEN parent.id IS NULL THEN category.name
+                         ELSE parent.name || ' › ' || category.name
+                    END AS target_name
+                FROM finance_goals g
+                LEFT JOIN finance_categories category ON category.id=g.category_id
+                LEFT JOIN finance_categories parent ON parent.id=category.parent_id
+                LEFT JOIN finance_tags tag ON tag.id=g.tag_id
+                WHERE g.user_id=%s AND g.is_active=TRUE
+                  AND g.start_month<=%s
+                  AND (g.end_month IS NULL OR g.end_month>=%s)
+                ORDER BY target_name;
+            """, (user_id, month, month))
+            goals = cur.fetchall()
+            results = []
+            for goal in goals:
+                cur.execute("""
+                    SELECT * FROM finance_goal_months
+                    WHERE goal_id=%s AND month_start=%s;
+                """, (goal["id"], month))
+                snapshot = cur.fetchone()
+                if not snapshot:
+                    carry_in = Decimal("0.00")
+                    previous_month = _add_months(month, -1)
+                    if previous_month >= goal["start_month"]:
+                        previous = next(
+                            (
+                                item for item in goal_progress(user_id, previous_month)
+                                if item["goal_id"] == goal["id"]
+                            ),
+                            None,
+                        )
+                        if previous:
+                            carry_in = previous["carry_out"]
+                    if goal["max_carry"] is not None:
+                        limit = Decimal(goal["max_carry"])
+                        carry_in = max(-limit, min(limit, carry_in))
+                    cur.execute("""
+                        INSERT INTO finance_goal_months
+                            (goal_id,user_id,month_start,base_amount,carry_in,carry_policy)
+                        VALUES (%s,%s,%s,%s,%s,%s)
+                        ON CONFLICT (goal_id,month_start) DO NOTHING;
+                    """, (
+                        goal["id"], user_id, month, goal["monthly_amount"],
+                        carry_in, goal["carry_policy"],
+                    ))
+                    conn.commit()
+                    snapshot = {
+                        "base_amount": goal["monthly_amount"],
+                        "carry_in": carry_in,
+                        "carry_policy": goal["carry_policy"],
+                    }
+                spent = _goal_spent(cur, goal, month)
+                available = (
+                    Decimal(snapshot["base_amount"])
+                    + Decimal(snapshot["carry_in"])
+                )
+                difference = available - spent
+                policy = snapshot["carry_policy"]
+                carry_out = Decimal("0.00")
+                if difference > 0 and policy in {"unused", "both"}:
+                    carry_out = difference
+                elif difference < 0 and policy in {"overspend", "both"}:
+                    carry_out = difference
+                if goal["max_carry"] is not None:
+                    limit = Decimal(goal["max_carry"])
+                    carry_out = max(-limit, min(limit, carry_out))
+                percentage = float(spent / available * 100) if available > 0 else 0
+                results.append({
+                    "goal_id": int(goal["id"]),
+                    "target_name": goal["target_name"],
+                    "base_amount": Decimal(snapshot["base_amount"]),
+                    "carry_in": Decimal(snapshot["carry_in"]),
+                    "available": available,
+                    "spent": spent,
+                    "remaining": available - spent,
+                    "carry_out": carry_out,
+                    "percentage": percentage,
+                    "carry_policy": policy,
+                })
+            return results
+
+
+
+def _normalized_header(value):
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(character for character in text if not unicodedata.combining(character))
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+def _row_lookup(row):
+    return {_normalized_header(key): value for key, value in row.items()}
+
+
+def _pick(row, *names):
+    lookup = _row_lookup(row)
+    for name in names:
+        key = _normalized_header(name)
+        if key in lookup:
+            return lookup[key]
+    return None
+
+
+def _parse_import_amount(value):
+    text = str(value or "").strip().replace("\u00a0", "").replace(" ", "")
+    if not text:
+        raise ValueError("Montant absent.")
+    if "," in text and "." not in text:
+        text = text.replace(",", ".")
+    try:
+        amount = abs(Decimal(text)).quantize(Decimal("0.01"))
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValueError("Le montant est invalide.")
+    if amount <= 0:
+        raise ValueError("Le montant doit être supérieur à zéro.")
+    return amount
+
+
+def _parse_import_type(value):
+    normalized = _normalized_header(value)
+    if normalized in {"expense", "depense", "depenses"}:
+        return "expense"
+    if normalized in {"income", "revenu", "revenus"}:
+        return "income"
+    raise ValueError(f"Type de transaction inconnu : {value}")
+
+
+def _parse_import_status(value):
+    normalized = _normalized_header(value)
+    if not normalized or normalized in {"confirmed", "confirmee", "confirme"}:
+        return "confirmed"
+    if normalized in {"planned", "prevue", "prevu", "a confirmer"}:
+        return "planned"
+    raise ValueError(f"Statut inconnu : {value}")
+
+def _parse_reconciliation_status(value):
+    normalized = _normalized_header(value)
+    if not normalized or normalized in {
+        "unreconciled",
+        "a concilier",
+        "non conciliee",
+        "non concilie",
+    }:
+        return "unreconciled"
+    if normalized in {
+        "reconciled",
+        "conciliee",
+        "concilie",
+    }:
+        return "reconciled"
+    raise ValueError(
+        f"Statut de conciliation inconnu : {value}"
+    )
+
+
+
+def _parse_import_bool(value):
+    if isinstance(value, bool):
+        return value
+    normalized = _normalized_header(value)
+    return normalized in {
+        "1", "true", "vrai", "oui", "yes", "hors budget", "exclue", "exclu"
+    }
+
+
+def _split_import_tags(value):
+    if isinstance(value, list):
+        candidates = value
+    else:
+        candidates = re.split(r"\s*[|;,]\s*", str(value or "").strip())
+    result = []
+    seen = set()
+    for candidate in candidates:
+        name = str(candidate or "").strip()
+        key = name.casefold()
+        if name and key not in seen:
+            seen.add(key)
+            result.append(name[:80])
+    return result
+
+
+def _stable_import_key(source, payload, occurrence):
+    canonical = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return f"{digest}:{occurrence}"
+
+
+def _parse_spendee_rows(rows):
+    normalized_rows = []
+    errors = []
+    occurrence_counts = {}
+    timezone = ZoneInfo("America/Toronto")
+
+    for row_number, row in enumerate(rows, start=2):
+        try:
+            currency = str(_pick(row, "Currency") or "CAD").strip().upper()
+            if currency and currency != "CAD":
+                raise ValueError(
+                    f"La devise {currency} n’est pas prise en charge par cette V1."
+                )
+
+            original_timestamp = str(_pick(row, "Date") or "").strip()
+            timestamp = datetime.fromisoformat(original_timestamp.replace("Z", "+00:00"))
+            if timestamp.tzinfo is not None:
+                transaction_date = timestamp.astimezone(timezone).date()
+            else:
+                transaction_date = timestamp.date()
+
+            category_name = str(_pick(row, "Category name") or "").strip()
+            original_note = str(_pick(row, "Note") or "").strip()
+            description = original_note or category_name or "Transaction importée"
+            tag_names = _split_import_tags(_pick(row, "Labels"))
+            transaction_type = _parse_import_type(_pick(row, "Type"))
+            amount = _parse_import_amount(_pick(row, "Amount"))
+
+            payload = {
+                "date": original_timestamp,
+                "wallet": str(_pick(row, "Wallet") or "").strip(),
+                "type": transaction_type,
+                "category": category_name,
+                "amount": str(amount),
+                "currency": currency,
+                "note": original_note,
+                "tags": tag_names,
+                "author": str(_pick(row, "Author") or "").strip(),
+            }
+            base = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+            occurrence_counts[base] = occurrence_counts.get(base, 0) + 1
+
+            normalized_rows.append(
+                {
+                    "transaction_date": transaction_date,
+                    "transaction_type": transaction_type,
+                    "amount": amount,
+                    "description": description[:160],
+                    "category_name": category_name[:100] or None,
+                    "tag_names": tag_names,
+                    "note": None,
+                    "status": "confirmed",
+                    "payment_method_name": None,
+                    "reconciliation_status": "unreconciled",
+                    "reconciliation_date": None,
+                    "budget_excluded": False,
+                    "import_source": "spendee",
+                    "import_key": _stable_import_key(
+                        "spendee", payload, occurrence_counts[base]
+                    ),
+                    "original_row": row_number,
+                }
+            )
+        except Exception as error:
+            errors.append(f"Ligne {row_number} : {error}")
+
+    return normalized_rows, errors, "Spendee CSV"
+
+
+def _parse_jf_csv_rows(rows):
+    normalized_rows = []
+    errors = []
+    occurrence_counts = {}
+
+    for row_number, row in enumerate(
+        rows,
+        start=2,
+    ):
+        try:
+            raw_date = str(
+                _pick(
+                    row,
+                    "Date",
+                    "transaction_date",
+                )
+                or ""
+            ).strip()
+
+            if "T" in raw_date:
+                transaction_date = (
+                    datetime.fromisoformat(
+                        raw_date.replace(
+                            "Z",
+                            "+00:00",
+                        )
+                    ).date()
+                )
+            else:
+                transaction_date = (
+                    date.fromisoformat(
+                        raw_date
+                    )
+                )
+
+            transaction_type = (
+                _parse_import_type(
+                    _pick(
+                        row,
+                        "Type",
+                        "transaction_type",
+                    )
+                )
+            )
+            amount = _parse_import_amount(
+                _pick(
+                    row,
+                    "Montant",
+                    "Amount",
+                    "amount",
+                )
+            )
+            category_name = str(
+                _pick(
+                    row,
+                    "Catégorie",
+                    "Categorie",
+                    "Category",
+                    "category_full_name",
+                )
+                or ""
+            ).strip()
+            tag_names = _split_import_tags(
+                _pick(
+                    row,
+                    "Étiquettes",
+                    "Etiquettes",
+                    "Tags",
+                    "tag_names",
+                )
+            )
+            description = str(
+                _pick(
+                    row,
+                    "Description",
+                    "description",
+                )
+                or category_name
+                or "Transaction importée"
+            ).strip()
+            note = (
+                str(
+                    _pick(
+                        row,
+                        "Note",
+                        "note",
+                    )
+                    or ""
+                ).strip()
+                or None
+            )
+            status = _parse_import_status(
+                _pick(
+                    row,
+                    "Statut",
+                    "status",
+                )
+            )
+            payment_method_name = (
+                str(
+                    _pick(
+                        row,
+                        "Mode de paiement",
+                        "Mode paiement",
+                        "Payment method",
+                        "payment_method_name",
+                    )
+                    or ""
+                ).strip()
+                or None
+            )
+            reconciliation_status = (
+                _parse_reconciliation_status(
+                    _pick(
+                        row,
+                        "Conciliation",
+                        "Statut de conciliation",
+                        "reconciliation_status",
+                    )
+                )
+            )
+            raw_reconciliation_date = str(
+                _pick(
+                    row,
+                    "Date de conciliation",
+                    "reconciliation_date",
+                )
+                or ""
+            ).strip()
+            reconciliation_date = (
+                date.fromisoformat(
+                    raw_reconciliation_date
+                )
+                if raw_reconciliation_date
+                else None
+            )
+            if reconciliation_status == "unreconciled":
+                reconciliation_date = None
+
+            budget_excluded = _parse_import_bool(
+                _pick(
+                    row,
+                    "Hors budget",
+                    "Exclue du budget",
+                    "Exclu du budget",
+                    "budget_excluded",
+                )
+            )
+            bank_programmed = _parse_import_bool(
+                _pick(
+                    row,
+                    "Programmée à la banque",
+                    "Programmee a la banque",
+                    "bank_programmed",
+                )
+            )
+            reminder_enabled = _parse_import_bool(
+                _pick(
+                    row,
+                    "Rappel actif",
+                    "reminder_enabled",
+                )
+            )
+            reminder_time = _normalize_reminder_time(
+                _pick(
+                    row,
+                    "Heure du rappel",
+                    "reminder_time",
+                )
+                or "09:00"
+            )
+
+            source = str(
+                _pick(
+                    row,
+                    "Source importation",
+                    "import_source",
+                )
+                or "jf_apps_csv"
+            ).strip()[:80]
+            supplied_key = str(
+                _pick(
+                    row,
+                    "Clé importation",
+                    "Cle importation",
+                    "import_key",
+                )
+                or ""
+            ).strip()
+
+            payload = {
+                "date": transaction_date.isoformat(),
+                "type": transaction_type,
+                "amount": str(amount),
+                "description": description,
+                "category": category_name,
+                "tags": tag_names,
+                "note": note,
+                "status": status,
+                "payment_method": payment_method_name,
+                "reconciliation_status": reconciliation_status,
+                "reconciliation_date": (
+                    reconciliation_date.isoformat()
+                    if reconciliation_date
+                    else None
+                ),
+            }
+            base = json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                default=str,
+            )
+            occurrence_counts[base] = (
+                occurrence_counts.get(
+                    base,
+                    0,
+                )
+                + 1
+            )
+            import_key = (
+                supplied_key
+                or _stable_import_key(
+                    source,
+                    payload,
+                    occurrence_counts[base],
+                )
+            )
+
+            normalized_rows.append(
+                {
+                    "transaction_date": transaction_date,
+                    "transaction_type": transaction_type,
+                    "amount": amount,
+                    "description": description[:160],
+                    "category_name": (
+                        category_name[:100]
+                        or None
+                    ),
+                    "tag_names": tag_names,
+                    "note": note,
+                    "status": status,
+                    "payment_method_name": (
+                        payment_method_name[:100]
+                        if payment_method_name
+                        else None
+                    ),
+                    "reconciliation_status": reconciliation_status,
+                    "reconciliation_date": reconciliation_date,
+                    "budget_excluded": budget_excluded,
+                    "bank_programmed": bank_programmed,
+                    "reminder_enabled": reminder_enabled,
+                    "reminder_time": reminder_time,
+                    "import_source": source,

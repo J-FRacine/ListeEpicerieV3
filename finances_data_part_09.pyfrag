@@ -1,0 +1,650 @@
+                    "import_key": import_key[:180],
+                    "original_row": row_number,
+                }
+            )
+        except Exception as error:
+            errors.append(
+                f"Ligne {row_number} : {error}"
+            )
+
+    return (
+        normalized_rows,
+        errors,
+        "JF Apps CSV",
+    )
+
+
+def _parse_jf_json(document):
+    if not isinstance(document, dict) or not isinstance(document.get("transactions"), list):
+        raise ValueError("Le fichier JSON ne contient pas une sauvegarde Finances reconnue.")
+    rows = []
+    for item in document["transactions"]:
+        if isinstance(item, dict):
+            rows.append(item)
+    parsed, errors, _ = _parse_jf_csv_rows(rows)
+
+    budget_items = []
+    for index, item in enumerate(document.get("budget_items") or [], start=1):
+        if not isinstance(item, dict):
+            continue
+        try:
+            item_type = str(item.get("item_type") or "").strip()
+            if item_type not in TRANSACTION_TYPES:
+                raise ValueError("type invalide")
+            input_frequency = str(item.get("input_frequency") or "monthly").strip()
+            if input_frequency not in BUDGET_INPUT_FREQUENCIES:
+                raise ValueError("fréquence invalide")
+            budget_items.append({
+                "item_type": item_type,
+                "description": _text(item.get("description"), "La description", 160, True),
+                "input_frequency": input_frequency,
+                "input_amount": _money(item.get("input_amount")),
+                "biweekly_override": (
+                    _money(item.get("biweekly_override"))
+                    if item.get("biweekly_override") not in (None, "")
+                    else None
+                ),
+                "note": _text(item.get("note"), "La note", 1000),
+                "sync_from_recurrence": bool(item.get("sync_from_recurrence", True)),
+                "sort_order": int(item.get("sort_order") or index),
+                "is_active": bool(item.get("is_active", True)),
+                "effective_start": _optional_date_value(
+                    item.get("effective_start"), "La date de début"
+                ),
+                "effective_end": _optional_date_value(
+                    item.get("effective_end"), "La date de fin"
+                ),
+            })
+        except Exception as error:
+            errors.append(f"Budget {index} : {error}")
+    return parsed, errors, "JF Apps JSON", budget_items
+
+
+def _csv_rows(text):
+    sample = text[:4096]
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
+    except csv.Error:
+        dialect = csv.excel
+    return list(csv.DictReader(io.StringIO(text), dialect=dialect))
+
+
+def _existing_import_state(user_id, rows):
+    if not rows:
+        return set(), set()
+
+    keys = [row["import_key"] for row in rows if row.get("import_key")]
+    sources = [row["import_source"] for row in rows if row.get("import_source")]
+    start_date = min(row["transaction_date"] for row in rows)
+    end_date = max(row["transaction_date"] for row in rows)
+
+    imported = set()
+    exact = set()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            if keys:
+                cur.execute(
+                    """
+                    SELECT import_source, import_key
+                    FROM finance_transactions
+                    WHERE user_id = %s
+                      AND import_key = ANY(%s)
+                      AND import_source = ANY(%s);
+                    """,
+                    (user_id, keys, sources),
+                )
+                imported = {
+                    (str(row["import_source"]), str(row["import_key"]))
+                    for row in cur.fetchall()
+                }
+
+            cur.execute(
+                """
+                SELECT
+                    transaction.transaction_date,
+                    transaction.transaction_type,
+                    transaction.amount,
+                    LOWER(TRIM(transaction.description)) AS description_key,
+                    LOWER(TRIM(COALESCE(
+                        CASE
+                            WHEN parent.id IS NULL THEN category.name
+                            ELSE parent.name || ' › ' || category.name
+                        END,
+                        ''
+                    ))) AS category_key
+                FROM finance_transactions AS transaction
+                LEFT JOIN finance_categories AS category
+                    ON category.id = transaction.category_id
+                LEFT JOIN finance_categories AS parent
+                    ON parent.id = category.parent_id
+                WHERE transaction.user_id = %s
+                  AND transaction.transaction_date BETWEEN %s AND %s;
+                """,
+                (user_id, start_date, end_date),
+            )
+            exact = {
+                (
+                    row["transaction_date"],
+                    row["transaction_type"],
+                    Decimal(row["amount"]),
+                    row["description_key"],
+                    row["category_key"],
+                )
+                for row in cur.fetchall()
+            }
+    return imported, exact
+
+
+def prepare_finance_import(user_id, filename, text):
+    if not str(text or "").strip():
+        raise ValueError("Le fichier est vide.")
+
+    lower_name = str(filename or "").lower()
+    budget_items = []
+    if lower_name.endswith(".json") or str(text).lstrip().startswith("{"):
+        rows, errors, format_name, budget_items = _parse_jf_json(json.loads(text))
+    else:
+        csv_rows = _csv_rows(text)
+        if not csv_rows:
+            raise ValueError("Le fichier CSV ne contient aucune transaction.")
+        headers = {_normalized_header(key) for key in csv_rows[0].keys()}
+        if {"wallet", "category name", "currency", "labels"}.issubset(headers):
+            rows, errors, format_name = _parse_spendee_rows(csv_rows)
+        else:
+            rows, errors, format_name = _parse_jf_csv_rows(csv_rows)
+
+    imported_keys, exact_keys = _existing_import_state(user_id, rows)
+    already_imported = 0
+    possible_duplicates = 0
+
+    for row in rows:
+        source_key = (row["import_source"], row["import_key"])
+        exact_key = (
+            row["transaction_date"],
+            row["transaction_type"],
+            Decimal(row["amount"]),
+            row["description"].strip().lower(),
+            str(row.get("category_name") or "").strip().lower(),
+        )
+        if source_key in imported_keys:
+            row["duplicate_reason"] = "already_imported"
+            already_imported += 1
+        elif exact_key in exact_keys:
+            row["duplicate_reason"] = "possible_duplicate"
+            possible_duplicates += 1
+        else:
+            row["duplicate_reason"] = None
+
+    return {
+        "format": format_name,
+        "rows": rows,
+        "errors": errors,
+        "total_rows": len(rows) + len(errors),
+        "valid_rows": len(rows),
+        "already_imported": already_imported,
+        "possible_duplicates": possible_duplicates,
+        "categories": sorted(
+            {row["category_name"] for row in rows if row.get("category_name")},
+            key=str.casefold,
+        ),
+        "tags": sorted(
+            {
+                tag
+                for row in rows
+                for tag in row.get(
+                    "tag_names",
+                    [],
+                )
+            },
+            key=str.casefold,
+        ),
+        "payment_methods": sorted(
+            {
+                row["payment_method_name"]
+                for row in rows
+                if row.get(
+                    "payment_method_name"
+                )
+            },
+            key=str.casefold,
+        ),
+        "budget_items": budget_items,
+    }
+
+
+def _get_or_create_category_for_import(cur, user_id, path, transaction_type):
+    if not path:
+        return None, 0
+
+    parts = [part.strip() for part in re.split(r"\s*(?:›|>)\s*", path) if part.strip()]
+    parts = parts[:2]
+    parent_id = None
+    created = 0
+
+    for index, name in enumerate(parts):
+        cur.execute(
+            """
+            SELECT id, category_type
+            FROM finance_categories
+            WHERE user_id = %s
+              AND parent_id IS NOT DISTINCT FROM %s
+              AND LOWER(name) = LOWER(%s)
+            LIMIT 1;
+            """,
+            (user_id, parent_id, name),
+        )
+        category = cur.fetchone()
+        if category:
+            category_id = int(category["id"])
+            if category["category_type"] not in {transaction_type, "both"}:
+                cur.execute(
+                    """
+                    UPDATE finance_categories
+                    SET category_type = 'both', is_active = TRUE, updated_at = NOW()
+                    WHERE id = %s;
+                    """,
+                    (category_id,),
+                )
+            else:
+                cur.execute(
+                    "UPDATE finance_categories SET is_active=TRUE WHERE id=%s;",
+                    (category_id,),
+                )
+        else:
+            cur.execute(
+                """
+                INSERT INTO finance_categories (
+                    user_id, parent_id, name, category_type
+                )
+                VALUES (%s, %s, %s, %s)
+                RETURNING id;
+                """,
+                (user_id, parent_id, name[:100], transaction_type),
+            )
+            category_id = int(cur.fetchone()["id"])
+            created += 1
+        parent_id = category_id
+
+    return parent_id, created
+
+
+def _get_or_create_tag_for_import(cur, user_id, name):
+    cur.execute(
+        """
+        SELECT id
+        FROM finance_tags
+        WHERE user_id = %s AND LOWER(name) = LOWER(%s)
+        LIMIT 1;
+        """,
+        (user_id, name),
+    )
+    row = cur.fetchone()
+    if row:
+        tag_id = int(row["id"])
+        cur.execute(
+            "UPDATE finance_tags SET is_active=TRUE WHERE id=%s;",
+            (tag_id,),
+        )
+        return tag_id, 0
+
+    cur.execute(
+        """
+        INSERT INTO finance_tags (user_id, name)
+        VALUES (%s, %s)
+        RETURNING id;
+        """,
+        (user_id, name[:80]),
+    )
+    return int(cur.fetchone()["id"]), 1
+
+def _get_or_create_payment_method_for_import(
+    cur,
+    user_id,
+    name,
+):
+    if not name:
+        return None, 0
+
+    cur.execute(
+        """
+        SELECT id
+        FROM finance_payment_methods
+        WHERE user_id = %s
+          AND LOWER(name) = LOWER(%s)
+        LIMIT 1;
+        """,
+        (
+            user_id,
+            name,
+        ),
+    )
+    row = cur.fetchone()
+
+    if row:
+        payment_method_id = int(
+            row["id"]
+        )
+        cur.execute(
+            """
+            UPDATE finance_payment_methods
+            SET
+                is_active = TRUE,
+                updated_at = NOW()
+            WHERE id = %s;
+            """,
+            (payment_method_id,),
+        )
+        return payment_method_id, 0
+
+    cur.execute(
+        """
+        SELECT COALESCE(
+            MAX(sort_order),
+            0
+        ) + 1 AS next_order
+        FROM finance_payment_methods
+        WHERE user_id = %s;
+        """,
+        (user_id,),
+    )
+    next_order = int(
+        cur.fetchone()["next_order"]
+    )
+
+    cur.execute(
+        """
+        INSERT INTO finance_payment_methods (
+            user_id,
+            name,
+            sort_order
+        )
+        VALUES (%s, %s, %s)
+        RETURNING id;
+        """,
+        (
+            user_id,
+            name[:100],
+            next_order,
+        ),
+    )
+    return (
+        int(
+            cur.fetchone()["id"]
+        ),
+        1,
+    )
+
+
+
+def import_finance_rows(
+    user_id,
+    rows,
+    skip_possible_duplicates=True,
+    budget_items=None,
+):
+    imported_count = 0
+    skipped_count = 0
+    categories_created = 0
+    tags_created = 0
+    payment_methods_created = 0
+    budget_items_imported = 0
+    failures = []
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            for row in rows:
+                cur.execute(
+                    "SAVEPOINT finance_import_row;"
+                )
+                row_categories_created = 0
+                row_tags_created = 0
+                row_payment_methods_created = 0
+
+                try:
+                    if (
+                        row.get(
+                            "duplicate_reason"
+                        )
+                        == "already_imported"
+                    ):
+                        skipped_count += 1
+                        cur.execute(
+                            "RELEASE SAVEPOINT finance_import_row;"
+                        )
+                        continue
+
+                    if (
+                        skip_possible_duplicates
+                        and row.get(
+                            "duplicate_reason"
+                        )
+                        == "possible_duplicate"
+                    ):
+                        skipped_count += 1
+                        cur.execute(
+                            "RELEASE SAVEPOINT finance_import_row;"
+                        )
+                        continue
+
+                    category_id, created = (
+                        _get_or_create_category_for_import(
+                            cur,
+                            user_id,
+                            row.get(
+                                "category_name"
+                            ),
+                            row[
+                                "transaction_type"
+                            ],
+                        )
+                    )
+                    row_categories_created += created
+
+                    payment_method_id, created = (
+                        _get_or_create_payment_method_for_import(
+                            cur,
+                            user_id,
+                            row.get(
+                                "payment_method_name"
+                            ),
+                        )
+                    )
+                    row_payment_methods_created += created
+
+                    reconciliation_status = row.get(
+                        "reconciliation_status"
+                    ) or "unreconciled"
+                    if (
+                        reconciliation_status
+                        not in RECONCILIATION_STATUSES
+                    ):
+                        reconciliation_status = "unreconciled"
+
+                    reconciliation_date = row.get(
+                        "reconciliation_date"
+                    )
+                    if row["status"] == "planned":
+                        reconciliation_status = "unreconciled"
+                        reconciliation_date = None
+                    elif (
+                        reconciliation_status
+                        == "unreconciled"
+                    ):
+                        reconciliation_date = None
+
+                    cur.execute(
+                        """
+                        INSERT INTO finance_transactions (
+                            user_id,
+                            transaction_date,
+                            transaction_type,
+                            amount,
+                            description,
+                            category_id,
+                            payment_method_id,
+                            note,
+                            status,
+                            reconciliation_status,
+                            reconciliation_date,
+                            budget_excluded,
+                            bank_programmed,
+                            reminder_enabled,
+                            reminder_time,
+                            import_source,
+                            import_key,
+                            imported_at
+                        )
+                        VALUES (
+                            %s, %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()
+                        )
+                        ON CONFLICT DO NOTHING
+                        RETURNING id;
+                        """,
+                        (
+                            user_id,
+                            row[
+                                "transaction_date"
+                            ],
+                            row[
+                                "transaction_type"
+                            ],
+                            row["amount"],
+                            row[
+                                "description"
+                            ],
+                            category_id,
+                            payment_method_id,
+                            row.get("note"),
+                            row["status"],
+                            reconciliation_status,
+                            reconciliation_date,
+                            bool(row.get("budget_excluded")),
+                            bool(row.get("bank_programmed")) if row["status"] == "planned" else False,
+                            bool(row.get("reminder_enabled")) if row["status"] == "planned" else False,
+                            row.get("reminder_time") or _normalize_reminder_time(None),
+                            row[
+                                "import_source"
+                            ],
+                            row[
+                                "import_key"
+                            ],
+                        ),
+                    )
+                    inserted = cur.fetchone()
+
+                    if not inserted:
+                        skipped_count += 1
+                        cur.execute(
+                            "ROLLBACK TO SAVEPOINT finance_import_row;"
+                        )
+                        cur.execute(
+                            "RELEASE SAVEPOINT finance_import_row;"
+                        )
+                        continue
+
+                    transaction_id = int(
+                        inserted["id"]
+                    )
+
+                    for tag_name in row.get(
+                        "tag_names",
+                        [],
+                    ):
+                        tag_id, created = (
+                            _get_or_create_tag_for_import(
+                                cur,
+                                user_id,
+                                tag_name,
+                            )
+                        )
+                        row_tags_created += created
+
+                        cur.execute(
+                            """
+                            INSERT INTO finance_transaction_tags (
+                                transaction_id,
+                                tag_id
+                            )
+                            VALUES (%s, %s)
+                            ON CONFLICT DO NOTHING;
+                            """,
+                            (
+                                transaction_id,
+                                tag_id,
+                            ),
+                        )
+
+                    imported_count += 1
+                    categories_created += (
+                        row_categories_created
+                    )
+                    tags_created += (
+                        row_tags_created
+                    )
+                    payment_methods_created += (
+                        row_payment_methods_created
+                    )
+
+                    cur.execute(
+                        "RELEASE SAVEPOINT finance_import_row;"
+                    )
+                except Exception as error:
+                    cur.execute(
+                        "ROLLBACK TO SAVEPOINT finance_import_row;"
+                    )
+                    cur.execute(
+                        "RELEASE SAVEPOINT finance_import_row;"
+                    )
+                    failures.append(
+                        (
+                            "Ligne "
+                            f"{row.get('original_row', '?')} "
+                            f": {error}"
+                        )
+                    )
+                    continue
+
+            for item in budget_items or []:
+                try:
+                    cur.execute(
+                        """
+                        SELECT id
+                        FROM finance_budget_items
+                        WHERE user_id=%s
+                          AND item_type=%s
+                          AND LOWER(TRIM(description))=LOWER(TRIM(%s))
+                        ORDER BY id
+                        LIMIT 1;
+                        """,
+                        (user_id, item["item_type"], item["description"]),
+                    )
+                    existing = cur.fetchone()
+                    if existing:
+                        cur.execute(
+                            """
+                            UPDATE finance_budget_items
+                            SET input_frequency=%s,input_amount=%s,biweekly_override=%s,
+                                note=%s,recurrence_id=NULL,sync_from_recurrence=%s,
+                                sort_order=%s,is_active=%s,effective_start=%s,effective_end=%s,
+                                updated_at=NOW()
+                            WHERE id=%s AND user_id=%s;
+                            """,
+                            (
+                                item["input_frequency"], item["input_amount"],
+                                item.get("biweekly_override"), item.get("note"),
+                                bool(item.get("sync_from_recurrence", True)),
+                                item.get("sort_order") or 0, bool(item.get("is_active", True)),
+                                item.get("effective_start"), item.get("effective_end"),
+                                existing["id"], user_id,
+                            ),
+                        )
+                    else:
+                        cur.execute(
+                            """
+                            INSERT INTO finance_budget_items (
+                                user_id,item_type,description,input_frequency,input_amount,
+                                biweekly_override,note,sort_order,is_active,
+                                recurrence_id,sync_from_recurrence,effective_start,effective_end
+                            )
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL,%s,%s,%s);

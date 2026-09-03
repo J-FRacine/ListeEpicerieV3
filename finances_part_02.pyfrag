@@ -1,0 +1,650 @@
+        font-size: .68rem;
+    }
+
+    .jf-finance-summary-label {
+        font-size: .59rem;
+    }
+    .jf-finance-summary-value {
+        font-size: .76rem;
+    }
+    .jf-finance-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "main amount"
+            "meta actions";
+    }
+    .jf-finance-amount {
+        min-width: 5.8rem;
+    }
+    .jf-finance-kpi-header,
+    .jf-finance-kpi-row {
+        grid-template-columns:
+            minmax(0, 1fr)
+            4.1rem
+            4.1rem
+            4.45rem
+            3.65rem;
+        gap: .25rem;
+    }
+    .jf-finance-kpi-header {
+        font-size: .52rem;
+    }
+    .jf-finance-kpi-name,
+    .jf-finance-kpi-value {
+        font-size: .65rem;
+    }
+}
+"""
+
+ui.add_css(FINANCE_CSS, shared=True)
+
+ui.add_css(
+    r"""
+    .jf-finance-balance-grid {
+        display:grid;
+        grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));
+        gap:.55rem;
+        width:100%;
+    }
+    .jf-finance-balance-card {
+        width:100%;
+        padding:.65rem .72rem;
+        border:1px solid var(--jf-border);
+        border-radius:12px;
+        background:var(--jf-surface);
+    }
+    .jf-finance-balance-main {
+        width:100%;
+        color:var(--jf-navy);
+        font-size:1.08rem;
+        font-weight:850;
+        text-align:right;
+        white-space:nowrap;
+    }
+    .body--dark .jf-finance-balance-main {color:#dceaf6;}
+    .jf-finance-balance-line {
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto;
+        align-items:center;
+        gap:.5rem;
+        width:100%;
+        font-size:.72rem;
+    }
+    .jf-finance-balance-line > :last-child {
+        min-width:6.5rem;
+        text-align:right;
+        font-weight:750;
+    }
+    .jf-finance-reconcile-toolbar {
+        display:grid;
+        grid-template-columns:minmax(12rem,1.3fr) minmax(9rem,.8fr)
+            minmax(9rem,.8fr) minmax(10rem,1fr);
+        align-items:end;
+        gap:.5rem;
+        width:100%;
+    }
+    .jf-finance-reconcile-row {
+        display:grid;
+        grid-template-columns:auto 5.4rem minmax(0,1fr) 7.5rem auto;
+        align-items:center;
+        gap:.45rem;
+        min-height:42px;
+        padding:.28rem .4rem;
+        border:1px solid var(--jf-border);
+        border-radius:9px;
+        background:var(--jf-surface);
+    }
+    .jf-finance-reconcile-date {
+        color:var(--jf-muted);
+        font-size:.7rem;
+        white-space:nowrap;
+    }
+    .jf-finance-reconcile-description {
+        min-width:0;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+        font-size:.8rem;
+        font-weight:750;
+    }
+    .jf-finance-reconcile-amount {
+        text-align:right;
+        font-size:.82rem;
+        font-weight:850;
+        white-space:nowrap;
+    }
+    .jf-finance-selection-summary {
+        position:sticky;
+        bottom:.35rem;
+        z-index:4;
+        width:100%;
+        padding:.65rem .75rem;
+        border:1px solid var(--jf-border);
+        border-radius:12px;
+        box-shadow:0 3px 12px rgba(0,0,0,.12);
+        background:var(--jf-surface);
+    }
+    .jf-finance-session-card {
+        width:100%;
+        padding:.6rem .7rem;
+        border:1px solid var(--jf-border);
+        border-radius:11px;
+        background:var(--jf-surface);
+    }
+    .jf-finance-session-cancelled {opacity:.68;}
+    .jf-finance-warning-card {
+        width:100%;
+        padding:.55rem .65rem;
+        border-left:4px solid #c6861a;
+        border-radius:10px;
+        background:rgba(198,134,26,.10);
+    }
+    @media(max-width:760px){
+        .jf-finance-reconcile-toolbar {
+            grid-template-columns:1fr 1fr;
+        }
+        .jf-finance-reconcile-search {grid-column:1/-1;}
+    }
+    @media(max-width:520px){
+        .jf-finance-reconcile-toolbar {grid-template-columns:1fr;}
+        .jf-finance-reconcile-search {grid-column:auto;}
+        .jf-finance-reconcile-row {
+            grid-template-columns:auto 4.5rem minmax(0,1fr) 6.5rem auto;
+            gap:.3rem;
+            padding-inline:.25rem;
+        }
+        .jf-finance-reconcile-description {font-size:.74rem;}
+        .jf-finance-reconcile-amount {font-size:.75rem;}
+    }
+    """,
+    shared=True,
+)
+
+
+ui.add_css(
+    r"""
+    .jf-finance-bank-strip {
+        width: 100%; padding: .85rem 1rem;
+        border: 1px solid color-mix(in srgb, var(--jf-blue) 24%, var(--jf-border));
+        border-radius: 16px;
+        background: color-mix(in srgb, var(--jf-blue-soft) 70%, var(--jf-surface));
+    }
+    .jf-finance-cashflow-head,.jf-finance-cashflow-row {
+        display:grid; grid-template-columns:5.5rem minmax(12rem,1fr) 7rem 7rem 8rem;
+        gap:.6rem; align-items:center; width:100%;
+    }
+    .jf-finance-cashflow-head.jf-finance-bank-reconcile,
+    .jf-finance-cashflow-row.jf-finance-bank-reconcile {
+        grid-template-columns:2.5rem 5.5rem minmax(12rem,1fr) 7rem 7rem 8rem;
+    }
+    .jf-finance-cashflow-head {padding:.45rem .7rem;font-size:.72rem;font-weight:800;color:var(--jf-muted);}
+    .jf-finance-cashflow-row {padding:.65rem .7rem;border-top:1px solid var(--jf-border);font-size:.82rem;}
+    .jf-finance-cashflow-money {text-align:right;font-variant-numeric:tabular-nums;}
+    .jf-finance-year-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.55rem;width:100%;}
+    .jf-finance-year-card {border:1px solid var(--jf-border);border-radius:12px;padding:.65rem .75rem;background:var(--jf-surface);cursor:pointer;}
+    .jf-finance-year-card:hover {border-color:var(--jf-blue);}
+    .jf-finance-budget-row {display:grid;grid-template-columns:minmax(12rem,1fr) 8.5rem 8.5rem auto;gap:.65rem;align-items:center;width:100%;padding:.7rem .8rem;border-top:1px solid var(--jf-border);}
+    .jf-finance-budget-money {text-align:right;font-variant-numeric:tabular-nums;font-weight:700;}
+    @media(max-width:700px){
+        .jf-finance-cashflow-head{display:none;}
+        .jf-finance-cashflow-row{grid-template-columns:4.5rem minmax(0,1fr) 7.3rem;gap:.35rem .55rem;}
+        .jf-finance-cashflow-row>:nth-child(3),.jf-finance-cashflow-row>:nth-child(4){display:none;}
+        .jf-finance-cashflow-row.jf-finance-bank-reconcile{grid-template-columns:2.2rem 4.5rem minmax(0,1fr) 7.3rem;}
+        .jf-finance-cashflow-row.jf-finance-bank-reconcile>:nth-child(4),
+        .jf-finance-cashflow-row.jf-finance-bank-reconcile>:nth-child(5){display:none;}
+        .jf-finance-budget-row{grid-template-columns:minmax(0,1fr) 7.2rem auto;}
+        .jf-finance-budget-row>:nth-child(3){display:none;}
+    }
+    """,
+    shared=True,
+)
+
+def _money(value):
+    amount = Decimal(value or 0)
+    return f"{abs(amount):,.2f}".replace(",", " ").replace(".", ",") + " $"
+
+
+def _signed(value, transaction_type):
+    return ("-" if transaction_type == "expense" else "+") + _money(value)
+
+
+
+def _payment_effect(value, transaction_type):
+    sign = "+" if transaction_type == "expense" else "-"
+    return sign + _money(value)
+
+
+def _balance_money(value):
+    amount = Decimal(value or 0)
+    sign = "-" if amount < 0 else ""
+    return sign + _money(amount)
+
+
+def _category_options(user_id):
+    return {
+        int(row["id"]): row["full_name"]
+        for row in list_categories(user_id)
+    }
+
+
+def _tag_options(user_id):
+    return {
+        int(row["id"]): row["name"]
+        for row in list_tags(user_id)
+    }
+
+def _quick_category_options(user_id):
+    return {
+        None: "Aucune",
+        **_category_options(user_id),
+        ADD_CATEGORY_OPTION: "+ Ajouter une catégorie…",
+    }
+
+
+def _quick_tag_options(user_id):
+    return {
+        **_tag_options(user_id),
+        ADD_TAG_OPTION: "+ Ajouter une étiquette…",
+    }
+
+
+def _bank_account_options(user_id):
+    return {
+        int(row["id"]): row["name"]
+        for row in list_bank_accounts(user_id)
+    }
+
+
+def _payment_options(
+    user_id,
+    include_none=True,
+):
+    options = {}
+
+    if include_none:
+        options[
+            None
+        ] = "Aucun"
+
+    for row in list_payment_methods(
+        user_id
+    ):
+        options[
+            int(row["id"])
+        ] = row["name"]
+
+    return options
+
+
+
+
+def _bank_payment_source_options(user_id, include_inactive=False):
+    return {
+        int(row["id"]): (
+            row["name"] + (" — désactivé" if not row.get("is_active") else "")
+        )
+        for row in list_payment_methods(
+            user_id,
+            include_inactive=include_inactive,
+        )
+        if row.get("method_type") == "bank"
+    }
+
+
+def _credit_card_options(user_id, include_inactive=False):
+    return {
+        int(row["id"]): (
+            row["name"] + (" — désactivée" if not row.get("is_active") else "")
+        )
+        for row in list_payment_methods(
+            user_id,
+            include_inactive=include_inactive,
+        )
+        if row.get("method_type") == "credit_card"
+    }
+
+
+def _recurrence_options(user_id):
+    options = {None: "Aucune récurrence"}
+    for row in list_recurrences(user_id):
+        unit = FREQUENCY_UNITS.get(
+            row.get("frequency_unit"),
+            str(row.get("frequency_unit") or ""),
+        ).lower()
+        interval = int(row.get("frequency_interval") or 1)
+        rhythm = unit if interval == 1 else f"{interval} {unit}s"
+        inactive = " — inactive" if not row.get("is_active") else ""
+        options[int(row["id"])] = (
+            f"{row['description']} — {_money(row['amount'])} / {rhythm}{inactive}"
+        )
+    return options
+
+
+
+def _card_payment_dialog(
+    user_id,
+    on_saved,
+    transfer=None,
+    prefill=None,
+):
+    prefill = dict(prefill or {})
+    source_options = _bank_payment_source_options(
+        user_id,
+        include_inactive=bool(transfer),
+    )
+    card_options = _credit_card_options(
+        user_id,
+        include_inactive=bool(transfer),
+    )
+    source_default = (
+        int(transfer["source_payment_method_id"])
+        if transfer
+        else (
+            int(prefill["source_payment_method_id"])
+            if prefill.get("source_payment_method_id") in source_options
+            else (None if prefill else next(iter(source_options), None))
+        )
+    )
+    card_default = (
+        int(transfer["destination_payment_method_id"])
+        if transfer
+        else (
+            int(prefill["destination_payment_method_id"])
+            if prefill.get("destination_payment_method_id") in card_options
+            else next(iter(card_options), None)
+        )
+    )
+    default_date = str(prefill.get("payment_date") or date.today().isoformat())
+
+    with ui.dialog() as dialog:
+        with ui.card().classes("w-full max-w-2xl p-4"):
+            ui.label(
+                "Modifier le paiement de carte"
+                if transfer
+                else "Paiement de carte"
+            ).classes("text-xl font-bold")
+            ui.label(
+                "Un seul paiement est créé, avec deux effets liés : sortie du compte bancaire et crédit appliqué sur la carte. Le mouvement est automatiquement Hors budget."
+            ).classes("text-sm jf-muted")
+
+            if not source_options or not card_options:
+                missing = []
+                if not source_options:
+                    missing.append("un Compte bancaire")
+                if not card_options:
+                    missing.append("une Carte de crédit")
+                ui.label(
+                    "Configurez d’abord " + " et ".join(missing)
+                    + " dans Organisation > Modes de paiement."
+                ).classes("text-sm text-negative")
+                with ui.row().classes("w-full justify-end"):
+                    ui.button("Fermer", on_click=dialog.close).props("flat")
+                dialog.open()
+                return
+
+            with ui.element("div").classes("jf-finance-form-grid"):
+                source_method = ui.select(
+                    source_options,
+                    value=source_default,
+                    label="Compte bancaire de départ",
+                ).props("dense outlined options-dense").classes("jf-finance-field")
+                destination_method = ui.select(
+                    card_options,
+                    value=card_default,
+                    label="Carte de crédit à payer",
+                ).props("dense outlined options-dense").classes("jf-finance-field")
+                amount = ui.number(
+                    label="Montant du paiement",
+                    value=(
+                        transfer.get("amount")
+                        if transfer
+                        else prefill.get("amount")
+                    ),
+                    min=.01,
+                    step=.01,
+                ).props("dense outlined").classes("jf-finance-field")
+                source_date = ui.input(
+                    label="Date du débit bancaire",
+                    value=(
+                        transfer["source_date"].isoformat()
+                        if transfer
+                        else default_date
+                    ),
+                ).props("type=date dense outlined").classes("jf-finance-field")
+                destination_date = ui.input(
+                    label="Date de réception sur la carte",
+                    value=(
+                        transfer["destination_date"].isoformat()
+                        if transfer
+                        else default_date
+                    ),
+                ).props("type=date dense outlined").classes("jf-finance-field")
+                description = ui.input(
+                    label="Description",
+                    value=(
+                        transfer.get("description")
+                        if transfer
+                        else prefill.get("description", "Paiement de carte")
+                    ),
+                ).props("dense outlined maxlength=160").classes(
+                    "jf-finance-field jf-finance-description"
+                )
+
+            status = ui.select(
+                TRANSACTION_STATUSES,
+                value=(
+                    transfer.get("status")
+                    if transfer
+                    else prefill.get("status", "planned")
+                ),
+                label="Statut",
+            ).props("dense outlined options-dense").classes("w-full")
+            bank_programmed = ui.checkbox(
+                "Déjà programmé auprès de la banque",
+                value=(
+                    bool(transfer.get("bank_programmed"))
+                    if transfer
+                    else bool(prefill.get("bank_programmed", False))
+                ),
+            )
+            reminder_enabled = ui.checkbox(
+                "Me rappeler ce paiement le jour du débit",
+                value=bool(transfer.get("reminder_enabled")) if transfer else False,
+            )
+            reminder_time = ui.input(
+                label="Heure du rappel",
+                value=(
+                    str(transfer.get("reminder_time") or "09:00")[:5]
+                    if transfer
+                    else "09:00"
+                ),
+            ).props("type=time dense outlined").classes("w-full")
+            note = ui.textarea(
+                label="Note facultative",
+                value=(
+                    transfer.get("note") or ""
+                    if transfer
+                    else str(prefill.get("note") or "")
+                ),
+            ).props("dense outlined autogrow maxlength=1000").classes("w-full")
+
+            def round_payment_up():
+                if amount.value in (None, ""):
+                    ui.notify("Indiquez d’abord un montant.", type="warning")
+                    return
+                try:
+                    rounded = Decimal(str(amount.value)).quantize(
+                        Decimal("1"), rounding=ROUND_CEILING
+                    )
+                except Exception:
+                    ui.notify("Le montant est invalide.", type="warning")
+                    return
+                amount.value = float(rounded)
+                amount.update()
+
+            ui.button(
+                "Arrondir au dollar supérieur",
+                icon="north_east",
+                on_click=round_payment_up,
+            ).props("outline dense color=secondary").classes("self-start")
+
+            if prefill and not transfer:
+                ui.label(
+                    "Les valeurs proviennent de la conciliation. Vérifiez le compte source, le montant, les dates et le statut avant d’enregistrer."
+                ).classes("text-xs text-primary")
+
+            ui.label(
+                "Quand le paiement est confirmé, son côté carte apparaît dans Conciliation comme un crédit qui réduit le solde dû. Les deux côtés restent liés lors d’une modification ou d’une suppression."
+            ).classes("text-xs jf-muted")
+
+            def save():
+                try:
+                    save_card_payment_transfer(
+                        user_id=user_id,
+                        transfer_id=transfer.get("id") if transfer else None,
+                        source_payment_method_id=source_method.value,
+                        destination_payment_method_id=destination_method.value,
+                        amount=amount.value,
+                        source_date=source_date.value,
+                        destination_date=destination_date.value or source_date.value,
+                        description=description.value,
+                        note=note.value,
+                        status=status.value,
+                        bank_programmed=bank_programmed.value,
+                        reminder_enabled=reminder_enabled.value,
+                        reminder_time=reminder_time.value or "09:00",
+                    )
+                except Exception as error:
+                    ui.notify(str(error), type="warning")
+                    return
+                dialog.close()
+                ui.notify(
+                    "Paiement de carte enregistré.",
+                    type="positive",
+                )
+                on_saved()
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Annuler", on_click=dialog.close).props("flat dense")
+                ui.button(
+                    "Enregistrer le paiement",
+                    icon="credit_card",
+                    on_click=save,
+                ).props("color=primary")
+
+    dialog.open()
+
+
+def _transaction_dialog(
+    user_id,
+    on_saved,
+    transaction=None,
+    default_payment_method_id=None,
+):
+    payment_options = _payment_options(
+        user_id
+    )
+
+    with ui.dialog() as dialog:
+        with ui.card().classes(
+            "w-full max-w-2xl p-4"
+        ):
+            ui.label(
+                (
+                    "Modifier la transaction"
+                    if transaction
+                    else "Nouvelle transaction"
+                )
+            ).classes(
+                "text-xl font-bold"
+            )
+
+            kind = ui.toggle(
+                TRANSACTION_TYPES,
+                value=(
+                    transaction[
+                        "transaction_type"
+                    ]
+                    if transaction
+                    else "expense"
+                ),
+            ).props(
+                "dense spread no-caps"
+            ).classes(
+                "w-full"
+            )
+
+            with ui.element(
+                "div"
+            ).classes(
+                "jf-finance-form-grid"
+            ):
+                amount = ui.number(
+                    label="Montant",
+                    value=(
+                        transaction["amount"]
+                        if transaction
+                        else None
+                    ),
+                    min=.01,
+                    step=.01,
+                ).props(
+                    "dense outlined"
+                ).classes(
+                    "jf-finance-field"
+                )
+
+                when = ui.input(
+                    label="Date",
+                    value=(
+                        transaction[
+                            "transaction_date"
+                        ].isoformat()
+                        if transaction
+                        else date.today().isoformat()
+                    ),
+                ).props(
+                    "type=date dense outlined"
+                ).classes(
+                    "jf-finance-field"
+                )
+
+                description = ui.input(
+                    label="Description",
+                    value=(
+                        transaction[
+                            "description"
+                        ]
+                        if transaction
+                        else ""
+                    ),
+                ).props(
+                    "dense outlined maxlength=160"
+                ).classes(
+                    "jf-finance-field "
+                    "jf-finance-description"
+                )
+
+            with ui.row().classes(
+                "w-full gap-2 flex-wrap"
+            ):
+                category = ui.select(
+                    {
+                        None: "Aucune",
+                        **_category_options(
+                            user_id
+                        ),
+                    },
+                    value=(
+                        transaction[
+                            "category_id"
+                        ]
+                        if transaction
+                        else None
+                    ),
+                    label=(
+                        "Catégorie ou "
+                        "sous-catégorie"
+                    ),
+                ).props(
+                    "dense outlined clearable "

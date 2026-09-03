@@ -1,0 +1,650 @@
+                        biweekly_override=%s,
+                        note=%s,
+                        recurrence_id=%s,
+                        sync_from_recurrence=%s,
+                        effective_start=%s,
+                        effective_end=%s,
+                        is_active=TRUE,
+                        updated_at=NOW()
+                    WHERE id=%s AND user_id=%s;
+                    """,
+                    (
+                        item_type,
+                        description,
+                        input_frequency,
+                        amount,
+                        override,
+                        note,
+                        normalized_recurrence_id,
+                        bool(sync_from_recurrence),
+                        start_value,
+                        end_value,
+                        budget_item_id,
+                        user_id,
+                    ),
+                )
+                if cur.rowcount == 0:
+                    raise ValueError("Poste budgétaire introuvable.")
+                saved_id = int(budget_item_id)
+            else:
+                cur.execute(
+                    """
+                    SELECT COALESCE(MAX(sort_order),0)+1 AS next_order
+                    FROM finance_budget_items
+                    WHERE user_id=%s AND item_type=%s;
+                    """,
+                    (user_id, item_type),
+                )
+                next_order = int(cur.fetchone()["next_order"])
+                cur.execute(
+                    """
+                    INSERT INTO finance_budget_items (
+                        user_id,
+                        item_type,
+                        description,
+                        input_frequency,
+                        input_amount,
+                        biweekly_override,
+                        note,
+                        sort_order,
+                        recurrence_id,
+                        sync_from_recurrence,
+                        effective_start,
+                        effective_end
+                    )
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    RETURNING id;
+                    """,
+                    (
+                        user_id,
+                        item_type,
+                        description,
+                        input_frequency,
+                        amount,
+                        override,
+                        note,
+                        next_order,
+                        normalized_recurrence_id,
+                        bool(sync_from_recurrence),
+                        start_value,
+                        end_value,
+                    ),
+                )
+                saved_id = int(cur.fetchone()["id"])
+
+            # Synchronisation explicite demandée : lorsque le lien est actif,
+            # la date de fin du Budget devient aussi la date de fin de la règle.
+            # Les transactions confirmées restent intactes; seules les
+            # occurrences prévues postérieures sont retirées.
+            if normalized_recurrence_id is not None and sync_from_recurrence:
+                cur.execute(
+                    """
+                    UPDATE finance_recurrences
+                    SET end_date=%s,
+                        updated_at=NOW()
+                    WHERE id=%s AND user_id=%s;
+                    """,
+                    (end_value, normalized_recurrence_id, user_id),
+                )
+                if end_value is not None:
+                    cur.execute(
+                        """
+                        DELETE FROM finance_transactions
+                        WHERE user_id=%s
+                          AND recurrence_id=%s
+                          AND status='planned'
+                          AND transaction_date>%s;
+                        """,
+                        (user_id, normalized_recurrence_id, end_value),
+                    )
+
+            conn.commit()
+            return saved_id
+
+
+def _export_finances_v1102(user_id):
+    """Export V1.10.2 incluant les réglages de report mensuel."""
+
+    csv_bytes, json_bytes = _export_finances_v1100(user_id)
+    try:
+        payload = json.loads(json_bytes.decode("utf-8"))
+    except Exception:
+        return csv_bytes, json_bytes
+
+    def serial(value):
+        if isinstance(value, (date, datetime, time, Decimal)):
+            return str(value)
+        if isinstance(value, list):
+            return [serial(item) for item in value]
+        if isinstance(value, dict):
+            return {key: serial(item) for key, item in value.items()}
+        return value
+
+    payload["version"] = "1.10.2"
+    payload["finance_settings"] = serial(get_finance_settings(user_id))
+    return (
+        csv_bytes,
+        json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
+    )
+
+
+# =========================================================
+# FINANCES V1.11.0 — BROUILLONS DE CONCILIATION,
+# CONTRÔLES D'HISTORIQUE ET FINANCEMENTS PLUS TOLÉRANTS
+# =========================================================
+
+
+
+
+
+def _init_finances_schema_v1110():
+    """Mise à niveau V1.11.0, idempotente et sans SQL manuel."""
+
+    _init_finances_schema_v1101()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                ALTER TABLE finance_installment_plans
+                ADD COLUMN IF NOT EXISTS completed_installments_estimated BOOLEAN
+                NOT NULL DEFAULT FALSE;
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS finance_reconciliation_drafts (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL
+                        REFERENCES users(id) ON DELETE CASCADE,
+                    payment_method_id BIGINT NOT NULL
+                        REFERENCES finance_payment_methods(id) ON DELETE CASCADE,
+                    statement_date DATE,
+                    statement_balance NUMERIC(14,2),
+                    due_date DATE,
+                    reconciliation_date DATE,
+                    note TEXT,
+                    include_opening_balance BOOLEAN NOT NULL DEFAULT FALSE,
+                    difference_explanation TEXT,
+                    filter_start DATE,
+                    filter_end DATE,
+                    filter_query TEXT,
+                    sort_direction TEXT NOT NULL DEFAULT 'asc'
+                        CHECK (sort_direction IN ('asc', 'desc')),
+                    selected_transaction_ids BIGINT[] NOT NULL DEFAULT ARRAY[]::BIGINT[],
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE (user_id, payment_method_id),
+                    CHECK (note IS NULL OR CHAR_LENGTH(note) <= 1000),
+                    CHECK (
+                        difference_explanation IS NULL
+                        OR CHAR_LENGTH(difference_explanation) <= 1000
+                    )
+                );
+                """
+            )
+            conn.commit()
+
+
+
+
+def save_reconciliation_draft(
+    user_id,
+    payment_method_id,
+    transaction_ids,
+    *,
+    statement_date=None,
+    statement_balance=None,
+    due_date=None,
+    reconciliation_date=None,
+    note=None,
+    include_opening_balance=False,
+    difference_explanation=None,
+    filter_start=None,
+    filter_end=None,
+    filter_query=None,
+    sort_direction="asc",
+):
+    """Sauvegarde le travail de conciliation sans concilier les transactions."""
+
+    ids = sorted({int(value) for value in (transaction_ids or [])})
+    statement = _optional_date_value(statement_date, "La date du relevé")
+    due = _optional_date_value(due_date, "La date de paiement")
+    reconciled_on = _optional_date_value(
+        reconciliation_date, "La date de conciliation"
+    )
+    start = _optional_date_value(filter_start, "La date de début du filtre")
+    end = _optional_date_value(filter_end, "La date de fin du filtre")
+    balance = _decimal_value(
+        statement_balance, "Le solde du relevé", allow_blank=True
+    )
+    cleaned_note = _text(note, "La note", 1000)
+    cleaned_explanation = _text(
+        difference_explanation, "L’explication de l’écart", 1000
+    )
+    cleaned_query = _text(filter_query, "La recherche", 300)
+    sort_value = str(sort_direction or "asc").strip().lower()
+    if sort_value not in {"asc", "desc"}:
+        sort_value = "asc"
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            method_id = _validate_payment_method(cur, user_id, payment_method_id)
+            if method_id is None:
+                raise ValueError("Choisissez un mode de paiement.")
+            cur.execute(
+                """
+                INSERT INTO finance_reconciliation_drafts (
+                    user_id, payment_method_id, statement_date,
+                    statement_balance, due_date, reconciliation_date,
+                    note, include_opening_balance, difference_explanation,
+                    filter_start, filter_end, filter_query, sort_direction,
+                    selected_transaction_ids
+                )
+                VALUES (
+                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                )
+                ON CONFLICT (user_id, payment_method_id) DO UPDATE
+                SET statement_date=EXCLUDED.statement_date,
+                    statement_balance=EXCLUDED.statement_balance,
+                    due_date=EXCLUDED.due_date,
+                    reconciliation_date=EXCLUDED.reconciliation_date,
+                    note=EXCLUDED.note,
+                    include_opening_balance=EXCLUDED.include_opening_balance,
+                    difference_explanation=EXCLUDED.difference_explanation,
+                    filter_start=EXCLUDED.filter_start,
+                    filter_end=EXCLUDED.filter_end,
+                    filter_query=EXCLUDED.filter_query,
+                    sort_direction=EXCLUDED.sort_direction,
+                    selected_transaction_ids=EXCLUDED.selected_transaction_ids,
+                    updated_at=NOW()
+                RETURNING id;
+                """,
+                (
+                    user_id,
+                    method_id,
+                    statement,
+                    balance,
+                    due,
+                    reconciled_on,
+                    cleaned_note,
+                    bool(include_opening_balance),
+                    cleaned_explanation,
+                    start,
+                    end,
+                    cleaned_query,
+                    sort_value,
+                    ids,
+                ),
+            )
+            draft_id = int(cur.fetchone()["id"])
+            conn.commit()
+    return draft_id
+
+
+def get_reconciliation_draft(user_id, payment_method_id):
+    if payment_method_id in (None, ""):
+        return None
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT draft.*, method.name AS payment_method_name
+                FROM finance_reconciliation_drafts AS draft
+                JOIN finance_payment_methods AS method
+                  ON method.id=draft.payment_method_id
+                WHERE draft.user_id=%s AND draft.payment_method_id=%s;
+                """,
+                (user_id, int(payment_method_id)),
+            )
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def list_reconciliation_drafts(user_id):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT draft.*, method.name AS payment_method_name
+                FROM finance_reconciliation_drafts AS draft
+                JOIN finance_payment_methods AS method
+                  ON method.id=draft.payment_method_id
+                WHERE draft.user_id=%s
+                ORDER BY draft.updated_at DESC, draft.id DESC;
+                """,
+                (user_id,),
+            )
+            return cur.fetchall()
+
+
+def delete_reconciliation_draft(user_id, payment_method_id):
+    if payment_method_id in (None, ""):
+        return 0
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM finance_reconciliation_drafts
+                WHERE user_id=%s AND payment_method_id=%s;
+                """,
+                (user_id, int(payment_method_id)),
+            )
+            count = cur.rowcount
+            conn.commit()
+    return count
+
+
+def find_potential_duplicate_transactions(
+    user_id,
+    *,
+    start_date=None,
+    end_date=None,
+    same_type=True,
+    window_days=2,
+    limit=10000,
+):
+    """Retourne des groupes de doublons potentiels: montant exact + dates proches."""
+
+    rows = list_transactions(
+        user_id,
+        start_date=start_date,
+        end_date=end_date,
+        include_linked_transfer_destinations=False,
+        limit=limit,
+    )
+    buckets = defaultdict(list)
+    for row in rows:
+        key = (
+            Decimal(row["amount"]).copy_abs().quantize(Decimal("0.01")),
+            row["transaction_type"] if same_type else "*",
+        )
+        buckets[key].append(dict(row))
+
+    groups = []
+    delta_days = max(0, int(window_days))
+    for (amount, tx_type), bucket in buckets.items():
+        bucket.sort(key=lambda item: (item["transaction_date"], int(item["id"])))
+        cluster = []
+        for row in bucket:
+            if not cluster:
+                cluster = [row]
+                continue
+            if (
+                row["transaction_date"] - cluster[0]["transaction_date"]
+            ).days <= delta_days:
+                cluster.append(row)
+            else:
+                if len(cluster) >= 2:
+                    groups.append(
+                        {
+                            "amount": amount,
+                            "transaction_type": tx_type,
+                            "transactions": cluster,
+                        }
+                    )
+                cluster = [row]
+        if len(cluster) >= 2:
+            groups.append(
+                {
+                    "amount": amount,
+                    "transaction_type": tx_type,
+                    "transactions": cluster,
+                }
+            )
+
+    groups.sort(
+        key=lambda group: (
+            group["transactions"][-1]["transaction_date"],
+            group["amount"],
+        ),
+        reverse=True,
+    )
+    return groups
+
+
+def list_month_unreconciled_transactions(user_id, month_value):
+    month = _month_start(month_value)
+    month_end = _add_months(month, 1) - timedelta(days=1)
+    return list_transactions(
+        user_id,
+        start_date=month,
+        end_date=month_end,
+        status="confirmed",
+        reconciliation_status="unreconciled",
+        include_linked_transfer_destinations=True,
+        limit=10000,
+    )
+
+
+def _export_finances_v1110(user_id):
+    """Export V1.11.0 incluant les nouveaux réglages de financement."""
+
+    csv_bytes, json_bytes = _export_finances_v1102(user_id)
+    try:
+        payload = json.loads(json_bytes.decode("utf-8"))
+    except Exception:
+        return csv_bytes, json_bytes
+
+    payload["version"] = "1.11.0"
+    payload["reconciliation_drafts"] = [
+        {
+            key: (
+                str(value)
+                if isinstance(value, (date, datetime, time, Decimal))
+                else value
+            )
+            for key, value in dict(row).items()
+        }
+        for row in list_reconciliation_drafts(user_id)
+    ]
+    return (
+        csv_bytes,
+        json.dumps(payload, ensure_ascii=False, indent=2, default=str).encode("utf-8"),
+    )
+
+# =========================================================
+# FINANCES V1.12.0 — PRÉVISIONS, GROUPES DE FINANCEMENTS,
+# INTÉRÊTS ET PRÊTS PARTAGÉS
+# =========================================================
+
+
+
+
+
+
+
+
+
+
+def init_finances_schema():
+    """Mise à niveau V1.12.0, idempotente et sans SQL manuel."""
+
+    _init_finances_schema_v1110()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Groupes de financements intégrés au Budget.
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS finance_budget_financing_groups (
+                    budget_item_id BIGINT PRIMARY KEY
+                        REFERENCES finance_budget_items(id) ON DELETE CASCADE,
+                    user_id INTEGER NOT NULL
+                        REFERENCES users(id) ON DELETE CASCADE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS finance_budget_financing_group_plans (
+                    budget_item_id BIGINT NOT NULL
+                        REFERENCES finance_budget_financing_groups(budget_item_id)
+                        ON DELETE CASCADE,
+                    plan_id BIGINT NOT NULL
+                        REFERENCES finance_installment_plans(id) ON DELETE CASCADE,
+                    PRIMARY KEY (budget_item_id, plan_id),
+                    UNIQUE (plan_id)
+                );
+                """
+            )
+
+            # Ventilation des versements avec intérêts.
+            cur.execute(
+                """
+                ALTER TABLE finance_installment_plans
+                ADD COLUMN IF NOT EXISTS payment_includes_interest BOOLEAN
+                NOT NULL DEFAULT TRUE;
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE finance_installment_plans
+                ADD COLUMN IF NOT EXISTS base_installment_amount NUMERIC(14,2);
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE finance_installment_plans
+                ADD COLUMN IF NOT EXISTS calculated_installment_amount NUMERIC(14,2);
+                """
+            )
+
+            # Prêts partagés : une entité isolée de toutes les autres finances.
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS finance_shared_loans (
+                    id BIGSERIAL PRIMARY KEY,
+                    owner_user_id INTEGER NOT NULL
+                        REFERENCES users(id) ON DELETE CASCADE,
+                    title TEXT NOT NULL,
+                    lender_name TEXT,
+                    borrower_name TEXT,
+                    original_balance NUMERIC(14,2) NOT NULL DEFAULT 0,
+                    current_balance NUMERIC(14,2) NOT NULL DEFAULT 0,
+                    annual_interest_rate NUMERIC(8,4) NOT NULL DEFAULT 0,
+                    payment_amount NUMERIC(14,2),
+                    frequency_unit TEXT NOT NULL DEFAULT 'month'
+                        CHECK (frequency_unit IN ('day','week','month','year')),
+                    frequency_interval INTEGER NOT NULL DEFAULT 1,
+                    start_date DATE,
+                    next_due_date DATE,
+                    end_date DATE,
+                    note TEXT,
+                    status TEXT NOT NULL DEFAULT 'active'
+                        CHECK (status IN ('active','paused','completed')),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CHECK (CHAR_LENGTH(title) BETWEEN 1 AND 160),
+                    CHECK (original_balance >= 0),
+                    CHECK (current_balance >= 0),
+                    CHECK (annual_interest_rate >= 0),
+                    CHECK (payment_amount IS NULL OR payment_amount > 0)
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS finance_shared_loans_owner_idx
+                ON finance_shared_loans (owner_user_id, status, id);
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS finance_shared_loan_members (
+                    loan_id BIGINT NOT NULL
+                        REFERENCES finance_shared_loans(id) ON DELETE CASCADE,
+                    user_id INTEGER NOT NULL
+                        REFERENCES users(id) ON DELETE CASCADE,
+                    role TEXT NOT NULL DEFAULT 'observer'
+                        CHECK (role IN ('lender','borrower','observer')),
+                    permission TEXT NOT NULL DEFAULT 'view'
+                        CHECK (permission IN ('view','edit')),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (loan_id, user_id)
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS finance_shared_loan_members_user_idx
+                ON finance_shared_loan_members (user_id, loan_id);
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS finance_shared_loan_events (
+                    id BIGSERIAL PRIMARY KEY,
+                    loan_id BIGINT NOT NULL
+                        REFERENCES finance_shared_loans(id) ON DELETE CASCADE,
+                    created_by_user_id INTEGER NOT NULL
+                        REFERENCES users(id) ON DELETE RESTRICT,
+                    event_date DATE NOT NULL,
+                    event_type TEXT NOT NULL
+                        CHECK (event_type IN ('payment','principal_addition','adjustment','note')),
+                    amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+                    interest_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+                    principal_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+                    balance_after NUMERIC(14,2) NOT NULL DEFAULT 0,
+                    note TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS finance_shared_loan_events_loan_idx
+                ON finance_shared_loan_events (loan_id, event_date, id);
+                """
+            )
+            conn.commit()
+
+
+
+
+
+def _financing_group_plan_ids(cur, user_id, budget_item_id=None):
+    conditions = ["group_row.user_id=%s"]
+    params = [user_id]
+    if budget_item_id is not None:
+        conditions.append("group_row.budget_item_id=%s")
+        params.append(int(budget_item_id))
+    cur.execute(
+        f"""
+        SELECT link.budget_item_id, link.plan_id
+        FROM finance_budget_financing_group_plans AS link
+        JOIN finance_budget_financing_groups AS group_row
+          ON group_row.budget_item_id=link.budget_item_id
+        WHERE {' AND '.join(conditions)}
+        ORDER BY link.budget_item_id, link.plan_id;
+        """,
+        params,
+    )
+    return cur.fetchall()
+
+
+def _financing_group_amount_for_month(cur, user_id, plan_ids, month):
+    if not plan_ids:
+        return Decimal("0.00")
+    month = _month_start(month)
+    month_end = _add_months(month, 1) - timedelta(days=1)
+    cur.execute(
+        """
+        SELECT COALESCE(SUM(amount), 0) AS total
+        FROM finance_transactions
+        WHERE user_id=%s
+          AND installment_plan_id=ANY(%s)
+          AND transaction_type='expense'
+          AND status IN ('planned','confirmed')
+          AND transaction_date BETWEEN %s AND %s;
+        """,
+        (user_id, list(plan_ids), month, month_end),
+    )
+    return Decimal(cur.fetchone()["total"] or 0).quantize(Decimal("0.01"))
+
+
+def list_budget_items(
+    user_id,
+    include_inactive=False,
+    month_value=None,
+    effective_only=False,

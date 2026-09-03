@@ -1,0 +1,650 @@
+                SUM(
+                    CASE
+                        WHEN transaction.transaction_type = 'expense'
+                        THEN transaction.amount
+                        ELSE -transaction.amount
+                    END
+                ) FILTER (WHERE link.is_active = TRUE),
+                0
+            ) AS transaction_total
+        FROM finance_reconciliation_sessions AS session
+        LEFT JOIN finance_reconciliation_session_transactions AS link
+            ON link.session_id = session.id
+        LEFT JOIN finance_transactions AS transaction
+            ON transaction.id = link.transaction_id
+        WHERE session.id = %s
+        GROUP BY session.id;
+        """,
+        (session_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return
+
+    transaction_total = Decimal(row["transaction_total"])
+    statement_balance = row["statement_balance"]
+    resolution = str(row.get("difference_resolution") or "legacy")
+
+    if row.get("reference_balance") is None:
+        # Compatibilité avec les séances créées avant V1.9.0.
+        selected_total = (
+            transaction_total
+            + Decimal(row.get("opening_balance_amount") or 0)
+        )
+        expected_balance = selected_total
+    else:
+        selected_total = transaction_total
+        expected_balance = (
+            Decimal(row["reference_balance"]) + transaction_total
+        )
+
+    difference = (
+        Decimal(statement_balance) - expected_balance
+        if statement_balance is not None
+        else None
+    )
+
+    if resolution == "carry":
+        closing_reference_balance = expected_balance
+    elif statement_balance is not None:
+        closing_reference_balance = Decimal(statement_balance)
+    else:
+        closing_reference_balance = expected_balance
+
+    cur.execute(
+        """
+        UPDATE finance_reconciliation_sessions
+        SET selected_total = %s,
+            expected_balance = %s,
+            difference = %s,
+            closing_reference_balance = %s
+        WHERE id = %s;
+        """,
+        (
+            selected_total,
+            expected_balance,
+            difference,
+            closing_reference_balance,
+            session_id,
+        ),
+    )
+
+
+def set_transaction_reconciliation(
+    user_id,
+    transaction_id,
+    reconciliation_status,
+    reconciliation_date=None,
+):
+    if reconciliation_status not in RECONCILIATION_STATUSES:
+        raise ValueError("Statut de conciliation invalide.")
+
+    parsed_date = (
+        reconciliation_date
+        if isinstance(reconciliation_date, date)
+        else (
+            date.fromisoformat(str(reconciliation_date))
+            if reconciliation_date
+            else None
+        )
+    )
+    if reconciliation_status == "unreconciled":
+        parsed_date = None
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT reconciliation_session_id
+                FROM finance_transactions
+                WHERE id = %s AND user_id = %s
+                FOR UPDATE;
+                """,
+                (transaction_id, user_id),
+            )
+            current = cur.fetchone()
+            if not current:
+                raise ValueError("Transaction introuvable.")
+
+            session_id = current["reconciliation_session_id"]
+
+            if reconciliation_status == "unreconciled" and session_id:
+                cur.execute(
+                    """
+                    UPDATE finance_reconciliation_session_transactions
+                    SET is_active = FALSE,
+                        removed_at = NOW()
+                    WHERE session_id = %s
+                      AND transaction_id = %s
+                      AND is_active = TRUE;
+                    """,
+                    (session_id, transaction_id),
+                )
+
+            cur.execute(
+                """
+                UPDATE finance_transactions
+                SET reconciliation_status = %s,
+                    reconciliation_date = %s,
+                    reconciliation_session_id = %s,
+                    updated_at = NOW()
+                WHERE id = %s AND user_id = %s;
+                """,
+                (
+                    reconciliation_status,
+                    parsed_date,
+                    (
+                        None
+                        if reconciliation_status == "unreconciled"
+                        else session_id
+                    ),
+                    transaction_id,
+                    user_id,
+                ),
+            )
+
+            if session_id:
+                _refresh_reconciliation_session_totals(
+                    cur,
+                    session_id,
+                )
+
+            conn.commit()
+
+
+def set_bank_transaction_seen(
+    user_id,
+    transaction_id,
+    seen,
+    reconciliation_date=None,
+):
+    """Conciliation rapide pour un compte bancaire.
+
+    Cocher confirme au besoin une transaction prévue et la concilie.
+    Décocher retire seulement la conciliation; la transaction reste confirmée.
+    """
+    parsed_date = (
+        reconciliation_date
+        if isinstance(reconciliation_date, date)
+        else (
+            date.fromisoformat(str(reconciliation_date))
+            if reconciliation_date
+            else date.today()
+        )
+    )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    transaction.id,
+                    transaction.status,
+                    transaction.reconciliation_session_id,
+                    method.method_type
+                FROM finance_transactions AS transaction
+                LEFT JOIN finance_payment_methods AS method
+                    ON method.id = transaction.payment_method_id
+                WHERE transaction.id = %s
+                  AND transaction.user_id = %s
+                FOR UPDATE OF transaction;
+                """,
+                (transaction_id, user_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise ValueError("Transaction introuvable.")
+            if row.get("method_type") != "bank":
+                raise ValueError(
+                    "La conciliation rapide s’applique seulement aux comptes bancaires."
+                )
+
+            session_id = row.get("reconciliation_session_id")
+
+            if seen:
+                cur.execute(
+                    """
+                    UPDATE finance_transactions
+                    SET status = 'confirmed',
+                        reconciliation_status = 'reconciled',
+                        reconciliation_date = %s,
+                        bank_programmed = FALSE,
+                        reminder_enabled = FALSE,
+                        updated_at = NOW()
+                    WHERE id = %s AND user_id = %s;
+                    """,
+                    (parsed_date, transaction_id, user_id),
+                )
+            else:
+                if session_id:
+                    cur.execute(
+                        """
+                        UPDATE finance_reconciliation_session_transactions
+                        SET is_active = FALSE,
+                            removed_at = NOW()
+                        WHERE session_id = %s
+                          AND transaction_id = %s
+                          AND is_active = TRUE;
+                        """,
+                        (session_id, transaction_id),
+                    )
+                cur.execute(
+                    """
+                    UPDATE finance_transactions
+                    SET reconciliation_status = 'unreconciled',
+                        reconciliation_date = NULL,
+                        reconciliation_session_id = NULL,
+                        updated_at = NOW()
+                    WHERE id = %s AND user_id = %s;
+                    """,
+                    (transaction_id, user_id),
+                )
+
+            if session_id:
+                _refresh_reconciliation_session_totals(cur, session_id)
+            conn.commit()
+
+
+def reconciliation_reference_summary(
+    user_id,
+    payment_method_id,
+):
+    """Retourne le point de départ du prochain relevé de carte.
+
+    Un écart justifié est absorbé parce que le solde réel du relevé devient
+    la nouvelle référence. Un écart reporté conserve le solde attendu comme
+    référence afin que l'écart demeure visible au prochain relevé.
+    """
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            payment_method_id = _validate_payment_method(
+                cur, user_id, payment_method_id
+            )
+            cur.execute(
+                """
+                SELECT
+                    id, name, method_type, opening_balance, opening_balance_date
+                FROM finance_payment_methods
+                WHERE id = %s AND user_id = %s;
+                """,
+                (payment_method_id, user_id),
+            )
+            method = cur.fetchone()
+            if not method:
+                raise ValueError("Mode de paiement introuvable.")
+
+            cur.execute(
+                """
+                SELECT
+                    id, statement_date, statement_balance, expected_balance,
+                    closing_reference_balance, difference, difference_resolution
+                FROM finance_reconciliation_sessions
+                WHERE user_id = %s
+                  AND payment_method_id = %s
+                  AND status = 'completed'
+                ORDER BY statement_date DESC, id DESC
+                LIMIT 1;
+                """,
+                (user_id, payment_method_id),
+            )
+            previous = cur.fetchone()
+
+    if previous:
+        balance = previous.get("closing_reference_balance")
+        if balance is None:
+            balance = previous.get("statement_balance")
+        if balance is None:
+            balance = previous.get("expected_balance")
+        if balance is None:
+            balance = Decimal("0.00")
+        return {
+            "payment_method_id": payment_method_id,
+            "payment_method_name": method["name"],
+            "reference_balance": Decimal(balance),
+            "reference_date": previous.get("statement_date"),
+            "source": "previous_statement",
+            "previous_session_id": previous.get("id"),
+            "previous_difference": previous.get("difference"),
+            "previous_difference_resolution": previous.get("difference_resolution"),
+        }
+
+    return {
+        "payment_method_id": payment_method_id,
+        "payment_method_name": method["name"],
+        "reference_balance": Decimal(method.get("opening_balance") or 0),
+        "reference_date": method.get("opening_balance_date"),
+        "source": "opening_balance",
+        "previous_session_id": None,
+        "previous_difference": None,
+        "previous_difference_resolution": None,
+    }
+
+
+
+def dashboard_summary(user_id, month_value):
+    month = _month_start(month_value)
+    next_month = _add_months(month, 1)
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    COALESCE(SUM(amount) FILTER (
+                        WHERE transaction_type='expense' AND status='confirmed'
+                    ),0) AS expenses,
+                    COALESCE(SUM(amount) FILTER (
+                        WHERE transaction_type='income' AND status='confirmed'
+                    ),0) AS incomes,
+                    COUNT(*) FILTER (WHERE status='planned') AS planned_count
+                FROM finance_transactions
+                WHERE user_id=%s AND transaction_date>=%s AND transaction_date<%s
+                  AND COALESCE(budget_excluded, FALSE) = FALSE;
+            """, (user_id, month, next_month))
+            row = cur.fetchone()
+    expenses = Decimal(row["expenses"])
+    incomes = Decimal(row["incomes"])
+    return {
+        "month": month,
+        "expenses": expenses,
+        "incomes": incomes,
+        "difference": incomes - expenses,
+        "planned_count": int(row["planned_count"]),
+    }
+
+def dashboard_expense_kpis(
+    user_id,
+    month_value,
+    limit=8,
+):
+    month = _month_start(
+        month_value
+    )
+    next_month = _add_months(
+        month,
+        1,
+    )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    CASE
+                        WHEN parent.id IS NULL
+                        THEN category.name
+                        ELSE parent.name
+                             || ' › '
+                             || category.name
+                    END AS name,
+                    SUM(transaction.amount) AS total,
+                    COUNT(*) AS transaction_count
+                FROM finance_transactions AS transaction
+                JOIN finance_categories AS category
+                    ON category.id =
+                        transaction.category_id
+                LEFT JOIN finance_categories AS parent
+                    ON parent.id =
+                        category.parent_id
+                WHERE transaction.user_id = %s
+                  AND transaction.transaction_type = 'expense'
+                  AND transaction.status = 'confirmed'
+                  AND COALESCE(transaction.budget_excluded, FALSE) = FALSE
+                  AND transaction.transaction_date >= %s
+                  AND transaction.transaction_date < %s
+                GROUP BY
+                    category.id,
+                    parent.id,
+                    parent.name
+                ORDER BY
+                    total DESC,
+                    name
+                LIMIT %s;
+                """,
+                (
+                    user_id,
+                    month,
+                    next_month,
+                    int(limit),
+                ),
+            )
+            categories = cur.fetchall()
+
+            cur.execute(
+                """
+                SELECT
+                    tag.name,
+                    SUM(transaction.amount) AS total,
+                    COUNT(
+                        DISTINCT transaction.id
+                    ) AS transaction_count
+                FROM finance_transactions AS transaction
+                JOIN finance_transaction_tags AS transaction_tag
+                    ON transaction_tag.transaction_id =
+                        transaction.id
+                JOIN finance_tags AS tag
+                    ON tag.id =
+                        transaction_tag.tag_id
+                WHERE transaction.user_id = %s
+                  AND transaction.transaction_type = 'expense'
+                  AND transaction.status = 'confirmed'
+                  AND COALESCE(transaction.budget_excluded, FALSE) = FALSE
+                  AND transaction.transaction_date >= %s
+                  AND transaction.transaction_date < %s
+                GROUP BY
+                    tag.id,
+                    tag.name
+                ORDER BY
+                    total DESC,
+                    tag.name
+                LIMIT %s;
+                """,
+                (
+                    user_id,
+                    month,
+                    next_month,
+                    int(limit),
+                ),
+            )
+            tags = cur.fetchall()
+
+    return {
+        "month": month,
+        "categories": categories,
+        "tags": tags,
+    }
+
+
+
+def _projection_row(
+    *,
+    transaction_date,
+    transaction_type,
+    amount,
+    description,
+    category_id=None,
+    category_full_name=None,
+    tag_ids=None,
+    tag_names=None,
+    payment_method_id=None,
+    payment_method_name=None,
+    recurrence_id=None,
+    occurrence_date=None,
+    status="planned",
+    projected=False,
+    budget_excluded=False,
+    bank_programmed=False,
+    reminder_enabled=False,
+    reminder_time=None,
+):
+    return {
+        "id": None,
+        "transaction_date": transaction_date,
+        "transaction_type": transaction_type,
+        "amount": Decimal(amount),
+        "description": description,
+        "category_id": category_id,
+        "category_full_name": category_full_name,
+        "tag_ids": list(tag_ids or []),
+        "tag_names": list(tag_names or []),
+        "payment_method_id": payment_method_id,
+        "payment_method_name": payment_method_name,
+        "recurrence_id": recurrence_id,
+        "occurrence_date": occurrence_date,
+        "status": status,
+        "projected": bool(projected),
+        "budget_excluded": bool(budget_excluded),
+        "bank_programmed": bool(bank_programmed),
+        "reminder_enabled": bool(reminder_enabled),
+        "reminder_time": reminder_time,
+    }
+
+
+def _projection_kpis(
+    rows,
+    transaction_type,
+    limit=12,
+    visible_category_ids=None,
+    visible_tag_ids=None,
+):
+    category_values = {}
+    tag_values = {}
+
+    for row in rows:
+        if row["transaction_type"] != transaction_type:
+            continue
+        if bool(row.get("budget_excluded")):
+            continue
+
+        amount = Decimal(row["amount"])
+        bucket = (
+            "upcoming"
+            if row.get("projection_bucket") == "upcoming"
+            else "realized"
+        )
+
+        category_id = row.get("category_id")
+        category_name = (
+            row.get("category_full_name")
+            or "Sans catégorie"
+        )
+        category_key = (
+            int(category_id)
+            if category_id is not None
+            else None
+        )
+        category_is_visible = (
+            category_key is None
+            or visible_category_ids is None
+            or category_key in visible_category_ids
+        )
+        if category_is_visible:
+            category = category_values.setdefault(
+                category_key,
+                {
+                    "id": category_key,
+                    "name": category_name,
+                    "realized": Decimal("0.00"),
+                    "upcoming": Decimal("0.00"),
+                    "transaction_count": 0,
+                },
+            )
+            category[bucket] += amount
+            category["transaction_count"] += 1
+
+        tag_ids = list(row.get("tag_ids") or [])
+        tag_names = list(row.get("tag_names") or [])
+        for index, tag_name in enumerate(tag_names):
+            tag_id = (
+                int(tag_ids[index])
+                if index < len(tag_ids)
+                and tag_ids[index] is not None
+                else None
+            )
+            if (
+                tag_id is not None
+                and visible_tag_ids is not None
+                and tag_id not in visible_tag_ids
+            ):
+                continue
+            tag_key = (
+                ("id", tag_id)
+                if tag_id is not None
+                else ("name", str(tag_name).casefold())
+            )
+            tag = tag_values.setdefault(
+                tag_key,
+                {
+                    "id": tag_id,
+                    "name": tag_name,
+                    "realized": Decimal("0.00"),
+                    "upcoming": Decimal("0.00"),
+                    "transaction_count": 0,
+                },
+            )
+            tag[bucket] += amount
+            tag["transaction_count"] += 1
+
+    def finalize(values):
+        rows_out = []
+        for row in values.values():
+            row = dict(row)
+            row["total"] = (
+                Decimal(row["realized"])
+                + Decimal(row["upcoming"])
+            )
+            rows_out.append(row)
+
+        rows_out.sort(
+            key=lambda row: (
+                -row["total"],
+                str(row["name"]).casefold(),
+            )
+        )
+        return rows_out[: int(limit)]
+
+    return {
+        "categories": finalize(category_values),
+        "tags": finalize(tag_values),
+    }
+
+
+def _dashboard_month_projection_v190(
+    user_id,
+    month_value,
+    *,
+    today_value=None,
+    kpi_limit=12,
+):
+    """Prépare le réalisé, l'à venir et les récurrences projetées du mois."""
+
+    month = _month_start(month_value)
+    next_month = _add_months(month, 1)
+    month_end = next_month - timedelta(days=1)
+    today = (
+        today_value
+        if isinstance(today_value, date)
+        else (
+            date.fromisoformat(str(today_value))
+            if today_value
+            else date.today()
+        )
+    )
+
+    existing = [
+        dict(row)
+        for row in list_transactions(
+            user_id,
+            start_date=month,
+            end_date=month_end,
+            include_linked_transfer_destinations=False,
+            limit=100000,
+        )
+    ]
+
+    existing_occurrences = {
+        (
+            int(row["recurrence_id"]),
+            row.get("occurrence_date")
+            or row["transaction_date"],
+        )
+        for row in existing
+        if row.get("recurrence_id")

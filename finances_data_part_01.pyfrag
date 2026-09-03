@@ -1,0 +1,650 @@
+from __future__ import annotations
+
+from calendar import monthrange
+from collections import defaultdict
+from datetime import date, datetime, time, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_HALF_UP
+import csv
+import hashlib
+import io
+import json
+import re
+import unicodedata
+from zoneinfo import ZoneInfo
+
+from db import get_connection
+from finances_shared_loans_data import (
+    SHARED_LOAN_PERMISSIONS,
+    SHARED_LOAN_ROLES,
+    add_shared_loan_event,
+    get_shared_loan,
+    list_available_loan_participants,
+    list_shared_loans,
+    save_shared_loan,
+    shared_loan_amortization_preview,
+)
+from finances_validation import (
+    decimal_value as _decimal_value,
+    money as _money,
+    optional_date as _optional_date_value,
+    text_value as _text,
+)
+from finances_calculations import (
+    add_months as _add_months,
+    analyze_installment_progress,
+    automatic_installment_amount as _automatic_installment_amount,
+    month_start as _month_start,
+    next_date as _next_date,
+    periods_per_year as _periods_per_year,
+    recurrence_dates_between as _recurrence_dates_between,
+)
+
+
+TRANSACTION_TYPES = {"expense": "Dépense", "income": "Revenu"}
+TRANSACTION_STATUSES = {"confirmed": "Confirmée", "planned": "Prévue"}
+FREQUENCY_UNITS = {
+    "day": "Jour",
+    "week": "Semaine",
+    "month": "Mois",
+    "year": "Année",
+}
+CONFIRMATION_MODES = {
+    "confirm": "À confirmer",
+    "automatic": "Création automatique",
+}
+CARRY_POLICIES = {
+    "none": "Aucun report",
+    "unused": "Reporter le montant inutilisé",
+    "overspend": "Reporter le dépassement",
+    "both": "Reporter les deux",
+}
+RECONCILIATION_STATUSES = {
+    "unreconciled": "À concilier",
+    "reconciled": "Conciliée",
+}
+DEFAULT_PAYMENT_METHODS = (
+    "MC Canadian Tire",
+    "MC PC",
+    "Visa Desjardins",
+    "Direct",
+)
+
+DEFAULT_PAYMENT_METHOD_TYPES = {
+    "MC Canadian Tire": "credit_card",
+    "MC PC": "credit_card",
+    "Visa Desjardins": "credit_card",
+    "Direct": "bank",
+}
+
+PAYMENT_METHOD_TYPES = {
+    "credit_card": "Carte de crédit",
+    "bank": "Compte bancaire",
+    "credit_line": "Marge de crédit",
+    "cash": "Argent comptant",
+    "other": "Autre",
+}
+
+RECONCILIATION_SESSION_STATUSES = {
+    "completed": "Complétée",
+    "cancelled": "Annulée",
+}
+
+BUDGET_INPUT_FREQUENCIES = {
+    "monthly": "Mensuel",
+    "biweekly": "Aux 2 semaines",
+}
+
+
+
+
+
+
+
+
+def _normalize_reminder_time(value):
+    text = str(value or "09:00").strip()[:5]
+    try:
+        parsed = datetime.strptime(text, "%H:%M").time()
+    except ValueError as error:
+        raise ValueError("L’heure du rappel est invalide.") from error
+    return parsed
+
+
+
+
+
+
+
+
+def _init_finances_schema_v190():
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS finance_categories (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    parent_id BIGINT REFERENCES finance_categories(id) ON DELETE RESTRICT,
+                    name TEXT NOT NULL,
+                    category_type TEXT NOT NULL DEFAULT 'both'
+                        CHECK (category_type IN ('expense', 'income', 'both')),
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CHECK (CHAR_LENGTH(name) BETWEEN 1 AND 100)
+                );
+            """)
+            cur.execute("""
+                ALTER TABLE finance_categories
+                ADD COLUMN IF NOT EXISTS dashboard_visible BOOLEAN
+                NOT NULL DEFAULT TRUE;
+            """)
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS finance_categories_root_uq
+                ON finance_categories (user_id, LOWER(name))
+                WHERE parent_id IS NULL;
+            """)
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS finance_categories_child_uq
+                ON finance_categories (user_id, parent_id, LOWER(name))
+                WHERE parent_id IS NOT NULL;
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS finance_tags (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    name TEXT NOT NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CHECK (CHAR_LENGTH(name) BETWEEN 1 AND 80),
+                    UNIQUE (user_id, name)
+                );
+            """)
+            cur.execute("""
+                ALTER TABLE finance_tags
+                ADD COLUMN IF NOT EXISTS dashboard_visible BOOLEAN
+                NOT NULL DEFAULT TRUE;
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS finance_payment_methods (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL
+                        REFERENCES users(id) ON DELETE CASCADE,
+                    name TEXT NOT NULL,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CHECK (CHAR_LENGTH(name) BETWEEN 1 AND 100)
+                );
+            """)
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                finance_payment_methods_name_uq
+                ON finance_payment_methods (user_id, LOWER(name));
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS
+                finance_payment_methods_order_idx
+                ON finance_payment_methods (
+                    user_id, is_active DESC, sort_order, name
+                );
+            """)
+            cur.execute("""
+                ALTER TABLE finance_payment_methods
+                ADD COLUMN IF NOT EXISTS method_type TEXT
+                NOT NULL DEFAULT 'credit_card';
+            """)
+            cur.execute("""
+                ALTER TABLE finance_payment_methods
+                ADD COLUMN IF NOT EXISTS statement_day SMALLINT;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_payment_methods
+                ADD COLUMN IF NOT EXISTS payment_day SMALLINT;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_payment_methods
+                ADD COLUMN IF NOT EXISTS opening_balance NUMERIC(14,2)
+                NOT NULL DEFAULT 0;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_payment_methods
+                ADD COLUMN IF NOT EXISTS opening_balance_date DATE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_payment_methods
+                ADD COLUMN IF NOT EXISTS opening_balance_reconciled BOOLEAN
+                NOT NULL DEFAULT FALSE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_payment_methods
+                ADD COLUMN IF NOT EXISTS note TEXT;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_payment_methods
+                ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(14,2);
+            """)
+            cur.execute("""
+                DO $$
+                DECLARE
+                    current_definition TEXT;
+                BEGIN
+                    SELECT pg_get_constraintdef(oid)
+                    INTO current_definition
+                    FROM pg_constraint
+                    WHERE conname = 'finance_payment_methods_type_ck'
+                      AND conrelid = 'finance_payment_methods'::regclass;
+
+                    IF current_definition IS NOT NULL
+                       AND POSITION('credit_line' IN current_definition) = 0 THEN
+                        ALTER TABLE finance_payment_methods
+                        DROP CONSTRAINT finance_payment_methods_type_ck;
+                        current_definition := NULL;
+                    END IF;
+
+                    IF current_definition IS NULL THEN
+                        ALTER TABLE finance_payment_methods
+                        ADD CONSTRAINT finance_payment_methods_type_ck
+                        CHECK (
+                            method_type IN (
+                                'credit_card',
+                                'bank',
+                                'credit_line',
+                                'cash',
+                                'other'
+                            )
+                        );
+                    END IF;
+                END $$;
+            """)
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname = 'finance_payment_methods_statement_day_ck'
+                    ) THEN
+                        ALTER TABLE finance_payment_methods
+                        ADD CONSTRAINT finance_payment_methods_statement_day_ck
+                        CHECK (
+                            statement_day IS NULL
+                            OR statement_day BETWEEN 1 AND 31
+                        );
+                    END IF;
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname = 'finance_payment_methods_payment_day_ck'
+                    ) THEN
+                        ALTER TABLE finance_payment_methods
+                        ADD CONSTRAINT finance_payment_methods_payment_day_ck
+                        CHECK (
+                            payment_day IS NULL
+                            OR payment_day BETWEEN 1 AND 31
+                        );
+                    END IF;
+                END
+                $$;
+            """)
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS finance_linked_transfers (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL
+                        REFERENCES users(id) ON DELETE CASCADE,
+                    transfer_type TEXT NOT NULL DEFAULT 'credit_card_payment'
+                        CHECK (transfer_type IN ('credit_card_payment')),
+                    source_payment_method_id BIGINT NOT NULL
+                        REFERENCES finance_payment_methods(id) ON DELETE RESTRICT,
+                    destination_payment_method_id BIGINT NOT NULL
+                        REFERENCES finance_payment_methods(id) ON DELETE RESTRICT,
+                    amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),
+                    source_date DATE NOT NULL,
+                    destination_date DATE NOT NULL,
+                    description TEXT NOT NULL,
+                    note TEXT,
+                    status TEXT NOT NULL DEFAULT 'planned'
+                        CHECK (status IN ('confirmed', 'planned')),
+                    bank_programmed BOOLEAN NOT NULL DEFAULT FALSE,
+                    reminder_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                    reminder_time TIME NOT NULL DEFAULT '09:00',
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CHECK (source_payment_method_id <> destination_payment_method_id)
+                );
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS finance_linked_transfers_user_date_idx
+                ON finance_linked_transfers (
+                    user_id, source_date DESC, id DESC
+                );
+            """)
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS finance_recurrences (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    transaction_type TEXT NOT NULL
+                        CHECK (transaction_type IN ('expense', 'income')),
+                    description TEXT NOT NULL,
+                    amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),
+                    category_id BIGINT REFERENCES finance_categories(id) ON DELETE SET NULL,
+                    note TEXT,
+                    frequency_unit TEXT NOT NULL
+                        CHECK (frequency_unit IN ('day', 'week', 'month', 'year')),
+                    frequency_interval INTEGER NOT NULL DEFAULT 1
+                        CHECK (frequency_interval BETWEEN 1 AND 365),
+                    start_date DATE NOT NULL,
+                    end_date DATE,
+                    next_date DATE NOT NULL,
+                    confirmation_mode TEXT NOT NULL DEFAULT 'confirm'
+                        CHECK (confirmation_mode IN ('confirm', 'automatic')),
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CHECK (end_date IS NULL OR end_date >= start_date)
+                );
+            """)
+            cur.execute("""
+                ALTER TABLE finance_recurrences
+                ADD COLUMN IF NOT EXISTS payment_method_id BIGINT;
+            """)
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname =
+                            'finance_recurrences_payment_method_fk'
+                    ) THEN
+                        ALTER TABLE finance_recurrences
+                        ADD CONSTRAINT
+                            finance_recurrences_payment_method_fk
+                        FOREIGN KEY (payment_method_id)
+                        REFERENCES finance_payment_methods(id)
+                        ON DELETE SET NULL;
+                    END IF;
+                END
+                $$;
+            """)
+
+            cur.execute("""
+                ALTER TABLE finance_recurrences
+                ADD COLUMN IF NOT EXISTS budget_excluded BOOLEAN
+                NOT NULL DEFAULT FALSE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_recurrences
+                ADD COLUMN IF NOT EXISTS bank_programmed BOOLEAN
+                NOT NULL DEFAULT FALSE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_recurrences
+                ADD COLUMN IF NOT EXISTS reminder_enabled BOOLEAN
+                NOT NULL DEFAULT FALSE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_recurrences
+                ADD COLUMN IF NOT EXISTS reminder_time TIME
+                NOT NULL DEFAULT '09:00';
+            """)
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS finance_recurrence_tags (
+                    recurrence_id BIGINT NOT NULL
+                        REFERENCES finance_recurrences(id) ON DELETE CASCADE,
+                    tag_id BIGINT NOT NULL
+                        REFERENCES finance_tags(id) ON DELETE CASCADE,
+                    PRIMARY KEY (recurrence_id, tag_id)
+                );
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS finance_transactions (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    transaction_date DATE NOT NULL,
+                    transaction_type TEXT NOT NULL
+                        CHECK (transaction_type IN ('expense', 'income')),
+                    amount NUMERIC(14,2) NOT NULL CHECK (amount > 0),
+                    description TEXT NOT NULL,
+                    category_id BIGINT REFERENCES finance_categories(id) ON DELETE SET NULL,
+                    note TEXT,
+                    status TEXT NOT NULL DEFAULT 'confirmed'
+                        CHECK (status IN ('confirmed', 'planned')),
+                    recurrence_id BIGINT REFERENCES finance_recurrences(id) ON DELETE SET NULL,
+                    occurrence_date DATE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE (recurrence_id, occurrence_date)
+                );
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS finance_transactions_user_date_idx
+                ON finance_transactions (user_id, transaction_date DESC, id DESC);
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS import_source TEXT;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS import_key TEXT;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS imported_at TIMESTAMPTZ;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS payment_method_id BIGINT;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS reconciliation_status TEXT
+                NOT NULL DEFAULT 'unreconciled';
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS reconciliation_date DATE;
+            """)
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname =
+                            'finance_transactions_payment_method_fk'
+                    ) THEN
+                        ALTER TABLE finance_transactions
+                        ADD CONSTRAINT
+                            finance_transactions_payment_method_fk
+                        FOREIGN KEY (payment_method_id)
+                        REFERENCES finance_payment_methods(id)
+                        ON DELETE SET NULL;
+                    END IF;
+                END
+                $$;
+            """)
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname =
+                            'finance_transactions_reconciliation_status_ck'
+                    ) THEN
+                        ALTER TABLE finance_transactions
+                        ADD CONSTRAINT
+                            finance_transactions_reconciliation_status_ck
+                        CHECK (
+                            reconciliation_status IN (
+                                'unreconciled',
+                                'reconciled'
+                            )
+                        );
+                    END IF;
+                END
+                $$;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS budget_excluded BOOLEAN
+                NOT NULL DEFAULT FALSE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS bank_programmed BOOLEAN
+                NOT NULL DEFAULT FALSE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS reminder_enabled BOOLEAN
+                NOT NULL DEFAULT FALSE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS reminder_time TIME
+                NOT NULL DEFAULT '09:00';
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS linked_transfer_id BIGINT;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS linked_transfer_role TEXT;
+            """)
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname =
+                            'finance_transactions_linked_transfer_fk'
+                    ) THEN
+                        ALTER TABLE finance_transactions
+                        ADD CONSTRAINT
+                            finance_transactions_linked_transfer_fk
+                        FOREIGN KEY (linked_transfer_id)
+                        REFERENCES finance_linked_transfers(id)
+                        ON DELETE CASCADE;
+                    END IF;
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint
+                        WHERE conname =
+                            'finance_transactions_linked_transfer_role_ck'
+                    ) THEN
+                        ALTER TABLE finance_transactions
+                        ADD CONSTRAINT
+                            finance_transactions_linked_transfer_role_ck
+                        CHECK (
+                            linked_transfer_role IS NULL
+                            OR linked_transfer_role IN ('source', 'destination')
+                        );
+                    END IF;
+                END
+                $$;
+            """)
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                finance_transactions_linked_transfer_role_uq
+                ON finance_transactions (
+                    linked_transfer_id, linked_transfer_role
+                )
+                WHERE linked_transfer_id IS NOT NULL
+                  AND linked_transfer_role IS NOT NULL;
+            """)
+
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS
+                finance_transactions_reconciliation_idx
+                ON finance_transactions (
+                    user_id,
+                    payment_method_id,
+                    reconciliation_status,
+                    transaction_date DESC
+                );
+            """)
+
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                finance_transactions_import_key_uq
+                ON finance_transactions (user_id, import_source, import_key)
+                WHERE import_source IS NOT NULL
+                  AND import_key IS NOT NULL;
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS finance_transaction_tags (
+                    transaction_id BIGINT NOT NULL
+                        REFERENCES finance_transactions(id) ON DELETE CASCADE,
+                    tag_id BIGINT NOT NULL
+                        REFERENCES finance_tags(id) ON DELETE CASCADE,
+                    PRIMARY KEY (transaction_id, tag_id)
+                );
+            """)
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS finance_reconciliation_sessions (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL
+                        REFERENCES users(id) ON DELETE CASCADE,
+                    payment_method_id BIGINT NOT NULL
+                        REFERENCES finance_payment_methods(id)
+                        ON DELETE RESTRICT,
+                    statement_date DATE NOT NULL,
+                    statement_balance NUMERIC(14,2),
+                    due_date DATE,
+                    reconciliation_date DATE NOT NULL,
+                    note TEXT,
+                    selected_total NUMERIC(14,2) NOT NULL DEFAULT 0,
+                    difference NUMERIC(14,2),
+                    included_opening_balance BOOLEAN
+                        NOT NULL DEFAULT FALSE,
+                    opening_balance_amount NUMERIC(14,2)
+                        NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'completed'
+                        CHECK (status IN ('completed', 'cancelled')),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    cancelled_at TIMESTAMPTZ,
+                    CHECK (note IS NULL OR CHAR_LENGTH(note) <= 1000)
+                );
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS
+                finance_reconciliation_sessions_user_idx
+                ON finance_reconciliation_sessions (
+                    user_id,
+                    payment_method_id,
+                    statement_date DESC,
+                    id DESC
+                );
+            """)
+            # V1.9.0 — référence de relevé et traitement explicite des écarts.
+            # Les ALTER sont idempotents pour les bases déjà en production.
+            cur.execute("""
+                ALTER TABLE finance_reconciliation_sessions
+                ADD COLUMN IF NOT EXISTS reference_balance NUMERIC(14,2);
+            """)
+            cur.execute("""
+                ALTER TABLE finance_reconciliation_sessions
+                ADD COLUMN IF NOT EXISTS reference_date DATE;
+            """)
+            cur.execute("""
+                ALTER TABLE finance_reconciliation_sessions
+                ADD COLUMN IF NOT EXISTS expected_balance NUMERIC(14,2);
+            """)
+            cur.execute("""
+                ALTER TABLE finance_reconciliation_sessions
+                ADD COLUMN IF NOT EXISTS closing_reference_balance NUMERIC(14,2);
+            """)
+            cur.execute("""
+                ALTER TABLE finance_reconciliation_sessions
+                ADD COLUMN IF NOT EXISTS difference_resolution TEXT
+                    NOT NULL DEFAULT 'legacy';
+            """)
+            cur.execute("""
+                ALTER TABLE finance_reconciliation_sessions

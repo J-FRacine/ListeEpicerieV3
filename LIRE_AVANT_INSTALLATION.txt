@@ -1,106 +1,14 @@
-JF APPS — PERSONNAGES JDR V1.3.0
-PROGRESSION GUIDÉE ET SOUS-CLASSE FACULTATIVE
-============================================================
+JF Apps — Finances, découpage compatible avec l'interface Web GitHub
 
-BASE UTILISÉE
--------------
-Cette version part de Personnages JDR V1.2.0 et conserve :
-- profils raciaux Pathfinder;
-- équipement, armures, boucliers et possessions;
-- poids, encombrement et vitesse;
-- audit des calculs Pathfinder;
-- compétences, sauvegardes et attaques existantes.
+Tous les fichiers sont à placer à la RACINE du dépôt.
 
-NOUVEAUTÉS V1.3.0
------------------
-1. Nouvel onglet « Progression ».
-2. Montée d’un niveau à la fois avec prévisualisation avant application.
-3. Sous-classe facultative :
-   - elle peut rester vide;
-   - aucun avertissement ou blocage si elle est vide;
-   - les choix propres à la sous-classe sont alors ignorés;
-   - elle peut être ajoutée plus tard.
-4. L’assistant peut appliquer/documenter :
-   - PV gagnés;
-   - ajout facultatif des PV gagnés aux PV actuels;
-   - BBA gagné;
-   - Vigueur, Réflexes et Volonté de base gagnés;
-   - augmentation facultative de caractéristique;
-   - nouveaux rangs de compétences;
-   - dons / choix de don;
-   - capacités spéciales / pouvoirs de classe;
-   - notes générales.
-5. Rappel visuel aux niveaux multiples de 4 pour vérifier l’augmentation
-   de caractéristique, sans l’imposer.
-6. Historique détaillé des montées de niveau.
-7. La sous-classe apparaît aussi dans Identité et dans le résumé du personnage.
+Fichiers requis :
+- finances.py
+- finances_data.py
+- tous les finances_part_XX.pyfrag
+- tous les finances_data_part_XX.pyfrag
 
-DONNÉES ET MIGRATION
---------------------
-Aucun script SQL manuel n’est requis.
-Au démarrage, Personnages JDR crée automatiquement :
-- la colonne rpg_characters.subclass_name si elle n’existe pas;
-- la table rpg_character_level_history et son index.
+Ne téléversez PAS le dossier _finances_refactor_backup.
+Les anciens dossiers finances_parts et finances_data_parts ne sont pas nécessaires avec cette version.
 
-La montée de niveau est enregistrée dans une transaction : si une validation
-échoue, les changements du niveau ne sont pas appliqués partiellement.
-
-SAUVEGARDE / RESTAURATION GLOBALE
----------------------------------
-Aucune modification du Portail V1.4.0 n’est nécessaire.
-Le mécanisme actuel exporte automatiquement les tables rpg_ reliées au
-personnage et restaure les colonnes compatibles dynamiquement. La nouvelle
-sous-classe et l’historique de progression sont donc pris en charge.
-
-FICHIERS À REMPLACER
---------------------
-À la racine du dépôt GitHub :
-- rpg_character.py
-- rpg_character_data.py
-- app_versions.py
-- manual.py
-
-FICHIERS INCLUS POUR COHÉRENCE, MAIS INCHANGÉS FONCTIONNELLEMENT
-----------------------------------------------------------------
-- rpg_character_rules.py
-- rpg_character_catalog.py
-
-Vous pouvez aussi les remplacer avec les copies incluses si vous souhaitez
-installer le paquet complet en une seule fois.
-
-AUCUNE NOUVELLE DÉPENDANCE
---------------------------
-Aucune modification de requirements.txt n’est requise.
-
-VERSIONS CONSERVÉES
--------------------
-- Portail JF Apps : V1.4.0
-- Finances : V1.13.1
-- Liste d’épicerie : V1.1.2
-- Journal de pression : V1.2.1
-- Personnages JDR : V1.3.0
-
-TESTS EFFECTUÉS
----------------
-- py_compile sur les fichiers Python du paquet : OK
-- analyse AST des fichiers modifiés : OK
-- présence de la migration subclass_name : OK
-- présence de la table d’historique : OK
-- contrôle statique de la version et du manuel : OK
-- simulation d’une montée niveau 3 -> 4 : OK
-- sous-classe vide acceptée : OK
-- notes propres à la sous-classe ignorées si sous-classe vide : OK
-- rangs de compétence ajoutés sans remplacer les rangs existants : OK
-
-TESTS CONSEILLÉS APRÈS DÉPLOIEMENT CANNER
------------------------------------------
-1. Ouvrir un personnage existant et vérifier que la page affiche V1.3.0.
-2. Vérifier Identité : le champ « Sous-classe facultative » est présent.
-3. Ouvrir Progression et lancer une montée de niveau avec sous-classe vide.
-4. Prévisualiser, puis appliquer; vérifier le nouveau niveau et l’historique.
-5. Refaire un essai avec une sous-classe et une note propre à celle-ci.
-6. Tester un ajout de PV, BBA, sauvegarde et rang de compétence.
-7. Vérifier qu’un rang existant est augmenté plutôt que remplacé.
-8. Créer une sauvegarde globale depuis le Centre de maintenance après le test.
-
-Aucun SQL manuel. Aucune nouvelle dépendance.
+Aucun changement PostgreSQL, aucun SQL manuel.

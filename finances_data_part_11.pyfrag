@@ -1,0 +1,650 @@
+                (session_id, user_id),
+            )
+            session = cur.fetchone()
+            if not session:
+                raise ValueError("Séance de conciliation introuvable.")
+            if session["status"] == "cancelled":
+                raise ValueError("Cette séance est déjà annulée.")
+
+            cur.execute(
+                """
+                SELECT transaction_id
+                FROM finance_reconciliation_session_transactions
+                WHERE session_id = %s
+                  AND is_active = TRUE;
+                """,
+                (session_id,),
+            )
+            ids = [int(row["transaction_id"]) for row in cur.fetchall()]
+
+            if ids:
+                cur.execute(
+                    """
+                    UPDATE finance_transactions
+                    SET reconciliation_status = 'unreconciled',
+                        reconciliation_date = NULL,
+                        reconciliation_session_id = NULL,
+                        updated_at = NOW()
+                    WHERE user_id = %s
+                      AND id = ANY(%s);
+                    """,
+                    (user_id, ids),
+                )
+                cur.execute(
+                    """
+                    UPDATE finance_reconciliation_session_transactions
+                    SET is_active = FALSE,
+                        removed_at = NOW()
+                    WHERE session_id = %s
+                      AND is_active = TRUE;
+                    """,
+                    (session_id,),
+                )
+
+            if session["included_opening_balance"]:
+                cur.execute(
+                    """
+                    UPDATE finance_payment_methods
+                    SET opening_balance_reconciled = FALSE,
+                        updated_at = NOW()
+                    WHERE id = %s AND user_id = %s;
+                    """,
+                    (session["payment_method_id"], user_id),
+                )
+
+            cur.execute(
+                """
+                UPDATE finance_reconciliation_sessions
+                SET status = 'cancelled',
+                    cancelled_at = NOW()
+                WHERE id = %s;
+                """,
+                (session_id,),
+            )
+            conn.commit()
+
+
+def list_reconciliation_session_links(user_id):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    link.*,
+                    session.user_id
+                FROM finance_reconciliation_session_transactions AS link
+                JOIN finance_reconciliation_sessions AS session
+                    ON session.id = link.session_id
+                WHERE session.user_id = %s
+                ORDER BY link.session_id, link.transaction_id;
+                """,
+                (user_id,),
+            )
+            return cur.fetchall()
+
+
+def _export_finances_v190(user_id):
+    transactions = list_transactions(
+        user_id,
+        include_linked_transfer_destinations=False,
+        limit=100000,
+    )
+    json_transactions = list_transactions(
+        user_id,
+        include_linked_transfer_destinations=True,
+        limit=100000,
+    )
+    linked_transfers = list_card_payment_transfers(
+        user_id,
+        limit=100000,
+    )
+    categories = list_categories(
+        user_id,
+        include_inactive=True,
+    )
+    tags = list_tags(
+        user_id,
+        include_inactive=True,
+    )
+    payment_methods = list_payment_methods(
+        user_id,
+        include_inactive=True,
+    )
+    recurrences = list_recurrences(
+        user_id
+    )
+    goals = list_goals(
+        user_id
+    )
+    budget_items = list_budget_items(
+        user_id,
+        include_inactive=True,
+    )
+    reconciliation_sessions = list_reconciliation_sessions(
+        user_id,
+        include_cancelled=True,
+        limit=100000,
+    )
+    reconciliation_session_links = list_reconciliation_session_links(
+        user_id
+    )
+
+    csv_buffer = io.StringIO()
+    writer = csv.writer(
+        csv_buffer
+    )
+    writer.writerow(
+        [
+            "Date",
+            "Type",
+            "Description",
+            "Montant",
+            "Catégorie",
+            "Étiquettes",
+            "Mode de paiement",
+            "Note",
+            "Statut",
+            "Conciliation",
+            "Date de conciliation",
+            "Hors budget",
+            "Programmée à la banque",
+            "Rappel actif",
+            "Heure du rappel",
+            "Récurrence",
+            "Source importation",
+            "Clé importation",
+            "Séance de conciliation",
+            "Paiement de carte lié",
+            "Compte de départ",
+            "Carte destinataire",
+        ]
+    )
+
+    for row in reversed(
+        transactions
+    ):
+        writer.writerow(
+            [
+                row[
+                    "transaction_date"
+                ].isoformat(),
+                TRANSACTION_TYPES[
+                    row[
+                        "transaction_type"
+                    ]
+                ],
+                row["description"],
+                str(row["amount"]),
+                row[
+                    "category_full_name"
+                ]
+                or "",
+                " | ".join(
+                    row[
+                        "tag_names"
+                    ]
+                    or []
+                ),
+                row.get(
+                    "payment_method_name"
+                )
+                or "",
+                row["note"]
+                or "",
+                TRANSACTION_STATUSES[
+                    row["status"]
+                ],
+                RECONCILIATION_STATUSES.get(
+                    row.get(
+                        "reconciliation_status"
+                    )
+                    or "unreconciled",
+                    "À concilier",
+                ),
+                (
+                    row[
+                        "reconciliation_date"
+                    ].isoformat()
+                    if row.get(
+                        "reconciliation_date"
+                    )
+                    else ""
+                ),
+                (
+                    "Oui"
+                    if row.get("budget_excluded")
+                    else "Non"
+                ),
+                (
+                    "Oui"
+                    if row.get("bank_programmed")
+                    else "Non"
+                ),
+                (
+                    "Oui"
+                    if row.get("reminder_enabled")
+                    else "Non"
+                ),
+                str(row.get("reminder_time") or "")[:5],
+                (
+                    "Oui"
+                    if row[
+                        "recurrence_id"
+                    ]
+                    else "Non"
+                ),
+                row.get(
+                    "import_source"
+                )
+                or "jf_apps",
+                row.get(
+                    "import_key"
+                )
+                or "",
+                row.get(
+                    "reconciliation_session_id"
+                )
+                or "",
+                (
+                    "Oui"
+                    if row.get("linked_transfer_id")
+                    else "Non"
+                ),
+                row.get("linked_transfer_source_name") or "",
+                row.get("linked_transfer_destination_name") or "",
+            ]
+        )
+
+    def serial(value):
+        if isinstance(
+            value,
+            (
+                date,
+                datetime,
+                time,
+                Decimal,
+            ),
+        ):
+            return str(
+                value
+            )
+        if isinstance(
+            value,
+            list,
+        ):
+            return [
+                serial(item)
+                for item in value
+            ]
+        if isinstance(
+            value,
+            dict,
+        ):
+            return {
+                key: serial(item)
+                for key, item
+                in value.items()
+            }
+        return value
+
+    payload = {
+        "format": "JF Apps Finances",
+        "version": "1.9.0",
+        "categories": [
+            serial(
+                dict(row)
+            )
+            for row in categories
+        ],
+        "tags": [
+            serial(
+                dict(row)
+            )
+            for row in tags
+        ],
+        "payment_methods": [
+            serial(
+                dict(row)
+            )
+            for row in payment_methods
+        ],
+        "transactions": [
+            serial(
+                dict(row)
+            )
+            for row in json_transactions
+        ],
+        "linked_transfers": [
+            serial(dict(row))
+            for row in linked_transfers
+        ],
+        "recurrences": [
+            serial(
+                dict(row)
+            )
+            for row in recurrences
+        ],
+        "goals": [
+            serial(
+                dict(row)
+            )
+            for row in goals
+        ],
+        "budget_items": [
+            serial(dict(row))
+            for row in budget_items
+        ],
+        "reconciliation_sessions": [
+            serial(dict(row))
+            for row in reconciliation_sessions
+        ],
+        "reconciliation_session_transactions": [
+            serial(dict(row))
+            for row in reconciliation_session_links
+        ],
+    }
+
+    return (
+        csv_buffer.getvalue().encode(
+            "utf-8-sig"
+        ),
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            indent=2,
+        ).encode(
+            "utf-8"
+        ),
+    )
+
+# =========================================================
+# ARCHITECTURE V1.13.0 — IMPLÉMENTATIONS HISTORIQUES EXPLICITES
+# Les fonctions remplacées au fil des versions portent désormais un nom
+# versionné (_..._v190, _..._v1100, etc.) plutôt que d’être redéfinies
+# plusieurs fois sous le même nom. Les fonctions publiques restent celles
+# de la version courante; le comportement et les migrations sont inchangés.
+# =========================================================
+
+# =========================================================
+# FINANCES V1.10.0 — BUDGET PÉRIODÉ, CAPACITÉ VARIABLE ET
+# PLANS DE FINANCEMENT / VERSEMENTS SUR CARTE
+# =========================================================
+
+
+
+
+
+
+
+
+INSTALLMENT_PLAN_TYPES = {
+    "merchant": "Financement magasin",
+    "credit_card": "Versements sur carte de crédit",
+}
+
+
+
+
+def _init_finances_schema_v1100():
+    """Mise à niveau V1.10.0, idempotente et sans SQL manuel."""
+
+    _init_finances_schema_v190()
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Périodes d'effet du Budget.
+            cur.execute(
+                """
+                ALTER TABLE finance_budget_items
+                ADD COLUMN IF NOT EXISTS effective_start DATE;
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE finance_budget_items
+                ADD COLUMN IF NOT EXISTS effective_end DATE;
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS finance_budget_items_effective_idx
+                ON finance_budget_items (
+                    user_id,
+                    is_active,
+                    effective_start,
+                    effective_end
+                );
+                """
+            )
+
+            # Plans de financement. Ils ne créent jamais une dépense pour le
+            # montant initial complet : seuls les versements deviennent des
+            # transactions budgétaires.
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS finance_installment_plans (
+                    id BIGSERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL
+                        REFERENCES users(id) ON DELETE CASCADE,
+                    plan_type TEXT NOT NULL
+                        CHECK (plan_type IN ('merchant', 'credit_card')),
+                    provider_name TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    original_amount NUMERIC(14,2) NOT NULL
+                        CHECK (original_amount > 0),
+                    purchase_date DATE,
+                    total_installments INTEGER NOT NULL
+                        CHECK (total_installments BETWEEN 1 AND 1200),
+                    completed_installments INTEGER NOT NULL DEFAULT 0
+                        CHECK (completed_installments >= 0),
+                    remaining_balance NUMERIC(14,2) NOT NULL DEFAULT 0
+                        CHECK (remaining_balance >= 0),
+                    installment_amount NUMERIC(14,2) NOT NULL
+                        CHECK (installment_amount > 0),
+                    annual_interest_rate NUMERIC(8,4) NOT NULL DEFAULT 0
+                        CHECK (annual_interest_rate >= 0),
+                    fees_total NUMERIC(14,2) NOT NULL DEFAULT 0
+                        CHECK (fees_total >= 0),
+                    frequency_unit TEXT NOT NULL DEFAULT 'month'
+                        CHECK (frequency_unit IN ('day','week','month','year')),
+                    frequency_interval INTEGER NOT NULL DEFAULT 1
+                        CHECK (frequency_interval BETWEEN 1 AND 365),
+                    next_due_date DATE,
+                    payment_method_id BIGINT
+                        REFERENCES finance_payment_methods(id)
+                        ON DELETE SET NULL,
+                    category_id BIGINT
+                        REFERENCES finance_categories(id)
+                        ON DELETE SET NULL,
+                    budget_excluded BOOLEAN NOT NULL DEFAULT FALSE,
+                    note TEXT,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CHECK (completed_installments <= total_installments),
+                    CHECK (CHAR_LENGTH(provider_name) BETWEEN 1 AND 120),
+                    CHECK (CHAR_LENGTH(description) BETWEEN 1 AND 160),
+                    CHECK (note IS NULL OR CHAR_LENGTH(note) <= 1000)
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS finance_installment_plans_user_idx
+                ON finance_installment_plans (
+                    user_id,
+                    is_active DESC,
+                    next_due_date,
+                    id
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS finance_installment_plan_tags (
+                    plan_id BIGINT NOT NULL
+                        REFERENCES finance_installment_plans(id)
+                        ON DELETE CASCADE,
+                    tag_id BIGINT NOT NULL
+                        REFERENCES finance_tags(id)
+                        ON DELETE CASCADE,
+                    PRIMARY KEY (plan_id, tag_id)
+                );
+                """
+            )
+
+            cur.execute(
+                """
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS installment_plan_id BIGINT;
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE finance_transactions
+                ADD COLUMN IF NOT EXISTS installment_number INTEGER;
+                """
+            )
+            cur.execute(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname =
+                            'finance_transactions_installment_plan_fk'
+                    ) THEN
+                        ALTER TABLE finance_transactions
+                        ADD CONSTRAINT
+                            finance_transactions_installment_plan_fk
+                        FOREIGN KEY (installment_plan_id)
+                        REFERENCES finance_installment_plans(id)
+                        ON DELETE SET NULL;
+                    END IF;
+                END
+                $$;
+                """
+            )
+            cur.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                finance_transactions_installment_number_uq
+                ON finance_transactions (
+                    installment_plan_id,
+                    installment_number
+                )
+                WHERE installment_plan_id IS NOT NULL
+                  AND installment_number IS NOT NULL;
+                """
+            )
+
+            conn.commit()
+
+
+def _periods_overlap(start_a, end_a, start_b, end_b):
+    floor = date(1, 1, 1)
+    ceiling = date(9999, 12, 31)
+    a_start = start_a or floor
+    a_end = end_a or ceiling
+    b_start = start_b or floor
+    b_end = end_b or ceiling
+    return a_start <= b_end and b_start <= a_end
+
+
+
+
+def _list_budget_items_v111(
+    user_id,
+    include_inactive=False,
+    month_value=None,
+    effective_only=False,
+):
+    month = _month_start(month_value) if month_value else None
+    month_end = (
+        _add_months(month, 1) - timedelta(days=1)
+        if month
+        else None
+    )
+
+    conditions = ["budget.user_id=%s", "(%s OR budget.is_active=TRUE)"]
+    params = [user_id, include_inactive]
+    if effective_only and month:
+        conditions.extend(
+            [
+                "(budget.effective_start IS NULL OR budget.effective_start <= %s)",
+                "(budget.effective_end IS NULL OR budget.effective_end >= %s)",
+            ]
+        )
+        params.extend([month_end, month])
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT
+                    budget.*,
+                    recurrence.description AS recurrence_description,
+                    recurrence.amount AS recurrence_amount,
+                    recurrence.frequency_unit AS recurrence_frequency_unit,
+                    recurrence.frequency_interval AS recurrence_frequency_interval,
+                    recurrence.start_date AS recurrence_start_date,
+                    recurrence.end_date AS recurrence_end_date,
+                    recurrence.next_date AS recurrence_next_date,
+                    recurrence.is_active AS recurrence_is_active
+                FROM finance_budget_items AS budget
+                LEFT JOIN finance_recurrences AS recurrence
+                    ON recurrence.id=budget.recurrence_id
+                   AND recurrence.user_id=budget.user_id
+                WHERE {' AND '.join(conditions)}
+                ORDER BY
+                    CASE WHEN budget.item_type='income' THEN 0 ELSE 1 END,
+                    budget.sort_order,
+                    LOWER(budget.description),
+                    budget.id;
+                """,
+                params,
+            )
+            rows = []
+            for raw in cur.fetchall():
+                row = dict(raw)
+                monthly, biweekly = _budget_amounts_from_values(
+                    row["input_frequency"],
+                    row["input_amount"],
+                    row.get("biweekly_override"),
+                )
+                row["monthly_amount"] = monthly
+                row["biweekly_amount"] = biweekly
+                row["biweekly_is_override"] = (
+                    row["input_frequency"] == "monthly"
+                    and row.get("biweekly_override") is not None
+                )
+                if month:
+                    row["effective_for_month"] = _periods_overlap(
+                        row.get("effective_start"),
+                        row.get("effective_end"),
+                        month,
+                        month_end,
+                    )
+                else:
+                    row["effective_for_month"] = True
+                rows.append(row)
+            return rows
+
+
+def budget_summary(user_id, month_value=None):
+    month = _month_start(month_value or date.today())
+    rows = list_budget_items(
+        user_id,
+        include_inactive=False,
+        month_value=month,
+        effective_only=True,
+    )
+    totals = {
+        "month": month,
+        "monthly_income": Decimal("0.00"),
+        "monthly_expense": Decimal("0.00"),
+        "biweekly_income": Decimal("0.00"),
+        "biweekly_expense": Decimal("0.00"),
+    }
+    for row in rows:

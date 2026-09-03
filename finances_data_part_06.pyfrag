@@ -1,0 +1,650 @@
+    }
+
+    projected = []
+    if month_end >= today:
+        for recurrence in list_recurrences(user_id):
+            if not recurrence["is_active"]:
+                continue
+
+            occurrence = recurrence["next_date"]
+            if not occurrence:
+                occurrence = recurrence["start_date"]
+
+            if recurrence["end_date"] and recurrence["end_date"] < month:
+                continue
+
+            while occurrence < month:
+                occurrence = _next_date(
+                    occurrence,
+                    recurrence["frequency_unit"],
+                    recurrence["frequency_interval"],
+                )
+
+            while occurrence <= month_end:
+                if (
+                    recurrence["end_date"]
+                    and occurrence > recurrence["end_date"]
+                ):
+                    break
+
+                occurrence_key = (
+                    int(recurrence["id"]),
+                    occurrence,
+                )
+                if occurrence_key not in existing_occurrences:
+                    projected.append(
+                        _projection_row(
+                            transaction_date=occurrence,
+                            transaction_type=recurrence[
+                                "transaction_type"
+                            ],
+                            amount=recurrence["amount"],
+                            description=recurrence["description"],
+                            category_id=recurrence["category_id"],
+                            category_full_name=recurrence[
+                                "category_full_name"
+                            ],
+                            tag_ids=recurrence["tag_ids"],
+                            tag_names=recurrence["tag_names"],
+                            payment_method_id=recurrence[
+                                "payment_method_id"
+                            ],
+                            payment_method_name=recurrence[
+                                "payment_method_name"
+                            ],
+                            recurrence_id=recurrence["id"],
+                            occurrence_date=occurrence,
+                            status="planned",
+                            projected=True,
+                            budget_excluded=bool(
+                                recurrence.get("budget_excluded")
+                            ),
+                            bank_programmed=bool(recurrence.get("bank_programmed")),
+                            reminder_enabled=bool(recurrence.get("reminder_enabled")),
+                            reminder_time=recurrence.get("reminder_time"),
+                        )
+                    )
+
+                occurrence = _next_date(
+                    occurrence,
+                    recurrence["frequency_unit"],
+                    recurrence["frequency_interval"],
+                )
+
+    combined = []
+    for row in existing:
+        row["projected"] = False
+        is_upcoming = (
+            row["status"] == "planned"
+            or row["transaction_date"] > today
+        )
+        row["projection_bucket"] = (
+            "upcoming"
+            if is_upcoming
+            else "realized"
+        )
+        combined.append(row)
+
+    for row in projected:
+        row["projection_bucket"] = "upcoming"
+        combined.append(row)
+
+    realized_expenses = sum(
+        (
+            Decimal(row["amount"])
+            for row in combined
+            if row["projection_bucket"] == "realized"
+            and row["transaction_type"] == "expense"
+            and not bool(row.get("budget_excluded"))
+        ),
+        Decimal("0.00"),
+    )
+    realized_incomes = sum(
+        (
+            Decimal(row["amount"])
+            for row in combined
+            if row["projection_bucket"] == "realized"
+            and row["transaction_type"] == "income"
+            and not bool(row.get("budget_excluded"))
+        ),
+        Decimal("0.00"),
+    )
+    upcoming_expenses = sum(
+        (
+            Decimal(row["amount"])
+            for row in combined
+            if row["projection_bucket"] == "upcoming"
+            and row["transaction_type"] == "expense"
+            and not bool(row.get("budget_excluded"))
+        ),
+        Decimal("0.00"),
+    )
+    upcoming_incomes = sum(
+        (
+            Decimal(row["amount"])
+            for row in combined
+            if row["projection_bucket"] == "upcoming"
+            and row["transaction_type"] == "income"
+            and not bool(row.get("budget_excluded"))
+        ),
+        Decimal("0.00"),
+    )
+
+    upcoming_rows = sorted(
+        (
+            row
+            for row in combined
+            if row["projection_bucket"] == "upcoming"
+        ),
+        key=lambda row: (
+            row["transaction_date"],
+            0 if row["transaction_type"] == "income" else 1,
+            str(row["description"]).casefold(),
+        ),
+    )
+
+    visible_category_ids = {
+        int(row["id"])
+        for row in list_categories(user_id, include_inactive=True)
+        if bool(row.get("dashboard_visible", True))
+    }
+    visible_tag_ids = {
+        int(row["id"])
+        for row in list_tags(user_id, include_inactive=True)
+        if bool(row.get("dashboard_visible", True))
+    }
+
+    return {
+        "month": month,
+        "month_end": month_end,
+        "realized": {
+            "expenses": realized_expenses,
+            "incomes": realized_incomes,
+            "difference": (
+                realized_incomes
+                - realized_expenses
+            ),
+        },
+        "upcoming": {
+            "expenses": upcoming_expenses,
+            "incomes": upcoming_incomes,
+            "difference": (
+                upcoming_incomes
+                - upcoming_expenses
+            ),
+            "count": len(upcoming_rows),
+        },
+        "total": {
+            "expenses": (
+                realized_expenses
+                + upcoming_expenses
+            ),
+            "incomes": (
+                realized_incomes
+                + upcoming_incomes
+            ),
+            "difference": (
+                realized_incomes
+                + upcoming_incomes
+                - realized_expenses
+                - upcoming_expenses
+            ),
+        },
+        "upcoming_transactions": upcoming_rows,
+        "transactions": combined,
+        "kpis": {
+            "expense": _projection_kpis(
+                combined,
+                "expense",
+                limit=kpi_limit,
+                visible_category_ids=visible_category_ids,
+                visible_tag_ids=visible_tag_ids,
+            ),
+            "income": _projection_kpis(
+                combined,
+                "income",
+                limit=kpi_limit,
+                visible_category_ids=visible_category_ids,
+                visible_tag_ids=visible_tag_ids,
+            ),
+        },
+    }
+
+
+def payment_reconciliation_summary(
+    user_id,
+    month_value,
+):
+    month = _month_start(
+        month_value
+    )
+    next_month = _add_months(
+        month,
+        1,
+    )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    payment_method.id
+                        AS payment_method_id,
+                    COALESCE(
+                        payment_method.name,
+                        'Sans mode de paiement'
+                    ) AS payment_method_name,
+                    payment_method.sort_order,
+                    COALESCE(
+                        SUM(transaction.amount)
+                        FILTER (
+                            WHERE transaction.transaction_type = 'expense'
+                              AND transaction.status = 'confirmed'
+                        ),
+                        0
+                    ) AS expense_total,
+                    COALESCE(
+                        SUM(transaction.amount)
+                        FILTER (
+                            WHERE transaction.transaction_type = 'income'
+                              AND transaction.status = 'confirmed'
+                        ),
+                        0
+                    ) AS income_total,
+                    COALESCE(
+                        SUM(transaction.amount)
+                        FILTER (
+                            WHERE transaction.reconciliation_status =
+                                'unreconciled'
+                              AND transaction.transaction_type =
+                                'expense'
+                              AND transaction.status = 'confirmed'
+                        ),
+                        0
+                    ) AS unreconciled_expense_total,
+                    COALESCE(
+                        SUM(transaction.amount)
+                        FILTER (
+                            WHERE transaction.reconciliation_status =
+                                'unreconciled'
+                              AND transaction.transaction_type =
+                                'income'
+                              AND transaction.status = 'confirmed'
+                        ),
+                        0
+                    ) AS unreconciled_income_total,
+                    COUNT(*)
+                    FILTER (
+                        WHERE transaction.reconciliation_status =
+                            'unreconciled'
+                          AND transaction.status = 'confirmed'
+                    ) AS unreconciled_count,
+                    COUNT(*)
+                    FILTER (
+                        WHERE transaction.reconciliation_status =
+                            'reconciled'
+                          AND transaction.status = 'confirmed'
+                    ) AS reconciled_count
+                FROM finance_transactions AS transaction
+                LEFT JOIN finance_payment_methods AS payment_method
+                    ON payment_method.id =
+                        transaction.payment_method_id
+                WHERE transaction.user_id = %s
+                  AND transaction.status = 'confirmed'
+                  AND transaction.transaction_date >= %s
+                  AND transaction.transaction_date < %s
+                GROUP BY
+                    payment_method.id,
+                    payment_method.name,
+                    payment_method.sort_order
+                ORDER BY
+                    payment_method.sort_order NULLS LAST,
+                    payment_method.name NULLS LAST;
+                """,
+                (
+                    user_id,
+                    month,
+                    next_month,
+                ),
+            )
+            rows = cur.fetchall()
+
+    return rows
+
+
+
+def save_recurrence(
+    user_id,
+    transaction_type,
+    description,
+    amount,
+    frequency_unit,
+    frequency_interval,
+    start_date,
+    category_id=None,
+    tag_ids=None,
+    payment_method_id=None,
+    note=None,
+    end_date=None,
+    confirmation_mode="confirm",
+    budget_excluded=False,
+    bank_programmed=False,
+    reminder_enabled=False,
+    reminder_time=None,
+    recurrence_id=None,
+):
+    if transaction_type not in TRANSACTION_TYPES:
+        raise ValueError("Type invalide.")
+    if frequency_unit not in FREQUENCY_UNITS:
+        raise ValueError("Fréquence invalide.")
+    if confirmation_mode not in CONFIRMATION_MODES:
+        raise ValueError("Mode invalide.")
+
+    interval = int(
+        frequency_interval
+        or 1
+    )
+    if interval < 1 or interval > 365:
+        raise ValueError(
+            "L’intervalle doit être compris entre 1 et 365."
+        )
+
+    parsed_start = date.fromisoformat(
+        str(start_date)
+    )
+    parsed_end = (
+        date.fromisoformat(
+            str(end_date)
+        )
+        if end_date
+        else None
+    )
+    if (
+        parsed_end
+        and parsed_end < parsed_start
+    ):
+        raise ValueError(
+            "La date de fin précède la date de début."
+        )
+
+    amount = _money(
+        amount
+    )
+    description = _text(
+        description,
+        "La description",
+        160,
+        True,
+    )
+    note = _text(
+        note,
+        "La note",
+        1000,
+    )
+    normalized_reminder_time = _normalize_reminder_time(reminder_time)
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            tags = _validate_links(
+                cur,
+                user_id,
+                category_id,
+                tag_ids,
+            )
+            validated_payment_method = (
+                _validate_payment_method(
+                    cur,
+                    user_id,
+                    payment_method_id,
+                )
+            )
+
+            if recurrence_id:
+                # Les occurrences prévues sont des projections de la règle.
+                # Lorsqu'on modifie la récurrence, elles sont reconstruites à
+                # partir des nouvelles valeurs. Les transactions confirmées
+                # restent intactes afin de préserver l'historique réel.
+                cur.execute(
+                    """
+                    DELETE FROM finance_transactions
+                    WHERE user_id=%s
+                      AND recurrence_id=%s
+                      AND status='planned';
+                    """,
+                    (user_id, recurrence_id),
+                )
+                cur.execute(
+                    """
+                    UPDATE finance_recurrences
+                    SET
+                        transaction_type = %s,
+                        description = %s,
+                        amount = %s,
+                        category_id = %s,
+                        payment_method_id = %s,
+                        note = %s,
+                        frequency_unit = %s,
+                        frequency_interval = %s,
+                        start_date = %s,
+                        end_date = %s,
+                        next_date = %s,
+                        confirmation_mode = %s,
+                        budget_excluded = %s,
+                        bank_programmed = %s,
+                        reminder_enabled = %s,
+                        reminder_time = %s,
+                        is_active = TRUE,
+                        updated_at = NOW()
+                    WHERE id = %s
+                      AND user_id = %s;
+                    """,
+                    (
+                        transaction_type,
+                        description,
+                        amount,
+                        category_id,
+                        validated_payment_method,
+                        note,
+                        frequency_unit,
+                        interval,
+                        parsed_start,
+                        parsed_end,
+                        parsed_start,
+                        confirmation_mode,
+                        bool(budget_excluded),
+                        bool(bank_programmed),
+                        bool(reminder_enabled),
+                        normalized_reminder_time,
+                        recurrence_id,
+                        user_id,
+                    ),
+                )
+                if cur.rowcount == 0:
+                    raise ValueError(
+                        "Récurrence introuvable."
+                    )
+
+                saved_id = int(
+                    recurrence_id
+                )
+                cur.execute(
+                    """
+                    DELETE FROM finance_recurrence_tags
+                    WHERE recurrence_id = %s;
+                    """,
+                    (saved_id,),
+                )
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO finance_recurrences (
+                        user_id,
+                        transaction_type,
+                        description,
+                        amount,
+                        category_id,
+                        payment_method_id,
+                        note,
+                        frequency_unit,
+                        frequency_interval,
+                        start_date,
+                        end_date,
+                        next_date,
+                        confirmation_mode,
+                        budget_excluded,
+                        bank_programmed,
+                        reminder_enabled,
+                        reminder_time
+                    )
+                    VALUES (
+                        %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s
+                    )
+                    RETURNING id;
+                    """,
+                    (
+                        user_id,
+                        transaction_type,
+                        description,
+                        amount,
+                        category_id,
+                        validated_payment_method,
+                        note,
+                        frequency_unit,
+                        interval,
+                        parsed_start,
+                        parsed_end,
+                        parsed_start,
+                        confirmation_mode,
+                        bool(budget_excluded),
+                        bool(bank_programmed),
+                        bool(reminder_enabled),
+                        normalized_reminder_time,
+                    ),
+                )
+                saved_id = int(
+                    cur.fetchone()["id"]
+                )
+
+            for tag_id in tags:
+                cur.execute(
+                    """
+                    INSERT INTO finance_recurrence_tags (
+                        recurrence_id,
+                        tag_id
+                    )
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING;
+                    """,
+                    (
+                        saved_id,
+                        tag_id,
+                    ),
+                )
+
+            _sync_budget_items_from_recurrence_cursor(
+                cur, user_id, saved_id
+            )
+            conn.commit()
+            return saved_id
+
+
+def list_recurrences(user_id):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    recurrence.*,
+                    payment_method.name
+                        AS payment_method_name,
+                    CASE
+                        WHEN parent.id IS NULL
+                        THEN category.name
+                        ELSE parent.name
+                             || ' › '
+                             || category.name
+                    END AS category_full_name,
+                    COALESCE(
+                        ARRAY_AGG(
+                            tag.id
+                            ORDER BY tag.name
+                        )
+                        FILTER (
+                            WHERE tag.id IS NOT NULL
+                        ),
+                        ARRAY[]::BIGINT[]
+                    ) AS tag_ids,
+                    COALESCE(
+                        ARRAY_AGG(
+                            tag.name
+                            ORDER BY tag.name
+                        )
+                        FILTER (
+                            WHERE tag.id IS NOT NULL
+                        ),
+                        ARRAY[]::TEXT[]
+                    ) AS tag_names
+                FROM finance_recurrences AS recurrence
+                LEFT JOIN finance_categories AS category
+                    ON category.id =
+                        recurrence.category_id
+                LEFT JOIN finance_categories AS parent
+                    ON parent.id =
+                        category.parent_id
+                LEFT JOIN finance_payment_methods AS payment_method
+                    ON payment_method.id =
+                        recurrence.payment_method_id
+                LEFT JOIN finance_recurrence_tags AS recurrence_tag
+                    ON recurrence_tag.recurrence_id =
+                        recurrence.id
+                LEFT JOIN finance_tags AS tag
+                    ON tag.id =
+                        recurrence_tag.tag_id
+                WHERE recurrence.user_id = %s
+                GROUP BY
+                    recurrence.id,
+                    category.id,
+                    parent.id,
+                    parent.name,
+                    payment_method.id,
+                    payment_method.name
+                ORDER BY
+                    recurrence.is_active DESC,
+                    recurrence.next_date,
+                    recurrence.description;
+                """,
+                (user_id,),
+            )
+            return cur.fetchall()
+
+
+def toggle_recurrence(user_id, recurrence_id, is_active):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE finance_recurrences SET is_active=%s,updated_at=NOW()
+                WHERE id=%s AND user_id=%s;
+            """, (bool(is_active), recurrence_id, user_id))
+            conn.commit()
+
+
+def delete_recurrence(
+    user_id,
+    recurrence_id,
+    *,
+    delete_planned=True,
+):
+    """Supprime une règle sans réécrire l'historique confirmé."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id
+                FROM finance_recurrences
+                WHERE id=%s AND user_id=%s
+                FOR UPDATE;
+                """,
+                (recurrence_id, user_id),
+            )

@@ -1,0 +1,650 @@
+                    SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order
+                    FROM finance_payment_methods
+                    WHERE user_id = %s;
+                    """,
+                    (user_id,),
+                )
+                next_order = int(cur.fetchone()["next_order"])
+                cur.execute(
+                    """
+                    INSERT INTO finance_payment_methods (
+                        user_id,
+                        name,
+                        sort_order,
+                        method_type,
+                        statement_day,
+                        payment_day,
+                        opening_balance,
+                        opening_balance_date,
+                        credit_limit,
+                        note
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    """,
+                    (
+                        user_id,
+                        cleaned_name,
+                        next_order,
+                        method_type,
+                        parsed_statement_day,
+                        parsed_payment_day,
+                        parsed_opening_balance,
+                        parsed_opening_date,
+                        parsed_credit_limit,
+                        cleaned_note,
+                    ),
+                )
+            conn.commit()
+
+
+def toggle_payment_method(
+    user_id,
+    payment_method_id,
+    is_active,
+):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE finance_payment_methods
+                SET
+                    is_active = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND user_id = %s;
+                """,
+                (
+                    bool(is_active),
+                    payment_method_id,
+                    user_id,
+                ),
+            )
+            if cur.rowcount == 0:
+                raise ValueError(
+                    "Mode de paiement introuvable."
+                )
+            conn.commit()
+
+
+def move_payment_method(
+    user_id,
+    payment_method_id,
+    direction,
+):
+    if direction not in {
+        "up",
+        "down",
+    }:
+        raise ValueError(
+            "Direction de déplacement invalide."
+        )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    id,
+                    sort_order
+                FROM finance_payment_methods
+                WHERE user_id = %s
+                ORDER BY
+                    sort_order,
+                    LOWER(name),
+                    id
+                FOR UPDATE;
+                """,
+                (user_id,),
+            )
+            rows = cur.fetchall()
+            ids = [
+                int(row["id"])
+                for row in rows
+            ]
+
+            try:
+                index = ids.index(
+                    int(payment_method_id)
+                )
+            except ValueError:
+                raise ValueError(
+                    "Mode de paiement introuvable."
+                )
+
+            target_index = (
+                index - 1
+                if direction == "up"
+                else index + 1
+            )
+
+            if (
+                target_index < 0
+                or target_index >= len(rows)
+            ):
+                return
+
+            current = rows[index]
+            target = rows[target_index]
+
+            current_order = int(
+                current["sort_order"]
+            )
+            target_order = int(
+                target["sort_order"]
+            )
+
+            if current_order == target_order:
+                current_order = index + 1
+                target_order = target_index + 1
+
+            cur.execute(
+                """
+                UPDATE finance_payment_methods
+                SET sort_order = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND user_id = %s;
+                """,
+                (
+                    target_order,
+                    current["id"],
+                    user_id,
+                ),
+            )
+            cur.execute(
+                """
+                UPDATE finance_payment_methods
+                SET sort_order = %s,
+                    updated_at = NOW()
+                WHERE id = %s
+                  AND user_id = %s;
+                """,
+                (
+                    current_order,
+                    target["id"],
+                    user_id,
+                ),
+            )
+
+            conn.commit()
+
+
+def _validate_payment_method(
+    cur,
+    user_id,
+    payment_method_id,
+):
+    if payment_method_id in (
+        None,
+        "",
+    ):
+        return None
+
+    normalized_id = int(
+        payment_method_id
+    )
+
+    cur.execute(
+        """
+        SELECT id
+        FROM finance_payment_methods
+        WHERE id = %s
+          AND user_id = %s;
+        """,
+        (
+            normalized_id,
+            user_id,
+        ),
+    )
+    if not cur.fetchone():
+        raise ValueError(
+            "Le mode de paiement sélectionné est invalide."
+        )
+
+    return normalized_id
+
+
+
+def _validate_links(cur, user_id, category_id, tag_ids):
+    if category_id:
+        cur.execute(
+            "SELECT id FROM finance_categories WHERE id=%s AND user_id=%s;",
+            (category_id, user_id),
+        )
+        if not cur.fetchone():
+            raise ValueError("Catégorie invalide.")
+    tags = sorted({int(value) for value in (tag_ids or [])})
+    if tags:
+        cur.execute(
+            "SELECT id FROM finance_tags WHERE user_id=%s AND id=ANY(%s);",
+            (user_id, tags),
+        )
+        found = {int(row["id"]) for row in cur.fetchall()}
+        if found != set(tags):
+            raise ValueError("Étiquette invalide.")
+    return tags
+
+
+
+def _validate_card_payment_methods(
+    cur,
+    user_id,
+    source_payment_method_id,
+    destination_payment_method_id,
+):
+    source_id = _validate_payment_method(
+        cur,
+        user_id,
+        source_payment_method_id,
+    )
+    destination_id = _validate_payment_method(
+        cur,
+        user_id,
+        destination_payment_method_id,
+    )
+    if source_id is None:
+        raise ValueError("Choisissez le compte bancaire de départ.")
+    if destination_id is None:
+        raise ValueError("Choisissez la carte de crédit à payer.")
+    if source_id == destination_id:
+        raise ValueError("Le compte de départ et la carte doivent être différents.")
+
+    cur.execute(
+        """
+        SELECT id, name, method_type
+        FROM finance_payment_methods
+        WHERE user_id = %s
+          AND id = ANY(%s);
+        """,
+        (user_id, [source_id, destination_id]),
+    )
+    methods = {
+        int(row["id"]): dict(row)
+        for row in cur.fetchall()
+    }
+    source = methods.get(source_id)
+    destination = methods.get(destination_id)
+    if not source or source.get("method_type") != "bank":
+        raise ValueError(
+            "Le compte de départ doit être un mode de paiement de type Compte bancaire."
+        )
+    if not destination or destination.get("method_type") != "credit_card":
+        raise ValueError(
+            "Le compte destinataire doit être un mode de paiement de type Carte de crédit."
+        )
+    return source, destination
+
+
+def get_card_payment_transfer(user_id, transfer_id):
+    if not transfer_id:
+        return None
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    transfer.*,
+                    source.name AS source_payment_method_name,
+                    destination.name AS destination_payment_method_name,
+                    source_transaction.id AS source_transaction_id,
+                    source_transaction.reconciliation_status
+                        AS source_reconciliation_status,
+                    destination_transaction.id AS destination_transaction_id,
+                    destination_transaction.reconciliation_status
+                        AS destination_reconciliation_status
+                FROM finance_linked_transfers AS transfer
+                JOIN finance_payment_methods AS source
+                    ON source.id = transfer.source_payment_method_id
+                JOIN finance_payment_methods AS destination
+                    ON destination.id = transfer.destination_payment_method_id
+                LEFT JOIN finance_transactions AS source_transaction
+                    ON source_transaction.linked_transfer_id = transfer.id
+                   AND source_transaction.linked_transfer_role = 'source'
+                LEFT JOIN finance_transactions AS destination_transaction
+                    ON destination_transaction.linked_transfer_id = transfer.id
+                   AND destination_transaction.linked_transfer_role = 'destination'
+                WHERE transfer.id = %s
+                  AND transfer.user_id = %s
+                  AND transfer.transfer_type = 'credit_card_payment';
+                """,
+                (transfer_id, user_id),
+            )
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def list_card_payment_transfers(user_id, limit=10000):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    transfer.*,
+                    source.name AS source_payment_method_name,
+                    destination.name AS destination_payment_method_name,
+                    source_transaction.id AS source_transaction_id,
+                    source_transaction.reconciliation_status
+                        AS source_reconciliation_status,
+                    destination_transaction.id AS destination_transaction_id,
+                    destination_transaction.reconciliation_status
+                        AS destination_reconciliation_status
+                FROM finance_linked_transfers AS transfer
+                JOIN finance_payment_methods AS source
+                    ON source.id = transfer.source_payment_method_id
+                JOIN finance_payment_methods AS destination
+                    ON destination.id = transfer.destination_payment_method_id
+                LEFT JOIN finance_transactions AS source_transaction
+                    ON source_transaction.linked_transfer_id = transfer.id
+                   AND source_transaction.linked_transfer_role = 'source'
+                LEFT JOIN finance_transactions AS destination_transaction
+                    ON destination_transaction.linked_transfer_id = transfer.id
+                   AND destination_transaction.linked_transfer_role = 'destination'
+                WHERE transfer.user_id = %s
+                  AND transfer.transfer_type = 'credit_card_payment'
+                ORDER BY transfer.source_date DESC, transfer.id DESC
+                LIMIT %s;
+                """,
+                (user_id, int(limit)),
+            )
+            return [dict(row) for row in cur.fetchall()]
+
+
+def save_card_payment_transfer(
+    user_id,
+    source_payment_method_id,
+    destination_payment_method_id,
+    amount,
+    source_date,
+    destination_date=None,
+    description=None,
+    note=None,
+    status="planned",
+    bank_programmed=False,
+    reminder_enabled=False,
+    reminder_time=None,
+    transfer_id=None,
+):
+    if status not in TRANSACTION_STATUSES:
+        raise ValueError("Statut invalide.")
+    parsed_source_date = (
+        source_date
+        if isinstance(source_date, date)
+        else date.fromisoformat(str(source_date))
+    )
+    parsed_destination_date = (
+        destination_date
+        if isinstance(destination_date, date)
+        else (
+            date.fromisoformat(str(destination_date))
+            if destination_date
+            else parsed_source_date
+        )
+    )
+    amount = _money(amount)
+    note = _text(note, "La note", 1000)
+    normalized_reminder_time = _normalize_reminder_time(reminder_time)
+    bank_programmed = bool(bank_programmed) if status == "planned" else False
+    reminder_enabled = bool(reminder_enabled) if status == "planned" else False
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            source, destination = _validate_card_payment_methods(
+                cur,
+                user_id,
+                source_payment_method_id,
+                destination_payment_method_id,
+            )
+            normalized_description = _text(
+                description or f"Paiement {destination['name']}",
+                "La description",
+                160,
+                True,
+            )
+
+            if transfer_id:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM finance_linked_transfers
+                    WHERE id = %s AND user_id = %s
+                    FOR UPDATE;
+                    """,
+                    (transfer_id, user_id),
+                )
+                if not cur.fetchone():
+                    raise ValueError("Paiement de carte introuvable.")
+                cur.execute(
+                    """
+                    SELECT reconciliation_status
+                    FROM finance_transactions
+                    WHERE user_id = %s
+                      AND linked_transfer_id = %s
+                    FOR UPDATE;
+                    """,
+                    (user_id, transfer_id),
+                )
+                linked_rows = cur.fetchall()
+                if any(
+                    row["reconciliation_status"] == "reconciled"
+                    for row in linked_rows
+                ):
+                    raise ValueError(
+                        "Retirez d’abord la conciliation du paiement de carte avant de le modifier."
+                    )
+                cur.execute(
+                    """
+                    UPDATE finance_linked_transfers
+                    SET source_payment_method_id = %s,
+                        destination_payment_method_id = %s,
+                        amount = %s,
+                        source_date = %s,
+                        destination_date = %s,
+                        description = %s,
+                        note = %s,
+                        status = %s,
+                        bank_programmed = %s,
+                        reminder_enabled = %s,
+                        reminder_time = %s,
+                        updated_at = NOW()
+                    WHERE id = %s AND user_id = %s;
+                    """,
+                    (
+                        source["id"],
+                        destination["id"],
+                        amount,
+                        parsed_source_date,
+                        parsed_destination_date,
+                        normalized_description,
+                        note,
+                        status,
+                        bank_programmed,
+                        reminder_enabled,
+                        normalized_reminder_time,
+                        transfer_id,
+                        user_id,
+                    ),
+                )
+                linked_id = int(transfer_id)
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO finance_linked_transfers (
+                        user_id,
+                        transfer_type,
+                        source_payment_method_id,
+                        destination_payment_method_id,
+                        amount,
+                        source_date,
+                        destination_date,
+                        description,
+                        note,
+                        status,
+                        bank_programmed,
+                        reminder_enabled,
+                        reminder_time
+                    )
+                    VALUES (
+                        %s, 'credit_card_payment', %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s
+                    )
+                    RETURNING id;
+                    """,
+                    (
+                        user_id,
+                        source["id"],
+                        destination["id"],
+                        amount,
+                        parsed_source_date,
+                        parsed_destination_date,
+                        normalized_description,
+                        note,
+                        status,
+                        bank_programmed,
+                        reminder_enabled,
+                        normalized_reminder_time,
+                    ),
+                )
+                linked_id = int(cur.fetchone()["id"])
+
+            cur.execute(
+                """
+                SELECT id, linked_transfer_role
+                FROM finance_transactions
+                WHERE user_id = %s
+                  AND linked_transfer_id = %s;
+                """,
+                (user_id, linked_id),
+            )
+            existing = {
+                row["linked_transfer_role"]: int(row["id"])
+                for row in cur.fetchall()
+            }
+
+            transaction_values = (
+                (
+                    "source",
+                    parsed_source_date,
+                    "expense",
+                    source["id"],
+                    bank_programmed,
+                    reminder_enabled,
+                    normalized_reminder_time,
+                ),
+                (
+                    "destination",
+                    parsed_destination_date,
+                    "income",
+                    destination["id"],
+                    False,
+                    False,
+                    normalized_reminder_time,
+                ),
+            )
+            for (
+                role,
+                transaction_date_value,
+                transaction_type,
+                payment_method_id,
+                transaction_bank_programmed,
+                transaction_reminder_enabled,
+                transaction_reminder_time,
+            ) in transaction_values:
+                existing_id = existing.get(role)
+                if existing_id:
+                    cur.execute(
+                        """
+                        UPDATE finance_transactions
+                        SET transaction_date = %s,
+                            transaction_type = %s,
+                            amount = %s,
+                            description = %s,
+                            category_id = NULL,
+                            note = %s,
+                            status = %s,
+                            recurrence_id = NULL,
+                            occurrence_date = NULL,
+                            payment_method_id = %s,
+                            reconciliation_status = 'unreconciled',
+                            reconciliation_date = NULL,
+                            reconciliation_session_id = NULL,
+                            budget_excluded = TRUE,
+                            bank_programmed = %s,
+                            reminder_enabled = %s,
+                            reminder_time = %s,
+                            linked_transfer_role = %s,
+                            updated_at = NOW()
+                        WHERE id = %s AND user_id = %s;
+                        """,
+                        (
+                            transaction_date_value,
+                            transaction_type,
+                            amount,
+                            normalized_description,
+                            note,
+                            status,
+                            payment_method_id,
+                            transaction_bank_programmed,
+                            transaction_reminder_enabled,
+                            transaction_reminder_time,
+                            role,
+                            existing_id,
+                            user_id,
+                        ),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        INSERT INTO finance_transactions (
+                            user_id,
+                            transaction_date,
+                            transaction_type,
+                            amount,
+                            description,
+                            category_id,
+                            note,
+                            status,
+                            recurrence_id,
+                            occurrence_date,
+                            payment_method_id,
+                            reconciliation_status,
+                            reconciliation_date,
+                            budget_excluded,
+                            bank_programmed,
+                            reminder_enabled,
+                            reminder_time,
+                            linked_transfer_id,
+                            linked_transfer_role
+                        )
+                        VALUES (
+                            %s, %s, %s, %s, %s, NULL, %s, %s,
+                            NULL, NULL, %s, 'unreconciled', NULL,
+                            TRUE, %s, %s, %s, %s, %s
+                        );
+                        """,
+                        (
+                            user_id,
+                            transaction_date_value,
+                            transaction_type,
+                            amount,
+                            normalized_description,
+                            note,
+                            status,
+                            payment_method_id,
+                            transaction_bank_programmed,
+                            transaction_reminder_enabled,
+                            transaction_reminder_time,
+                            linked_id,
+                            role,
+                        ),
+                    )
+
+            conn.commit()
+            return linked_id
+
+
+def save_transaction(
+    user_id,
+    transaction_date,
+    transaction_type,
+    amount,
+    description,

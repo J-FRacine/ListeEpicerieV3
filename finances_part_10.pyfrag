@@ -1,0 +1,650 @@
+                                    "text-xs jf-muted"
+                                )
+
+                            with ui.element(
+                                "div"
+                            ).classes(
+                                "jf-finance-history-columns"
+                            ):
+                                with ui.element(
+                                    "div"
+                                ).classes(
+                                    "jf-finance-history-column"
+                                ):
+                                    with ui.element(
+                                        "div"
+                                    ).classes(
+                                        "jf-finance-history-heading"
+                                    ):
+                                        ui.label(
+                                            "Dépenses"
+                                        )
+                                        ui.label(
+                                            _money(
+                                                sum(
+                                                    Decimal(
+                                                        row[
+                                                            "amount"
+                                                        ]
+                                                    )
+                                                    for row
+                                                    in expenses
+                                                )
+                                            )
+                                        ).classes(
+                                            "text-right"
+                                        )
+
+                                    if expenses:
+                                        for row in expenses:
+                                            render_transaction_row(
+                                                row
+                                            )
+                                    else:
+                                        ui.label(
+                                            "Aucune dépense"
+                                        ).classes(
+                                            "jf-finance-empty-column"
+                                        )
+
+                                with ui.element(
+                                    "div"
+                                ).classes(
+                                    "jf-finance-history-column"
+                                ):
+                                    with ui.element(
+                                        "div"
+                                    ).classes(
+                                        "jf-finance-history-heading"
+                                    ):
+                                        ui.label(
+                                            "Revenus"
+                                        )
+                                        ui.label(
+                                            _money(
+                                                sum(
+                                                    Decimal(
+                                                        row[
+                                                            "amount"
+                                                        ]
+                                                    )
+                                                    for row
+                                                    in incomes
+                                                )
+                                            )
+                                        ).classes(
+                                            "text-right"
+                                        )
+
+                                    if incomes:
+                                        for row in incomes:
+                                            render_transaction_row(
+                                                row
+                                            )
+                                    else:
+                                        ui.label(
+                                            "Aucun revenu"
+                                        ).classes(
+                                            "jf-finance-empty-column"
+                                        )
+
+            render_history()
+
+
+        # RÉCURRENCES
+        with ui.tab_panel(recurring_tab).classes("px-0"):
+            recurrence_box = ui.column().classes("w-full gap-2")
+
+            def delete_recurrence_dialog(row):
+                with ui.dialog() as delete_dialog:
+                    with ui.card().classes("w-full max-w-xl p-4"):
+                        ui.label("Supprimer la récurrence").classes(
+                            "text-xl font-bold"
+                        )
+                        ui.label(row["description"]).classes("font-semibold")
+                        ui.label(
+                            "Les transactions déjà confirmées resteront toujours dans l’historique. "
+                            "Choisis seulement ce qui doit arriver aux occurrences encore prévues."
+                        ).classes("text-sm jf-muted")
+
+                        def remove_recurrence(delete_planned):
+                            try:
+                                delete_recurrence(
+                                    user_id,
+                                    row["id"],
+                                    delete_planned=delete_planned,
+                                )
+                            except Exception as error:
+                                ui.notify(str(error), type="warning")
+                                return
+                            delete_dialog.close()
+                            ui.notify("Récurrence supprimée.", type="positive")
+                            refresh_all()
+
+                        with ui.column().classes("w-full gap-2 mt-2"):
+                            ui.button(
+                                "Supprimer aussi les transactions prévues non confirmées",
+                                icon="delete_sweep",
+                                on_click=lambda: remove_recurrence(True),
+                            ).props("color=negative").classes("w-full")
+                            ui.button(
+                                "Conserver les transactions prévues comme transactions indépendantes",
+                                icon="keep",
+                                on_click=lambda: remove_recurrence(False),
+                            ).props("outline color=primary").classes("w-full")
+                        with ui.row().classes("w-full justify-end"):
+                            ui.button("Annuler", on_click=delete_dialog.close).props("flat")
+                delete_dialog.open()
+
+            def recurrence_dialog(row=None):
+                with ui.dialog() as dialog:
+                    with ui.card().classes("w-full max-w-2xl p-4"):
+                        ui.label(
+                            "Modifier la récurrence" if row else "Nouvelle récurrence"
+                        ).classes("text-xl font-bold")
+                        kind = ui.toggle(
+                            TRANSACTION_TYPES,
+                            value=row["transaction_type"] if row else "expense",
+                        ).props("dense spread no-caps").classes("w-full")
+                        with ui.element("div").classes("jf-finance-form-grid"):
+                            amount = ui.number(
+                                label="Montant",
+                                value=row["amount"] if row else None,
+                                min=.01,
+                                step=.01,
+                            ).props("dense outlined").classes("jf-finance-field")
+                            start_date = ui.input(
+                                label="Début",
+                                value=(
+                                    row["start_date"].isoformat()
+                                    if row else date.today().isoformat()
+                                ),
+                            ).props("type=date dense outlined").classes(
+                                "jf-finance-field"
+                            )
+                            description = ui.input(
+                                label="Description",
+                                value=row["description"] if row else "",
+                            ).props("dense outlined maxlength=160").classes(
+                                "jf-finance-field jf-finance-description"
+                            )
+                        with ui.row().classes("w-full gap-2 flex-wrap"):
+                            interval = ui.number(
+                                label="Tous les",
+                                value=row["frequency_interval"] if row else 1,
+                                min=1,
+                                max=365,
+                                step=1,
+                            ).props("dense outlined").classes("w-28")
+                            unit = ui.select(
+                                FREQUENCY_UNITS,
+                                value=row["frequency_unit"] if row else "month",
+                                label="Unité",
+                            ).props("dense outlined options-dense").classes(
+                                "grow min-w-36"
+                            )
+                            end_date = ui.input(
+                                label="Fin facultative",
+                                value=(
+                                    row["end_date"].isoformat()
+                                    if row and row["end_date"] else ""
+                                ),
+                            ).props("type=date dense outlined").classes(
+                                "grow min-w-40"
+                            )
+                        with ui.row().classes(
+                            "w-full gap-2 flex-wrap"
+                        ):
+                            category = ui.select(
+                                {
+                                    None: "Aucune",
+                                    **_category_options(
+                                        user_id
+                                    ),
+                                },
+                                value=(
+                                    row[
+                                        "category_id"
+                                    ]
+                                    if row
+                                    else None
+                                ),
+                                label="Catégorie",
+                            ).props(
+                                "dense outlined clearable "
+                                "options-dense"
+                            ).classes(
+                                "min-w-52 grow"
+                            )
+                            payment_method = ui.select(
+                                _payment_options(
+                                    user_id
+                                ),
+                                value=(
+                                    row.get(
+                                        "payment_method_id"
+                                    )
+                                    if row
+                                    else None
+                                ),
+                                label=(
+                                    "Mode de paiement "
+                                    "par défaut"
+                                ),
+                            ).props(
+                                "dense outlined clearable "
+                                "options-dense"
+                            ).classes(
+                                "min-w-48 grow"
+                            )
+                        tags = ui.select(
+                            _tag_options(user_id),
+                            value=list(row["tag_ids"]) if row else [],
+                            label="Étiquettes",
+                            multiple=True,
+                        ).props(
+                            "dense outlined use-chips clearable options-dense"
+                        ).classes("w-full")
+                        budget_excluded_rec = ui.checkbox(
+                            "Hors budget — transfert, paiement de carte ou déplacement d’épargne",
+                            value=bool(row.get("budget_excluded")) if row else False,
+                        )
+                        ui.label("Les occurrences sont exclues du budget, mais continuent d’affecter le solde du compte si un compte bancaire est choisi.").classes("text-xs jf-muted")
+                        bank_programmed_rec = ui.checkbox(
+                            "Programmée dans le compte bancaire",
+                            value=bool(row.get("bank_programmed")) if row else False,
+                        )
+                        reminder_enabled_rec = ui.checkbox(
+                            "Me rappeler chaque occurrence le jour prévu",
+                            value=bool(row.get("reminder_enabled")) if row else False,
+                        )
+                        reminder_time_rec = ui.input(
+                            label="Heure du rappel",
+                            value=str(row.get("reminder_time") or "09:00")[:5] if row else "09:00",
+                        ).props("type=time dense outlined").classes("w-full")
+                        ui.label(
+                            "Le rappel d’une récurrence est envoyé même si l’occurrence n’a pas encore été matérialisée dans l’Historique."
+                        ).classes("text-xs jf-muted")
+                        if row:
+                            ui.label(
+                                "Si tu modifies la date, le montant ou la fréquence, les occurrences prévues non confirmées sont recalculées automatiquement. Les transactions confirmées restent intactes. Une occurrence rétroactive créée par la correction reste À confirmer."
+                            ).classes("text-xs jf-muted")
+                        mode = ui.select(
+                            CONFIRMATION_MODES,
+                            value=row["confirmation_mode"] if row else "confirm",
+                            label="Création des occurrences",
+                        ).props("dense outlined options-dense").classes("w-full")
+                        note = ui.textarea(
+                            label="Note facultative",
+                            value=row["note"] if row else "",
+                        ).props("dense outlined autogrow maxlength=1000").classes(
+                            "w-full"
+                        )
+
+                        def save_rec():
+                            try:
+                                save_recurrence(
+                                    user_id=user_id,
+                                    recurrence_id=row["id"] if row else None,
+                                    transaction_type=kind.value,
+                                    description=description.value,
+                                    amount=amount.value,
+                                    category_id=category.value,
+                                    tag_ids=tags.value or [],
+                                    payment_method_id=(
+                                        payment_method.value
+                                    ),
+                                    note=note.value,
+                                    frequency_unit=unit.value,
+                                    frequency_interval=interval.value,
+                                    start_date=start_date.value,
+                                    end_date=end_date.value or None,
+                                    confirmation_mode=mode.value,
+                                    budget_excluded=budget_excluded_rec.value,
+                                    bank_programmed=bank_programmed_rec.value,
+                                    reminder_enabled=reminder_enabled_rec.value,
+                                    reminder_time=reminder_time_rec.value or "09:00",
+                                )
+                                generate_due_recurrences(
+                                    user_id,
+                                    force_planned=bool(row),
+                                )
+                            except Exception as error:
+                                ui.notify(str(error), type="warning")
+                                return
+                            dialog.close()
+                            ui.notify("Récurrence enregistrée.", type="positive")
+                            refresh_all()
+
+                        with ui.row().classes("w-full justify-end gap-2"):
+                            ui.button(
+                                "Annuler", on_click=dialog.close
+                            ).props("flat")
+                            ui.button(
+                                "Enregistrer", icon="save", on_click=save_rec
+                            ).props("color=primary")
+                dialog.open()
+
+            @ui.refreshable
+            def render_recurrences():
+                recurrence_box.clear()
+                rows = list_recurrences(user_id)
+                with recurrence_box:
+                    with ui.row().classes(
+                        "w-full items-center justify-between"
+                    ):
+                        ui.label("Transactions récurrentes").classes(
+                            "text-xl font-bold"
+                        )
+                        ui.button(
+                            "Ajouter",
+                            icon="add",
+                            on_click=lambda: recurrence_dialog(),
+                        ).props("color=primary dense")
+                    if not rows:
+                        ui.label("Aucune récurrence.").classes(
+                            "text-sm jf-muted"
+                        )
+                    for row in rows:
+                        with ui.element("div").classes("jf-finance-card"):
+                            with ui.row().classes(
+                                "w-full items-center justify-between gap-2"
+                            ):
+                                with ui.column().classes("gap-0 min-w-0"):
+                                    ui.label(row["description"]).classes(
+                                        "text-sm font-bold"
+                                    )
+                                    ui.label(
+                                        f"{_signed(row['amount'], row['transaction_type'])} "
+                                        f"— tous les {row['frequency_interval']} "
+                                        f"{FREQUENCY_UNITS[row['frequency_unit']].lower()}(s)"
+                                    ).classes("text-xs jf-muted")
+                                    details = [
+                                        (
+                                            "Prochaine : "
+                                            f"{row['next_date'].strftime('%d/%m/%Y')}"
+                                        ),
+                                        CONFIRMATION_MODES[
+                                            row[
+                                                "confirmation_mode"
+                                            ]
+                                        ],
+                                    ]
+                                    if row.get(
+                                        "payment_method_name"
+                                    ):
+                                        details.append(
+                                            row[
+                                                "payment_method_name"
+                                            ]
+                                        )
+                                    if row.get("budget_excluded"):
+                                        details.append("Hors budget")
+                                    if row.get("bank_programmed"):
+                                        details.append("Programmée à la banque")
+                                    if row.get("reminder_enabled"):
+                                        details.append("Rappel " + str(row.get("reminder_time") or "09:00")[:5])
+                                    ui.label(
+                                        " — ".join(
+                                            details
+                                        )
+                                    ).classes(
+                                        "text-xs jf-muted"
+                                    )
+                                with ui.row().classes("gap-1 shrink-0"):
+                                    ui.switch(
+                                        value=row["is_active"],
+                                        on_change=(
+                                            lambda event,
+                                            selected=row["id"]:
+                                            change_recurrence_state(
+                                                selected, event.value
+                                            )
+                                        ),
+                                    ).props("dense")
+                                    ui.button(
+                                        icon="edit",
+                                        on_click=(
+                                            lambda _event=None,
+                                            selected=row:
+                                            recurrence_dialog(selected)
+                                        ),
+                                    ).props(
+                                        "flat dense round size=sm color=primary"
+                                    )
+                                    ui.button(
+                                        icon="delete",
+                                        on_click=(
+                                            lambda _event=None,
+                                            selected=row:
+                                            delete_recurrence_dialog(selected)
+                                        ),
+                                    ).props(
+                                        "flat dense round size=sm color=negative"
+                                    ).tooltip("Supprimer")
+
+            def change_recurrence_state(recurrence_id, value):
+                toggle_recurrence(user_id, recurrence_id, value)
+                render_recurrences.refresh()
+
+            render_recurrences()
+
+        # OBJECTIFS
+        with ui.tab_panel(goals_tab).classes("px-0"):
+            goals_box = ui.column().classes("w-full gap-2")
+
+            def goal_dialog(row=None):
+                categories = _category_options(user_id)
+                tags = _tag_options(user_id)
+                with ui.dialog() as dialog:
+                    with ui.card().classes("w-full max-w-2xl p-4"):
+                        ui.label(
+                            "Modifier l’objectif" if row else "Nouvel objectif"
+                        ).classes("text-xl font-bold")
+                        kind = ui.toggle(
+                            {"category": "Catégorie", "tag": "Étiquette"},
+                            value=row["goal_type"] if row else "category",
+                        ).props("dense spread no-caps").classes("w-full")
+                        target = ui.select(
+                            categories if not row or row["goal_type"] == "category" else tags,
+                            value=(
+                                row["category_id"]
+                                if row and row["goal_type"] == "category"
+                                else (row["tag_id"] if row else None)
+                            ),
+                            label="Cible",
+                        ).props("dense outlined options-dense").classes("w-full")
+
+                        def refresh_targets():
+                            target.options = (
+                                categories if kind.value == "category" else tags
+                            )
+                            target.value = None
+                            target.update()
+
+                        kind.on_value_change(lambda event: refresh_targets())
+
+                        with ui.element("div").classes("jf-finance-form-grid"):
+                            amount = ui.number(
+                                label="Objectif mensuel",
+                                value=row["monthly_amount"] if row else None,
+                                min=.01,
+                                step=.01,
+                            ).props("dense outlined").classes("jf-finance-field")
+                            start_month = ui.input(
+                                label="Début",
+                                value=(
+                                    row["start_month"].strftime("%Y-%m")
+                                    if row else date.today().strftime("%Y-%m")
+                                ),
+                            ).props("type=month dense outlined").classes(
+                                "jf-finance-field"
+                            )
+                            end_month = ui.input(
+                                label="Fin facultative",
+                                value=(
+                                    row["end_month"].strftime("%Y-%m")
+                                    if row and row["end_month"] else ""
+                                ),
+                            ).props("type=month dense outlined").classes(
+                                "jf-finance-field jf-finance-description"
+                            )
+                        carry = ui.select(
+                            CARRY_POLICIES,
+                            value=row["carry_policy"] if row else "none",
+                            label="Report au mois suivant",
+                        ).props("dense outlined options-dense").classes("w-full")
+                        maximum = ui.number(
+                            label="Plafond de report facultatif",
+                            value=row["max_carry"] if row else None,
+                            min=0,
+                            step=.01,
+                        ).props("dense outlined clearable").classes("w-full")
+                        ui.label(
+                            "Les mois déjà créés conservent leur historique."
+                        ).classes("text-xs jf-muted")
+
+                        def save_goal_now():
+                            try:
+                                save_goal(
+                                    user_id=user_id,
+                                    goal_id=row["id"] if row else None,
+                                    goal_type=kind.value,
+                                    target_id=target.value,
+                                    monthly_amount=amount.value,
+                                    carry_policy=carry.value,
+                                    start_month=start_month.value,
+                                    end_month=end_month.value or None,
+                                    max_carry=maximum.value,
+                                )
+                            except Exception as error:
+                                ui.notify(str(error), type="warning")
+                                return
+                            dialog.close()
+                            ui.notify("Objectif enregistré.", type="positive")
+                            refresh_all()
+
+                        with ui.row().classes("w-full justify-end gap-2"):
+                            ui.button(
+                                "Annuler", on_click=dialog.close
+                            ).props("flat")
+                            ui.button(
+                                "Enregistrer", icon="save", on_click=save_goal_now
+                            ).props("color=primary")
+                dialog.open()
+
+            @ui.refreshable
+            def render_goals():
+                goals_box.clear()
+                rows = list_goals(user_id)
+                with goals_box:
+                    with ui.row().classes(
+                        "w-full items-center justify-between"
+                    ):
+                        ui.label("Objectifs mensuels").classes(
+                            "text-xl font-bold"
+                        )
+                        ui.button(
+                            "Ajouter",
+                            icon="add",
+                            on_click=lambda: goal_dialog(),
+                        ).props("color=primary dense")
+                    if not rows:
+                        ui.label("Aucun objectif.").classes(
+                            "text-sm jf-muted"
+                        )
+                    for row in rows:
+                        with ui.element("div").classes("jf-finance-card"):
+                            with ui.row().classes(
+                                "w-full items-center justify-between gap-2"
+                            ):
+                                with ui.column().classes("gap-0 min-w-0"):
+                                    ui.label(row["target_name"]).classes(
+                                        "text-sm font-bold"
+                                    )
+                                    ui.label(
+                                        f"{_money(row['monthly_amount'])} / mois "
+                                        f"— {CARRY_POLICIES[row['carry_policy']]}"
+                                    ).classes("text-xs jf-muted")
+                                with ui.row().classes("gap-1"):
+                                    ui.switch(
+                                        value=row["is_active"],
+                                        on_change=(
+                                            lambda event,
+                                            selected=row["id"]:
+                                            change_goal_state(
+                                                selected, event.value
+                                            )
+                                        ),
+                                    ).props("dense")
+                                    ui.button(
+                                        icon="edit",
+                                        on_click=(
+                                            lambda _event=None,
+                                            selected=row:
+                                            goal_dialog(selected)
+                                        ),
+                                    ).props(
+                                        "flat dense round size=sm color=primary"
+                                    )
+
+            def change_goal_state(goal_id, value):
+                toggle_goal(user_id, goal_id, value)
+                refresh_all()
+
+            render_goals()
+
+        # CONCILIATION
+        with ui.tab_panel(reconciliation_tab).classes("px-0"):
+            payment_options = _payment_options(
+                user_id,
+                include_none=False,
+            )
+            saved_reconciliation_drafts = list_reconciliation_drafts(user_id)
+            draft_payment_id = (
+                int(saved_reconciliation_drafts[0]["payment_method_id"])
+                if saved_reconciliation_drafts
+                else None
+            )
+            first_payment_id = (
+                draft_payment_id
+                if draft_payment_id in payment_options
+                else (next(iter(payment_options)) if payment_options else None)
+            )
+            reconciliation_selected = set()
+            reconciliation_rows_by_id = {}
+            unassigned_selected = set()
+            reconciliation_method_rows = {
+                int(row["id"]): dict(row)
+                for row in list_payment_methods(user_id, include_inactive=True)
+            }
+
+            with ui.card().classes("w-full p-3"):
+                ui.label("Conciliation par relevé").classes(
+                    "text-xl font-bold"
+                )
+                ui.label(
+                    "Les soldes traversent les mois. Une transaction "
+                    "disparaît du solde confirmé dès sa conciliation."
+                ).classes("text-xs jf-muted")
+
+                reconciliation_payment = ui.select(
+                    payment_options,
+                    value=first_payment_id,
+                    label="Mode de paiement",
+                ).props(
+                    "dense outlined options-dense"
+                ).classes("w-full mt-2")
+
+                with ui.element("div").classes(
+                    "jf-finance-reconcile-toolbar mt-2"
+                ):
+                    reconciliation_start = ui.input(
+                        label="Du — facultatif",
+                        value="",
+                    ).props(
+                        "type=date dense outlined"
+                    ).classes("jf-finance-field")
+
+                    reconciliation_end = ui.input(
+                        label="Au — facultatif",

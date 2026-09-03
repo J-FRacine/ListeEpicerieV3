@@ -1,0 +1,650 @@
+                            "w-full max-w-lg p-4"
+                        ):
+                            ui.label(
+                                "Ajouter une catégorie"
+                            ).classes(
+                                "text-xl font-bold"
+                            )
+                            ui.label(
+                                "La nouvelle catégorie sera créée "
+                                "et sélectionnée pour la transaction en cours."
+                            ).classes(
+                                "text-sm jf-muted"
+                            )
+
+                            new_name = ui.input(
+                                label="Nom de la catégorie",
+                                placeholder="Ex. Pharmacie",
+                            ).props(
+                                "dense outlined maxlength=100 autofocus"
+                            ).classes(
+                                "w-full mt-2"
+                            )
+
+                            parent = ui.select(
+                                quick_parent_options(),
+                                value=None,
+                                label=(
+                                    "Sous-catégorie de "
+                                    "(facultatif)"
+                                ),
+                            ).props(
+                                "dense outlined clearable options-dense"
+                            ).classes(
+                                "w-full"
+                            )
+
+                            ui.label(
+                                "Les différences de majuscules, "
+                                "d’accents et d’espaces sont reconnues "
+                                "afin d’éviter les doublons évidents."
+                            ).classes(
+                                "text-xs jf-muted"
+                            )
+
+                            def save_new_category():
+                                try:
+                                    result = (
+                                        get_or_create_finance_category(
+                                            user_id,
+                                            new_name.value,
+                                            parent_id=parent.value,
+                                            category_type=(
+                                                kind.value
+                                                or "expense"
+                                            ),
+                                        )
+                                    )
+                                except Exception as error:
+                                    ui.notify(
+                                        str(error),
+                                        type="warning",
+                                    )
+                                    return
+
+                                category.options = (
+                                    _quick_category_options(
+                                        user_id
+                                    )
+                                )
+                                category.value = result["id"]
+                                category.update()
+                                dialog.close()
+
+                                ui.notify(
+                                    (
+                                        "Catégorie créée et sélectionnée."
+                                        if result["created"]
+                                        else (
+                                            "Cette catégorie existait déjà; "
+                                            "elle a été sélectionnée."
+                                        )
+                                    ),
+                                    type=(
+                                        "positive"
+                                        if result["created"]
+                                        else "info"
+                                    ),
+                                )
+                                render_dashboard.refresh()
+
+                            with ui.row().classes(
+                                "w-full justify-end gap-2 mt-2"
+                            ):
+                                ui.button(
+                                    "Annuler",
+                                    on_click=dialog.close,
+                                ).props("flat")
+                                ui.button(
+                                    "Ajouter",
+                                    icon="add",
+                                    on_click=save_new_category,
+                                ).props(
+                                    "color=primary"
+                                )
+
+                    dialog.open()
+
+                def category_quick_changed(event):
+                    if event.value != ADD_CATEGORY_OPTION:
+                        return
+                    category.value = None
+                    category.update()
+                    open_quick_category_dialog()
+
+                category.on_value_change(
+                    category_quick_changed
+                )
+
+                def open_quick_tag_dialog(
+                    selected_before,
+                ):
+                    with ui.dialog() as dialog:
+                        with ui.card().classes(
+                            "w-full max-w-lg p-4"
+                        ):
+                            ui.label(
+                                "Ajouter une étiquette"
+                            ).classes(
+                                "text-xl font-bold"
+                            )
+                            ui.label(
+                                "Les étiquettes déjà sélectionnées "
+                                "seront conservées."
+                            ).classes(
+                                "text-sm jf-muted"
+                            )
+
+                            new_name = ui.input(
+                                label="Nom de l’étiquette",
+                                placeholder="Ex. Vacances 2026",
+                            ).props(
+                                "dense outlined maxlength=80 autofocus"
+                            ).classes(
+                                "w-full mt-2"
+                            )
+
+                            ui.label(
+                                "Les différences de majuscules, "
+                                "d’accents et d’espaces sont reconnues "
+                                "afin d’éviter les doublons évidents."
+                            ).classes(
+                                "text-xs jf-muted"
+                            )
+
+                            def save_new_tag():
+                                try:
+                                    result = get_or_create_finance_tag(
+                                        user_id,
+                                        new_name.value,
+                                    )
+                                except Exception as error:
+                                    ui.notify(
+                                        str(error),
+                                        type="warning",
+                                    )
+                                    return
+
+                                selected = [
+                                    int(value)
+                                    for value in selected_before
+                                    if value not in (
+                                        None,
+                                        ADD_TAG_OPTION,
+                                    )
+                                ]
+                                if result["id"] not in selected:
+                                    selected.append(
+                                        result["id"]
+                                    )
+
+                                tags.options = (
+                                    _quick_tag_options(
+                                        user_id
+                                    )
+                                )
+                                tags.value = selected
+                                tags.update()
+                                dialog.close()
+
+                                ui.notify(
+                                    (
+                                        "Étiquette créée et sélectionnée."
+                                        if result["created"]
+                                        else (
+                                            "Cette étiquette existait déjà; "
+                                            "elle a été sélectionnée."
+                                        )
+                                    ),
+                                    type=(
+                                        "positive"
+                                        if result["created"]
+                                        else "info"
+                                    ),
+                                )
+                                render_dashboard.refresh()
+
+                            with ui.row().classes(
+                                "w-full justify-end gap-2 mt-2"
+                            ):
+                                ui.button(
+                                    "Annuler",
+                                    on_click=dialog.close,
+                                ).props("flat")
+                                ui.button(
+                                    "Ajouter",
+                                    icon="add",
+                                    on_click=save_new_tag,
+                                ).props(
+                                    "color=primary"
+                                )
+
+                    dialog.open()
+
+                def tags_quick_changed(event):
+                    selected = list(event.value or [])
+                    if ADD_TAG_OPTION not in selected:
+                        return
+                    selected = [
+                        value
+                        for value in selected
+                        if value != ADD_TAG_OPTION
+                    ]
+                    tags.value = selected
+                    tags.update()
+                    open_quick_tag_dialog(
+                        selected
+                    )
+
+                tags.on_value_change(
+                    tags_quick_changed
+                )
+
+                with ui.expansion(
+                    "Note, statut, rappel, budget et conciliation",
+                    icon="tune",
+                ).classes(
+                    "w-full"
+                ):
+                    budget_excluded_quick = ui.checkbox(
+                        "Hors budget — transfert, paiement de carte ou déplacement d’épargne", value=False
+                    )
+                    ui.label("Le mouvement reste visible dans le Compte bancaire mais est exclu du budget et des KPI.").classes("text-xs jf-muted")
+                    status = ui.select(
+                        TRANSACTION_STATUSES,
+                        value="confirmed",
+                        label="Statut de transaction",
+                    ).props(
+                        "dense outlined options-dense"
+                    ).classes(
+                        "w-full"
+                    )
+                    bank_programmed_quick = ui.checkbox(
+                        "Programmée dans le compte bancaire",
+                        value=False,
+                    )
+                    reminder_enabled_quick = ui.checkbox(
+                        "Me rappeler cette transaction le jour prévu",
+                        value=False,
+                    )
+                    reminder_time_quick = ui.input(
+                        label="Heure du rappel", value="09:00"
+                    ).props("type=time dense outlined").classes("w-full")
+                    reconciled = ui.checkbox(
+                        "Transaction conciliée",
+                        value=False,
+                    )
+                    reconciliation_date = ui.input(
+                        label=(
+                            "Date de conciliation "
+                            "(facultative)"
+                        ),
+                    ).props(
+                        "type=date dense outlined"
+                    ).classes(
+                        "w-full"
+                    )
+                    note = ui.textarea(
+                        label="Note facultative"
+                    ).props(
+                        "dense outlined autogrow "
+                        "maxlength=1000"
+                    ).classes(
+                        "w-full"
+                    )
+
+                def save_quick():
+                    try:
+                        save_transaction(
+                            user_id=user_id,
+                            transaction_date=(
+                                when.value
+                            ),
+                            transaction_type=(
+                                kind.value
+                            ),
+                            amount=amount.value,
+                            description=(
+                                description.value
+                            ),
+                            category_id=(
+                                None
+                                if category.value
+                                in (
+                                    None,
+                                    ADD_CATEGORY_OPTION,
+                                )
+                                else category.value
+                            ),
+                            tag_ids=(
+                                [
+                                    value
+                                    for value
+                                    in (tags.value or [])
+                                    if value != ADD_TAG_OPTION
+                                ]
+                            ),
+                            payment_method_id=(
+                                payment_method.value
+                            ),
+                            note=note.value,
+                            status=status.value,
+                            reconciliation_status=(
+                                "reconciled"
+                                if reconciled.value
+                                else "unreconciled"
+                            ),
+                            reconciliation_date=(
+                                reconciliation_date.value
+                                or None
+                            ),
+                            budget_excluded=budget_excluded_quick.value,
+                            bank_programmed=bank_programmed_quick.value,
+                            reminder_enabled=reminder_enabled_quick.value,
+                            reminder_time=reminder_time_quick.value or "09:00",
+                        )
+                    except Exception as error:
+                        ui.notify(
+                            str(error),
+                            type="warning",
+                        )
+                        return
+
+                    amount.value = None
+                    description.value = ""
+                    note.value = ""
+                    tags.value = []
+                    reconciled.value = False
+                    reconciliation_date.value = ""
+                    budget_excluded_quick.value = False
+                    bank_programmed_quick.value = False
+                    reminder_enabled_quick.value = False
+                    reminder_time_quick.value = "09:00"
+
+                    ui.notify(
+                        "Transaction enregistrée.",
+                        type="positive",
+                    )
+                    refresh_all()
+
+                ui.button(
+                    "Enregistrer",
+                    icon="save",
+                    on_click=save_quick,
+                ).props(
+                    "color=primary"
+                ).classes(
+                    "mt-2"
+                )
+
+
+        # HISTORIQUE
+        with ui.tab_panel(
+            history_tab
+        ).classes(
+            "px-0"
+        ):
+            with ui.card().classes(
+                "w-full p-3"
+            ):
+                ui.label(
+                    "Historique compact"
+                ).classes(
+                    "text-lg font-bold"
+                )
+
+                with ui.expansion(
+                    "Filtres",
+                    icon="filter_alt",
+                ).classes(
+                    "w-full"
+                ):
+                    with ui.element(
+                        "div"
+                    ).classes(
+                        "jf-finance-form-grid"
+                    ):
+                        start = ui.input(
+                            label="Du",
+                            value=(
+                                month_state.value.isoformat()
+                            ),
+                        ).props(
+                            "type=date dense outlined"
+                        ).classes(
+                            "jf-finance-field"
+                        )
+                        end = ui.input(
+                            label="Au",
+                            value=(
+                                date.today().isoformat()
+                            ),
+                        ).props(
+                            "type=date dense outlined"
+                        ).classes(
+                            "jf-finance-field"
+                        )
+                        query = ui.input(
+                            label="Recherche"
+                        ).props(
+                            "dense outlined clearable"
+                        ).classes(
+                            "jf-finance-field "
+                            "jf-finance-description"
+                        )
+                        history_amount_exact = ui.input(
+                            label="Montant exact"
+                        ).props(
+                            "dense outlined clearable inputmode=decimal"
+                        ).classes("jf-finance-field")
+                        history_amount_min = ui.input(
+                            label="Montant min."
+                        ).props(
+                            "dense outlined clearable inputmode=decimal"
+                        ).classes("jf-finance-field")
+                        history_amount_max = ui.input(
+                            label="Montant max."
+                        ).props(
+                            "dense outlined clearable inputmode=decimal"
+                        ).classes("jf-finance-field")
+
+                    with ui.row().classes(
+                        "w-full gap-2 flex-wrap"
+                    ):
+                        history_type = ui.select(
+                            {
+                                "": "Tous les types",
+                                **TRANSACTION_TYPES,
+                            },
+                            value="",
+                            label="Type",
+                        ).props(
+                            "dense outlined options-dense"
+                        ).classes(
+                            "min-w-40 grow"
+                        )
+                        history_status = ui.select(
+                            {
+                                "": "Tous les statuts",
+                                **TRANSACTION_STATUSES,
+                            },
+                            value="",
+                            label="Transaction",
+                        ).props(
+                            "dense outlined options-dense"
+                        ).classes(
+                            "min-w-40 grow"
+                        )
+                        history_reconciliation = ui.select(
+                            {
+                                "": "Toutes",
+                                **RECONCILIATION_STATUSES,
+                            },
+                            value="",
+                            label="Conciliation",
+                        ).props(
+                            "dense outlined options-dense"
+                        ).classes(
+                            "min-w-40 grow"
+                        )
+
+                    with ui.row().classes(
+                        "w-full gap-2 flex-wrap"
+                    ):
+                        history_category = ui.select(
+                            {
+                                None: "Toutes",
+                                **_category_options(
+                                    user_id
+                                ),
+                            },
+                            value=None,
+                            label="Catégorie",
+                        ).props(
+                            "dense outlined clearable "
+                            "options-dense"
+                        ).classes(
+                            "min-w-52 grow"
+                        )
+                        history_tag = ui.select(
+                            {
+                                None: "Toutes",
+                                **_tag_options(
+                                    user_id
+                                ),
+                            },
+                            value=None,
+                            label="Étiquette",
+                        ).props(
+                            "dense outlined clearable "
+                            "options-dense"
+                        ).classes(
+                            "min-w-44 grow"
+                        )
+                        history_payment = ui.select(
+                            {
+                                None: "Tous",
+                                **_payment_options(
+                                    user_id,
+                                    include_none=False,
+                                ),
+                            },
+                            value=None,
+                            label="Mode de paiement",
+                        ).props(
+                            "dense outlined clearable "
+                            "options-dense"
+                        ).classes(
+                            "min-w-48 grow"
+                        )
+
+                    with ui.row().classes("w-full gap-2 flex-wrap"):
+                        ui.button(
+                            "Appliquer",
+                            icon="filter_alt",
+                            on_click=lambda: render_history.refresh(),
+                        ).props("outline dense color=primary")
+                        ui.button(
+                            "Rechercher les doublons",
+                            icon="content_copy",
+                            on_click=lambda: duplicate_search_dialog(),
+                        ).props("outline dense color=secondary")
+                        ui.button(
+                            "Vérifier les non conciliées du mois",
+                            icon="rule",
+                            on_click=lambda: monthly_unreconciled_dialog(),
+                        ).props("outline dense color=secondary")
+
+            history_box = ui.column().classes(
+                "jf-finance-history-list mt-2"
+            )
+
+            def remove_dialog(
+                row,
+            ):
+                with ui.dialog() as dialog:
+                    with ui.card().classes(
+                        "w-full max-w-md p-4"
+                    ):
+                        ui.label(
+                            "Supprimer cette transaction?"
+                        ).classes(
+                            "text-lg font-bold"
+                        )
+                        ui.label(
+                            (
+                                f"{row['description']} — "
+                                f"{_signed(row['amount'], row['transaction_type'])}"
+                            )
+                        )
+                        if row.get("linked_transfer_id"):
+                            ui.label(
+                                "Ce paiement est lié au compte bancaire et à la carte de crédit. Les deux côtés seront supprimés ensemble."
+                            ).classes("text-sm jf-muted")
+
+                        def remove():
+                            try:
+                                delete_transaction(
+                                    user_id,
+                                    row["id"],
+                                )
+                            except Exception as error:
+                                ui.notify(
+                                    str(error),
+                                    type="warning",
+                                )
+                                return
+
+                            dialog.close()
+                            ui.notify(
+                                "Transaction supprimée.",
+                                type="positive",
+                            )
+                            refresh_all()
+
+                        with ui.row().classes(
+                            "w-full justify-end gap-2"
+                        ):
+                            ui.button(
+                                "Annuler",
+                                on_click=dialog.close,
+                            ).props(
+                                "flat"
+                            )
+                            ui.button(
+                                "Supprimer",
+                                icon="delete",
+                                on_click=remove,
+                            ).props(
+                                "color=negative"
+                            )
+
+                dialog.open()
+
+            def confirm_transaction(
+                transaction_id,
+            ):
+                try:
+                    set_transaction_status(
+                        user_id,
+                        transaction_id,
+                        "confirmed",
+                    )
+                except Exception as error:
+                    ui.notify(
+                        str(error),
+                        type="warning",
+                    )
+                    return
+
+                ui.notify(
+                    "Transaction confirmée.",
+                    type="positive",
+                )
+                refresh_all()
+
+            def change_reconciliation(
+                transaction_id,
+                current_status,
+            ):
+                new_status = (

@@ -1,0 +1,650 @@
+                    "unreconciled"
+                    if current_status
+                    == "reconciled"
+                    else "reconciled"
+                )
+                reconciliation_date = (
+                    date.today()
+                    if new_status
+                    == "reconciled"
+                    else None
+                )
+
+                try:
+                    set_transaction_reconciliation(
+                        user_id,
+                        transaction_id,
+                        new_status,
+                        reconciliation_date,
+                    )
+                except Exception as error:
+                    ui.notify(
+                        str(error),
+                        type="warning",
+                    )
+                    return
+
+                ui.notify(
+                    (
+                        "Transaction conciliée."
+                        if new_status
+                        == "reconciled"
+                        else (
+                            "Transaction remise "
+                            "à concilier."
+                        )
+                    ),
+                    type="positive",
+                )
+                refresh_all()
+
+            def render_transaction_row(
+                row,
+            ):
+                with ui.element(
+                    "article"
+                ).classes(
+                    "jf-finance-row"
+                ):
+                    ui.label(
+                        row["description"]
+                    ).classes(
+                        "jf-finance-main"
+                    )
+
+                    meta = []
+                    if row[
+                        "category_full_name"
+                    ]:
+                        meta.append(
+                            row[
+                                "category_full_name"
+                            ]
+                        )
+                    if row[
+                        "tag_names"
+                    ]:
+                        meta.append(
+                            " • ".join(
+                                row[
+                                    "tag_names"
+                                ]
+                            )
+                        )
+                    if row.get("linked_transfer_id") and row.get("linked_transfer_role") == "source":
+                        meta.append(
+                            (
+                                f"{row.get('linked_transfer_source_name') or row.get('payment_method_name') or 'Compte'}"
+                                f" → {row.get('linked_transfer_destination_name') or 'Carte'}"
+                            )
+                        )
+                    elif row.get(
+                        "payment_method_name"
+                    ):
+                        meta.append(
+                            row[
+                                "payment_method_name"
+                            ]
+                        )
+                    if row[
+                        "status"
+                    ] == "planned":
+                        meta.append(
+                            "À confirmer"
+                        )
+                    if row.get("budget_excluded"):
+                        meta.append("Hors budget")
+                    if row.get("bank_programmed"):
+                        meta.append("Programmé")
+                    if row.get("reminder_enabled"):
+                        meta.append("Rappel " + str(row.get("reminder_time") or "09:00")[:5])
+                    meta.append(
+                        RECONCILIATION_STATUSES.get(
+                            row.get(
+                                "reconciliation_status"
+                            )
+                            or "unreconciled",
+                            "À concilier",
+                        )
+                    )
+
+                    ui.label(
+                        " — ".join(
+                            meta
+                        )
+                        or "Sans catégorie"
+                    ).classes(
+                        "jf-finance-meta"
+                    )
+
+                    amount_css = (
+                        "jf-finance-expense"
+                        if row[
+                            "transaction_type"
+                        ]
+                        == "expense"
+                        else "jf-finance-income"
+                    )
+                    ui.label(
+                        _signed(
+                            row[
+                                "amount"
+                            ],
+                            row[
+                                "transaction_type"
+                            ],
+                        )
+                    ).classes(
+                        (
+                            "jf-finance-amount "
+                            f"{amount_css}"
+                        )
+                    )
+
+                    with ui.element(
+                        "div"
+                    ).classes(
+                        "jf-finance-actions"
+                    ):
+                        if row[
+                            "status"
+                        ] == "planned":
+                            ui.button(
+                                icon="check",
+                                on_click=(
+                                    lambda _event=None,
+                                    selected_id=row[
+                                        "id"
+                                    ]:
+                                    confirm_transaction(
+                                        selected_id
+                                    )
+                                ),
+                            ).props(
+                                "flat dense round "
+                                "size=sm color=positive"
+                            ).tooltip(
+                                "Confirmer la transaction"
+                            )
+
+                        reconciliation_icon = (
+                            "undo"
+                            if row.get(
+                                "reconciliation_status"
+                            )
+                            == "reconciled"
+                            else "done_all"
+                        )
+                        reconciliation_tooltip = (
+                            "Remettre à concilier"
+                            if row.get(
+                                "reconciliation_status"
+                            )
+                            == "reconciled"
+                            else "Marquer conciliée"
+                        )
+
+                        ui.button(
+                            icon=reconciliation_icon,
+                            on_click=(
+                                lambda _event=None,
+                                selected_id=row[
+                                    "id"
+                                ],
+                                current=row.get(
+                                    "reconciliation_status"
+                                )
+                                or "unreconciled":
+                                change_reconciliation(
+                                    selected_id,
+                                    current,
+                                )
+                            ),
+                        ).props(
+                            "flat dense round "
+                            "size=sm color=secondary"
+                        ).tooltip(
+                            reconciliation_tooltip
+                        )
+
+                        if row.get("linked_transfer_id"):
+                            ui.button(
+                                icon="edit",
+                                on_click=(
+                                    lambda _event=None,
+                                    selected_transfer_id=row.get("linked_transfer_id"):
+                                    _card_payment_dialog(
+                                        user_id,
+                                        refresh_all,
+                                        get_card_payment_transfer(
+                                            user_id,
+                                            selected_transfer_id,
+                                        ),
+                                    )
+                                ),
+                            ).props(
+                                "flat dense round size=sm color=primary"
+                            ).tooltip(
+                                "Modifier le paiement de carte"
+                            )
+                        else:
+                            ui.button(
+                                icon="edit",
+                                on_click=(
+                                    lambda _event=None,
+                                    selected_id=row[
+                                        "id"
+                                    ]:
+                                    _transaction_dialog(
+                                        user_id,
+                                        refresh_all,
+                                        get_transaction(
+                                            user_id,
+                                            selected_id,
+                                        ),
+                                    )
+                                ),
+                            ).props(
+                                "flat dense round "
+                                "size=sm color=primary"
+                            ).tooltip(
+                                "Modifier"
+                            )
+
+                        ui.button(
+                            icon="delete",
+                            on_click=(
+                                lambda _event=None,
+                                selected=row:
+                                remove_dialog(
+                                    selected
+                                )
+                            ),
+                        ).props(
+                            "flat dense round "
+                            "size=sm color=negative"
+                        ).tooltip(
+                            "Supprimer"
+                        )
+
+            def _open_history_row(row):
+                if row.get("linked_transfer_id"):
+                    try:
+                        transfer = get_card_payment_transfer(
+                            user_id, row["linked_transfer_id"]
+                        )
+                    except Exception as error:
+                        ui.notify(str(error), type="warning")
+                        return
+                    _card_payment_dialog(user_id, refresh_all, transfer=transfer)
+                else:
+                    _transaction_dialog(
+                        user_id,
+                        refresh_all,
+                        get_transaction(user_id, row["id"]),
+                    )
+
+            def duplicate_search_dialog():
+                with ui.dialog() as duplicate_dialog:
+                    with ui.card().classes("w-full max-w-5xl p-4"):
+                        ui.label("Doublons potentiels").classes("text-xl font-bold")
+                        ui.label(
+                            "Même montant exact avec des dates séparées de 2 jours ou moins. Aucune transaction n’est supprimée automatiquement."
+                        ).classes("text-sm jf-muted")
+                        with ui.element("div").classes("jf-finance-form-grid"):
+                            duplicate_start = ui.input(
+                                label="Du — facultatif", value=start.value or ""
+                            ).props("type=date dense outlined clearable").classes("jf-finance-field")
+                            duplicate_end = ui.input(
+                                label="Au — facultatif", value=end.value or ""
+                            ).props("type=date dense outlined clearable").classes("jf-finance-field")
+                        same_type = ui.checkbox(
+                            "Comparer seulement les transactions du même type (dépense avec dépense, revenu avec revenu)",
+                            value=True,
+                        )
+                        duplicate_results_box = ui.column().classes("w-full gap-2 mt-2")
+
+                        @ui.refreshable
+                        def render_duplicate_results():
+                            duplicate_results_box.clear()
+                            try:
+                                groups = find_potential_duplicate_transactions(
+                                    user_id,
+                                    start_date=duplicate_start.value or None,
+                                    end_date=duplicate_end.value or None,
+                                    same_type=bool(same_type.value),
+                                    window_days=2,
+                                )
+                            except Exception as error:
+                                with duplicate_results_box:
+                                    ui.label(str(error)).classes("text-negative")
+                                return
+                            with duplicate_results_box:
+                                if not groups:
+                                    ui.label("Aucun doublon potentiel trouvé.").classes("text-sm text-positive p-3")
+                                    return
+                                ui.label(
+                                    f"{len(groups)} groupe(s) de doublons potentiels."
+                                ).classes("text-sm font-semibold")
+                                for group in groups:
+                                    with ui.card().classes("w-full p-3"):
+                                        group_type = TRANSACTION_TYPES.get(
+                                            group.get("transaction_type"), "Tous types"
+                                        )
+                                        ui.label(
+                                            f"{_money(group['amount'])} — {group_type}"
+                                        ).classes("font-bold")
+                                        for candidate in group["transactions"]:
+                                            with ui.row().classes(
+                                                "w-full items-center justify-between gap-2 flex-wrap border-t pt-2"
+                                            ):
+                                                with ui.column().classes("gap-0 min-w-0 grow"):
+                                                    ui.label(
+                                                        candidate["transaction_date"].strftime("%d/%m/%Y")
+                                                        + " — "
+                                                        + candidate["description"]
+                                                    ).classes("font-semibold")
+                                                    meta = [
+                                                        candidate.get("category_full_name") or "Sans catégorie",
+                                                        candidate.get("payment_method_name") or "Sans mode",
+                                                        TRANSACTION_STATUSES.get(candidate.get("status"), candidate.get("status", "")),
+                                                    ]
+                                                    if candidate.get("import_source"):
+                                                        meta.append("Source : " + str(candidate["import_source"]))
+                                                    ui.label(" — ".join(meta)).classes("text-xs jf-muted")
+                                                ui.label(
+                                                    _signed(candidate["amount"], candidate["transaction_type"])
+                                                ).classes("font-bold")
+                                                with ui.row().classes("gap-0"):
+                                                    ui.button(
+                                                        icon="open_in_new",
+                                                        on_click=lambda _event=None, selected=candidate: _open_history_row(selected),
+                                                    ).props("flat dense round size=sm color=primary").tooltip("Ouvrir / modifier")
+
+                                                    def ask_delete(_event=None, selected=candidate):
+                                                        with ui.dialog() as delete_dialog:
+                                                            with ui.card().classes("w-full max-w-md p-4"):
+                                                                ui.label("Supprimer ce doublon potentiel ?").classes("text-lg font-bold")
+                                                                ui.label(
+                                                                    selected["description"] + " — " + _signed(selected["amount"], selected["transaction_type"])
+                                                                )
+                                                                def delete_now():
+                                                                    try:
+                                                                        delete_transaction(user_id, selected["id"])
+                                                                    except Exception as error:
+                                                                        ui.notify(str(error), type="warning")
+                                                                        return
+                                                                    delete_dialog.close()
+                                                                    ui.notify("Transaction supprimée.", type="positive")
+                                                                    render_duplicate_results.refresh()
+                                                                    refresh_all()
+                                                                with ui.row().classes("w-full justify-end gap-2"):
+                                                                    ui.button("Annuler", on_click=delete_dialog.close).props("flat")
+                                                                    ui.button("Supprimer", icon="delete", on_click=delete_now).props("color=negative")
+                                                        delete_dialog.open()
+
+                                                    ui.button(
+                                                        icon="delete",
+                                                        on_click=ask_delete,
+                                                    ).props("flat dense round size=sm color=negative").tooltip("Supprimer")
+
+                        with ui.row().classes("w-full justify-between gap-2 mt-2 flex-wrap"):
+                            ui.button(
+                                "Relancer la recherche", icon="search",
+                                on_click=lambda: render_duplicate_results.refresh(),
+                            ).props("outline color=primary")
+                            ui.button("Fermer", on_click=duplicate_dialog.close).props("flat")
+                        duplicate_start.on_value_change(lambda event: render_duplicate_results.refresh())
+                        duplicate_end.on_value_change(lambda event: render_duplicate_results.refresh())
+                        same_type.on_value_change(lambda event: render_duplicate_results.refresh())
+                        render_duplicate_results()
+                duplicate_dialog.open()
+
+            def monthly_unreconciled_dialog():
+                with ui.dialog() as validation_dialog:
+                    with ui.card().classes("w-full max-w-5xl p-4"):
+                        ui.label("Vérifier les transactions non conciliées").classes("text-xl font-bold")
+                        ui.label(
+                            "Cette liste sert à repérer les transactions oubliées, en erreur ou potentiellement en double. Une transaction non conciliée n’est pas automatiquement une erreur."
+                        ).classes("text-sm jf-muted")
+                        month_input = ui.input(
+                            label="Mois à vérifier",
+                            value=month_state.value.strftime("%Y-%m"),
+                        ).props("type=month dense outlined").classes("w-full max-w-xs")
+                        monthly_box = ui.column().classes("w-full gap-2 mt-2")
+
+                        @ui.refreshable
+                        def render_monthly_unreconciled():
+                            monthly_box.clear()
+                            try:
+                                rows = list_month_unreconciled_transactions(
+                                    user_id, month_input.value
+                                )
+                                duplicate_groups = find_potential_duplicate_transactions(
+                                    user_id,
+                                    start_date=(month_input.value + "-01"),
+                                    end_date=(
+                                        _add_month_label_end(month_input.value)
+                                    ),
+                                    same_type=True,
+                                    window_days=2,
+                                )
+                            except Exception as error:
+                                with monthly_box:
+                                    ui.label(str(error)).classes("text-negative")
+                                return
+                            duplicate_ids = {
+                                int(candidate["id"])
+                                for group in duplicate_groups
+                                for candidate in group["transactions"]
+                            }
+                            grouped_rows = defaultdict(list)
+                            for row in rows:
+                                grouped_rows[
+                                    (
+                                        row.get("payment_method_id"),
+                                        row.get("payment_method_name") or "Sans mode de paiement",
+                                        row.get("payment_method_type"),
+                                    )
+                                ].append(row)
+                            with monthly_box:
+                                if not rows:
+                                    ui.label(
+                                        "Aucune transaction non conciliée pour ce mois."
+                                    ).classes("text-sm text-positive p-3")
+                                    return
+                                ui.label(
+                                    f"{len(rows)} transaction(s) confirmée(s) encore non conciliée(s)."
+                                ).classes("font-semibold")
+                                for (_method_id, method_name, method_type), method_rows in grouped_rows.items():
+                                    expenses = sum(
+                                        (Decimal(row["amount"]) for row in method_rows if row["transaction_type"] == "expense"),
+                                        Decimal("0.00"),
+                                    )
+                                    incomes = sum(
+                                        (Decimal(row["amount"]) for row in method_rows if row["transaction_type"] == "income"),
+                                        Decimal("0.00"),
+                                    )
+                                    with ui.card().classes("w-full p-3"):
+                                        ui.label(method_name).classes("font-bold")
+                                        ui.label(
+                                            f"{len(method_rows)} transaction(s) — Dépenses {_money(expenses)} — Revenus/crédits {_money(incomes)}"
+                                        ).classes("text-xs jf-muted")
+                                        for row in sorted(method_rows, key=lambda item: (item["transaction_date"], int(item["id"]))):
+                                            with ui.row().classes("w-full items-center justify-between gap-2 border-t pt-2 flex-wrap"):
+                                                with ui.column().classes("gap-0 min-w-0 grow"):
+                                                    title = row["transaction_date"].strftime("%d/%m/%Y") + " — " + row["description"]
+                                                    if int(row["id"]) in duplicate_ids:
+                                                        title += " — doublon potentiel"
+                                                    ui.label(title).classes("font-semibold")
+                                                    ui.label(
+                                                        (row.get("category_full_name") or "Sans catégorie")
+                                                        + (" — Source : " + str(row.get("import_source")) if row.get("import_source") else "")
+                                                    ).classes("text-xs jf-muted")
+                                                ui.label(_signed(row["amount"], row["transaction_type"])).classes("font-bold")
+                                                with ui.row().classes("gap-0"):
+                                                    ui.button(
+                                                        icon="edit",
+                                                        on_click=lambda _event=None, selected=row: _open_history_row(selected),
+                                                    ).props("flat dense round size=sm color=primary").tooltip("Modifier")
+                                                    if method_type == "bank":
+                                                        def mark_seen(_event=None, selected=row):
+                                                            try:
+                                                                set_bank_transaction_seen(user_id, selected["id"], True, date.today())
+                                                            except Exception as error:
+                                                                ui.notify(str(error), type="warning")
+                                                                return
+                                                            ui.notify("Transaction marquée Vu.", type="positive")
+                                                            render_monthly_unreconciled.refresh()
+                                                            refresh_all()
+                                                        ui.button(
+                                                            icon="done_all",
+                                                            on_click=mark_seen,
+                                                        ).props("flat dense round size=sm color=positive").tooltip("Marquer Vu")
+                                if duplicate_ids:
+                                    ui.label(
+                                        f"{len(duplicate_ids)} transaction(s) de ce mois appartiennent à au moins un groupe de doublons potentiels."
+                                    ).classes("text-xs text-warning")
+                        def _refresh_month(_event=None):
+                            render_monthly_unreconciled.refresh()
+                        month_input.on_value_change(_refresh_month)
+                        with ui.row().classes("w-full justify-between gap-2 mt-2 flex-wrap"):
+                            ui.button(
+                                "Rechercher les doublons", icon="content_copy",
+                                on_click=lambda: duplicate_search_dialog(),
+                            ).props("outline color=secondary")
+                            ui.button("Fermer", on_click=validation_dialog.close).props("flat")
+                        render_monthly_unreconciled()
+                validation_dialog.open()
+
+            def _add_month_label_end(month_text):
+                month_start = date.fromisoformat(str(month_text) + "-01")
+                if month_start.month == 12:
+                    next_month = date(month_start.year + 1, 1, 1)
+                else:
+                    next_month = date(month_start.year, month_start.month + 1, 1)
+                return (next_month - timedelta(days=1)).isoformat()
+
+            @ui.refreshable
+            def render_history():
+                history_box.clear()
+
+                try:
+                    rows = list_transactions(
+                        user_id,
+                        start_date=(
+                            start.value
+                            or None
+                        ),
+                        end_date=(
+                            end.value
+                            or None
+                        ),
+                        transaction_type=(
+                            history_type.value
+                            or None
+                        ),
+                        category_id=(
+                            history_category.value
+                            or None
+                        ),
+                        tag_id=(
+                            history_tag.value
+                            or None
+                        ),
+                        status=(
+                            history_status.value
+                            or None
+                        ),
+                        payment_method_id=(
+                            history_payment.value
+                            or None
+                        ),
+                        reconciliation_status=(
+                            history_reconciliation.value
+                            or None
+                        ),
+                        query=(
+                            query.value
+                            or None
+                        ),
+                        amount_exact=(history_amount_exact.value or None),
+                        amount_min=(history_amount_min.value or None),
+                        amount_max=(history_amount_max.value or None),
+                        include_linked_transfer_destinations=False,
+                    )
+                except Exception as error:
+                    with history_box:
+                        ui.label(
+                            str(error)
+                        ).classes(
+                            "text-negative"
+                        )
+                    return
+
+                grouped = defaultdict(
+                    list
+                )
+                for row in rows:
+                    grouped[
+                        row[
+                            "transaction_date"
+                        ]
+                    ].append(
+                        row
+                    )
+
+                with history_box:
+                    if not rows:
+                        ui.label(
+                            "Aucune transaction."
+                        ).classes(
+                            "text-sm jf-muted p-3"
+                        )
+                        return
+
+                    for day in sorted(
+                        grouped,
+                        reverse=True,
+                    ):
+                        day_rows = grouped[
+                            day
+                        ]
+                        expenses = [
+                            row
+                            for row in day_rows
+                            if row[
+                                "transaction_type"
+                            ]
+                            == "expense"
+                        ]
+                        incomes = [
+                            row
+                            for row in day_rows
+                            if row[
+                                "transaction_type"
+                            ]
+                            == "income"
+                        ]
+
+                        with ui.element(
+                            "section"
+                        ).classes(
+                            "jf-finance-history-day"
+                        ):
+                            with ui.element(
+                                "div"
+                            ).classes(
+                                "jf-finance-day"
+                            ):
+                                ui.label(
+                                    day.strftime(
+                                        "%d/%m/%Y"
+                                    )
+                                )
+                                ui.label(
+                                    (
+                                        f"{len(day_rows)} "
+                                        "transaction(s)"
+                                    )
+                                ).classes(

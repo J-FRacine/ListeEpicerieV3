@@ -1,0 +1,650 @@
+    category_id=None,
+    tag_ids=None,
+    note=None,
+    status="confirmed",
+    payment_method_id=None,
+    reconciliation_status="unreconciled",
+    reconciliation_date=None,
+    budget_excluded=False,
+    bank_programmed=False,
+    reminder_enabled=False,
+    reminder_time=None,
+    transaction_id=None,
+):
+    if transaction_type not in TRANSACTION_TYPES:
+        raise ValueError("Type invalide.")
+    if status not in TRANSACTION_STATUSES:
+        raise ValueError("Statut invalide.")
+    if reconciliation_status not in RECONCILIATION_STATUSES:
+        raise ValueError("Statut de conciliation invalide.")
+
+    parsed_date = (
+        transaction_date
+        if isinstance(transaction_date, date)
+        else date.fromisoformat(str(transaction_date))
+    )
+    parsed_reconciliation_date = (
+        reconciliation_date
+        if isinstance(reconciliation_date, date)
+        else (
+            date.fromisoformat(str(reconciliation_date))
+            if reconciliation_date
+            else None
+        )
+    )
+    if status == "planned":
+        reconciliation_status = "unreconciled"
+        parsed_reconciliation_date = None
+    elif reconciliation_status == "unreconciled":
+        parsed_reconciliation_date = None
+
+    normalized_reminder_time = _normalize_reminder_time(reminder_time)
+    bank_programmed = bool(bank_programmed) if status == "planned" else False
+    reminder_enabled = bool(reminder_enabled) if status == "planned" else False
+
+    amount = _money(amount)
+    description = _text(
+        description,
+        "La description",
+        160,
+        True,
+    )
+    note = _text(
+        note,
+        "La note",
+        1000,
+    )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            tags = _validate_links(
+                cur,
+                user_id,
+                category_id,
+                tag_ids,
+            )
+            validated_payment_method = (
+                _validate_payment_method(
+                    cur,
+                    user_id,
+                    payment_method_id,
+                )
+            )
+
+            if transaction_id:
+                cur.execute(
+                    """
+                    SELECT reconciliation_status, linked_transfer_id
+                    FROM finance_transactions
+                    WHERE id = %s AND user_id = %s
+                    FOR UPDATE;
+                    """,
+                    (transaction_id, user_id),
+                )
+                current_transaction = cur.fetchone()
+                if not current_transaction:
+                    raise ValueError("Transaction introuvable.")
+                if current_transaction.get("linked_transfer_id"):
+                    raise ValueError(
+                        "Ce paiement est lié à deux comptes. Utilisez « Modifier le paiement de carte » pour le changer."
+                    )
+                if (
+                    current_transaction["reconciliation_status"]
+                    == "reconciled"
+                ):
+                    raise ValueError(
+                        "Retirez d’abord la conciliation avant de "
+                        "modifier cette transaction."
+                    )
+
+                cur.execute(
+                    """
+                    UPDATE finance_transactions
+                    SET
+                        transaction_date = %s,
+                        transaction_type = %s,
+                        amount = %s,
+                        description = %s,
+                        category_id = %s,
+                        note = %s,
+                        status = %s,
+                        payment_method_id = %s,
+                        reconciliation_status = %s,
+                        reconciliation_date = %s,
+                        budget_excluded = %s,
+                        bank_programmed = %s,
+                        reminder_enabled = %s,
+                        reminder_time = %s,
+                        updated_at = NOW()
+                    WHERE id = %s
+                      AND user_id = %s;
+                    """,
+                    (
+                        parsed_date,
+                        transaction_type,
+                        amount,
+                        description,
+                        category_id,
+                        note,
+                        status,
+                        validated_payment_method,
+                        reconciliation_status,
+                        parsed_reconciliation_date,
+                        bool(budget_excluded),
+                        bank_programmed,
+                        reminder_enabled,
+                        normalized_reminder_time,
+                        transaction_id,
+                        user_id,
+                    ),
+                )
+                if cur.rowcount == 0:
+                    raise ValueError(
+                        "Transaction introuvable."
+                    )
+
+                saved_id = int(
+                    transaction_id
+                )
+                cur.execute(
+                    """
+                    DELETE FROM finance_transaction_tags
+                    WHERE transaction_id = %s;
+                    """,
+                    (saved_id,),
+                )
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO finance_transactions (
+                        user_id,
+                        transaction_date,
+                        transaction_type,
+                        amount,
+                        description,
+                        category_id,
+                        note,
+                        status,
+                        payment_method_id,
+                        reconciliation_status,
+                        reconciliation_date,
+                        budget_excluded,
+                        bank_programmed,
+                        reminder_enabled,
+                        reminder_time
+                    )
+                    VALUES (
+                        %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s
+                    )
+                    RETURNING id;
+                    """,
+                    (
+                        user_id,
+                        parsed_date,
+                        transaction_type,
+                        amount,
+                        description,
+                        category_id,
+                        note,
+                        status,
+                        validated_payment_method,
+                        reconciliation_status,
+                        parsed_reconciliation_date,
+                        bool(budget_excluded),
+                        bank_programmed,
+                        reminder_enabled,
+                        normalized_reminder_time,
+                    ),
+                )
+                saved_id = int(
+                    cur.fetchone()["id"]
+                )
+
+            for tag_id in tags:
+                cur.execute(
+                    """
+                    INSERT INTO finance_transaction_tags (
+                        transaction_id,
+                        tag_id
+                    )
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING;
+                    """,
+                    (
+                        saved_id,
+                        tag_id,
+                    ),
+                )
+
+            conn.commit()
+            return saved_id
+
+
+def list_transactions(
+    user_id,
+    start_date=None,
+    end_date=None,
+    transaction_type=None,
+    category_id=None,
+    tag_id=None,
+    status=None,
+    payment_method_id=None,
+    reconciliation_status=None,
+    query=None,
+    transaction_id=None,
+    include_linked_transfer_destinations=True,
+    amount_exact=None,
+    amount_min=None,
+    amount_max=None,
+    limit=1000,
+):
+    conditions = [
+        "t.user_id = %s",
+    ]
+    params = [
+        user_id,
+    ]
+
+    for sql, value in (
+        (
+            "t.id = %s",
+            transaction_id,
+        ),
+        (
+            "t.transaction_date >= %s",
+            start_date,
+        ),
+        (
+            "t.transaction_date <= %s",
+            end_date,
+        ),
+        (
+            "t.transaction_type = %s",
+            transaction_type,
+        ),
+        (
+            "t.category_id = %s",
+            category_id,
+        ),
+        (
+            "t.status = %s",
+            status,
+        ),
+        (
+            "t.payment_method_id = %s",
+            payment_method_id,
+        ),
+        (
+            "t.reconciliation_status = %s",
+            reconciliation_status,
+        ),
+    ):
+        if value not in (
+            None,
+            "",
+        ):
+            conditions.append(
+                sql
+            )
+            params.append(
+                value
+            )
+
+    if not include_linked_transfer_destinations:
+        conditions.append(
+            "(t.linked_transfer_role IS NULL OR t.linked_transfer_role <> 'destination')"
+        )
+
+    if tag_id:
+        conditions.append(
+            """
+            EXISTS (
+                SELECT 1
+                FROM finance_transaction_tags AS selected_tag
+                WHERE selected_tag.transaction_id = t.id
+                  AND selected_tag.tag_id = %s
+            )
+            """
+        )
+        params.append(
+            tag_id
+        )
+
+    if query:
+        conditions.append(
+            """
+            (
+                LOWER(t.description) LIKE LOWER(%s)
+                OR LOWER(
+                    COALESCE(
+                        t.note,
+                        ''
+                    )
+                ) LIKE LOWER(%s)
+                OR LOWER(
+                    COALESCE(
+                        payment_method.name,
+                        ''
+                    )
+                ) LIKE LOWER(%s)
+            )
+            """
+        )
+        pattern = (
+            f"%{str(query).strip()}%"
+        )
+        params.extend(
+            [
+                pattern,
+                pattern,
+                pattern,
+            ]
+        )
+
+    def _amount_filter_value(value, label):
+        if value in (None, ""):
+            return None
+        text = str(value).strip().replace(" ", "").replace(",", ".")
+        try:
+            parsed = Decimal(text).copy_abs().quantize(Decimal("0.01"))
+        except (InvalidOperation, ValueError, TypeError) as error:
+            raise ValueError(f"{label} est invalide.") from error
+        return parsed
+
+    exact_value = _amount_filter_value(amount_exact, "Le montant")
+    min_value = _amount_filter_value(amount_min, "Le montant minimum")
+    max_value = _amount_filter_value(amount_max, "Le montant maximum")
+    if min_value is not None and max_value is not None and min_value > max_value:
+        raise ValueError("Le montant minimum ne peut pas dépasser le montant maximum.")
+    if exact_value is not None:
+        conditions.append("ABS(t.amount) = %s")
+        params.append(exact_value)
+    else:
+        if min_value is not None:
+            conditions.append("ABS(t.amount) >= %s")
+            params.append(min_value)
+        if max_value is not None:
+            conditions.append("ABS(t.amount) <= %s")
+            params.append(max_value)
+
+    params.append(
+        int(limit)
+    )
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT
+                    t.*,
+                    payment_method.name
+                        AS payment_method_name,
+                    payment_method.method_type
+                        AS payment_method_type,
+                    linked_transfer.transfer_type
+                        AS linked_transfer_type,
+                    linked_transfer.source_payment_method_id
+                        AS linked_transfer_source_payment_method_id,
+                    linked_transfer.destination_payment_method_id
+                        AS linked_transfer_destination_payment_method_id,
+                    linked_transfer.source_date
+                        AS linked_transfer_source_date,
+                    linked_transfer.destination_date
+                        AS linked_transfer_destination_date,
+                    source_method.name
+                        AS linked_transfer_source_name,
+                    destination_method.name
+                        AS linked_transfer_destination_name,
+                    CASE
+                        WHEN parent.id IS NULL
+                        THEN category.name
+                        ELSE parent.name
+                             || ' › '
+                             || category.name
+                    END AS category_full_name,
+                    COALESCE(
+                        ARRAY_AGG(
+                            tag.id
+                            ORDER BY tag.name
+                        )
+                        FILTER (
+                            WHERE tag.id IS NOT NULL
+                        ),
+                        ARRAY[]::BIGINT[]
+                    ) AS tag_ids,
+                    COALESCE(
+                        ARRAY_AGG(
+                            tag.name
+                            ORDER BY tag.name
+                        )
+                        FILTER (
+                            WHERE tag.id IS NOT NULL
+                        ),
+                        ARRAY[]::TEXT[]
+                    ) AS tag_names
+                FROM finance_transactions AS t
+                LEFT JOIN finance_categories AS category
+                    ON category.id = t.category_id
+                LEFT JOIN finance_categories AS parent
+                    ON parent.id = category.parent_id
+                LEFT JOIN finance_payment_methods AS payment_method
+                    ON payment_method.id = t.payment_method_id
+                LEFT JOIN finance_linked_transfers AS linked_transfer
+                    ON linked_transfer.id = t.linked_transfer_id
+                LEFT JOIN finance_payment_methods AS source_method
+                    ON source_method.id = linked_transfer.source_payment_method_id
+                LEFT JOIN finance_payment_methods AS destination_method
+                    ON destination_method.id = linked_transfer.destination_payment_method_id
+                LEFT JOIN finance_transaction_tags AS transaction_tag
+                    ON transaction_tag.transaction_id = t.id
+                LEFT JOIN finance_tags AS tag
+                    ON tag.id = transaction_tag.tag_id
+                WHERE {" AND ".join(conditions)}
+                GROUP BY
+                    t.id,
+                    category.id,
+                    parent.id,
+                    parent.name,
+                    payment_method.id,
+                    payment_method.name,
+                    payment_method.method_type,
+                    linked_transfer.id,
+                    linked_transfer.transfer_type,
+                    linked_transfer.source_payment_method_id,
+                    linked_transfer.destination_payment_method_id,
+                    linked_transfer.source_date,
+                    linked_transfer.destination_date,
+                    source_method.id,
+                    source_method.name,
+                    destination_method.id,
+                    destination_method.name
+                ORDER BY
+                    t.transaction_date DESC,
+                    t.id DESC
+                LIMIT %s;
+                """,
+                params,
+            )
+            return cur.fetchall()
+
+
+def get_transaction(user_id, transaction_id):
+    rows = list_transactions(user_id, transaction_id=transaction_id)
+    if not rows:
+        raise ValueError("Transaction introuvable.")
+    return rows[0]
+
+
+def delete_transaction(user_id, transaction_id):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT reconciliation_status, linked_transfer_id
+                FROM finance_transactions
+                WHERE id = %s AND user_id = %s
+                FOR UPDATE;
+                """,
+                (transaction_id, user_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise ValueError("Transaction introuvable.")
+
+            linked_transfer_id = row.get("linked_transfer_id")
+            if linked_transfer_id:
+                cur.execute(
+                    """
+                    SELECT reconciliation_status
+                    FROM finance_transactions
+                    WHERE user_id = %s
+                      AND linked_transfer_id = %s
+                    FOR UPDATE;
+                    """,
+                    (user_id, linked_transfer_id),
+                )
+                linked_rows = cur.fetchall()
+                if any(
+                    linked_row["reconciliation_status"] == "reconciled"
+                    for linked_row in linked_rows
+                ):
+                    raise ValueError(
+                        "Retirez d’abord la conciliation du paiement de carte avant de le supprimer."
+                    )
+                cur.execute(
+                    """
+                    DELETE FROM finance_linked_transfers
+                    WHERE id = %s AND user_id = %s;
+                    """,
+                    (linked_transfer_id, user_id),
+                )
+                conn.commit()
+                return
+
+            if row["reconciliation_status"] == "reconciled":
+                raise ValueError(
+                    "Retirez d’abord la conciliation avant de "
+                    "supprimer cette transaction."
+                )
+
+            cur.execute(
+                """
+                DELETE FROM finance_transactions
+                WHERE id = %s AND user_id = %s;
+                """,
+                (transaction_id, user_id),
+            )
+            conn.commit()
+
+
+def set_transaction_status(user_id, transaction_id, status):
+    if status not in TRANSACTION_STATUSES:
+        raise ValueError("Statut invalide.")
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT linked_transfer_id
+                FROM finance_transactions
+                WHERE id = %s AND user_id = %s
+                FOR UPDATE;
+                """,
+                (transaction_id, user_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise ValueError("Transaction introuvable.")
+            linked_transfer_id = row.get("linked_transfer_id")
+            if linked_transfer_id:
+                cur.execute(
+                    """
+                    UPDATE finance_linked_transfers
+                    SET status = %s,
+                        bank_programmed = CASE
+                            WHEN %s = 'planned' THEN bank_programmed
+                            ELSE FALSE
+                        END,
+                        reminder_enabled = CASE
+                            WHEN %s = 'planned' THEN reminder_enabled
+                            ELSE FALSE
+                        END,
+                        updated_at = NOW()
+                    WHERE id = %s AND user_id = %s;
+                    """,
+                    (
+                        status,
+                        status,
+                        status,
+                        linked_transfer_id,
+                        user_id,
+                    ),
+                )
+                cur.execute(
+                    """
+                    UPDATE finance_transactions
+                    SET status = %s,
+                        bank_programmed = CASE
+                            WHEN %s = 'planned'
+                                 AND linked_transfer_role = 'source'
+                            THEN bank_programmed
+                            ELSE FALSE
+                        END,
+                        reminder_enabled = CASE
+                            WHEN %s = 'planned'
+                                 AND linked_transfer_role = 'source'
+                            THEN reminder_enabled
+                            ELSE FALSE
+                        END,
+                        updated_at = NOW()
+                    WHERE user_id = %s
+                      AND linked_transfer_id = %s;
+                    """,
+                    (
+                        status,
+                        status,
+                        status,
+                        user_id,
+                        linked_transfer_id,
+                    ),
+                )
+            else:
+                cur.execute(
+                    """
+                    UPDATE finance_transactions
+                    SET status=%s,
+                        bank_programmed = CASE
+                            WHEN %s = 'planned' THEN bank_programmed
+                            ELSE FALSE
+                        END,
+                        reminder_enabled = CASE
+                            WHEN %s = 'planned' THEN reminder_enabled
+                            ELSE FALSE
+                        END,
+                        updated_at=NOW()
+                    WHERE id=%s AND user_id=%s;
+                    """,
+                    (status, status, status, transaction_id, user_id),
+                )
+            conn.commit()
+
+
+def _refresh_reconciliation_session_totals(
+    cur,
+    session_id,
+):
+    """Recalcule une séance après le retrait d'une transaction.
+
+    Les séances V1.9 utilisent un solde de référence + les mouvements nets.
+    Les anciennes séances sans reference_balance conservent leur calcul historique.
+    """
+    cur.execute(
+        """
+        SELECT
+            session.statement_balance,
+            session.opening_balance_amount,
+            session.reference_balance,
+            session.expected_balance,
+            session.difference_resolution,
+            COALESCE(

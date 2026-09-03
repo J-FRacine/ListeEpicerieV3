@@ -1,0 +1,650 @@
+from __future__ import annotations
+
+from collections import defaultdict
+from datetime import date, timedelta
+from decimal import Decimal, ROUND_CEILING
+from pathlib import Path
+import json
+import tempfile
+
+from nicegui import ui
+
+from app_versions import version_label
+from blood_pressure_push import (
+    count_active_push_subscriptions,
+    get_vapid_public_key,
+    save_push_subscription,
+    set_push_channel_enabled,
+)
+from finances_data import (
+    BUDGET_INPUT_FREQUENCIES,
+    INSTALLMENT_PLAN_TYPES,
+    CARRY_POLICIES,
+    CONFIRMATION_MODES,
+    FREQUENCY_UNITS,
+    PAYMENT_METHOD_TYPES,
+    RECONCILIATION_SESSION_STATUSES,
+    RECONCILIATION_STATUSES,
+    TRANSACTION_STATUSES,
+    TRANSACTION_TYPES,
+    bank_cashflow_month,
+    bank_cashflow_year_summary,
+    analyze_installment_progress,
+    budget_summary,
+    budget_capacity_summary,
+    budget_forecast,
+    bulk_assign_payment_method,
+    calculate_installment_payment,
+    cancel_reconciliation_session,
+    count_unassigned_confirmed_transactions,
+    create_reconciliation_session,
+    dashboard_month_projection,
+    dashboard_summary,
+    delete_recurrence,
+    delete_installment_plan,
+    delete_financing_budget_group,
+    delete_reconciliation_draft,
+    delete_transaction,
+    ensure_default_finance_categories,
+    ensure_default_finance_payment_methods,
+    export_finances,
+    find_potential_duplicate_transactions,
+    financing_month_summary,
+    generate_due_recurrences,
+    get_or_create_finance_category,
+    get_or_create_finance_tag,
+    get_card_payment_transfer,
+    get_installment_plan,
+    get_reconciliation_draft,
+    get_finance_settings,
+    get_reconciliation_session,
+    get_transaction,
+    goal_progress,
+    import_finance_rows,
+    init_finances_schema,
+    list_bank_accounts,
+    list_budget_items,
+    list_card_payment_transfers,
+    list_categories,
+    list_goals,
+    list_installment_plans,
+    list_financing_budget_groups,
+    list_month_unreconciled_transactions,
+    list_payment_methods,
+    list_reconciliation_sessions,
+    list_reconciliation_drafts,
+    list_recurrences,
+    list_tags,
+    list_transactions,
+    list_unassigned_transactions,
+    list_unreconciled_transactions,
+    move_budget_item,
+    move_payment_method,
+    payment_predicted_balance_summary,
+    reconciliation_reference_summary,
+    prepare_finance_import,
+    remove_transaction_from_reconciliation_session,
+    save_budget_item,
+    save_financing_budget_group,
+    save_card_payment_transfer,
+    save_category,
+    save_goal,
+    save_installment_plan,
+    save_reconciliation_draft,
+    save_payment_method,
+    save_recurrence,
+    save_tag,
+    save_transaction,
+    set_bank_transaction_seen,
+    set_month_carryover,
+    set_category_dashboard_visible,
+    set_tag_dashboard_visible,
+    set_transaction_reconciliation,
+    set_transaction_status,
+    toggle_budget_item,
+    toggle_category,
+    toggle_goal,
+    toggle_installment_plan,
+    toggle_payment_method,
+    toggle_recurrence,
+    toggle_tag,
+)
+from finances_shared_loans import shared_loans_panel
+from finances_ui_state import MonthCursor, month_label as _month_label, shift_month as _shift_month
+
+
+ADD_CATEGORY_OPTION = "__jf_add_category__"
+ADD_TAG_OPTION = "__jf_add_tag__"
+CREATE_RECURRENCE_OPTION = "__jf_create_recurrence__"
+
+BUDGET_SORT_FIELDS = {
+    "custom": "Ordre personnalisé",
+    "description": "Alphabétique",
+    "monthly_amount": "Montant par mois",
+    "biweekly_amount": "Montant par paie",
+    "effective_start": "Date de début",
+}
+BUDGET_SORT_DIRECTIONS = {
+    "asc": "Croissant",
+    "desc": "Décroissant",
+}
+
+
+FINANCE_CSS = r"""
+.jf-finance-main-tabs {
+    width: 100%;
+    overflow: hidden;
+    border-bottom: 1px solid var(--jf-border);
+}
+.jf-finance-main-tabs .q-tabs__content {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color:
+        color-mix(in srgb, var(--jf-blue) 36%, transparent)
+        transparent;
+}
+.jf-finance-main-tabs .q-tabs__content::-webkit-scrollbar {
+    height: 4px;
+}
+.jf-finance-main-tabs .q-tabs__content::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: color-mix(
+        in srgb,
+        var(--jf-blue) 36%,
+        transparent
+    );
+}
+.jf-finance-main-tabs .q-tab {
+    flex: 0 0 auto;
+    min-width: max-content;
+    padding-inline: .72rem;
+}
+.jf-finance-main-tabs .q-tab__content {
+    min-width: max-content;
+}
+.jf-finance-main-tabs .q-tab__label {
+    overflow: visible;
+    white-space: nowrap;
+    text-overflow: clip;
+}
+.jf-finance-main-tabs .q-tabs__arrow {
+    color: var(--jf-navy);
+}
+.body--dark .jf-finance-main-tabs .q-tabs__arrow {
+    color: #dceaf6;
+}
+
+.jf-finance-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .45rem;
+    width: 100%;
+}
+.jf-finance-summary {
+    min-width: 0;
+    padding: .58rem .58rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 11px;
+    background: var(--jf-surface);
+}
+.jf-finance-summary-label {
+    color: var(--jf-muted);
+    font-size: .66rem;
+}
+.jf-finance-summary-value {
+    width: 100%;
+    color: var(--jf-navy);
+    font-size: 1rem;
+    font-weight: 850;
+    text-align: right;
+    white-space: nowrap;
+}
+.body--dark .jf-finance-summary-value {
+    color: #dceaf6;
+}
+.jf-finance-form-grid {
+    display: grid;
+    grid-template-columns:
+        minmax(7rem, .7fr)
+        minmax(8rem, .8fr)
+        minmax(12rem, 1.5fr);
+    gap: .5rem;
+    width: 100%;
+}
+.jf-finance-field .q-field__control {
+    min-height: 40px;
+    height: 40px;
+}
+.jf-finance-card {
+    width: 100%;
+    padding: .55rem .65rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 10px;
+    background: var(--jf-surface);
+}
+.jf-finance-expense {
+    color: #a33b46;
+}
+.jf-finance-income {
+    color: #187148;
+}
+.jf-finance-progress {
+    width: 100%;
+    height: 7px;
+    overflow: hidden;
+    border-radius: 99px;
+    background: rgba(120, 130, 145, .18);
+}
+.jf-finance-progress > div {
+    height: 100%;
+    border-radius: 99px;
+    background: var(--jf-blue);
+}
+.jf-finance-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .55rem;
+    width: 100%;
+}
+.jf-finance-kpi-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+}
+.jf-finance-kpi-header,
+.jf-finance-kpi-row {
+    display: grid;
+    grid-template-columns:
+        minmax(0, 1.35fr)
+        minmax(5.4rem, .72fr)
+        minmax(5.4rem, .72fr)
+        minmax(5.8rem, .78fr)
+        minmax(4.2rem, .50fr);
+    align-items: center;
+    gap: .42rem;
+    width: 100%;
+}
+.jf-finance-kpi-header {
+    padding: .25rem 0 .35rem;
+    color: var(--jf-muted);
+    font-size: .62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+.jf-finance-kpi-row {
+    padding: .34rem 0;
+    border-bottom: 1px solid var(--jf-border);
+}
+.jf-finance-kpi-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .75rem;
+}
+.jf-finance-kpi-link {
+    justify-self: start;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0;
+    min-height: 1.8rem;
+    color: var(--jf-blue);
+    font-size: .75rem;
+    font-weight: 800;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+.jf-finance-kpi-link .q-btn__content {
+    min-width: 0;
+    max-width: 100%;
+    justify-content: flex-start;
+}
+.jf-finance-kpi-link .block {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.jf-finance-kpi-detail-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .45rem;
+    width: 100%;
+}
+.jf-finance-kpi-detail-list {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    width: 100%;
+}
+.jf-finance-kpi-detail-row {
+    display: grid;
+    grid-template-columns: 5.2rem minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: .45rem;
+    width: 100%;
+    padding: .42rem .48rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 9px;
+    background: var(--jf-surface);
+}
+.jf-finance-kpi-detail-date {
+    color: var(--jf-muted);
+    font-size: .68rem;
+    white-space: nowrap;
+}
+.jf-finance-kpi-detail-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .78rem;
+    font-weight: 780;
+}
+.jf-finance-kpi-detail-meta {
+    color: var(--jf-muted);
+    font-size: .62rem;
+}
+.jf-finance-kpi-detail-amount {
+    min-width: 6rem;
+    font-size: .78rem;
+    font-weight: 850;
+    text-align: right;
+    white-space: nowrap;
+}
+@media (max-width: 560px) {
+    .jf-finance-kpi-detail-summary {
+        grid-template-columns: 1fr;
+    }
+    .jf-finance-kpi-detail-row {
+        grid-template-columns: 4.7rem minmax(0, 1fr) auto;
+        grid-template-areas:
+            "date name amount"
+            "date meta actions";
+        gap: .15rem .35rem;
+    }
+    .jf-finance-kpi-detail-date {grid-area: date;}
+    .jf-finance-kpi-detail-name {grid-area: name;}
+    .jf-finance-kpi-detail-meta {grid-area: meta;}
+    .jf-finance-kpi-detail-amount {grid-area: amount;}
+    .jf-finance-kpi-detail-actions {grid-area: actions; justify-self: end;}
+}
+
+.jf-finance-kpi-value {
+    justify-self: end;
+    min-width: 0;
+    font-size: .74rem;
+    font-weight: 760;
+    text-align: right;
+    white-space: nowrap;
+}
+.jf-finance-kpi-total {
+    font-weight: 900;
+}
+.jf-finance-upcoming-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .55rem;
+    width: 100%;
+}
+.jf-finance-upcoming-row {
+    display: grid;
+    grid-template-columns: 4.6rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .45rem;
+    width: 100%;
+    padding: .35rem 0;
+    border-bottom: 1px solid var(--jf-border);
+}
+.jf-finance-upcoming-date {
+    color: var(--jf-muted);
+    font-size: .68rem;
+    white-space: nowrap;
+}
+.jf-finance-upcoming-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .76rem;
+    font-weight: 760;
+}
+.jf-finance-upcoming-meta {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--jf-muted);
+    font-size: .62rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.jf-finance-upcoming-amount {
+    min-width: 6rem;
+    font-size: .76rem;
+    font-weight: 850;
+    text-align: right;
+    white-space: nowrap;
+}
+.jf-finance-reconciliation-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .5rem;
+    width: 100%;
+}
+.jf-finance-reconciliation-card {
+    width: 100%;
+    padding: .5rem .6rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 10px;
+    background: var(--jf-surface);
+}
+.jf-finance-reconciliation-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: .45rem;
+    width: 100%;
+    font-size: .72rem;
+}
+.jf-finance-reconciliation-value {
+    justify-self: end;
+    min-width: 6.4rem;
+    font-weight: 800;
+    text-align: right;
+    white-space: nowrap;
+}
+.jf-finance-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+    width: 100%;
+}
+.jf-finance-history-day {
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid var(--jf-border);
+    border-radius: 12px;
+    background: var(--jf-surface);
+}
+.jf-finance-day {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    width: 100%;
+    padding: .3rem .55rem;
+    border-left: 4px solid var(--jf-blue);
+    background: var(--jf-blue-soft);
+    font-size: .76rem;
+    font-weight: 800;
+}
+.jf-finance-history-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    width: 100%;
+}
+.jf-finance-history-column {
+    min-width: 0;
+    padding: .4rem;
+}
+.jf-finance-history-column + .jf-finance-history-column {
+    border-left: 1px solid var(--jf-border);
+}
+.jf-finance-history-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .4rem;
+    padding: 0 .15rem .3rem;
+    color: var(--jf-muted);
+    font-size: .66rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+.jf-finance-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+        "main amount actions"
+        "meta amount actions";
+    align-items: center;
+    gap: .05rem .38rem;
+    width: 100%;
+    min-height: 43px;
+    padding: .28rem .35rem;
+    border: 1px solid var(--jf-border);
+    border-radius: 9px;
+    background: var(--jf-surface);
+}
+.jf-finance-row + .jf-finance-row {
+    margin-top: .28rem;
+}
+.jf-finance-main {
+    grid-area: main;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .82rem;
+    font-weight: 800;
+}
+.jf-finance-meta {
+    grid-area: meta;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--jf-muted);
+    font-size: .65rem;
+}
+.jf-finance-amount {
+    grid-area: amount;
+    justify-self: end;
+    min-width: 6.6rem;
+    font-size: .86rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 850;
+    text-align: right;
+    white-space: nowrap;
+}
+.jf-finance-actions {
+    grid-area: actions;
+    display: flex;
+    gap: 0;
+    justify-self: end;
+}
+.jf-finance-payment-chip,
+.jf-finance-reconciliation-chip {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: .08rem .32rem;
+    border-radius: 999px;
+    font-size: .58rem;
+    font-weight: 800;
+}
+.jf-finance-payment-chip {
+    color: var(--jf-blue);
+    background: var(--jf-blue-soft);
+}
+.jf-finance-reconciliation-chip {
+    color: #73500f;
+    background: rgba(199, 151, 65, .17);
+}
+.jf-finance-reconciled-chip {
+    color: #176848;
+    background: rgba(33, 145, 92, .15);
+}
+.jf-finance-empty-column {
+    padding: .55rem .25rem;
+    color: var(--jf-muted);
+    font-size: .7rem;
+    text-align: center;
+}
+.jf-finance-payment-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .35rem;
+    width: 100%;
+}
+.jf-finance-payment-order {
+    display: flex;
+    gap: 0;
+}
+@media (max-width: 760px) {
+    .jf-finance-main-tabs {
+        margin-top: .15rem;
+    }
+    .jf-finance-main-tabs .q-tabs__content {
+        padding-bottom: .12rem;
+    }
+    .jf-finance-main-tabs .q-tab {
+        min-height: 3rem;
+        padding-inline: .65rem;
+    }
+    .jf-finance-main-tabs .q-tab__content {
+        flex-direction: row;
+        gap: .35rem;
+    }
+    .jf-finance-main-tabs .q-tab__icon {
+        margin-bottom: 0;
+        font-size: 1.2rem;
+    }
+    .jf-finance-main-tabs .q-tab__label {
+        font-size: .72rem;
+        line-height: 1;
+    }
+
+    .jf-finance-form-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    .jf-finance-description {
+        grid-column: 1 / -1;
+    }
+    .jf-finance-summary-value {
+        font-size: .86rem;
+    }
+    .jf-finance-kpi-grid,
+    .jf-finance-upcoming-grid,
+    .jf-finance-reconciliation-grid,
+    .jf-finance-history-columns {
+        grid-template-columns: 1fr;
+    }
+    .jf-finance-history-column + .jf-finance-history-column {
+        border-left: 0;
+        border-top: 1px solid var(--jf-border);
+    }
+}
+@media (max-width: 430px) {
+    .jf-finance-main-tabs .q-tab {
+        min-height: 2.85rem;
+        padding-inline: .58rem;
+    }
+    .jf-finance-main-tabs .q-tab__label {

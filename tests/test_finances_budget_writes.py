@@ -1,8 +1,11 @@
 """Écritures réelles avec contrat SQL simulé; aucun rollback réel testé."""
 import importlib
+import inspect
+import subprocess
+from pathlib import Path
 import sys
 import unittest
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from datetime import date, time
 from decimal import Decimal as D
 from types import ModuleType
@@ -366,6 +369,78 @@ class BudgetWritesTests(unittest.TestCase):
                 "WHERE id=%s AND user_id=%s", "AND EXISTS", "FROM finance_budget_financing_groups AS group_row",
                 "group_row.budget_item_id=finance_budget_items.id"], (42, 7), count=count)]):
                 self.assertEqual(data.delete_financing_budget_group(7, "42"), count)
+
+
+class BudgetWritesArchitectureTests(unittest.TestCase):
+    def test_independent_import(self):
+        script = """
+import importlib.abc
+import sys
+class Blocker(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] in {'db', 'finances_data', 'nicegui', 'psycopg'}:
+            raise AssertionError(fullname)
+sys.meta_path.insert(0, Blocker())
+import finances_budget_writes
+assert callable(finances_budget_writes.save_budget_item)
+"""
+        result = subprocess.run([sys.executable, "-B", "-c", script],
+                                cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_six_facades_resolve_successively_replaced_dependencies(self):
+        contracts = {
+            "toggle_budget_item": ["get_connection"],
+            "move_budget_item": ["get_connection"],
+            "_create_budget_recurrence_cursor": ["_text", "_money", "_optional_date_value",
+                "_normalize_reminder_time", "_validate_links", "_validate_payment_method",
+                "FREQUENCY_UNITS", "CONFIRMATION_MODES", "date"],
+            "save_budget_item": ["get_connection", "TRANSACTION_TYPES", "BUDGET_INPUT_FREQUENCIES",
+                "_text", "_money", "_optional_date_value", "_create_budget_recurrence_cursor",
+                "_budget_values_from_recurrence", "_periods_overlap"],
+            "save_financing_budget_group": ["get_connection", "_text", "_optional_date_value",
+                "_financing_group_amount_for_month", "date"],
+            "delete_financing_budget_group": ["get_connection"],
+        }
+        for name, dependencies in contracts.items():
+            facade = getattr(data, name)
+            signature = inspect.signature(facade)
+            values = {key: Mock(name=key) for key in signature.parameters}
+            positional = [values[key] for key, value in signature.parameters.items()
+                          if value.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD]
+            keywords = {key: values[key] for key, value in signature.parameters.items()
+                        if value.kind == inspect.Parameter.KEYWORD_ONLY}
+            for iteration in range(2):
+                with self.subTest(name=name, iteration=iteration), ExitStack() as stack:
+                    replacements = {dep: stack.enter_context(patch.object(data, dep)) for dep in dependencies}
+                    target = stack.enter_context(patch.object(data._budget_writes, name))
+                    self.assertIs(facade(**values), target.return_value)
+                    target.assert_called_once_with(*positional, **keywords, **replacements)
+
+    def test_late_dates_validators_and_connection_are_executed(self):
+        for day in (START, END):
+            class FixedDate(date):
+                @classmethod
+                def today(cls):
+                    return day
+            cur = ScriptedConnection([step("INSERT INTO finance_recurrences",
+                (7, "expense", "Test", D("20"), None, 8, None, "month", 1, day, None, day,
+                 "confirm", False, False, False, time(9)), one={"id": 12}),
+                step("ON CONFLICT DO NOTHING", (12, 4))])
+            with patch.object(data, "date", FixedDate), \
+                 patch.object(data, "_validate_links", return_value=[4]) as links, \
+                 patch.object(data, "_validate_payment_method", return_value=8) as payment:
+                self.assertEqual(data._create_budget_recurrence_cursor(cur, 7, transaction_type="expense",
+                    fallback_description="Test", fallback_amount="20", fallback_start=None,
+                    fallback_end=None, payload={}), 12)
+                links.assert_called_once_with(cur, 7, None, [])
+                payment.assert_called_once_with(cur, 7, None)
+            self.assertEqual(cur.steps, [])
+            conn = ScriptedConnection([step("UPDATE finance_budget_items", (True, 42, 7))])
+            with patch.object(data, "get_connection", return_value=conn) as connect:
+                data.toggle_budget_item(7, 42, True)
+                connect.assert_called_once_with()
+            self.assertEqual(conn.commits, 1)
 
 
 if __name__ == "__main__":

@@ -126,6 +126,20 @@ sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
   volontaire et sans migration. PostgreSQL, navigateur et Canner/Render réels
   ne sont pas validés.
 
+### Extraction des écritures Budget — 2026-09-04
+
+- `finances_budget_writes.py` contient maintenant les six écritures spécifiques
+  au Budget. Leurs corps, SQL, ordre de requêtes et commits sont conservés.
+- Les connexions, validateurs, helpers, constantes et source de date sont injectés
+  par les façades historiques à chaque appel. Le module n’importe ni `db`,
+  `finances_data`, NiceGUI ou psycopg.
+- `finances_budget_data.py` conserve les calculs et lectures Budget. L’interface
+  reste dans les fragments UI et `_variable_expense_total_for_month()` reste
+  historique. Aucune optimisation KPI supplémentaire et aucune migration.
+- 83 tests réussis : les 80 précédents, dont les 29 tests SQL d’écriture sans
+  changement, et 3 contrôles d’import/délégation. PostgreSQL, navigateur et
+  Canner/Render réels ne sont pas validés.
+
 ### Structure technique Finances
 
 Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
@@ -138,6 +152,7 @@ Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
   - `finances_account.py` : panneau Compte et contrat `AccountPanelHandle`.
   - `finances_account_data.py` : noyau de données Compte (banques et marges).
   - `finances_budget_data.py` : résumé, capacités, prévisions et lectures Budget.
+  - `finances_budget_writes.py` : écritures spécifiques au Budget.
   - `finances_calculations.py`
   - `finances_validation.py`
   - `finances_shared_loans.py`
@@ -187,7 +202,7 @@ Le refactor doit être progressif, écran par écran, afin de réduire le risque
 ### Validation / qualité
 
 - Maintenir la compilation Python comme contrôle minimum.
-- Maintenir les 51 tests automatisés de calcul et de compatibilité; compléter
+- Maintenir les 83 tests automatisés de calcul et de compatibilité; compléter
   progressivement les protections de l’interface et des écritures SQL.
 - Conserver des tests ciblés pour :
   - mois à trois paies;

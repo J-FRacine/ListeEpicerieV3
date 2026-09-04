@@ -302,65 +302,27 @@ def _sync_budget_items_from_recurrence_cursor(cur, user_id, recurrence_id):
 
 
 
+import finances_budget_writes as _budget_writes
+
+
 def toggle_budget_item(user_id, budget_item_id, is_active):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE finance_budget_items
-                SET is_active=%s, updated_at=NOW()
-                WHERE id=%s AND user_id=%s;
-                """,
-                (bool(is_active), budget_item_id, user_id),
-            )
-            if cur.rowcount == 0:
-                raise ValueError("Poste budgétaire introuvable.")
-            conn.commit()
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _budget_writes.toggle_budget_item(
+        user_id,
+        budget_item_id,
+        is_active,
+        get_connection=get_connection,
+    )
 
 
 def move_budget_item(user_id, budget_item_id, direction):
-    if direction not in {"up", "down"}:
-        raise ValueError("Direction invalide.")
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, item_type, sort_order
-                FROM finance_budget_items
-                WHERE user_id=%s
-                ORDER BY item_type, sort_order, id
-                FOR UPDATE;
-                """,
-                (user_id,),
-            )
-            rows = cur.fetchall()
-            current = next(
-                (row for row in rows if int(row["id"]) == int(budget_item_id)),
-                None,
-            )
-            if not current:
-                raise ValueError("Poste budgétaire introuvable.")
-            same_type = [row for row in rows if row["item_type"] == current["item_type"]]
-            ids = [int(row["id"]) for row in same_type]
-            index = ids.index(int(budget_item_id))
-            target_index = index - 1 if direction == "up" else index + 1
-            if target_index < 0 or target_index >= len(same_type):
-                return
-            target = same_type[target_index]
-            current_order = int(current["sort_order"])
-            target_order = int(target["sort_order"])
-            if current_order == target_order:
-                current_order = index + 1
-                target_order = target_index + 1
-            cur.execute(
-                "UPDATE finance_budget_items SET sort_order=%s,updated_at=NOW() WHERE id=%s;",
-                (target_order, current["id"]),
-            )
-            cur.execute(
-                "UPDATE finance_budget_items SET sort_order=%s,updated_at=NOW() WHERE id=%s;",
-                (current_order, target["id"]),
-            )
-            conn.commit()
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _budget_writes.move_budget_item(
+        user_id,
+        budget_item_id,
+        direction,
+        get_connection=get_connection,
+    )
 
 
 

@@ -18,158 +18,30 @@ def save_financing_budget_group(
     effective_end=None,
     note=None,
 ):
-    description = _text(description, "Le nom du groupe", 160, True)
-    selected = sorted({int(value) for value in (plan_ids or [])})
-    if not selected:
-        raise ValueError("Sélectionnez au moins un financement.")
-    start_value = _optional_date_value(effective_start, "La date de début")
-    end_value = _optional_date_value(effective_end, "La date de fin")
-    if start_value and end_value and end_value < start_value:
-        raise ValueError("La date de fin doit être après la date de début.")
-
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id
-                FROM finance_installment_plans
-                WHERE user_id=%s AND id=ANY(%s);
-                """,
-                (user_id, selected),
-            )
-            valid = {int(row["id"]) for row in cur.fetchall()}
-            if valid != set(selected):
-                raise ValueError("Un financement sélectionné est introuvable.")
-
-            cur.execute(
-                """
-                SELECT link.plan_id, budget.description
-                FROM finance_budget_financing_group_plans AS link
-                JOIN finance_budget_financing_groups AS group_row
-                  ON group_row.budget_item_id=link.budget_item_id
-                JOIN finance_budget_items AS budget
-                  ON budget.id=link.budget_item_id
-                WHERE group_row.user_id=%s
-                  AND link.plan_id=ANY(%s)
-                  AND (%s::BIGINT IS NULL OR link.budget_item_id<>%s::BIGINT);
-                """,
-                (user_id, selected, budget_item_id, budget_item_id),
-            )
-            conflicts = cur.fetchall()
-            if conflicts:
-                names = ", ".join(str(row["description"]) for row in conflicts)
-                raise ValueError(
-                    "Un financement est déjà associé à un autre groupe Budget : " + names
-                )
-
-            # Le montant stocké sert uniquement de valeur de repli; list_budget_items
-            # le remplace dynamiquement selon les échéances du mois consulté.
-            month = _month_start(start_value or date.today())
-            fallback_amount = _financing_group_amount_for_month(
-                cur, user_id, selected, month
-            )
-            if fallback_amount <= 0:
-                fallback_amount = Decimal("0.01")
-
-            if budget_item_id:
-                cur.execute(
-                    """
-                    UPDATE finance_budget_items
-                    SET description=%s, item_type='expense', input_frequency='monthly',
-                        input_amount=%s, biweekly_override=NULL, note=%s,
-                        recurrence_id=NULL, sync_from_recurrence=FALSE,
-                        effective_start=%s, effective_end=%s,
-                        is_active=TRUE, updated_at=NOW()
-                    WHERE id=%s AND user_id=%s
-                    RETURNING id;
-                    """,
-                    (
-                        description,
-                        fallback_amount,
-                        _text(note, "La note", 1000),
-                        start_value,
-                        end_value,
-                        int(budget_item_id),
-                        user_id,
-                    ),
-                )
-                row = cur.fetchone()
-                if not row:
-                    raise ValueError("Groupe Budget introuvable.")
-                saved_id = int(row["id"])
-            else:
-                cur.execute(
-                    """
-                    SELECT COALESCE(MAX(sort_order),0)+1 AS next_order
-                    FROM finance_budget_items
-                    WHERE user_id=%s AND item_type='expense';
-                    """,
-                    (user_id,),
-                )
-                next_order = int(cur.fetchone()["next_order"])
-                cur.execute(
-                    """
-                    INSERT INTO finance_budget_items (
-                        user_id,item_type,description,input_frequency,input_amount,
-                        note,sort_order,effective_start,effective_end,is_active
-                    )
-                    VALUES (%s,'expense',%s,'monthly',%s,%s,%s,%s,%s,TRUE)
-                    RETURNING id;
-                    """,
-                    (
-                        user_id,
-                        description,
-                        fallback_amount,
-                        _text(note, "La note", 1000),
-                        next_order,
-                        start_value,
-                        end_value,
-                    ),
-                )
-                saved_id = int(cur.fetchone()["id"])
-
-            cur.execute(
-                """
-                INSERT INTO finance_budget_financing_groups (budget_item_id,user_id)
-                VALUES (%s,%s)
-                ON CONFLICT (budget_item_id) DO UPDATE SET
-                    user_id=EXCLUDED.user_id, updated_at=NOW();
-                """,
-                (saved_id, user_id),
-            )
-            cur.execute(
-                "DELETE FROM finance_budget_financing_group_plans WHERE budget_item_id=%s;",
-                (saved_id,),
-            )
-            for plan_id in selected:
-                cur.execute(
-                    """
-                    INSERT INTO finance_budget_financing_group_plans (budget_item_id,plan_id)
-                    VALUES (%s,%s);
-                    """,
-                    (saved_id, plan_id),
-                )
-            conn.commit()
-            return saved_id
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _budget_writes.save_financing_budget_group(
+        user_id,
+        description=description,
+        plan_ids=plan_ids,
+        budget_item_id=budget_item_id,
+        effective_start=effective_start,
+        effective_end=effective_end,
+        note=note,
+        get_connection=get_connection,
+        _text=_text,
+        _optional_date_value=_optional_date_value,
+        _financing_group_amount_for_month=_financing_group_amount_for_month,
+        date=date,
+    )
 
 
 def delete_financing_budget_group(user_id, budget_item_id):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                DELETE FROM finance_budget_items
-                WHERE id=%s AND user_id=%s
-                  AND EXISTS (
-                    SELECT 1 FROM finance_budget_financing_groups AS group_row
-                    WHERE group_row.budget_item_id=finance_budget_items.id
-                  );
-                """,
-                (int(budget_item_id), user_id),
-            )
-            count = cur.rowcount
-            conn.commit()
-            return count
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _budget_writes.delete_financing_budget_group(
+        user_id,
+        budget_item_id,
+        get_connection=get_connection,
+    )
 
 
 def _fixed_budget_installment_plan_ids(user_id, month_value):

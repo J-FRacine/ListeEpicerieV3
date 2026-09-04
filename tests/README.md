@@ -4,7 +4,7 @@ Depuis la racine du dépôt, avec Python 3.10 ou plus récent :
 
 ```sh
 python -m unittest discover -s tests -v
-python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py tests/test_finances_budget.py tests/test_finances_budget_ui.py finances_account.py finances_budget_data.py finances_calculations.py finances_account_data.py finances_data.py finances.py finances_ui_state.py finances_validation.py finances_shared_loans_data.py
+python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py tests/test_finances_budget.py tests/test_finances_budget_ui.py tests/test_finances_budget_writes.py finances_account.py finances_budget_data.py finances_calculations.py finances_account_data.py finances_data.py finances.py finances_ui_state.py finances_validation.py finances_shared_loans_data.py
 ```
 
 Les tests utilisent `unittest`, inclus dans Python. Ils chargent les vrais
@@ -47,10 +47,10 @@ de notifications ou de PostgreSQL réel n’est ajouté.
 
 ## Extraction des données de Compte
 
-La suite comprend maintenant 51 tests : les 29 tests précédents (17 tests métier,
+La suite comprend maintenant 80 tests : les 29 tests précédents (17 tests métier,
 3 contrôles d’architecture des données et 9 tests du panneau Compte),
 plus 10 tests Budget, 6 tests de navigation/structure Budget et 3 contrôles
-d’architecture Budget et 3 contrôles des lectures Budget.
+d’architecture Budget, 3 contrôles des lectures Budget et 29 tests des écritures.
 Les 3 contrôles d’architecture des données vérifient l’import de
 `finances_account_data` dans un processus neuf interdisant `db`, `finances_data`,
 `psycopg` et `nicegui`, ainsi que la résolution des dépendances à chaque appel
@@ -137,3 +137,32 @@ Les requêtes SQL et leurs paramètres sont conservés. Les accès reçoivent un
 connexion ou un curseur injecté; les tests utilisent uniquement des simulations.
 Aucune migration ni optimisation KPI, aucune validation PostgreSQL/Canner/Render
 ou navigateur réel.
+
+## Caractérisation des écritures Budget
+
+`tests/test_finances_budget_writes.py` ajoute 29 tests (avec plusieurs sous-cas)
+sans modifier les 51 tests existants. Les six fonctions historiques sont exécutées
+avec une connexion/curseur déterministe qui vérifie l’ordre du SQL, les filtres,
+les paramètres et les réponses. Le SQL est comparé sans dépendre des espaces.
+
+- Activation/désactivation, poste absent, date de mise à jour et commit.
+- Tri verrouillé, même type de poste, déplacements haut/bas, limites sans commit,
+  poste absent et ordre identique remplacé par les positions relatives actuelles.
+- Création de récurrence : replis, validations, intervalle 1–365, zéro traité comme
+  valeur absente, dates, catégorie/étiquettes et paiement via validateurs simulés,
+  rappel normalisé, indicateurs et insertion des étiquettes.
+- Sauvegarde : nettoyage, validations, création/modification, ordre et ID,
+  appartenance et unicité de la récurrence, synchronisation et override,
+  chevauchements inclusifs et exclusion du poste édité, autorisation explicite,
+  nouvelle récurrence dans le même curseur, suppression limitée aux transactions
+  prévues après la fin; conservation du chemin sans synchronisation.
+- Groupes : plans triés/dédupliqués, appartenance, conflits avec exclusion du
+  groupe courant, montant dynamique de repli et minimum 0.01, création/modification,
+  dépense mensuelle imposée, retrait du lien récurrent, upsert et remplacement des
+  liens, suppression réservée au groupe de l’utilisateur et retour de rowcount.
+
+Les tests protègent l’appel unique au commit final et son absence sur les chemins
+d’erreur ou de tri sans déplacement. Les transactions PostgreSQL sont simulées :
+leur atomicité réelle et le rollback ne sont pas validés. Aucun PostgreSQL,
+NiceGUI, navigateur, Canner/Render réel n’est lancé. Finances reste en V1.13.2;
+aucun fichier de production ni migration n’est modifié.

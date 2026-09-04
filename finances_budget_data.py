@@ -201,12 +201,14 @@ def budget_forecast(
     user_id, start_month, months=6, initial_capacity=None, *,
     budget_capacity_summary, _budget_capacity_summary_v110, _variable_expense_total_for_month, get_finance_settings,
 ):
-    """Prévision légère de la capacité variable et du solde de fin de mois.
+    """Prévision de la capacité variable et du solde de fin de mois.
 
-    Contrairement au Tableau, cette vue n'a besoin ni des KPI par catégorie/
-    étiquette ni du détail de toutes les transactions. On évite donc de bâtir
-    six fois ``dashboard_month_projection`` lors d'un simple changement de mois.
-    Le report est propagé séquentiellement à partir du premier mois affiché.
+    ``initial_capacity`` permet de réutiliser la capacité déjà calculée pour
+    le premier mois. Le report est ensuite propagé séquentiellement.
+    Les dépenses variables restent calculées par
+    ``_variable_expense_total_for_month()``, qui passe encore par
+    ``_dashboard_month_projection_v190()`` et ses KPI. L'optimisation
+    supplémentaire de ce chemin KPI n'est pas réalisée dans cette extraction.
     """
 
     start = _month_start(start_month)

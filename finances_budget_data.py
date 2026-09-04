@@ -1,8 +1,9 @@
-"""Résumé, capacité et prévisions Budget sans accès direct à PostgreSQL.
+"""Calculs et lectures Budget avec accès PostgreSQL injecté.
 
 Les façades historiques injectent les services courants à chaque appel.
-Les lectures détaillées, écritures et calculs de dépenses variables restent
-chez le parent; aucune optimisation des KPI n'est effectuée ici.
+Les lectures reçoivent get_connection ou un curseur sans importer db.
+Les écritures et calculs de dépenses variables restent chez le parent;
+aucune optimisation des KPI n'est effectuée ici.
 """
 from datetime import date, timedelta
 from decimal import Decimal
@@ -261,3 +262,177 @@ def budget_forecast(
             carry = Decimal("0.00")
 
     return result
+
+
+def _list_budget_items_v111(
+    user_id, include_inactive=False, month_value=None, effective_only=False, *,
+    get_connection, _budget_amounts_from_values, _periods_overlap,
+):
+    month = _month_start(month_value) if month_value else None
+    month_end = (
+        _add_months(month, 1) - timedelta(days=1)
+        if month
+        else None
+    )
+
+    conditions = ["budget.user_id=%s", "(%s OR budget.is_active=TRUE)"]
+    params = [user_id, include_inactive]
+    if effective_only and month:
+        conditions.extend(
+            [
+                "(budget.effective_start IS NULL OR budget.effective_start <= %s)",
+                "(budget.effective_end IS NULL OR budget.effective_end >= %s)",
+            ]
+        )
+        params.extend([month_end, month])
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT
+                    budget.*,
+                    recurrence.description AS recurrence_description,
+                    recurrence.amount AS recurrence_amount,
+                    recurrence.frequency_unit AS recurrence_frequency_unit,
+                    recurrence.frequency_interval AS recurrence_frequency_interval,
+                    recurrence.start_date AS recurrence_start_date,
+                    recurrence.end_date AS recurrence_end_date,
+                    recurrence.next_date AS recurrence_next_date,
+                    recurrence.is_active AS recurrence_is_active
+                FROM finance_budget_items AS budget
+                LEFT JOIN finance_recurrences AS recurrence
+                    ON recurrence.id=budget.recurrence_id
+                   AND recurrence.user_id=budget.user_id
+                WHERE {' AND '.join(conditions)}
+                ORDER BY
+                    CASE WHEN budget.item_type='income' THEN 0 ELSE 1 END,
+                    budget.sort_order,
+                    LOWER(budget.description),
+                    budget.id;
+                """,
+                params,
+            )
+            rows = []
+            for raw in cur.fetchall():
+                row = dict(raw)
+                monthly, biweekly = _budget_amounts_from_values(
+                    row["input_frequency"],
+                    row["input_amount"],
+                    row.get("biweekly_override"),
+                )
+                row["monthly_amount"] = monthly
+                row["biweekly_amount"] = biweekly
+                row["biweekly_is_override"] = (
+                    row["input_frequency"] == "monthly"
+                    and row.get("biweekly_override") is not None
+                )
+                if month:
+                    row["effective_for_month"] = _periods_overlap(
+                        row.get("effective_start"),
+                        row.get("effective_end"),
+                        month,
+                        month_end,
+                    )
+                else:
+                    row["effective_for_month"] = True
+                rows.append(row)
+            return rows
+
+
+def _financing_group_amount_for_month(
+    cur, user_id, plan_ids, month,
+):
+    if not plan_ids:
+        return Decimal("0.00")
+    month = _month_start(month)
+    month_end = _add_months(month, 1) - timedelta(days=1)
+    cur.execute(
+        """
+        SELECT COALESCE(SUM(amount), 0) AS total
+        FROM finance_transactions
+        WHERE user_id=%s
+          AND installment_plan_id=ANY(%s)
+          AND transaction_type='expense'
+          AND status IN ('planned','confirmed')
+          AND transaction_date BETWEEN %s AND %s;
+        """,
+        (user_id, list(plan_ids), month, month_end),
+    )
+    return Decimal(cur.fetchone()["total"] or 0).quantize(Decimal("0.01"))
+
+
+def list_budget_items(
+    user_id, include_inactive=False, month_value=None, effective_only=False, *,
+    _list_budget_items_v111, get_connection, _financing_group_amount_for_month,
+):
+    rows = [
+        dict(row)
+        for row in _list_budget_items_v111(
+            user_id,
+            include_inactive=include_inactive,
+            month_value=month_value,
+            effective_only=effective_only,
+        )
+    ]
+    if not rows:
+        return rows
+
+    month = _month_start(month_value or date.today())
+    by_id = {int(row["id"]): row for row in rows}
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT group_row.budget_item_id,
+                       COALESCE(ARRAY_AGG(link.plan_id ORDER BY link.plan_id)
+                           FILTER (WHERE link.plan_id IS NOT NULL), ARRAY[]::BIGINT[]) AS plan_ids,
+                       COALESCE(ARRAY_AGG(plan.description ORDER BY plan.description)
+                           FILTER (WHERE plan.id IS NOT NULL), ARRAY[]::TEXT[]) AS plan_names
+                FROM finance_budget_financing_groups AS group_row
+                LEFT JOIN finance_budget_financing_group_plans AS link
+                  ON link.budget_item_id=group_row.budget_item_id
+                LEFT JOIN finance_installment_plans AS plan
+                  ON plan.id=link.plan_id
+                WHERE group_row.user_id=%s
+                  AND group_row.budget_item_id=ANY(%s)
+                GROUP BY group_row.budget_item_id;
+                """,
+                (user_id, list(by_id)),
+            )
+            for group in cur.fetchall():
+                item_id = int(group["budget_item_id"])
+                row = by_id.get(item_id)
+                if not row:
+                    continue
+                plan_ids = [int(value) for value in (group.get("plan_ids") or [])]
+                dynamic_monthly = _financing_group_amount_for_month(
+                    cur, user_id, plan_ids, month
+                )
+                dynamic_biweekly = (
+                    dynamic_monthly * Decimal("12") / Decimal("26")
+                ).quantize(Decimal("0.01"))
+                row["budget_financing_group"] = True
+                row["financing_plan_ids"] = plan_ids
+                row["financing_plan_names"] = list(group.get("plan_names") or [])
+                row["monthly_amount"] = dynamic_monthly
+                row["biweekly_amount"] = dynamic_biweekly
+                row["input_frequency"] = "monthly"
+                row["input_amount"] = dynamic_monthly
+                row["biweekly_override"] = None
+                row["biweekly_is_override"] = False
+    return rows
+
+
+def list_financing_budget_groups(
+    user_id, month_value=None, *,
+    list_budget_items,
+):
+    return [
+        row for row in list_budget_items(
+            user_id,
+            include_inactive=True,
+            month_value=month_value or date.today(),
+        )
+        if row.get("budget_financing_group")
+    ]

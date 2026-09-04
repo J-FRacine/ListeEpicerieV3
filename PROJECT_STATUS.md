@@ -102,12 +102,29 @@ sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
   `finances_data` au moment de chaque appel; les remplacements après import
   restent pris en compte. Le module importe seulement la bibliothèque standard
   et les calculs génériques de dates, sans connexion PostgreSQL directe.
-- Les lectures détaillées et écritures Budget, les groupes de financement et
-  `_variable_expense_total_for_month()` restent dans les fragments de données.
+- À cette première étape, les lectures détaillées et écritures Budget, les groupes
+  de financement et `_variable_expense_total_for_month()` restaient dans les fragments.
 - Aucune optimisation supplémentaire des KPI n’est réalisée; le chemin indirect
   par `_dashboard_month_projection_v190()` est conservé. Aucune migration.
 - 48 tests : les 45 précédents et 3 contrôles d’import/délégation Budget.
   PostgreSQL, le navigateur et Canner/Render ne sont pas testés réellement.
+
+### Extraction des lectures Budget — 2026-09-04
+
+- `finances_budget_data.py` contient maintenant aussi `_list_budget_items_v111`,
+  `_financing_group_amount_for_month`, `list_budget_items` et
+  `list_financing_budget_groups`. Les corps et requêtes SQL sont conservés.
+- Les accès reçoivent `get_connection` ou un curseur, sans importer `db`.
+  Les façades historiques injectent les dépendances courantes à chaque appel.
+- Les écritures et la synchronisation Budget/récurrences restent inchangées
+  dans `finances_data`, tout comme `_variable_expense_total_for_month()` et les
+  consommateurs Tableau, exports et restauration. L’interface Budget reste
+  dans les fragments UI. Aucune optimisation KPI supplémentaire.
+- 51 tests réussis : 48 précédents et 3 contrôles des lectures; les tests SQL
+  simulés sont complétés pour les montants, périodes, overrides et groupes.
+- Finances reste en V1.13.2, sans changement fonctionnel, SQL ou de performance
+  volontaire et sans migration. PostgreSQL, navigateur et Canner/Render réels
+  ne sont pas validés.
 
 ### Structure technique Finances
 
@@ -120,7 +137,7 @@ Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
 - Modules déjà séparés :
   - `finances_account.py` : panneau Compte et contrat `AccountPanelHandle`.
   - `finances_account_data.py` : noyau de données Compte (banques et marges).
-  - `finances_budget_data.py` : résumé, capacités et prévisions Budget.
+  - `finances_budget_data.py` : résumé, capacités, prévisions et lectures Budget.
   - `finances_calculations.py`
   - `finances_validation.py`
   - `finances_shared_loans.py`
@@ -170,7 +187,7 @@ Le refactor doit être progressif, écran par écran, afin de réduire le risque
 ### Validation / qualité
 
 - Maintenir la compilation Python comme contrôle minimum.
-- Maintenir les 48 tests automatisés de calcul et de compatibilité; compléter
+- Maintenir les 51 tests automatisés de calcul et de compatibilité; compléter
   progressivement les protections de l’interface et des écritures SQL.
 - Conserver des tests ciblés pour :
   - mois à trois paies;

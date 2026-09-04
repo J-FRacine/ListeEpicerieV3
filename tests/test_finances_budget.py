@@ -86,12 +86,16 @@ class BudgetTests(unittest.TestCase):
         cursor = connection.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value
         def execute(sql, params):
             if "FROM finance_budget_items AS budget" in sql:
+                self.assertIn("budget.user_id=%s", sql)
+                self.assertIn("recurrence.id=budget.recurrence_id", sql)
+                self.assertIn("recurrence.user_id=budget.user_id", sql)
+                self.assertIn("CASE WHEN budget.item_type='income' THEN 0 ELSE 1 END, budget.sort_order, LOWER(budget.description), budget.id", " ".join(sql.split()))
                 self.assertIn("(%s OR budget.is_active=TRUE)", sql)
                 self.assertIn("budget.effective_start <= %s", sql)
                 self.assertIn("budget.effective_end >= %s", sql)
                 self.assertEqual(params, [1, False, date(2026, 10, 31), date(2026, 10, 1)])
                 cursor.fetchall.return_value = [dict(id=1, item_type="income", input_frequency="monthly",
-                                                     input_amount=D("1000"), is_active=True)]
+                                                     input_amount=D("1000"), biweekly_override=D("475"), is_active=True)]
             else:
                 self.assertIn("FROM finance_budget_financing_groups", sql)
                 cursor.fetchall.return_value = []
@@ -102,6 +106,10 @@ class BudgetTests(unittest.TestCase):
             result = data.budget_capacity_summary(1, "2026-10")
         self.assertEqual(result["available_month"], D("1000.00"))
         self.assertEqual(len(result["rows"]), 1)
+        self.assertEqual(result["rows"][0]["monthly_amount"], D("1000.00"))
+        self.assertEqual(result["rows"][0]["biweekly_amount"], D("475.00"))
+        self.assertTrue(result["rows"][0]["biweekly_is_override"])
+        self.assertTrue(result["rows"][0]["effective_for_month"])
         self.assertEqual(cursor.execute.call_count, 2)
 
     def test_forecast_reuses_initial_capacity_and_propagates_three_months(self):
@@ -154,6 +162,8 @@ class BudgetTests(unittest.TestCase):
                 self.assertEqual(row["biweekly_amount"], expected)
                 self.assertTrue(row["budget_financing_group"])
                 self.assertEqual(row["financing_plan_ids"], [20, 21])
+                self.assertEqual(row["financing_plan_names"], ["A", "B"])
+                self.assertFalse(row["biweekly_is_override"])
                 sql, params = cursor.execute.call_args.args
                 self.assertIn("status IN ('planned','confirmed')", sql)
                 self.assertIn("transaction_type='expense'", sql)
@@ -215,6 +225,51 @@ assert callable(finances_budget_data.budget_forecast)
                                  [call(1, date(2026, 10, 1)), call(1, date(2026, 11, 1))])
                 self.assertEqual([r["ending_balance"] for r in rows],
                                  [amount - 10, 2 * (amount - 10)])
+
+
+class BudgetReadArchitectureTests(unittest.TestCase):
+    def test_read_facades_resolve_successive_dependency_replacements(self):
+        contracts = {
+            "_list_budget_items_v111": ["get_connection", "_budget_amounts_from_values", "_periods_overlap"],
+            "list_budget_items": ["_list_budget_items_v111", "get_connection", "_financing_group_amount_for_month"],
+            "list_financing_budget_groups": ["list_budget_items"],
+            "_financing_group_amount_for_month": [],
+        }
+        for name, dependencies in contracts.items():
+            for iteration in range(2):
+                with self.subTest(name=name, iteration=iteration), ExitStack() as stack:
+                    replacements = {dep: stack.enter_context(patch.object(data, dep)) for dep in dependencies}
+                    target = stack.enter_context(patch.object(data._budget_data, name))
+                    if name == "_financing_group_amount_for_month":
+                        args = (Mock(), 1, [20], date(2026, 10, 1))
+                        result = getattr(data, name)(*args)
+                        target.assert_called_once_with(*args)
+                    elif name == "list_financing_budget_groups":
+                        result = getattr(data, name)(1, "2026-10")
+                        target.assert_called_once_with(1, "2026-10", **replacements)
+                    else:
+                        result = getattr(data, name)(1, include_inactive=True, month_value="2026-10", effective_only=True)
+                        target.assert_called_once_with(1, include_inactive=True, month_value="2026-10",
+                                                       effective_only=True, **replacements)
+                    self.assertIs(result, target.return_value)
+
+    def test_group_list_filters_current_budget_reader(self):
+        for identity in (10, 20):
+            group = dict(id=identity, budget_financing_group=True)
+            with patch.object(data, "list_budget_items", return_value=[dict(id=1), group,
+                              dict(id=2, budget_financing_group=False)]) as reader:
+                self.assertEqual(data.list_financing_budget_groups(1, "2026-10"), [group])
+                reader.assert_called_once_with(1, include_inactive=True, month_value="2026-10")
+
+    def test_summary_reaches_current_budget_reader(self):
+        for amount in (D("100"), D("200")):
+            with patch.object(data, "list_budget_items", return_value=[dict(item_type="income",
+                              monthly_amount=amount, biweekly_amount=D("50"))]) as reader:
+                result = data.budget_summary(1, "2026-10")
+                self.assertEqual(result["monthly_remaining"], amount)
+                self.assertEqual(result["biweekly_remaining"], D("50"))
+                reader.assert_called_once_with(1, include_inactive=False,
+                                               month_value=date(2026, 10, 1), effective_only=True)
 
 
 if __name__ == "__main__":

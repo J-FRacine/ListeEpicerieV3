@@ -1,71 +1,11 @@
-):
-    rows = [
-        dict(row)
-        for row in _list_budget_items_v111(
-            user_id,
-            include_inactive=include_inactive,
-            month_value=month_value,
-            effective_only=effective_only,
-        )
-    ]
-    if not rows:
-        return rows
-
-    month = _month_start(month_value or date.today())
-    by_id = {int(row["id"]): row for row in rows}
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT group_row.budget_item_id,
-                       COALESCE(ARRAY_AGG(link.plan_id ORDER BY link.plan_id)
-                           FILTER (WHERE link.plan_id IS NOT NULL), ARRAY[]::BIGINT[]) AS plan_ids,
-                       COALESCE(ARRAY_AGG(plan.description ORDER BY plan.description)
-                           FILTER (WHERE plan.id IS NOT NULL), ARRAY[]::TEXT[]) AS plan_names
-                FROM finance_budget_financing_groups AS group_row
-                LEFT JOIN finance_budget_financing_group_plans AS link
-                  ON link.budget_item_id=group_row.budget_item_id
-                LEFT JOIN finance_installment_plans AS plan
-                  ON plan.id=link.plan_id
-                WHERE group_row.user_id=%s
-                  AND group_row.budget_item_id=ANY(%s)
-                GROUP BY group_row.budget_item_id;
-                """,
-                (user_id, list(by_id)),
-            )
-            for group in cur.fetchall():
-                item_id = int(group["budget_item_id"])
-                row = by_id.get(item_id)
-                if not row:
-                    continue
-                plan_ids = [int(value) for value in (group.get("plan_ids") or [])]
-                dynamic_monthly = _financing_group_amount_for_month(
-                    cur, user_id, plan_ids, month
-                )
-                dynamic_biweekly = (
-                    dynamic_monthly * Decimal("12") / Decimal("26")
-                ).quantize(Decimal("0.01"))
-                row["budget_financing_group"] = True
-                row["financing_plan_ids"] = plan_ids
-                row["financing_plan_names"] = list(group.get("plan_names") or [])
-                row["monthly_amount"] = dynamic_monthly
-                row["biweekly_amount"] = dynamic_biweekly
-                row["input_frequency"] = "monthly"
-                row["input_amount"] = dynamic_monthly
-                row["biweekly_override"] = None
-                row["biweekly_is_override"] = False
-    return rows
 
 
 def list_financing_budget_groups(user_id, month_value=None):
-    return [
-        row for row in list_budget_items(
-            user_id,
-            include_inactive=True,
-            month_value=month_value or date.today(),
-        )
-        if row.get("budget_financing_group")
-    ]
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _budget_data.list_financing_budget_groups(
+        user_id, month_value,
+        list_budget_items=list_budget_items,
+    )
 
 
 def save_financing_budget_group(

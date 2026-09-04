@@ -560,76 +560,13 @@ def _list_budget_items_v111(
     month_value=None,
     effective_only=False,
 ):
-    month = _month_start(month_value) if month_value else None
-    month_end = (
-        _add_months(month, 1) - timedelta(days=1)
-        if month
-        else None
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _budget_data._list_budget_items_v111(
+        user_id, include_inactive=include_inactive, month_value=month_value, effective_only=effective_only,
+        get_connection=get_connection,
+        _budget_amounts_from_values=_budget_amounts_from_values,
+        _periods_overlap=_periods_overlap,
     )
-
-    conditions = ["budget.user_id=%s", "(%s OR budget.is_active=TRUE)"]
-    params = [user_id, include_inactive]
-    if effective_only and month:
-        conditions.extend(
-            [
-                "(budget.effective_start IS NULL OR budget.effective_start <= %s)",
-                "(budget.effective_end IS NULL OR budget.effective_end >= %s)",
-            ]
-        )
-        params.extend([month_end, month])
-
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""
-                SELECT
-                    budget.*,
-                    recurrence.description AS recurrence_description,
-                    recurrence.amount AS recurrence_amount,
-                    recurrence.frequency_unit AS recurrence_frequency_unit,
-                    recurrence.frequency_interval AS recurrence_frequency_interval,
-                    recurrence.start_date AS recurrence_start_date,
-                    recurrence.end_date AS recurrence_end_date,
-                    recurrence.next_date AS recurrence_next_date,
-                    recurrence.is_active AS recurrence_is_active
-                FROM finance_budget_items AS budget
-                LEFT JOIN finance_recurrences AS recurrence
-                    ON recurrence.id=budget.recurrence_id
-                   AND recurrence.user_id=budget.user_id
-                WHERE {' AND '.join(conditions)}
-                ORDER BY
-                    CASE WHEN budget.item_type='income' THEN 0 ELSE 1 END,
-                    budget.sort_order,
-                    LOWER(budget.description),
-                    budget.id;
-                """,
-                params,
-            )
-            rows = []
-            for raw in cur.fetchall():
-                row = dict(raw)
-                monthly, biweekly = _budget_amounts_from_values(
-                    row["input_frequency"],
-                    row["input_amount"],
-                    row.get("biweekly_override"),
-                )
-                row["monthly_amount"] = monthly
-                row["biweekly_amount"] = biweekly
-                row["biweekly_is_override"] = (
-                    row["input_frequency"] == "monthly"
-                    and row.get("biweekly_override") is not None
-                )
-                if month:
-                    row["effective_for_month"] = _periods_overlap(
-                        row.get("effective_start"),
-                        row.get("effective_end"),
-                        month,
-                        month_end,
-                    )
-                else:
-                    row["effective_for_month"] = True
-                rows.append(row)
-            return rows
 
 
 import finances_budget_data as _budget_data

@@ -47,10 +47,10 @@ de notifications ou de PostgreSQL réel n’est ajouté.
 
 ## Extraction des données de Compte
 
-La suite comprend maintenant 48 tests : les 29 tests précédents (17 tests métier,
+La suite comprend maintenant 51 tests : les 29 tests précédents (17 tests métier,
 3 contrôles d’architecture des données et 9 tests du panneau Compte),
 plus 10 tests Budget, 6 tests de navigation/structure Budget et 3 contrôles
-d’architecture Budget.
+d’architecture Budget et 3 contrôles des lectures Budget.
 Les 3 contrôles d’architecture des données vérifient l’import de
 `finances_account_data` dans un processus neuf interdisant `db`, `finances_data`,
 `psycopg` et `nicegui`, ainsi que la résolution des dépendances à chaque appel
@@ -120,3 +120,20 @@ conservés sans modification de leurs résultats attendus.
 Le résumé, les capacités et les prévisions résident dans `finances_budget_data.py`.
 Les lectures détaillées, écritures et `_variable_expense_total_for_month()` restent
 dans `finances_data`. Aucune optimisation supplémentaire des KPI ni migration.
+
+## Extraction des lectures Budget
+
+Les lectures et enrichissements sont maintenant dans `finances_budget_data.py`,
+avec le noyau de calcul déjà extrait. Trois nouveaux tests protègent les quatre
+façades de lecture après remplacements successifs, le filtrage des seuls groupes
+et la liaison du résumé vers la lecture courante. L’import indépendant déjà testé
+reste vérifié après cette extraction. Les tests SQL existants vérifient aussi
+les jointures, le tri, les montants, les indicateurs de période/override et les noms
+des plans, sans changer leurs résultats métier attendus.
+
+Les écritures et la synchronisation restent historiques, ainsi que
+`_variable_expense_total_for_month()`; l’interface Budget reste dans les fragments.
+Les requêtes SQL et leurs paramètres sont conservés. Les accès reçoivent une
+connexion ou un curseur injecté; les tests utilisent uniquement des simulations.
+Aucune migration ni optimisation KPI, aucune validation PostgreSQL/Canner/Render
+ou navigateur réel.

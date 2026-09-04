@@ -624,23 +624,10 @@ def _financing_group_plan_ids(cur, user_id, budget_item_id=None):
 
 
 def _financing_group_amount_for_month(cur, user_id, plan_ids, month):
-    if not plan_ids:
-        return Decimal("0.00")
-    month = _month_start(month)
-    month_end = _add_months(month, 1) - timedelta(days=1)
-    cur.execute(
-        """
-        SELECT COALESCE(SUM(amount), 0) AS total
-        FROM finance_transactions
-        WHERE user_id=%s
-          AND installment_plan_id=ANY(%s)
-          AND transaction_type='expense'
-          AND status IN ('planned','confirmed')
-          AND transaction_date BETWEEN %s AND %s;
-        """,
-        (user_id, list(plan_ids), month, month_end),
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _budget_data._financing_group_amount_for_month(
+        cur, user_id, plan_ids, month,
     )
-    return Decimal(cur.fetchone()["total"] or 0).quantize(Decimal("0.01"))
 
 
 def list_budget_items(
@@ -648,3 +635,11 @@ def list_budget_items(
     include_inactive=False,
     month_value=None,
     effective_only=False,
+):
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _budget_data.list_budget_items(
+        user_id, include_inactive=include_inactive, month_value=month_value, effective_only=effective_only,
+        _list_budget_items_v111=_list_budget_items_v111,
+        get_connection=get_connection,
+        _financing_group_amount_for_month=_financing_group_amount_for_month,
+    )

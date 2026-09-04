@@ -20,27 +20,12 @@
 
 
 def list_installment_plans(user_id, include_inactive=True):
-    rows = [dict(row) for row in _list_installment_plans_v111(user_id, include_inactive)]
-    for row in rows:
-        rate = Decimal(row.get("annual_interest_rate") or 0)
-        row["payment_includes_interest"] = bool(row.get("payment_includes_interest", True))
-        row["base_installment_amount"] = Decimal(
-            row.get("base_installment_amount") or row.get("installment_amount") or 0
-        )
-        row["calculated_installment_amount"] = (
-            Decimal(row["calculated_installment_amount"])
-            if row.get("calculated_installment_amount") is not None
-            else None
-        )
-        if rate > 0 and not row["payment_includes_interest"]:
-            total_payment = Decimal(row.get("installment_amount") or 0)
-            base = Decimal(row.get("base_installment_amount") or 0)
-            row["estimated_interest_per_payment"] = max(
-                Decimal("0.00"), total_payment - base
-            ).quantize(Decimal("0.01"))
-        else:
-            row["estimated_interest_per_payment"] = None
-    return rows
+    """Délègue avec la lecture historique courante de finances_data."""
+    return _financing_data.list_installment_plans(
+        user_id,
+        include_inactive,
+        _list_installment_plans_v111=_list_installment_plans_v111,
+    )
 
 
 

@@ -1,6 +1,8 @@
 """Caractérisation Financements sans PostgreSQL ni NiceGUI réels."""
 import ast
 import importlib
+import inspect
+import subprocess
 import sys
 import unittest
 from datetime import date
@@ -32,6 +34,84 @@ def plan(**values):
         calculated_installment_amount=None,payment_method_name="Visa",payment_method_type="credit_card",
         category_full_name="Maison • Achats",tag_ids=[2],tag_names=["Important"])
     row.update(values);return row
+
+
+class FinancingDataArchitectureTests(unittest.TestCase):
+    def test_independent_import_without_database_or_ui_modules(self):
+        script = r'''
+import builtins
+real_import = builtins.__import__
+blocked = {"db", "finances_data", "finances", "nicegui", "psycopg"}
+def guarded(name, *args, **kwargs):
+    if name.split(".")[0] in blocked:
+        raise AssertionError("import interdit: " + name)
+    return real_import(name, *args, **kwargs)
+builtins.__import__ = guarded
+import finances_financing_data
+'''
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_historical_signatures_and_five_facades(self):
+        expected = {
+            "_list_installment_plans_v111": "(user_id, include_inactive=True)",
+            "list_installment_plans": "(user_id, include_inactive=True)",
+            "get_installment_plan": "(user_id, plan_id)",
+            "_project_installment_plan_payments_for_month": "(plan, month_value)",
+            "financing_month_summary": "(user_id, month_value)",
+        }
+        for name, signature in expected.items():
+            with self.subTest(name=name):
+                self.assertEqual(str(inspect.signature(getattr(data, name))), signature)
+
+        with patch.object(data._financing_data, "_list_installment_plans_v111", return_value="raw") as target:
+            self.assertEqual(data._list_installment_plans_v111(7, False), "raw")
+            self.assertIs(target.call_args.kwargs["get_connection"], data.get_connection)
+            self.assertIs(target.call_args.kwargs["next_date"], data._next_date)
+            self.assertIs(target.call_args.kwargs["FREQUENCY_UNITS"], data.FREQUENCY_UNITS)
+        with patch.object(data._financing_data, "list_installment_plans", return_value="list") as target:
+            self.assertEqual(data.list_installment_plans(7, False), "list")
+            self.assertIs(target.call_args.kwargs["_list_installment_plans_v111"], data._list_installment_plans_v111)
+        with patch.object(data._financing_data, "get_installment_plan", return_value="one") as target:
+            self.assertEqual(data.get_installment_plan(7, 42), "one")
+            self.assertIs(target.call_args.kwargs["list_installment_plans"], data.list_installment_plans)
+        with patch.object(data._financing_data, "_project_installment_plan_payments_for_month", return_value=(D("1"), 1)) as target:
+            self.assertEqual(data._project_installment_plan_payments_for_month({}, "2026-10"), (D("1"), 1))
+            target.assert_called_once_with({}, "2026-10")
+        with patch.object(data._financing_data, "financing_month_summary", return_value="summary") as target:
+            self.assertEqual(data.financing_month_summary(7, "2026-10"), "summary")
+            self.assertIs(target.call_args.kwargs["get_connection"], data.get_connection)
+            self.assertIs(target.call_args.kwargs["list_installment_plans"], data.list_installment_plans)
+            self.assertIs(target.call_args.kwargs["_project_installment_plan_payments_for_month"], data._project_installment_plan_payments_for_month)
+
+    def test_facades_resolve_replaced_dependencies_at_call_time(self):
+        first = Mock(return_value=[plan(id=1)])
+        second = Mock(return_value=[plan(id=2)])
+        with patch.object(data, "_list_installment_plans_v111", first):
+            self.assertEqual(data.list_installment_plans(7)[0]["id"], 1)
+        with patch.object(data, "_list_installment_plans_v111", second):
+            self.assertEqual(data.list_installment_plans(7)[0]["id"], 2)
+
+        current_list = Mock(return_value=[plan(id=42)])
+        with patch.object(data, "list_installment_plans", current_list):
+            self.assertEqual(data.get_installment_plan(7, 42)["id"], 42)
+
+        conn, cur = connection()
+        cur.fetchall.return_value = []
+        plans = [plan(id=5)]
+        current_project = Mock(return_value=(D("75"), 1))
+        with patch.object(data, "get_connection", conn), \
+             patch.object(data, "list_installment_plans", return_value=plans) as current_plans, \
+             patch.object(data, "_project_installment_plan_payments_for_month", current_project):
+            result = data.financing_month_summary(7, "2026-10")
+        current_plans.assert_called_once_with(7, include_inactive=False)
+        current_project.assert_called_once_with(plans[0], date(2026, 10, 1))
+        self.assertEqual(result["payments"], D("75.00"))
 
 
 class FinancingReadTests(unittest.TestCase):

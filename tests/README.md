@@ -4,7 +4,7 @@ Depuis la racine du dépôt, avec Python 3.10 ou plus récent :
 
 ```sh
 python -m unittest discover -s tests -v
-python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py tests/test_finances_budget.py tests/test_finances_budget_ui.py tests/test_finances_budget_writes.py tests/test_finances_financing.py finances_budget.py finances_budget_writes.py finances_account.py finances_budget_data.py finances_calculations.py finances_account_data.py finances_data.py finances.py finances_ui_state.py finances_validation.py finances_shared_loans_data.py
+python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py tests/test_finances_budget.py tests/test_finances_budget_ui.py tests/test_finances_budget_writes.py tests/test_finances_financing.py finances_budget.py finances_budget_writes.py finances_account.py finances_budget_data.py finances_financing_data.py finances_calculations.py finances_account_data.py finances_data.py finances.py finances_ui_state.py finances_validation.py finances_shared_loans_data.py
 ```
 
 Les tests utilisent `unittest`, inclus dans Python. Ils chargent les vrais
@@ -47,7 +47,7 @@ de notifications ou de PostgreSQL réel n’est ajouté.
 
 ## Extraction des données de Compte
 
-La suite comprend maintenant 107 tests : les 29 tests précédents (17 tests métier,
+La suite comprend maintenant 110 tests : les 29 tests précédents (17 tests métier,
 3 contrôles d’architecture des données et 9 tests du panneau Compte),
 plus 10 tests Budget, 6 tests de navigation/structure Budget et 3 contrôles
 d’architecture Budget, 3 contrôles des lectures Budget et 29 tests des écritures, 3 contrôles de leur extraction et 5 tests du contrat Budget et 1 contrôle du panneau extrait.
@@ -234,3 +234,18 @@ seul `financing_month_state`, navigation précédent/suivant/reset ciblée sur
 aperçu des intérêts, avertissement de progression et recours à `refresh_all()`
 après sauvegarde, suppression ou activation. NiceGUI n'est pas lancé; le rendu,
 les notifications, PostgreSQL et Canner/Render réels ne sont pas validés.
+
+## Extraction des lectures et calculs Financements
+
+`finances_financing_data.py` contient maintenant la lecture historique des plans,
+ses enrichissements, la sélection d'un plan, la projection mensuelle de secours
+et le résumé Financements du mois. Trois contrôles d'architecture complètent les
+107 tests précédents : import autonome, signatures/délégation des cinq façades et
+résolution des dépendances remplacées au moment de chaque appel.
+
+Les façades de `finances_data` injectent la connexion, les lectures et le calcul
+de projection courants. Les 18 tests de caractérisation continuent d'exécuter les
+vrais corps et de vérifier le SQL et les paramètres avec des simulations. Les
+écritures et l'interface restent dans les fragments; leur extraction constitue
+la prochaine étape. PostgreSQL, NiceGUI, le navigateur, les notifications et
+Canner/Render réels ne sont pas validés.

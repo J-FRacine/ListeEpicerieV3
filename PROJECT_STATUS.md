@@ -185,6 +185,20 @@ sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
   migration ou numéro de version n'est modifié. NiceGUI, PostgreSQL et
   Canner/Render réels ne sont pas validés.
 
+### Extraction des lectures et calculs Financements — 2026-09-04
+
+- `finances_financing_data.py` contient désormais `_list_installment_plans_v111`,
+  `list_installment_plans`, `get_installment_plan`, la projection mensuelle de
+  secours et `financing_month_summary`, avec leurs comportements et SQL actuels.
+- Le module ne dépend ni de `db`, `finances_data`, `finances`, NiceGUI ou psycopg.
+  La connexion et les autres dépendances sont injectées par les façades
+  historiques à chaque appel afin de préserver les remplacements dans les tests.
+- Les écritures et l'interface Financements restent dans les fragments. La
+  prochaine étape prévue est l'extraction des écritures.
+- Trois contrôles d'architecture portent la suite à 110 tests. Finances reste en
+  V1.13.2, sans changement fonctionnel, migration ou modification d'interface.
+  PostgreSQL, NiceGUI, navigateur et Canner/Render réels ne sont pas validés.
+
 ### Structure technique Finances
 
 Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
@@ -199,6 +213,7 @@ Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
   - `finances_budget.py` : panneau Budget et contrat `BudgetPanelHandle`.
   - `finances_budget_data.py` : résumé, capacités, prévisions et lectures Budget.
   - `finances_budget_writes.py` : écritures spécifiques au Budget.
+  - `finances_financing_data.py` : lectures et calculs Financements.
   - `finances_calculations.py`
   - `finances_validation.py`
   - `finances_shared_loans.py`
@@ -248,7 +263,7 @@ Le refactor doit être progressif, écran par écran, afin de réduire le risque
 ### Validation / qualité
 
 - Maintenir la compilation Python comme contrôle minimum.
-- Maintenir les 107 tests automatisés de calcul et de compatibilité; compléter
+- Maintenir les 110 tests automatisés de calcul et de compatibilité; compléter
   progressivement les protections de l’interface et des écritures SQL.
 - Conserver des tests ciblés pour :
   - mois à trois paies;

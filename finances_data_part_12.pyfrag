@@ -500,46 +500,11 @@ def _save_installment_plan_v111(
 
 
 def _list_installment_plans_v111(user_id, include_inactive=True):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
-                    plan.*,
-                    payment_method.name AS payment_method_name,
-                    payment_method.method_type AS payment_method_type,
-                    CASE
-                        WHEN parent.id IS NULL THEN category.name
-                        ELSE parent.name || ' › ' || category.name
-                    END AS category_full_name,
-                    COALESCE(
-                        ARRAY_AGG(tag.id ORDER BY tag.name)
-                        FILTER (WHERE tag.id IS NOT NULL),
-                        ARRAY[]::BIGINT[]
-                    ) AS tag_ids,
-                    COALESCE(
-                        ARRAY_AGG(tag.name ORDER BY tag.name)
-                        FILTER (WHERE tag.id IS NOT NULL),
-                        ARRAY[]::TEXT[]
-                    ) AS tag_names,
-                    (
-                        SELECT COUNT(*)
-                        FROM finance_transactions AS tx
-                        WHERE tx.installment_plan_id=plan.id
-                          AND tx.status='confirmed'
-                    ) AS confirmed_tracked_count,
-                    (
-                        SELECT COUNT(*)
-                        FROM finance_transactions AS tx
-                        WHERE tx.installment_plan_id=plan.id
-                          AND tx.status='planned'
-                    ) AS planned_count,
-                    COALESCE((
-                        SELECT SUM(tx.amount)
-                        FROM finance_transactions AS tx
-                        WHERE tx.installment_plan_id=plan.id
-                          AND tx.status='confirmed'
-                    ), 0) AS confirmed_tracked_amount
-,
-                    (
-                        SELECT MIN(tx.transaction_date)
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _financing_data._list_installment_plans_v111(
+        user_id,
+        include_inactive,
+        get_connection=get_connection,
+        next_date=_next_date,
+        FREQUENCY_UNITS=FREQUENCY_UNITS,
+    )

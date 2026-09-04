@@ -12,6 +12,8 @@ import re
 import unicodedata
 from zoneinfo import ZoneInfo
 
+import finances_financing_data as _financing_data
+
 from db import get_connection
 from finances_shared_loans_data import (
     SHARED_LOAN_PERMISSIONS,

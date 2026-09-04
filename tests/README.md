@@ -4,7 +4,7 @@ Depuis la racine du dépôt, avec Python 3.10 ou plus récent :
 
 ```sh
 python -m unittest discover -s tests -v
-python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py finances_account.py finances_calculations.py finances_account_data.py finances_data.py finances.py
+python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py tests/test_finances_budget.py tests/test_finances_budget_ui.py finances_account.py finances_calculations.py finances_account_data.py finances_data.py finances.py finances_ui_state.py finances_validation.py finances_shared_loans_data.py
 ```
 
 Les tests utilisent `unittest`, inclus dans Python. Ils chargent les vrais
@@ -47,8 +47,9 @@ de notifications ou de PostgreSQL réel n’est ajouté.
 
 ## Extraction des données de Compte
 
-La suite comprend maintenant 29 tests : 17 tests métier, 3 contrôles
-d’architecture des données et 9 tests du panneau Compte.
+La suite comprend maintenant 45 tests : les 29 tests précédents (17 tests métier,
+3 contrôles d’architecture des données et 9 tests du panneau Compte),
+plus 10 tests Budget et 6 tests de navigation/structure Budget.
 Les 3 contrôles d’architecture des données vérifient l’import de
 `finances_account_data` dans un processus neuf interdisant `db`, `finances_data`,
 `psycopg` et `nicegui`, ainsi que la résolution des dépendances à chaque appel
@@ -75,3 +76,33 @@ du parent sont exécutés depuis les fragments; ceux du panneau depuis
 composants simulés. Les contrôles d’import interdisent NiceGUI et les modules
 historiques dans un processus neuf.
 Ils ne valident ni le rendu dans un navigateur ni les notifications réelles.
+
+## Caractérisation Budget avant extraction
+
+`tests/test_finances_budget.py` ajoute 10 tests des vrais calculs : choix du revenu
+principal, détection d’un ancrage bihebdomadaire, repli à deux paies, arrondis et
+montant personnalisé, bornes des périodes, contrat de filtrage des postes actifs,
+réutilisation de `initial_capacity`, propagation du report sur trois mois et date
+d’activation, exclusion des fixes/financements et montant dynamique des groupes.
+Le calcul des dépenses variables conserve une seule lecture des postes Budget.
+Les requêtes de lecture sont vérifiées avec un curseur simulé fournissant les
+résultats filtrés : cela ne valide pas leur exécution par PostgreSQL.
+Le cas réel octobre/novembre 2026 reste couvert dans `test_finances.py`;
+l’effet bancaire d’un mouvement exclu du Budget reste couvert dans
+`test_finances_account.py`, sans duplication de ces scénarios.
+
+`tests/test_finances_budget_ui.py` ajoute 6 tests : navigation Budget/Tableau
+ciblée avec le même `MonthCursor`, remise au mois courant, ordre indicateur →
+attente du navigateur → rendu → masquage, masquage même après une exception,
+absence de curseur Budget indépendant et réutilisation du résumé de capacité
+comme résumé affiché et comme capacité initiale des prévisions.
+Le vrai `change_month()` est isolé depuis les fragments et exécuté avec des
+composants simulés; les raccordements du rendu sont contrôlés par leur AST.
+Ces tests simulent NiceGUI sans le lancer et ne valident aucun navigateur réel.
+
+Les optimisations V1.13.1 couvertes concernent le rafraîchissement ciblé et la
+réutilisation des calculs existants. Aucun test n’exige zéro calcul KPI :
+`_variable_expense_total_for_month()` appelle encore
+`_dashboard_month_projection_v190()`, qui calcule catégories/étiquettes/KPI.
+Cette optimisation éventuelle reste une tâche séparée; aucun code de production
+n’est modifié. PostgreSQL, les notifications et Canner/Render ne sont pas validés.

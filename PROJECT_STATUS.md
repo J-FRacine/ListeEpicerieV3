@@ -38,8 +38,7 @@ Version actuelle dans `main` : **V1.13.2**
 
 ### Extraction interne de Compte — 2026-09-04
 
-Sur la branche `codex/finances-account-data-extraction`, le noyau de données
-Compte est extrait dans `finances_account_data.py`. Finances reste en V1.13.2,
+Depuis le 2026-09-04, le noyau de données Compte est extrait dans `finances_account_data.py`. Finances reste en V1.13.2,
 sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
 
 - Le module contient la sélection des comptes, les mouvements effectifs, les

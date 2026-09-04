@@ -4,7 +4,7 @@ Depuis la racine du dépôt, avec Python 3.10 ou plus récent :
 
 ```sh
 python -m unittest discover -s tests -v
-python -m py_compile tests/test_finances.py tests/test_finances_account.py finances_calculations.py finances_account_data.py finances_data.py finances.py
+python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py finances_account.py finances_calculations.py finances_account_data.py finances_data.py finances.py
 ```
 
 Les tests utilisent `unittest`, inclus dans Python. Ils chargent les vrais
@@ -47,9 +47,25 @@ de notifications ou de PostgreSQL réel n’est ajouté.
 
 ## Extraction des données de Compte
 
-La suite comprend maintenant 20 tests : les 17 tests métier inchangés et
-3 contrôles d’architecture et de compatibilité. Ceux-ci vérifient l’import de
+La suite comprend maintenant 26 tests : 17 tests métier, 3 contrôles
+d’architecture des données et 6 tests du contrat du panneau Compte.
+Les 3 contrôles d’architecture des données vérifient l’import de
 `finances_account_data` dans un processus neuf interdisant `db`, `finances_data`,
 `psycopg` et `nicegui`, ainsi que la résolution des dépendances à chaque appel
 des trois points d’entrée historiques. Les contrôles de délégation complètent
 les tests métier, qui continuent à exécuter les vrais calculs extraits.
+
+## Contrat du panneau Compte
+
+`tests/test_finances_account_ui.py` couvre 6 aspects du contrat `AccountPanelHandle` :
+
+- import sans NiceGUI, `finances`, `finances_data` ou `db`;
+- callbacks différés et remplaçables;
+- actualisation par le vrai `refresh_all()`, via le handle, dans l’ordre options puis rendu;
+- résolution des fonctions cibles après la construction du handle;
+- maintien de la sélection ou choix du premier compte disponible lors du rechargement;
+- résolution tardive des callbacks partagés utilisés par l’édition des mouvements.
+
+Ces tests simulent l’interface sans lancer réellement NiceGUI. Les raccordements
+sont exécutés à partir du code des fragments, isolés de la construction de la page.
+Ils ne valident ni le rendu dans un navigateur ni les notifications réelles.

@@ -25,26 +25,27 @@ def transaction(amount, kind="expense", day=5, **values):
 
 
 class FinancesTests(unittest.TestCase):
-    def test_three_pay_month_and_following_two_pay_month(self):
+    def test_october_2026_three_pays_and_november_two_pays(self):
         rows = [dict(item_type="income", recurrence_id=1,
                      input_frequency="biweekly", biweekly_amount=D("1000"),
                      monthly_amount=D("2166.67")),
                 dict(item_type="expense", biweekly_amount=D("400"),
                      monthly_amount=D("866.67"))]
-        # Ancrage futur : le calcul doit retrouver les paies historiques.
+        # Ancrage en décembre : retrouver les paies historiques d’octobre et novembre.
         recurrence = dict(id=1, is_active=True, frequency_unit="week",
-                          frequency_interval=2, start_date=date(2026, 1, 2),
-                          next_date=date(2026, 3, 13))
+                          frequency_interval=2, start_date=date(2026, 10, 2),
+                          next_date=date(2026, 12, 11))
         with patch.object(data, "list_budget_items", return_value=rows), \
              patch.object(data, "list_recurrences", return_value=[recurrence]), \
              patch.object(data, "get_finance_settings", return_value={}):
-            january = data.budget_capacity_summary(1, "2026-01")
-            february = data.budget_capacity_summary(1, "2026-02")
-        self.assertEqual(january["pay_dates"], [date(2026, 1, d) for d in (2, 16, 30)])
-        self.assertEqual(january["pay_count"], 3)
-        self.assertEqual(january["available_month"], D("1800.00"))
-        self.assertEqual(february["pay_count"], 2)
-        self.assertEqual(february["available_month"], D("1200.00"))
+            october = data.budget_capacity_summary(1, "2026-10")
+            november = data.budget_capacity_summary(1, "2026-11")
+        self.assertEqual(october["pay_dates"], [date(2026, 10, d) for d in (2, 16, 30)])
+        self.assertEqual(october["pay_count"], 3)
+        self.assertEqual(october["available_month"], D("1800.00"))
+        self.assertEqual(november["pay_dates"], [date(2026, 11, d) for d in (13, 27)])
+        self.assertEqual(november["pay_count"], 2)
+        self.assertEqual(november["available_month"], D("1200.00"))
 
     def test_financing_without_interest_includes_fees(self):
         self.assertEqual(automatic_installment_amount("1200", 12, "0", "60", "month", 1), D("105.00"))

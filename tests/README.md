@@ -12,8 +12,9 @@ fragments de `finances_data.py`. Le module `db` est remplacé pendant cet import
 par un objet qui refuse toute connexion; les lectures de données sont simulées.
 Aucune installation de NiceGUI ou de psycopg, ni base de données, n'est requise.
 
-Couverture : capacité Budget d'un mois à trois paies et du mois suivant à deux
-paies, financement avec intérêts ou frais et financement terminé, solde actuel
+Couverture : capacité Budget d’octobre 2026 (paies les 2, 16 et 30) et de
+novembre 2026 (paies les 13 et 27), retrouvées depuis un ancrage au 11 décembre,
+financement avec intérêts ou frais et financement terminé, solde actuel
 et prévisionnel bancaire (y compris une dépense prévue en retard), sens de la
 dette d'une marge, exclusion des dépenses fixes et financements du Tableau.
 

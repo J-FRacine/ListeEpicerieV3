@@ -1,6 +1,8 @@
 """Caractérisation de Compte : vrais calculs, lectures SQL simulées."""
 import importlib
 import sys
+import subprocess
+from pathlib import Path
 import unittest
 from contextlib import contextmanager
 from datetime import date
@@ -172,6 +174,60 @@ class AccountCharacterizationTests(unittest.TestCase):
         self.assertEqual(result["current_balance"], D("750"))
         self.assertEqual(result["end_balance"], D("750"))
         self.assertTrue(result["rows"][0]["budget_excluded"])
+
+
+class AccountArchitectureTests(unittest.TestCase):
+    def test_module_import_without_database_or_legacy_module(self):
+        # Processus neuf : aucun module déjà importé ne peut masquer un cycle.
+        script = """
+import importlib.abc
+import sys
+class BlockLegacyImports(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] in {'db', 'finances_data', 'psycopg', 'nicegui'}:
+            raise AssertionError('Import interdit : ' + fullname)
+sys.meta_path.insert(0, BlockLegacyImports())
+import finances_account_data
+assert callable(finances_account_data.bank_cashflow_month)
+assert callable(finances_account_data.bank_cashflow_year_summary)
+"""
+        result = subprocess.run(
+            [sys.executable, "-B", "-c", script],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_account_list_resolves_current_payment_reader(self):
+        # Deux remplacements successifs après l'import doivent être visibles.
+        for identifier in (41, 42):
+            with self.subTest(identifier=identifier):
+                rows = [account(id=identifier), account(id=99, method_type="credit_card")]
+                with patch.object(data, "list_payment_methods", return_value=rows) as reader:
+                    result = data.list_bank_accounts(7, include_inactive=True)
+                self.assertEqual([row["id"] for row in result], [identifier])
+                reader.assert_called_once_with(7, include_inactive=True)
+
+    def test_cashflow_delegates_resolve_current_dependencies(self):
+        # Le chargement isolé avec patch.dict restaure sys.modules ensuite.
+        # Observer le module effectivement utilisé par la façade historique.
+        extracted = data._account_data
+        for name, period in (("bank_cashflow_month", "2027-01"),
+                             ("bank_cashflow_year_summary", 2027)):
+            for replacement in (1, 2):
+                with self.subTest(entry=name, replacement=replacement):
+                    with patch.object(data, "list_bank_accounts") as accounts, \
+                         patch.object(data, "list_transactions") as transactions, \
+                         patch.object(data, "list_recurrences") as recurrences, \
+                         patch.object(data, "_projection_row") as projection, \
+                         patch.object(extracted, name, return_value={"delegated": True}) as delegate:
+                        result = getattr(data, name)(7, 1, period, today_value=date(2027, 1, 10))
+                        delegate.assert_called_once_with(
+                            7, 1, period, today_value=date(2027, 1, 10),
+                            list_bank_accounts=accounts, list_transactions=transactions,
+                            list_recurrences=recurrences, _projection_row=projection,
+                        )
+                        self.assertEqual(result, {"delegated": True})
 
 
 if __name__ == "__main__":

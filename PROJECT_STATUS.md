@@ -36,6 +36,25 @@ Version actuelle dans `main` : **V1.13.2**
 - Les marges de crédit conservent leur présentation distincte.
 - Aucun changement de schéma PostgreSQL pour V1.13.2.
 
+### Extraction interne de Compte — 2026-09-04
+
+Sur la branche `codex/finances-account-data-extraction`, le noyau de données
+Compte est extrait dans `finances_account_data.py`. Finances reste en V1.13.2,
+sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
+
+- Le module contient la sélection des comptes, les mouvements effectifs, les
+  signes banque/marge et les synthèses mensuelle et annuelle.
+- Il n’importe ni `finances_data` ni `db` et ne se connecte pas à PostgreSQL.
+- Les trois points d’entrée publics restent dans `finances_data_part_07.pyfrag`
+  sous forme de délégations. Les lectures et la construction des projections
+  sont injectées depuis les fonctions présentes au moment de chaque appel.
+- Les deux fonctions privées, utilisées uniquement dans le bloc extrait,
+  sont désormais internes au nouveau module.
+- L’interface Compte et la conciliation restent à leurs emplacements actuels.
+- Validation locale : 17 tests métier conservés, complétés par 3 tests
+  d’architecture/compatibilité; compilation Python et des deux sources
+  reconstruites. La validation réelle Canner/Render et PostgreSQL reste à faire.
+
 ### Structure technique Finances
 
 Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
@@ -45,6 +64,7 @@ Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
 - `finances_data.py` : petit chargeur.
 - `finances_data_part_01.pyfrag` à `finances_data_part_16.pyfrag` : couche de données historique.
 - Modules déjà séparés :
+  - `finances_account_data.py` : noyau de données Compte (banques et marges).
   - `finances_calculations.py`
   - `finances_validation.py`
   - `finances_shared_loans.py`
@@ -94,7 +114,8 @@ Le refactor doit être progressif, écran par écran, afin de réduire le risque
 ### Validation / qualité
 
 - Maintenir la compilation Python comme contrôle minimum.
-- Ajouter ou consolider une vraie suite de tests automatisés pour Finances.
+- Maintenir les 20 tests automatisés de calcul et de compatibilité; compléter
+  progressivement les protections de l’interface et des écritures SQL.
 - Conserver des tests ciblés pour :
   - mois à trois paies;
   - projections Budget;

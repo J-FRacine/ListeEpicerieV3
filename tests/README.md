@@ -4,7 +4,7 @@ Depuis la racine du dépôt, avec Python 3.10 ou plus récent :
 
 ```sh
 python -m unittest discover -s tests -v
-python -m py_compile tests/test_finances.py tests/test_finances_account.py finances_calculations.py finances_data.py finances.py
+python -m py_compile tests/test_finances.py tests/test_finances_account.py finances_calculations.py finances_account_data.py finances_data.py finances.py
 ```
 
 Les tests utilisent `unittest`, inclus dans Python. Ils chargent les vrais
@@ -23,7 +23,7 @@ déploiement sur Canner/Render. Les montants attendus sont fixés dans les tests
 
 ## Caractérisation de Compte avant extraction
 
-`test_finances_account.py` ajoute 10 tests aux 7 tests existants (17 au total) :
+`test_finances_account.py` ajoute 10 tests métier aux 7 tests existants :
 
 - continuité du solde avec mouvements antérieurs au mois affiché;
 - mois sans mouvement et maintien du solde reporté;
@@ -44,3 +44,12 @@ Cela protège le contrat de lecture, sans valider l’exécution SQL par Postgre
 
 Toutes les dates et tous les montants attendus sont fixes. Aucun test NiceGUI,
 de notifications ou de PostgreSQL réel n’est ajouté.
+
+## Extraction des données de Compte
+
+La suite comprend maintenant 20 tests : les 17 tests métier inchangés et
+3 contrôles d’architecture et de compatibilité. Ceux-ci vérifient l’import de
+`finances_account_data` dans un processus neuf interdisant `db`, `finances_data`,
+`psycopg` et `nicegui`, ainsi que la résolution des dépendances à chaque appel
+des trois points d’entrée historiques. Les contrôles de délégation complètent
+les tests métier, qui continuent à exécuter les vrais calculs extraits.

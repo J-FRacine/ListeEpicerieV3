@@ -4,7 +4,7 @@ Depuis la racine du dépôt, avec Python 3.10 ou plus récent :
 
 ```sh
 python -m unittest discover -s tests -v
-python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py tests/test_finances_budget.py tests/test_finances_budget_ui.py tests/test_finances_budget_writes.py finances_budget.py finances_budget_writes.py finances_account.py finances_budget_data.py finances_calculations.py finances_account_data.py finances_data.py finances.py finances_ui_state.py finances_validation.py finances_shared_loans_data.py
+python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py tests/test_finances_budget.py tests/test_finances_budget_ui.py tests/test_finances_budget_writes.py tests/test_finances_financing.py finances_budget.py finances_budget_writes.py finances_account.py finances_budget_data.py finances_calculations.py finances_account_data.py finances_data.py finances.py finances_ui_state.py finances_validation.py finances_shared_loans_data.py
 ```
 
 Les tests utilisent `unittest`, inclus dans Python. Ils chargent les vrais
@@ -47,7 +47,7 @@ de notifications ou de PostgreSQL réel n’est ajouté.
 
 ## Extraction des données de Compte
 
-La suite comprend maintenant 89 tests : les 29 tests précédents (17 tests métier,
+La suite comprend maintenant 107 tests : les 29 tests précédents (17 tests métier,
 3 contrôles d’architecture des données et 9 tests du panneau Compte),
 plus 10 tests Budget, 6 tests de navigation/structure Budget et 3 contrôles
 d’architecture Budget, 3 contrôles des lectures Budget et 29 tests des écritures, 3 contrôles de leur extraction et 5 tests du contrat Budget et 1 contrôle du panneau extrait.
@@ -213,3 +213,24 @@ Les fragments ne contiennent plus le bloc ni les fonctions internes Budget;
 `refresh_all()` utilise toujours le handle. Aucun changement visuel, métier, SQL
 ou KPI. NiceGUI et le navigateur réels, PostgreSQL et Canner/Render ne sont pas
 validés.
+
+## Caractérisation des Financements
+
+`tests/test_finances_financing.py` ajoute 18 tests aux 89 tests existants. Ils
+exécutent les vrais corps de lecture, sauvegarde, synchronisation, activation et
+suppression avec une connexion et un curseur simulés. Les requêtes, paramètres,
+validations et commits sont contrôlés sans ouvrir de connexion PostgreSQL.
+
+La couverture comprend les plans actifs/inactifs et leurs enrichissements, le
+résumé du mois, les intérêts et frais, le versement incluant ou non les intérêts,
+la progression déjà effectuée, le solde restant, le compte de paiement, la
+catégorie, les étiquettes et `budget_excluded`. Elle protège aussi la génération
+des versements futurs, la conservation des transactions confirmées, les plans
+terminés, les incohérences de progression et les suppressions/activations.
+
+Les contrôles UI analysent et isolent les fonctions actuelles des fragments : un
+seul `financing_month_state`, navigation précédent/suivant/reset ciblée sur
+`render_financing.refresh()`, rendu alimenté par les deux lectures du mois,
+aperçu des intérêts, avertissement de progression et recours à `refresh_all()`
+après sauvegarde, suppression ou activation. NiceGUI n'est pas lancé; le rendu,
+les notifications, PostgreSQL et Canner/Render réels ne sont pas validés.

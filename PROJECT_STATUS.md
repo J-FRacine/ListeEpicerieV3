@@ -171,6 +171,20 @@ sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
   89 tests réussis; NiceGUI/navigateur, PostgreSQL et Canner/Render réels ne sont
   pas validés.
 
+### Caractérisation des Financements — 2026-09-04
+
+- 18 tests dédiés protègent les lectures, enrichissements, résumés mensuels,
+  validations et calculs des plans de financement.
+- Les écritures sont exercées avec connexion et curseur simulés : création,
+  modification, synchronisation des versements futurs, conservation de
+  l'historique confirmé, activation et suppression.
+- Les contrats UI actuels couvrent le curseur mensuel unique, la navigation
+  ciblée, les services du rendu, l'aperçu des intérêts, l'avertissement
+  d'incohérence et les actualisations globales après mutation.
+- La suite compte 107 tests. Aucun code de production, comportement, SQL,
+  migration ou numéro de version n'est modifié. NiceGUI, PostgreSQL et
+  Canner/Render réels ne sont pas validés.
+
 ### Structure technique Finances
 
 Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
@@ -234,7 +248,7 @@ Le refactor doit être progressif, écran par écran, afin de réduire le risque
 ### Validation / qualité
 
 - Maintenir la compilation Python comme contrôle minimum.
-- Maintenir les 89 tests automatisés de calcul et de compatibilité; compléter
+- Maintenir les 107 tests automatisés de calcul et de compatibilité; compléter
   progressivement les protections de l’interface et des écritures SQL.
 - Conserver des tests ciblés pour :
   - mois à trois paies;

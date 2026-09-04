@@ -179,6 +179,10 @@ ui.add_css(
     }
     .jf-finance-cashflow-head {padding:.45rem .7rem;font-size:.72rem;font-weight:800;color:var(--jf-muted);}
     .jf-finance-cashflow-row {padding:.65rem .7rem;border-top:1px solid var(--jf-border);font-size:.82rem;}
+    .jf-finance-cashflow-start {
+        background:color-mix(in srgb,var(--jf-blue-soft) 55%,var(--jf-surface));
+        font-weight:700;
+    }
     .jf-finance-cashflow-money {text-align:right;font-variant-numeric:tabular-nums;}
     .jf-finance-year-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.55rem;width:100%;}
     .jf-finance-year-card {border:1px solid var(--jf-border);border-radius:12px;padding:.65rem .75rem;background:var(--jf-surface);cursor:pointer;}

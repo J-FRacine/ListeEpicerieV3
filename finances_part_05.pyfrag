@@ -510,7 +510,6 @@
                                 ])
                         else:
                             summary_values = [
-                                ("Solde de départ", month_data["start_balance"]),
                                 ("Solde actuel", month_data.get("current_balance") if month_data.get("current_balance") is not None else month_data["start_balance"]),
                                 ("Plus bas prévu", month_data["minimum_balance"]),
                                 ("Solde fin de mois", month_data["end_balance"]),
@@ -539,6 +538,26 @@
                                     "text-right"
                                     if text not in {"Vu", "Date", "Description"}
                                     else ""
+                                )
+                        if bank_reconcile:
+                            start_value = Decimal(month_data["start_balance"])
+                            start_css = (
+                                "jf-finance-expense"
+                                if start_value < 0
+                                else "jf-finance-income"
+                            )
+                            with ui.element("div").classes(
+                                "jf-finance-cashflow-row "
+                                "jf-finance-bank-reconcile "
+                                "jf-finance-cashflow-start"
+                            ):
+                                ui.label("")
+                                ui.label(account_month_state.value.strftime("%d/%m"))
+                                ui.label("Solde de départ").classes("font-bold")
+                                ui.label("")
+                                ui.label("")
+                                ui.label(_balance_money(start_value)).classes(
+                                    "jf-finance-cashflow-money font-bold " + start_css
                                 )
                         if month_data["rows"]:
                             for row in month_data["rows"]:

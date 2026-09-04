@@ -1,14 +1,38 @@
-JF Apps — Finances, découpage compatible avec l'interface Web GitHub
+JF Apps — Finances V1.13.2
+Date : 2026-09-04
 
-Tous les fichiers sont à placer à la RACINE du dépôt.
+FICHIERS À TÉLÉVERSER À LA RACINE DE GITHUB
+-------------------------------------------
+- finances_part_02.pyfrag
+- finances_part_05.pyfrag
+- finances_validation.py
+- app_versions.py
+- manual.py
 
-Fichiers requis :
-- finances.py
-- finances_data.py
-- tous les finances_part_XX.pyfrag
-- tous les finances_data_part_XX.pyfrag
+Les autres fragments Finances restent inchangés et ne doivent pas être remplacés.
 
-Ne téléversez PAS le dossier _finances_refactor_backup.
-Les anciens dossiers finances_parts et finances_data_parts ne sont pas nécessaires avec cette version.
+CONTENU DE V1.13.2
+-------------------
+- Solde de départ comme première ligne du tableau Compte bancaire.
+- Ligne informative seulement : aucune case Vu, aucune transaction, aucune édition.
+- KPI supérieurs : Solde actuel, Plus bas prévu, Solde fin de mois.
+- Marges de crédit inchangées.
+- Correctif text_value() conservé et inclus.
+- Version et manuel mis à jour.
+- Structure scindée de Finances conservée comme base pour les prochaines versions.
 
-Aucun changement PostgreSQL, aucun SQL manuel.
+BASE DE DONNÉES
+----------------
+Aucune migration PostgreSQL.
+Aucun SQL manuel.
+Aucune nouvelle dépendance Python.
+
+VALIDATIONS EFFECTUÉES
+-----------------------
+- Les sources locales utilisées ont été vérifiées par SHA Git contre les fichiers actuels de GitHub.
+- finances.py a été reconstruit avec les 14 fragments, incluant les deux fragments modifiés, puis compilé.
+- finances_data.py a été reconstruit depuis la source correspondant aux fragments actuels, puis compilé.
+- app_versions.py, manual.py et finances_validation.py ont été compilés.
+- Contrôles statiques ciblés sur le Solde de départ, les KPI et la marge de crédit.
+
+Ces validations ne constituent pas un test de Canner ni de PostgreSQL en production.

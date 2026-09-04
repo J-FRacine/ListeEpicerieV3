@@ -15,12 +15,32 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.1.2",
     "blood_pressure": "1.2.1",
-    "finances": "1.13.1",
+    "finances": "1.13.2",
     "rpg": "1.3.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.13.2",
+        "date": "2026-09-04",
+        "title": "Finances — solde de départ intégré au Compte",
+        "summary": (
+            "Le solde de départ devient la première ligne du Compte bancaire, "
+            "avec une présentation plus compacte et une structure de code scindée."
+        ),
+        "changes": [
+            "Dans un compte bancaire, le Solde de départ est maintenant affiché comme première ligne du tableau des mouvements.",
+            "La ligne Solde de départ est informative seulement : aucune case Vu, aucune transaction et aucune action de modification ne sont créées.",
+            "Le résumé supérieur d’un compte bancaire affiche maintenant seulement Solde actuel, Plus bas prévu et Solde fin de mois sur une même rangée.",
+            "Le montant affiché reprend exactement start_balance, la valeur déjà calculée par la projection de trésorerie pour le mois sélectionné.",
+            "La présentation et les calculs des marges de crédit restent inchangés.",
+            "Le correctif de compatibilité text_value() pour l’ajout et la modification de transactions est inclus dans la base V1.13.2.",
+            "Finances utilise maintenant des fragments de taille raisonnable pour finances.py et finances_data.py afin de faciliter les prochaines évolutions.",
+            "Aucun changement de schéma PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance Python.",
+        ],
+    },
     {
         "app_key": "rpg",
         "version": "1.3.0",

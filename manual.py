@@ -176,14 +176,25 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.13.1",
+        "title": "Finances — V1.13.2",
         "icon": "account_balance_wallet",
         "caption": "Prévisions, Budget, financements et prêts partagés",
         "keywords": (
             "finances budget prévisions pourcentage kpi financement intérêts "
-            "archives à venir paies prêts partagés catégorie étiquette saisie rapide"
+            "archives à venir paies prêts partagés catégorie étiquette saisie rapide "
+            "compte solde départ solde actuel plus bas prévu fin mois"
         ),
         "content": """
+### V1.13.2 — Solde de départ dans le tableau Compte
+
+Dans un **Compte bancaire**, le **Solde de départ** n’occupe plus une carte dans le résumé supérieur. Le haut de l’écran affiche maintenant seulement **Solde actuel**, **Plus bas prévu** et **Solde fin de mois**, sur une même rangée.
+
+Le **Solde de départ** apparaît comme la première ligne du tableau des mouvements, à la date du début du mois affiché. Cette ligne est uniquement informative : elle ne crée aucune transaction, ne possède aucune case **Vu** et ne peut pas être modifiée. Son montant reprend exactement le solde déjà calculé par la projection de trésorerie et change automatiquement lorsqu’on navigue vers un autre mois.
+
+Les **Marges de crédit** conservent leur présentation actuelle avec Dette de départ, Dette actuelle, Plus haut prévu et Dette fin de mois.
+
+V1.13.2 inclut aussi le correctif de compatibilité de validation utilisé lors de l’ajout ou de la modification d’une transaction. La structure interne de Finances est maintenant scindée en fragments plus petits pour simplifier les prochaines modifications, sans changement volontaire des calculs ni du schéma PostgreSQL.
+
 ### V1.13.1 — navigation Budget optimisée
 
 Le changement de mois du **Budget** est maintenant plus léger. Finances ne reconstruit plus le Tableau en arrière-plan lorsqu’il n’est pas affiché, réutilise le résumé déjà calculé pour la capacité du mois et utilise une version allégée des **Prévisions** qui ne recalcule pas tous les KPI de catégorie et d’étiquette pour chacun des six mois. Un indicateur **« Calcul du mois et des prévisions… »** apparaît pendant le traitement lorsque le serveur ou la base de données prend encore quelques secondes.

@@ -49,26 +49,49 @@ sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
   sont injectées depuis les fonctions présentes au moment de chaque appel.
 - Les deux fonctions privées, utilisées uniquement dans le bloc extrait,
   sont désormais internes au nouveau module.
-- L’interface Compte et la conciliation restent à leurs emplacements actuels.
+- Cette première extraction ne déplaçait pas encore l’interface Compte ni la conciliation.
 - Validation locale : 17 tests métier conservés, complétés par 3 tests
   d’architecture/compatibilité; compilation Python et des deux sources
   reconstruites. La validation réelle Canner/Render et PostgreSQL reste à faire.
 
 ### Préparation de l’interface Compte — 2026-09-04
 
-- `finances_account.py` définit uniquement `AccountPanelHandle`, sans import
+- Cette étape a introduit `AccountPanelHandle` dans `finances_account.py`, sans import
   NiceGUI, `finances`, `finances_data` ou `db`.
 - Le parent appelle `reload_options()` puis `refresh()`. Les callbacks fournis
   par le panneau sont résolus à l’appel et peuvent être remplacés; aucune
   référence au sélecteur ou au rendu interne n’est nécessaire à `refresh_all()`.
 - Le rechargement conserve la sélection si elle existe, sinon choisit le premier
   compte disponible ou aucune sélection. Le mois reste géré dans le panneau.
-- Le panneau reste dans les fragments 05 et 06; ses dialogues partagés restent
-  résolus tardivement. Aucun texte, présentation ou calcul n’est changé.
+- Lors de cette préparation, le panneau restait dans les fragments 05 et 06;
+  les dialogues partagés conservaient leur résolution tardive.
 - Six tests de contrat s’ajoutent aux 20 tests existants (26 au total), avec
   exécution des raccordements réels isolés et dépendances d’interface simulées.
 - Finances reste en V1.13.2, sans migration. Le rendu réel NiceGUI, les
   notifications et PostgreSQL ne sont pas validés par ces tests.
+
+### Extraction de l’interface Compte — 2026-09-04
+
+- `build_account_panel()` dans `finances_account.py` contient désormais le
+  panneau complet : banques et marges, mois, soldes, mouvements, conciliation
+  « Vu », édition, vue annuelle et commandes de notifications Finances.
+- Le bloc de 500 lignes des fragments 05/06 est remplacé par un appel de
+  construction. Les textes, classes CSS et instructions du bloc sont conservés;
+  les styles généraux et les dialogues partagés ne sont pas déplacés.
+- `ui`, la navigation, le curseur mensuel, les lectures/calculs, le formatage,
+  la conciliation et les services push sont injectés explicitement.
+- Les services sont transmis par des lambdas; notamment `refresh_all`,
+  `recurrence_dialog`, `_transaction_dialog` et `_card_payment_dialog` sont
+  résolus au moment de leur utilisation, même après la construction.
+- Le parent conserve seulement `AccountPanelHandle` et appelle ses opérations
+  `reload_options()` et `refresh()`. Les widgets et fonctions internes restent
+  locaux au constructeur. Aucun import de NiceGUI, `finances`, `finances_data`
+  ou `db` dans le module du panneau.
+- Les 26 tests précédents sont conservés/adaptés à la localisation du panneau;
+  3 contrôles supplémentaires portent le total à 29. Construction simulée
+  vérifiée pour une banque, une marge et l’absence de compte.
+- Finances reste en V1.13.2, sans migration ni changement utilisateur prévu.
+  Le navigateur, PostgreSQL et les notifications réelles restent à valider.
 
 ### Structure technique Finances
 
@@ -79,7 +102,7 @@ Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
 - `finances_data.py` : petit chargeur.
 - `finances_data_part_01.pyfrag` à `finances_data_part_16.pyfrag` : couche de données historique.
 - Modules déjà séparés :
-  - `finances_account.py` : contrat du futur panneau Compte, sans déplacement du panneau.
+  - `finances_account.py` : panneau Compte et contrat `AccountPanelHandle`.
   - `finances_account_data.py` : noyau de données Compte (banques et marges).
   - `finances_calculations.py`
   - `finances_validation.py`
@@ -130,7 +153,7 @@ Le refactor doit être progressif, écran par écran, afin de réduire le risque
 ### Validation / qualité
 
 - Maintenir la compilation Python comme contrôle minimum.
-- Maintenir les 26 tests automatisés de calcul et de compatibilité; compléter
+- Maintenir les 29 tests automatisés de calcul et de compatibilité; compléter
   progressivement les protections de l’interface et des écritures SQL.
 - Conserver des tests ciblés pour :
   - mois à trois paies;

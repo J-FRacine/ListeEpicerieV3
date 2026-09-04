@@ -47,8 +47,8 @@ de notifications ou de PostgreSQL réel n’est ajouté.
 
 ## Extraction des données de Compte
 
-La suite comprend maintenant 26 tests : 17 tests métier, 3 contrôles
-d’architecture des données et 6 tests du contrat du panneau Compte.
+La suite comprend maintenant 29 tests : 17 tests métier, 3 contrôles
+d’architecture des données et 9 tests du panneau Compte.
 Les 3 contrôles d’architecture des données vérifient l’import de
 `finances_account_data` dans un processus neuf interdisant `db`, `finances_data`,
 `psycopg` et `nicegui`, ainsi que la résolution des dépendances à chaque appel
@@ -57,15 +57,21 @@ les tests métier, qui continuent à exécuter les vrais calculs extraits.
 
 ## Contrat du panneau Compte
 
-`tests/test_finances_account_ui.py` couvre 6 aspects du contrat `AccountPanelHandle` :
+`tests/test_finances_account_ui.py` couvre 9 aspects du contrat `AccountPanelHandle` :
 
 - import sans NiceGUI, `finances`, `finances_data` ou `db`;
 - callbacks différés et remplaçables;
 - actualisation par le vrai `refresh_all()`, via le handle, dans l’ordre options puis rendu;
 - résolution des fonctions cibles après la construction du handle;
 - maintien de la sélection ou choix du premier compte disponible lors du rechargement;
-- résolution tardive des callbacks partagés utilisés par l’édition des mouvements.
+- résolution tardive des callbacks partagés utilisés par l’édition des mouvements;
+- retrait des définitions du panneau des fragments et confidentialité des fonctions internes;
+- construction par le parent via des callbacks différés et remplaçables;
+- construction du panneau complet retournant un handle, pour banque, marge et absence de compte.
 
 Ces tests simulent l’interface sans lancer réellement NiceGUI. Les raccordements
-sont exécutés à partir du code des fragments, isolés de la construction de la page.
+du parent sont exécutés depuis les fragments; ceux du panneau depuis
+`finances_account.py`. Le constructeur complet est aussi exécuté avec des
+composants simulés. Les contrôles d’import interdisent NiceGUI et les modules
+historiques dans un processus neuf.
 Ils ne valident ni le rendu dans un navigateur ni les notifications réelles.

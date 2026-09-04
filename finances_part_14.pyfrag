@@ -345,11 +345,8 @@
         render_categories.refresh()
         render_tags.refresh()
         render_payment_methods.refresh()
-        account_selector.options = _bank_account_options(user_id)
-        if account_selector.value not in account_selector.options:
-            account_selector.value = next(iter(account_selector.options), None)
-        account_selector.update()
-        render_account.refresh()
+        account_panel.reload_options()
+        account_panel.refresh()
         render_budget.refresh()
         render_financing.refresh()
 

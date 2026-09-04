@@ -54,6 +54,22 @@ sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
   d’architecture/compatibilité; compilation Python et des deux sources
   reconstruites. La validation réelle Canner/Render et PostgreSQL reste à faire.
 
+### Préparation de l’interface Compte — 2026-09-04
+
+- `finances_account.py` définit uniquement `AccountPanelHandle`, sans import
+  NiceGUI, `finances`, `finances_data` ou `db`.
+- Le parent appelle `reload_options()` puis `refresh()`. Les callbacks fournis
+  par le panneau sont résolus à l’appel et peuvent être remplacés; aucune
+  référence au sélecteur ou au rendu interne n’est nécessaire à `refresh_all()`.
+- Le rechargement conserve la sélection si elle existe, sinon choisit le premier
+  compte disponible ou aucune sélection. Le mois reste géré dans le panneau.
+- Le panneau reste dans les fragments 05 et 06; ses dialogues partagés restent
+  résolus tardivement. Aucun texte, présentation ou calcul n’est changé.
+- Six tests de contrat s’ajoutent aux 20 tests existants (26 au total), avec
+  exécution des raccordements réels isolés et dépendances d’interface simulées.
+- Finances reste en V1.13.2, sans migration. Le rendu réel NiceGUI, les
+  notifications et PostgreSQL ne sont pas validés par ces tests.
+
 ### Structure technique Finances
 
 Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
@@ -63,6 +79,7 @@ Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
 - `finances_data.py` : petit chargeur.
 - `finances_data_part_01.pyfrag` à `finances_data_part_16.pyfrag` : couche de données historique.
 - Modules déjà séparés :
+  - `finances_account.py` : contrat du futur panneau Compte, sans déplacement du panneau.
   - `finances_account_data.py` : noyau de données Compte (banques et marges).
   - `finances_calculations.py`
   - `finances_validation.py`
@@ -113,7 +130,7 @@ Le refactor doit être progressif, écran par écran, afin de réduire le risque
 ### Validation / qualité
 
 - Maintenir la compilation Python comme contrôle minimum.
-- Maintenir les 20 tests automatisés de calcul et de compatibilité; compléter
+- Maintenir les 26 tests automatisés de calcul et de compatibilité; compléter
   progressivement les protections de l’interface et des écritures SQL.
 - Conserver des tests ciblés pour :
   - mois à trois paies;

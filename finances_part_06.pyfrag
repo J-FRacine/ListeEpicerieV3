@@ -26,6 +26,16 @@
                                         else:
                                             ui.label(_balance_money(end_value)).classes("font-bold " + ("jf-finance-expense" if end_value < 0 else "jf-finance-income"))
                                             ui.label("min. " + _balance_money(month_row["minimum_balance"])).classes("text-xs jf-muted")
+            def reload_account_options():
+                account_selector.options = _bank_account_options(user_id)
+                if account_selector.value not in account_selector.options:
+                    account_selector.value = next(iter(account_selector.options), None)
+                account_selector.update()
+
+            account_panel = AccountPanelHandle(
+                on_refresh=lambda: render_account.refresh(),
+                on_reload_options=lambda: reload_account_options(),
+            )
             account_selector.on_value_change(lambda _event: render_account.refresh())
             render_account()
 

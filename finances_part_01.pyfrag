@@ -109,6 +109,7 @@ from finances_data import (
     toggle_recurrence,
     toggle_tag,
 )
+from finances_account import AccountPanelHandle
 from finances_shared_loans import shared_loans_panel
 from finances_ui_state import MonthCursor, month_label as _month_label, shift_month as _shift_month
 

@@ -1,11 +1,14 @@
 """Navigation réelle isolée des fragments, sans démarrer NiceGUI."""
 import ast
+import subprocess
+import sys
 import unittest
 from datetime import date
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 from finances_ui_state import MonthCursor
+from finances_budget import BudgetPanelHandle
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -68,6 +71,69 @@ class BudgetNavigationTests(unittest.IsolatedAsyncioTestCase):
 
 
 class BudgetStructureTests(unittest.TestCase):
+    def test_handle_is_lazy_and_refreshes_exactly_its_callback(self):
+        callback = Mock()
+        handle = BudgetPanelHandle(callback)
+        callback.assert_not_called()
+        handle.refresh()
+        callback.assert_called_once_with()
+
+    def test_handle_imports_without_ui_parent_data_or_database(self):
+        script = """
+import importlib.abc
+import sys
+class Blocker(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] in {'nicegui', 'finances', 'finances_data', 'db', 'psycopg'}:
+            raise AssertionError(fullname)
+sys.meta_path.insert(0, Blocker())
+from finances_budget import BudgetPanelHandle
+called = []
+handle = BudgetPanelHandle(lambda: called.append(True))
+assert not called
+handle.refresh()
+assert called == [True]
+"""
+        result = subprocess.run([sys.executable, "-B", "-c", script], cwd=ROOT,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_parent_constructs_lazy_budget_handle_after_initial_render(self):
+        tree = source()
+        assignment = next(n for n in ast.walk(tree) if isinstance(n, ast.Assign)
+                          and any(isinstance(t, ast.Name) and t.id == "budget_panel" for t in n.targets))
+        self.assertEqual(assignment.value.func.id, "BudgetPanelHandle")
+        namespace = {"BudgetPanelHandle": BudgetPanelHandle, "render_budget": Mock()}
+        exec(compile(ast.Module(body=[assignment], type_ignores=[]), "<budget binding>", "exec"), namespace)
+        namespace["render_budget"].refresh.assert_not_called()
+        namespace["budget_panel"].refresh()
+        namespace["render_budget"].refresh.assert_called_once_with()
+        fragment = (ROOT / "finances_part_07.pyfrag").read_text(encoding="utf-8")
+        self.assertLess(fragment.index("render_budget()"), fragment.index("budget_panel = BudgetPanelHandle"))
+
+    def test_refresh_all_uses_budget_handle_without_direct_budget_render(self):
+        node = function("refresh_all")
+        text = ast.unparse(node)
+        self.assertIn("budget_panel.refresh()", text)
+        self.assertNotIn("render_budget.refresh()", text)
+        names = {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+        namespace = {name: MagicMock(name=name) for name in names}
+        events = []
+        namespace["budget_panel"].refresh.side_effect = lambda: events.append("budget")
+        exec(compile(ast.Module(body=[node], type_ignores=[]), "<refresh_all>", "exec"), namespace)
+        namespace["refresh_all"]()
+        self.assertEqual(events, ["budget"])
+        namespace["render_dashboard"].refresh.assert_called_once_with()
+        namespace["account_panel"].reload_options.assert_called_once_with()
+        namespace["account_panel"].refresh.assert_called_once_with()
+
+    def test_targeted_budget_refreshes_remain_outside_refresh_all(self):
+        tree = source()
+        calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+                 and ast.unparse(n.func) == "render_budget.refresh"]
+        self.assertGreaterEqual(len(calls), 2)
+        self.assertFalse(any(call in ast.walk(function("refresh_all")) for call in calls))
+
     def test_render_reuses_capacity_as_summary_and_initial_forecast(self):
         node = function("render_budget")
         calls = [n for n in ast.walk(node) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]

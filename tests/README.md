@@ -4,7 +4,7 @@ Depuis la racine du dépôt, avec Python 3.10 ou plus récent :
 
 ```sh
 python -m unittest discover -s tests -v
-python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py tests/test_finances_budget.py tests/test_finances_budget_ui.py tests/test_finances_budget_writes.py finances_budget_writes.py finances_account.py finances_budget_data.py finances_calculations.py finances_account_data.py finances_data.py finances.py finances_ui_state.py finances_validation.py finances_shared_loans_data.py
+python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py tests/test_finances_budget.py tests/test_finances_budget_ui.py tests/test_finances_budget_writes.py finances_budget.py finances_budget_writes.py finances_account.py finances_budget_data.py finances_calculations.py finances_account_data.py finances_data.py finances.py finances_ui_state.py finances_validation.py finances_shared_loans_data.py
 ```
 
 Les tests utilisent `unittest`, inclus dans Python. Ils chargent les vrais
@@ -47,10 +47,10 @@ de notifications ou de PostgreSQL réel n’est ajouté.
 
 ## Extraction des données de Compte
 
-La suite comprend maintenant 83 tests : les 29 tests précédents (17 tests métier,
+La suite comprend maintenant 88 tests : les 29 tests précédents (17 tests métier,
 3 contrôles d’architecture des données et 9 tests du panneau Compte),
 plus 10 tests Budget, 6 tests de navigation/structure Budget et 3 contrôles
-d’architecture Budget, 3 contrôles des lectures Budget et 29 tests des écritures et 3 contrôles de leur extraction.
+d’architecture Budget, 3 contrôles des lectures Budget et 29 tests des écritures, 3 contrôles de leur extraction et 5 tests du contrat Budget.
 Les 3 contrôles d’architecture des données vérifient l’import de
 `finances_account_data` dans un processus neuf interdisant `db`, `finances_data`,
 `psycopg` et `nicegui`, ainsi que la résolution des dépendances à chaque appel
@@ -182,3 +182,20 @@ dans `finances_data`; l’interface reste dans les fragments UI et
 requêtes ou commit n’est changé. Aucune optimisation KPI ni migration. Les
 transactions PostgreSQL et leur rollback restent simulés; aucun navigateur ou
 déploiement Canner/Render réel n’est validé.
+
+## Contrat du panneau Budget
+
+`finances_budget.py` contient le contrat minimal `BudgetPanelHandle`. Cinq tests
+supplémentaires vérifient son callback différé, son import sans NiceGUI,
+`finances`, `finances_data`, `db` ou psycopg, sa construction après le rendu
+initial, l’utilisation du handle par `refresh_all()` et le maintien des appels
+ciblés historiques. Les tests de navigation existants continuent de protéger le
+curseur mensuel unique partagé avec Tableau, le sablier, l’attente du navigateur
+et les rafraîchissements ciblés.
+
+L’interface reste dans les fragments 06/07. L’étape suivante prévue est
+`build_budget_panel(...) -> BudgetPanelHandle`; ce builder recevra par injection
+`ui`, l’utilisateur, l’onglet, le `month_state` partagé, les lectures et écritures,
+les options, les plans, le formatage et les callbacks/services nécessaires.
+Aucun builder ni widget n’est créé ici. PostgreSQL, NiceGUI réel, navigateur et
+Canner/Render ne sont pas validés.

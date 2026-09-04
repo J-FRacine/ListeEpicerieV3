@@ -347,7 +347,7 @@
         render_payment_methods.refresh()
         account_panel.reload_options()
         account_panel.refresh()
-        render_budget.refresh()
+        budget_panel.refresh()
         render_financing.refresh()
 
         reconciliation_payment.options = _payment_options(

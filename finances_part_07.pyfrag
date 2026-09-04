@@ -139,6 +139,9 @@
                             css = "jf-finance-income" if forecast["ending_balance"] >= 0 else "jf-finance-expense"
                             ui.label(_balance_money(forecast["ending_balance"])).classes("text-right font-bold " + css)
             render_budget()
+            budget_panel = BudgetPanelHandle(
+                on_refresh=lambda: render_budget.refresh(),
+            )
 
         # FINANCEMENTS ET VERSEMENTS
         with ui.tab_panel(financing_tab).classes("px-0"):

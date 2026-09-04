@@ -156,6 +156,21 @@ sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
   L’étape suivante prévue est `build_budget_panel(...) -> BudgetPanelHandle`.
   Navigateur, PostgreSQL et Canner/Render réels ne sont pas validés.
 
+### Extraction de l’interface Budget — 2026-09-04
+
+- `build_budget_panel()` dans `finances_budget.py` contient désormais le panneau
+  complet et retourne `BudgetPanelHandle`. Le parent injecte les services par
+  callbacks différés et conserve seulement le handle.
+- Le builder reçoit le même `month_state` que Tableau. La navigation Tableau
+  reste dans le parent; la navigation Budget, son sablier et son `finally` sont
+  internes au panneau. Aucun second curseur.
+- Tri, dialogues, textes, rendu, calcul unique de capacité, prévision avec
+  `initial_capacity`, nouvelle période et génération des occurrences sont
+  conservés. Aucun changement visuel, métier, SQL, KPI ou migration.
+- Les fragments ne contiennent plus le bloc `# BUDGET GLOBAL` ni ses fonctions.
+  89 tests réussis; NiceGUI/navigateur, PostgreSQL et Canner/Render réels ne sont
+  pas validés.
+
 ### Structure technique Finances
 
 Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
@@ -167,7 +182,7 @@ Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
 - Modules déjà séparés :
   - `finances_account.py` : panneau Compte et contrat `AccountPanelHandle`.
   - `finances_account_data.py` : noyau de données Compte (banques et marges).
-  - `finances_budget.py` : contrat minimal du futur panneau Budget.
+  - `finances_budget.py` : panneau Budget et contrat `BudgetPanelHandle`.
   - `finances_budget_data.py` : résumé, capacités, prévisions et lectures Budget.
   - `finances_budget_writes.py` : écritures spécifiques au Budget.
   - `finances_calculations.py`
@@ -219,7 +234,7 @@ Le refactor doit être progressif, écran par écran, afin de réduire le risque
 ### Validation / qualité
 
 - Maintenir la compilation Python comme contrôle minimum.
-- Maintenir les 88 tests automatisés de calcul et de compatibilité; compléter
+- Maintenir les 89 tests automatisés de calcul et de compatibilité; compléter
   progressivement les protections de l’interface et des écritures SQL.
 - Conserver des tests ciblés pour :
   - mois à trois paies;

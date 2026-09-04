@@ -65,7 +65,7 @@
                         ui.button(
                             icon="chevron_left",
                             on_click=lambda: (
-                                change_month(-1, source="dashboard")
+                                change_month(-1)
                             ),
                         ).props(
                             "flat dense round"
@@ -81,7 +81,7 @@
                         ui.button(
                             icon="chevron_right",
                             on_click=lambda: (
-                                change_month(1, source="dashboard")
+                                change_month(1)
                             ),
                         ).props(
                             "flat dense round"

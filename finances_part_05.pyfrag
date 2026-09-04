@@ -176,33 +176,12 @@
                                         "flat dense color=primary"
                                     ).classes("mt-1")
 
-            async def change_month(
-                offset,
-                reset=False,
-                source="budget",
-            ):
+            async def change_month(offset, reset=False):
                 if reset:
                     month_state.reset()
                 else:
                     month_state.shift(offset)
-
-                # Ne recalculer que l'écran réellement utilisé. Auparavant, un
-                # clic dans Budget reconstruisait aussi tout le Tableau, ce qui
-                # doublait inutilement une partie importante du travail.
-                if source == "dashboard":
-                    render_dashboard.refresh()
-                    return
-
-                budget_loading.set_visibility(True)
-                try:
-                    # Laisser le navigateur afficher le sablier avant les
-                    # calculs synchrones du Budget et des prévisions.
-                    await ui.run_javascript(
-                        "await new Promise(requestAnimationFrame); return true;"
-                    )
-                    render_budget.refresh()
-                finally:
-                    budget_loading.set_visibility(False)
+                render_dashboard.refresh()
 
             render_dashboard()
 

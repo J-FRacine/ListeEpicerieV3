@@ -47,10 +47,10 @@ de notifications ou de PostgreSQL réel n’est ajouté.
 
 ## Extraction des données de Compte
 
-La suite comprend maintenant 88 tests : les 29 tests précédents (17 tests métier,
+La suite comprend maintenant 89 tests : les 29 tests précédents (17 tests métier,
 3 contrôles d’architecture des données et 9 tests du panneau Compte),
 plus 10 tests Budget, 6 tests de navigation/structure Budget et 3 contrôles
-d’architecture Budget, 3 contrôles des lectures Budget et 29 tests des écritures, 3 contrôles de leur extraction et 5 tests du contrat Budget.
+d’architecture Budget, 3 contrôles des lectures Budget et 29 tests des écritures, 3 contrôles de leur extraction et 5 tests du contrat Budget et 1 contrôle du panneau extrait.
 Les 3 contrôles d’architecture des données vérifient l’import de
 `finances_account_data` dans un processus neuf interdisant `db`, `finances_data`,
 `psycopg` et `nicegui`, ainsi que la résolution des dépendances à chaque appel
@@ -199,3 +199,17 @@ L’interface reste dans les fragments 06/07. L’étape suivante prévue est
 les options, les plans, le formatage et les callbacks/services nécessaires.
 Aucun builder ni widget n’est créé ici. PostgreSQL, NiceGUI réel, navigateur et
 Canner/Render ne sont pas validés.
+
+## Extraction de l’interface Budget
+
+`build_budget_panel(...)` dans `finances_budget.py` contient maintenant le panneau
+Budget complet et retourne `BudgetPanelHandle`. Les tests UI adaptés couvrent la
+construction simulée, les navigations séparées, le sablier et son `finally`, le
+tri/déplacement ciblé, le calcul unique de capacité, `initial_capacity`, les deux
+sauvegardes lors d’une nouvelle période, la génération des occurrences et les
+callbacks différés. Le parent transmet le même `month_state` que Tableau.
+
+Les fragments ne contiennent plus le bloc ni les fonctions internes Budget;
+`refresh_all()` utilise toujours le handle. Aucun changement visuel, métier, SQL
+ou KPI. NiceGUI et le navigateur réels, PostgreSQL et Canner/Render ne sont pas
+validés.

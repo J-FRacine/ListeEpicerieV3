@@ -93,6 +93,22 @@ sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
 - Finances reste en V1.13.2, sans migration ni changement utilisateur prévu.
   Le navigateur, PostgreSQL et les notifications réelles restent à valider.
 
+### Extraction du noyau de calcul Budget — 2026-09-04
+
+- Le résumé, la capacité de base, la capacité avec report et les prévisions
+  sont maintenant extraits dans `finances_budget_data.py`, sans changement
+  fonctionnel, visuel ou de performance volontaire. Finances reste en V1.13.2.
+- Les quatre façades historiques injectent les fonctions présentes dans
+  `finances_data` au moment de chaque appel; les remplacements après import
+  restent pris en compte. Le module importe seulement la bibliothèque standard
+  et les calculs génériques de dates, sans connexion PostgreSQL directe.
+- Les lectures détaillées et écritures Budget, les groupes de financement et
+  `_variable_expense_total_for_month()` restent dans les fragments de données.
+- Aucune optimisation supplémentaire des KPI n’est réalisée; le chemin indirect
+  par `_dashboard_month_projection_v190()` est conservé. Aucune migration.
+- 48 tests : les 45 précédents et 3 contrôles d’import/délégation Budget.
+  PostgreSQL, le navigateur et Canner/Render ne sont pas testés réellement.
+
 ### Structure technique Finances
 
 Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
@@ -104,6 +120,7 @@ Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
 - Modules déjà séparés :
   - `finances_account.py` : panneau Compte et contrat `AccountPanelHandle`.
   - `finances_account_data.py` : noyau de données Compte (banques et marges).
+  - `finances_budget_data.py` : résumé, capacités et prévisions Budget.
   - `finances_calculations.py`
   - `finances_validation.py`
   - `finances_shared_loans.py`
@@ -153,7 +170,7 @@ Le refactor doit être progressif, écran par écran, afin de réduire le risque
 ### Validation / qualité
 
 - Maintenir la compilation Python comme contrôle minimum.
-- Maintenir les 29 tests automatisés de calcul et de compatibilité; compléter
+- Maintenir les 48 tests automatisés de calcul et de compatibilité; compléter
   progressivement les protections de l’interface et des écritures SQL.
 - Conserver des tests ciblés pour :
   - mois à trois paies;

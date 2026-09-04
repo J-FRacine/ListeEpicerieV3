@@ -4,7 +4,7 @@ Depuis la racine du dépôt, avec Python 3.10 ou plus récent :
 
 ```sh
 python -m unittest discover -s tests -v
-python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py tests/test_finances_budget.py tests/test_finances_budget_ui.py finances_account.py finances_calculations.py finances_account_data.py finances_data.py finances.py finances_ui_state.py finances_validation.py finances_shared_loans_data.py
+python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py tests/test_finances_budget.py tests/test_finances_budget_ui.py finances_account.py finances_budget_data.py finances_calculations.py finances_account_data.py finances_data.py finances.py finances_ui_state.py finances_validation.py finances_shared_loans_data.py
 ```
 
 Les tests utilisent `unittest`, inclus dans Python. Ils chargent les vrais
@@ -47,9 +47,10 @@ de notifications ou de PostgreSQL réel n’est ajouté.
 
 ## Extraction des données de Compte
 
-La suite comprend maintenant 45 tests : les 29 tests précédents (17 tests métier,
+La suite comprend maintenant 48 tests : les 29 tests précédents (17 tests métier,
 3 contrôles d’architecture des données et 9 tests du panneau Compte),
-plus 10 tests Budget et 6 tests de navigation/structure Budget.
+plus 10 tests Budget, 6 tests de navigation/structure Budget et 3 contrôles
+d’architecture Budget.
 Les 3 contrôles d’architecture des données vérifient l’import de
 `finances_account_data` dans un processus neuf interdisant `db`, `finances_data`,
 `psycopg` et `nicegui`, ainsi que la résolution des dépendances à chaque appel
@@ -106,3 +107,16 @@ réutilisation des calculs existants. Aucun test n’exige zéro calcul KPI :
 `_dashboard_month_projection_v190()`, qui calcule catégories/étiquettes/KPI.
 Cette optimisation éventuelle reste une tâche séparée; aucun code de production
 n’est modifié. PostgreSQL, les notifications et Canner/Render ne sont pas validés.
+
+## Extraction du noyau de calcul Budget
+
+Trois contrôles supplémentaires dans `test_finances_budget.py` vérifient :
+import indépendant de `finances_budget_data` dans un processus neuf interdisant
+`db`, `finances_data`, `nicegui` et `psycopg`; délégation des quatre façades avec
+remplacements successifs de leurs dépendances; utilisation effective par les
+prévisions des services remplacés après import. Les 45 tests précédents sont
+conservés sans modification de leurs résultats attendus.
+
+Le résumé, les capacités et les prévisions résident dans `finances_budget_data.py`.
+Les lectures détaillées, écritures et `_variable_expense_total_for_month()` restent
+dans `finances_data`. Aucune optimisation supplémentaire des KPI ni migration.

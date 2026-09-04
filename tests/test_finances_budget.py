@@ -1,5 +1,8 @@
 """Caractérisation Budget : vrais calculs, lectures PostgreSQL simulées."""
 import importlib
+import subprocess
+from contextlib import ExitStack
+from pathlib import Path
 import sys
 import unittest
 from datetime import date
@@ -155,6 +158,63 @@ class BudgetTests(unittest.TestCase):
                 self.assertIn("status IN ('planned','confirmed')", sql)
                 self.assertIn("transaction_type='expense'", sql)
                 self.assertEqual(params, (1, [20, 21], date(2026, 10, 1), date(2026, 10, 31)))
+
+
+class BudgetArchitectureTests(unittest.TestCase):
+    def test_independent_import_in_fresh_process(self):
+        script = """
+import importlib.abc
+import sys
+class Blocker(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] in {'db', 'finances_data', 'nicegui', 'psycopg'}:
+            raise AssertionError('Import interdit: ' + fullname)
+sys.meta_path.insert(0, Blocker())
+import finances_budget_data
+assert callable(finances_budget_data.budget_forecast)
+"""
+        result = subprocess.run([sys.executable, "-B", "-c", script],
+                                cwd=Path(__file__).resolve().parents[1],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_four_facades_delegate_with_successively_replaced_dependencies(self):
+        contracts = {
+            "budget_summary": ["list_budget_items"],
+            "_budget_capacity_summary_v110": ["budget_summary", "list_recurrences"],
+            "budget_capacity_summary": ["_budget_capacity_summary_v110", "get_finance_settings",
+                                        "_variable_expense_total_for_month"],
+            "budget_forecast": ["budget_capacity_summary", "_budget_capacity_summary_v110",
+                                "_variable_expense_total_for_month", "get_finance_settings"],
+        }
+        for name, dependencies in contracts.items():
+            for iteration in range(2):
+                with self.subTest(facade=name, replacement=iteration), ExitStack() as stack:
+                    replacements = {dep: stack.enter_context(patch.object(data, dep))
+                                    for dep in dependencies}
+                    target = stack.enter_context(patch.object(data._budget_data, name))
+                    result = getattr(data, name)(1, "2026-10")
+                    self.assertIs(result, target.return_value)
+                    if name == "budget_forecast":
+                        replacements.update(months=6, initial_capacity=None)
+                    target.assert_called_once_with(1, "2026-10", **replacements)
+
+    def test_forecast_executes_current_services_after_each_replacement(self):
+        for amount in (D("100"), D("200")):
+            with self.subTest(amount=amount), \
+                 patch.object(data, "get_finance_settings", return_value=dict(
+                     carry_month_balance=True, carry_start_month="2026-10")) as settings, \
+                 patch.object(data, "budget_capacity_summary", return_value=dict(available_month=amount)) as first, \
+                 patch.object(data, "_budget_capacity_summary_v110", return_value=dict(available_month=amount)) as base, \
+                 patch.object(data, "_variable_expense_total_for_month", return_value=D("10")) as variable:
+                rows = data.budget_forecast(1, "2026-10", months=2)
+                settings.assert_called_once_with(1)
+                first.assert_called_once_with(1, date(2026, 10, 1))
+                base.assert_called_once_with(1, date(2026, 11, 1))
+                self.assertEqual(variable.call_args_list,
+                                 [call(1, date(2026, 10, 1)), call(1, date(2026, 11, 1))])
+                self.assertEqual([r["ending_balance"] for r in rows],
+                                 [amount - 10, 2 * (amount - 10)])
 
 
 if __name__ == "__main__":

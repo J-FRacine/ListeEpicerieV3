@@ -632,19 +632,12 @@ def _list_budget_items_v111(
             return rows
 
 
+import finances_budget_data as _budget_data
+
+
 def budget_summary(user_id, month_value=None):
-    month = _month_start(month_value or date.today())
-    rows = list_budget_items(
-        user_id,
-        include_inactive=False,
-        month_value=month,
-        effective_only=True,
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _budget_data.budget_summary(
+        user_id, month_value,
+        list_budget_items=list_budget_items,
     )
-    totals = {
-        "month": month,
-        "monthly_income": Decimal("0.00"),
-        "monthly_expense": Decimal("0.00"),
-        "biweekly_income": Decimal("0.00"),
-        "biweekly_expense": Decimal("0.00"),
-    }
-    for row in rows:

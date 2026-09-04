@@ -330,45 +330,13 @@ def set_month_carryover(user_id, enabled, start_month=None):
 
 
 def budget_capacity_summary(user_id, month_value):
-    """Capacité variable avec report optionnel du solde mensuel."""
-
-    month = _month_start(month_value)
-    base = dict(_budget_capacity_summary_v110(user_id, month))
-    base_available = Decimal(base["available_month"])
-    settings = get_finance_settings(user_id)
-    carry_enabled = bool(settings.get("carry_month_balance"))
-    carry_start = settings.get("carry_start_month")
-    carry_in = Decimal("0.00")
-
-    if carry_enabled and carry_start:
-        carry_start = _month_start(carry_start)
-        if month > carry_start:
-            cursor = carry_start
-            safety = 0
-            while cursor < month and safety < 600:
-                cursor_base = _budget_capacity_summary_v110(
-                    user_id,
-                    cursor,
-                )
-                cursor_available = Decimal(cursor_base["available_month"])
-                cursor_expenses = _variable_expense_total_for_month(
-                    user_id,
-                    cursor,
-                )
-                carry_in = (
-                    cursor_available + carry_in - cursor_expenses
-                ).quantize(Decimal("0.01"))
-                cursor = _add_months(cursor, 1)
-                safety += 1
-
-    base["available_month_base"] = base_available
-    base["carry_enabled"] = carry_enabled
-    base["carry_start_month"] = carry_start
-    base["carry_in"] = carry_in
-    base["available_month"] = (
-        base_available + carry_in
-    ).quantize(Decimal("0.01"))
-    return base
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _budget_data.budget_capacity_summary(
+        user_id, month_value,
+        _budget_capacity_summary_v110=_budget_capacity_summary_v110,
+        get_finance_settings=get_finance_settings,
+        _variable_expense_total_for_month=_variable_expense_total_for_month,
+    )
 
 
 def _create_budget_recurrence_cursor(

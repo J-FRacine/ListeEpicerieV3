@@ -1,120 +1,15 @@
-        key = "income" if row["item_type"] == "income" else "expense"
-        totals[f"monthly_{key}"] += Decimal(row["monthly_amount"])
-        totals[f"biweekly_{key}"] += Decimal(row["biweekly_amount"])
-    totals["monthly_remaining"] = (
-        totals["monthly_income"] - totals["monthly_expense"]
-    )
-    totals["biweekly_remaining"] = (
-        totals["biweekly_income"] - totals["biweekly_expense"]
-    )
-    totals["rows"] = rows
-    return totals
 
 
 
 
 
 def _budget_capacity_summary_v110(user_id, month_value):
-    """Capacité disponible pour les dépenses variables du mois affiché."""
-
-    month = _month_start(month_value)
-    month_end = _add_months(month, 1) - timedelta(days=1)
-    summary = budget_summary(user_id, month)
-    active_rows = summary["rows"]
-    income_rows = [
-        row for row in active_rows
-        if row["item_type"] == "income"
-    ]
-
-    recurrence_by_id = {
-        int(row["id"]): dict(row)
-        for row in list_recurrences(user_id)
-    }
-
-    linked_income_rows = [
-        row for row in income_rows
-        if row.get("recurrence_id")
-        and int(row["recurrence_id"]) in recurrence_by_id
-    ]
-
-    pay_dates = []
-    source = "budget"
-    if linked_income_rows:
-        # Le poste de revenu principal est celui qui représente le plus gros
-        # montant par paie. Cela évite qu'un remboursement ponctuel soit compté
-        # comme une paie supplémentaire.
-        primary_income = max(
-            linked_income_rows,
-            key=lambda row: Decimal(row["biweekly_amount"]),
-        )
-        recurrence = recurrence_by_id[int(primary_income["recurrence_id"])]
-        pay_dates = _recurrence_dates_between(
-            recurrence,
-            month,
-            month_end,
-        )
-        source = "recurrence"
-    else:
-        has_biweekly_income = any(
-            row["input_frequency"] == "biweekly"
-            for row in income_rows
-        )
-        if has_biweekly_income:
-            # Si le poste Budget n'est pas lié explicitement, chercher une
-            # récurrence de revenu active aux deux semaines. On privilégie
-            # celle dont le montant est le plus proche du principal revenu
-            # bihebdomadaire du Budget. Cela permet de détecter les mois à
-            # trois paies sans exiger une liaison parfaite des anciennes données.
-            target_amount = max(
-                (Decimal(row["biweekly_amount"]) for row in income_rows),
-                default=Decimal("0.00"),
-            )
-            candidates = [
-                row for row in recurrence_by_id.values()
-                if row.get("transaction_type") == "income"
-                and row.get("is_active")
-                and row.get("frequency_unit") == "week"
-                and int(row.get("frequency_interval") or 1) == 2
-            ]
-            if candidates:
-                recurrence = min(
-                    candidates,
-                    key=lambda row: (
-                        abs(Decimal(row.get("amount") or 0) - target_amount),
-                        -Decimal(row.get("amount") or 0),
-                    ),
-                )
-                pay_dates = _recurrence_dates_between(
-                    recurrence,
-                    month,
-                    month_end,
-                )
-                source = "recurrence_detected"
-            else:
-                # Sans aucun ancrage de calendrier fiable, conserver le repli
-                # prudent de deux paies.
-                pay_dates = [month, month]
-                source = "fallback_2"
-
-    if pay_dates:
-        pay_count = len(pay_dates)
-        available_month = (
-            Decimal(summary["biweekly_remaining"])
-            * Decimal(pay_count)
-        )
-    else:
-        pay_count = 1 if income_rows else 0
-        available_month = Decimal(summary["monthly_remaining"])
-        source = "monthly"
-
-    return {
-        **summary,
-        "pay_count": pay_count,
-        "pay_dates": pay_dates,
-        "pay_count_source": source,
-        "remaining_per_pay": Decimal(summary["biweekly_remaining"]),
-        "available_month": available_month,
-    }
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _budget_data._budget_capacity_summary_v110(
+        user_id, month_value,
+        budget_summary=budget_summary,
+        list_recurrences=list_recurrences,
+    )
 
 
 def _fixed_budget_recurrence_ids(user_id, month_value):

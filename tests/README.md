@@ -5,6 +5,8 @@ Depuis la racine du dépôt, avec Python 3.10 ou plus récent :
 ```sh
 python -m unittest discover -s tests -v
 python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py tests/test_finances_budget.py tests/test_finances_budget_ui.py tests/test_finances_budget_writes.py tests/test_finances_financing.py finances_budget.py finances_budget_writes.py finances_account.py finances_budget_data.py finances_financing_data.py finances_calculations.py finances_account_data.py finances_data.py finances.py finances_ui_state.py finances_validation.py finances_shared_loans_data.py
+python -m py_compile finances_financing_writes.py tests/test_finances_financing_writes.py
+python -c "from pathlib import Path; [compile(''.join(p.read_text(encoding='utf-8') for p in sorted(Path('.').glob(prefix + '_part_*.pyfrag'))), prefix + '.py', 'exec') for prefix in ('finances_data', 'finances')]"
 ```
 
 Les tests utilisent `unittest`, inclus dans Python. Ils chargent les vrais
@@ -47,7 +49,7 @@ de notifications ou de PostgreSQL réel n’est ajouté.
 
 ## Extraction des données de Compte
 
-La suite comprend maintenant 110 tests : les 29 tests précédents (17 tests métier,
+La suite comprend maintenant 114 tests : les 29 tests précédents (17 tests métier,
 3 contrôles d’architecture des données et 9 tests du panneau Compte),
 plus 10 tests Budget, 6 tests de navigation/structure Budget et 3 contrôles
 d’architecture Budget, 3 contrôles des lectures Budget et 29 tests des écritures, 3 contrôles de leur extraction et 5 tests du contrat Budget et 1 contrôle du panneau extrait.
@@ -249,3 +251,29 @@ vrais corps et de vérifier le SQL et les paramètres avec des simulations. Les
 écritures et l'interface restent dans les fragments; leur extraction constitue
 la prochaine étape. PostgreSQL, NiceGUI, le navigateur, les notifications et
 Canner/Render réels ne sont pas validés.
+
+## Extraction des écritures Financements — 2026-09-08
+
+Lectures/calculs → `finances_financing_data.py`; écritures →
+`finances_financing_writes.py`; UI encore dans les fragments.
+`calculate_installment_payment` reste dans `finances_data`.
+La prochaine étape prévue est la préparation/extraction UI Financements.
+
+`tests/test_finances_financing_writes.py` ajoute 4 tests, pour un total de 114 :
+
+- import indépendant dans un processus neuf interdisant `db`, `finances_data`,
+  `finances`, NiceGUI et psycopg; seul import permis : `Decimal`, sans cycle;
+- signatures historiques, arguments explicites, valeurs par défaut et délégation
+  des six façades;
+- deux remplacements successifs de toutes les dépendances injectées, dont
+  connexions, constantes, validateurs, calculs et façades imbriquées;
+- exécution des deux sauvegardes avec deux connexions simulées : reconstruction
+  avec le premier curseur avant son commit, puis connexion et commit des métadonnées.
+
+Les 110 tests précédents, dont les 18 tests métier/contrat Financements, sont
+inchangés. Les corps extraits conservent le SQL, les validations, les calculs,
+les versements confirmés et les frontières transactionnelles. Seules les
+prévisions `planned` et `unreconciled` sont supprimées/reconstruites.
+Finances reste V1.13.2, sans migration ni changement utilisateur.
+Les connexions sont simulées : PostgreSQL, rollback réel, NiceGUI, navigateur,
+notifications et déploiements Canner/Render ne sont pas validés.

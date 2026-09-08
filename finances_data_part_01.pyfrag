@@ -13,6 +13,7 @@ import unicodedata
 from zoneinfo import ZoneInfo
 
 import finances_financing_data as _financing_data
+import finances_financing_writes as _financing_writes
 
 from db import get_connection
 from finances_shared_loans_data import (

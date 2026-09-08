@@ -229,61 +229,8 @@ def save_installment_plan(
     note=None,
     payment_includes_interest=True,
 ):
-    """Enregistre un financement; calcule le versement total si intérêts exclus."""
-
-    rate = _decimal_value(annual_interest_rate, "Le taux d’intérêt", allow_blank=True) or Decimal("0.00")
-    base_payment = (
-        _money(installment_amount)
-        if installment_amount not in (None, "")
-        else None
-    )
-    includes = bool(payment_includes_interest) or rate <= 0
-    calculated = None
-    actual_payment = base_payment
-    completed_for_save = completed_installments
-    completed_was_estimated_here = False
-
-    if rate > 0 and not includes:
-        total_count = int(total_installments or 0)
-        if completed_installments not in (None, ""):
-            completed = int(completed_installments or 0)
-        elif (
-            base_payment is not None
-            and remaining_balance not in (None, "")
-            and total_count > 0
-        ):
-            progress = analyze_installment_progress(
-                original_amount=original_amount,
-                remaining_balance=remaining_balance,
-                installment_amount=base_payment,
-                total_installments=total_count,
-                completed_installments=None,
-            )
-            completed = int(progress["estimated_completed_installments"])
-            # Le calcul des intérêts doit utiliser la progression estimée avec le
-            # montant de base saisi. On transmet donc cette progression au moteur
-            # V1.11 afin qu'il ne la réestime pas avec le versement total calculé.
-            completed_for_save = completed
-            completed_was_estimated_here = True
-        else:
-            completed = 0
-        remaining_count = max(1, total_count - completed)
-        principal = (
-            _money(remaining_balance, allow_zero=True)
-            if remaining_balance not in (None, "")
-            else _money(original_amount)
-        )
-        calculated = _automatic_installment_amount(
-            principal,
-            remaining_count,
-            rate,
-            _decimal_value(fees_total, "Les frais", allow_blank=True) or Decimal("0.00"),
-            frequency_unit,
-            int(frequency_interval or 1),
-        )
-        actual_payment = calculated
-
-    saved_id = _save_installment_plan_v111(
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _financing_writes.save_installment_plan(
         user_id,
         plan_type=plan_type,
         provider_name=provider_name,
@@ -294,9 +241,9 @@ def save_installment_plan(
         payment_method_id=payment_method_id,
         plan_id=plan_id,
         purchase_date=purchase_date,
-        completed_installments=completed_for_save,
+        completed_installments=completed_installments,
         remaining_balance=remaining_balance,
-        installment_amount=actual_payment,
+        installment_amount=installment_amount,
         annual_interest_rate=annual_interest_rate,
         fees_total=fees_total,
         frequency_unit=frequency_unit,
@@ -305,11 +252,11 @@ def save_installment_plan(
         tag_ids=tag_ids,
         budget_excluded=budget_excluded,
         note=note,
+        payment_includes_interest=payment_includes_interest,
+        _automatic_installment_amount=_automatic_installment_amount,
+        _decimal_value=_decimal_value,
+        _money=_money,
+        _save_installment_plan_v111=_save_installment_plan_v111,
+        analyze_installment_progress=analyze_installment_progress,
+        get_connection=get_connection,
     )
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE finance_installment_plans
-                SET payment_includes_interest=%s,
-                    base_installment_amount=%s,

@@ -8,79 +8,23 @@ def get_installment_plan(user_id, plan_id):
 
 
 def toggle_installment_plan(user_id, plan_id, is_active):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE finance_installment_plans
-                SET is_active=%s, updated_at=NOW()
-                WHERE id=%s AND user_id=%s;
-                """,
-                (bool(is_active), plan_id, user_id),
-            )
-            if cur.rowcount == 0:
-                raise ValueError("Plan de financement introuvable.")
-            if is_active:
-                _rebuild_installment_transactions(cur, user_id, plan_id)
-            else:
-                cur.execute(
-                    """
-                    DELETE FROM finance_transactions
-                    WHERE user_id=%s
-                      AND installment_plan_id=%s
-                      AND status='planned'
-                      AND reconciliation_status='unreconciled';
-                    """,
-                    (user_id, plan_id),
-                )
-            conn.commit()
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _financing_writes.toggle_installment_plan(
+        user_id,
+        plan_id,
+        is_active,
+        _rebuild_installment_transactions=_rebuild_installment_transactions,
+        get_connection=get_connection,
+    )
 
 
 def delete_installment_plan(user_id, plan_id):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id
-                FROM finance_installment_plans
-                WHERE id=%s AND user_id=%s
-                FOR UPDATE;
-                """,
-                (plan_id, user_id),
-            )
-            if not cur.fetchone():
-                raise ValueError("Plan de financement introuvable.")
-            cur.execute(
-                """
-                DELETE FROM finance_transactions
-                WHERE user_id=%s
-                  AND installment_plan_id=%s
-                  AND status='planned'
-                  AND reconciliation_status='unreconciled';
-                """,
-                (user_id, plan_id),
-            )
-            # Les versements déjà confirmés sont conservés dans l'historique.
-            cur.execute(
-                """
-                UPDATE finance_transactions
-                SET installment_plan_id=NULL,
-                    installment_number=NULL,
-                    updated_at=NOW()
-                WHERE user_id=%s
-                  AND installment_plan_id=%s
-                  AND status='confirmed';
-                """,
-                (user_id, plan_id),
-            )
-            cur.execute(
-                """
-                DELETE FROM finance_installment_plans
-                WHERE id=%s AND user_id=%s;
-                """,
-                (plan_id, user_id),
-            )
-            conn.commit()
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _financing_writes.delete_installment_plan(
+        user_id,
+        plan_id,
+        get_connection=get_connection,
+    )
 
 
 def _export_finances_v1100(user_id):

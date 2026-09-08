@@ -1,6 +1,6 @@
 # JF Apps — État du projet
 
-Dernière mise à jour : 2026-09-04
+Dernière mise à jour : 2026-09-08
 
 Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversations. Le dépôt GitHub `J-FRacine/ListeEpicerieV3` sur `main` est la référence technique.
 
@@ -199,6 +199,28 @@ sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
   V1.13.2, sans changement fonctionnel, migration ou modification d'interface.
   PostgreSQL, NiceGUI, navigateur et Canner/Render réels ne sont pas validés.
 
+### Extraction des écritures Financements — 2026-09-08
+
+- `finances_financing_writes.py` contient les corps actuels de
+  `_plan_transaction_note`, `_rebuild_installment_transactions`,
+  `_save_installment_plan_v111`, `save_installment_plan`,
+  `toggle_installment_plan` et `delete_installment_plan`.
+- Les six façades de `finances_data` conservent leurs signatures et injectent
+  les services et constantes courants à chaque appel. Le nouveau module importe
+  seulement `Decimal`, sans dépendance vers les façades, la base ou NiceGUI.
+- Le SQL, les validations, les calculs, le verrouillage et l'historique confirmé
+  sont conservés. `save_installment_plan` garde ses deux connexions et commits :
+  sauvegarde/reconstruction avec le même curseur, puis métadonnées séparément.
+- Lectures/calculs → `finances_financing_data.py`; écritures →
+  `finances_financing_writes.py`; UI encore dans les fragments.
+  `calculate_installment_payment` reste dans `finances_data`.
+  Prochaine étape prévue : préparation/extraction UI Financements.
+- 114 tests réussis : les 110 précédents, inchangés, et 4 contrôles d'architecture,
+  de délégation et des deux transactions. Compilations et import indépendant
+  vérifiés localement. Finances reste V1.13.2, sans migration ni changement
+  fonctionnel, SQL, transactionnel ou utilisateur. PostgreSQL, NiceGUI,
+  navigateur, notifications et Canner/Render réels ne sont pas validés.
+
 ### Structure technique Finances
 
 Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
@@ -214,6 +236,7 @@ Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
   - `finances_budget_data.py` : résumé, capacités, prévisions et lectures Budget.
   - `finances_budget_writes.py` : écritures spécifiques au Budget.
   - `finances_financing_data.py` : lectures et calculs Financements.
+  - `finances_financing_writes.py` : écritures Financements.
   - `finances_calculations.py`
   - `finances_validation.py`
   - `finances_shared_loans.py`
@@ -263,7 +286,7 @@ Le refactor doit être progressif, écran par écran, afin de réduire le risque
 ### Validation / qualité
 
 - Maintenir la compilation Python comme contrôle minimum.
-- Maintenir les 110 tests automatisés de calcul et de compatibilité; compléter
+- Maintenir les 114 tests automatisés de calcul et de compatibilité; compléter
   progressivement les protections de l’interface et des écritures SQL.
 - Conserver des tests ciblés pour :
   - mois à trois paies;

@@ -1,22 +1,3 @@
-                    calculated_installment_amount=%s,
-                    completed_installments_estimated=CASE
-                        WHEN %s THEN TRUE
-                        ELSE completed_installments_estimated
-                    END,
-                    updated_at=NOW()
-                WHERE id=%s AND user_id=%s;
-                """,
-                (
-                    includes,
-                    base_payment if base_payment is not None else actual_payment,
-                    calculated,
-                    completed_was_estimated_here,
-                    saved_id,
-                    user_id,
-                ),
-            )
-            conn.commit()
-    return saved_id
 
 
 def list_installment_plans(user_id, include_inactive=True):

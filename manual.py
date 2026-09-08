@@ -147,15 +147,15 @@ Dans **Personnages JDR**, ils donnent accès aux différentes sections de la feu
 
 ### Liste d’épicerie
 
-La liste d’épicerie conserve une barre inférieure sur une seule ligne pour les actions quotidiennes :
+La liste d’épicerie utilise maintenant une navigation principale compacte dans la partie haute, sous l’en-tête commun :
 
 - **Items**;
-- **Besoins**;
+- **Besoins**, avec le nombre d’items à acheter lorsqu’il y en a, par exemple **Besoins 14**;
 - **Catégories** lorsque cette fonction est active, ou **Magasins** lorsqu’elle est désactivée.
 
-Le bouton Portail a été retiré de cette barre parce qu’il est déjà disponible dans l’en-tête commun.
+La section active est mise en évidence. Sur téléphone, ces trois accès restent sur une seule rangée et la barre fixe au bas de l’écran n’est plus utilisée. Le bouton **Portail** demeure dans l’en-tête commun.
 
-Sous l’en-tête commun, une petite barre d’outils donne accès à :
+Sous cette navigation principale, une petite barre d’outils donne accès à :
 
 - **Planification** : listes modèles, recettes et bibliothèque;
 - **Activité** : historique et corbeille;

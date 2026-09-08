@@ -13,7 +13,7 @@ APP_LABELS = {
 
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
-    "grocery": "1.1.2",
+    "grocery": "1.2.0",
     "blood_pressure": "1.2.1",
     "finances": "1.13.2",
     "rpg": "1.3.0",
@@ -21,6 +21,26 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "grocery",
+        "version": "1.2.0",
+        "date": "2026-09-08",
+        "title": "Liste d’épicerie — navigation principale en haut",
+        "summary": (
+            "Les accès Items, Besoins et Catégories/Magasins quittent la barre "
+            "fixe du bas et deviennent une navigation compacte dans la partie haute."
+        ),
+        "changes": [
+            "Items, Besoins et Catégories/Magasins sont maintenant affichés sous l’en-tête commun de la Liste d’épicerie.",
+            "Le compteur Besoins reste visible directement dans le bouton, par exemple Besoins 14.",
+            "La section active est clairement mise en évidence.",
+            "Sur téléphone, les trois accès restent sur une seule rangée compacte sans barre fixe au bas de l’écran.",
+            "Le libellé dynamique Catégories ou Magasins continue de suivre le réglage de la famille.",
+            "Planification, Activité et Données restent disponibles dans leur barre d’outils secondaire.",
+            "Le Mode courses conserve son écran simplifié et son fonctionnement actuel.",
+            "Aucun changement de données, de schéma PostgreSQL, de migration ou de dépendance Python.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.13.2",

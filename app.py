@@ -55,6 +55,10 @@ from grocery_preferences import (
     categories_are_enabled,
     init_grocery_preferences_schema,
 )
+from grocery_navigation import (
+    grocery_primary_navigation,
+    install_grocery_navigation_styles,
+)
 from items import items_panel
 from maintenance import maintenance_panel
 from manual import manual_panel
@@ -952,6 +956,7 @@ SHELL_CSS = r"""
 """
 
 ui.add_css(SHELL_CSS, shared=True)
+install_grocery_navigation_styles(ui)
 
 
 def page_container():
@@ -2224,6 +2229,8 @@ def application_header(
     active_tab,
     *,
     show_tools=True,
+    needs_count=0,
+    categories_enabled=True,
 ):
     portal_header(
         app_key="grocery",
@@ -2231,6 +2238,13 @@ def application_header(
 
     if not show_tools:
         return
+
+    grocery_primary_navigation(
+        ui,
+        active_tab,
+        needs_count,
+        categories_enabled=categories_enabled,
+    )
 
     with ui.row().classes(
         "jf-local-tools items-center justify-end gap-1"
@@ -2301,77 +2315,6 @@ def application_header(
         ).classes(
             "jf-local-tool"
         )
-
-
-def bottom_navigation(
-    active_tab,
-    needs_count=0,
-    *,
-    categories_enabled=True,
-):
-    needs_label = (
-        f"Besoins {needs_count}"
-        if needs_count > 0
-        else "Besoins"
-    )
-    organization_label = (
-        "Catégories"
-        if categories_enabled
-        else "Magasins"
-    )
-    organization_icon = (
-        "category"
-        if categories_enabled
-        else "storefront"
-    )
-
-    with ui.footer().classes("jf-footer"):
-        with ui.row().classes(
-            "w-full justify-around gap-1 flex-nowrap"
-        ):
-            items_button = ui.button(
-                "Items",
-                icon="inventory_2",
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=items"
-                ),
-            ).props("flat").classes(
-                "jf-nav-button"
-            )
-
-            needs_button = ui.button(
-                needs_label,
-                icon="shopping_cart",
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=besoins"
-                ),
-            ).props("flat").classes(
-                "jf-nav-button"
-            )
-
-            organization_button = ui.button(
-                organization_label,
-                icon=organization_icon,
-                on_click=lambda: ui.navigate.to(
-                    "/?tab=categories"
-                ),
-            ).props("flat").classes(
-                "jf-nav-button"
-            )
-
-            active_buttons = {
-                "items": items_button,
-                "besoins": needs_button,
-                "categories": organization_button,
-            }
-
-            active_button = active_buttons.get(
-                active_tab
-            )
-            if active_button:
-                active_button.classes(
-                    add="jf-nav-active"
-                )
 
 
 
@@ -2719,32 +2662,40 @@ def index(
 
     needs_count = 0
     grocery_categories_enabled = True
+    has_valid_family = ensure_valid_family(user["id"])
 
-    with page_container():
-        application_header(normalized_tab)
+    if has_valid_family:
+        current_family_id = get_current_family_id()
+        grocery_categories_enabled = categories_are_enabled(
+            user["id"],
+            current_family_id,
+        )
 
-        if not ensure_valid_family(user["id"]):
-            show_no_family_message()
-        else:
-            current_family_id = get_current_family_id()
-            grocery_categories_enabled = categories_are_enabled(
+        try:
+            family_items = get_items(
                 user["id"],
                 current_family_id,
             )
+            needs_count = sum(
+                1
+                for item in family_items
+                if item["needed"] == 1
+            )
+        except (ValueError, PermissionError):
+            needs_count = 0
 
-            try:
-                family_items = get_items(
-                    user["id"],
-                    current_family_id,
-                )
-                needs_count = sum(
-                    1
-                    for item in family_items
-                    if item["needed"] == 1
-                )
-            except (ValueError, PermissionError):
-                needs_count = 0
+    with page_container():
+        application_header(
+            normalized_tab,
+            needs_count=needs_count,
+            categories_enabled=(
+                grocery_categories_enabled
+            ),
+        )
 
+        if not has_valid_family:
+            show_no_family_message()
+        else:
             if normalized_tab == "items":
                 items_panel()
             elif normalized_tab == "besoins":
@@ -2761,14 +2712,6 @@ def index(
                 activity_panel()
             elif normalized_tab == "donnees":
                 backup_panel()
-
-    bottom_navigation(
-        normalized_tab,
-        needs_count,
-        categories_enabled=(
-            grocery_categories_enabled
-        ),
-    )
 
 
 init_db()

@@ -254,3 +254,28 @@ def list_month_unreconciled_transactions(user_id, month_value):
         add_months=_add_months,
         list_transactions=list_transactions,
     )
+
+
+
+# Extraction progressive des écritures utilisées par l'Historique.
+import finances_history_writes as _history_writes
+
+
+def set_transaction_reconciliation(
+    user_id,
+    transaction_id,
+    reconciliation_status,
+    reconciliation_date=None,
+):
+    return _history_writes.set_transaction_reconciliation(
+        user_id,
+        transaction_id,
+        reconciliation_status,
+        reconciliation_date,
+        RECONCILIATION_STATUSES=RECONCILIATION_STATUSES,
+        refresh_reconciliation_session_totals=(
+            _refresh_reconciliation_session_totals
+        ),
+        get_connection=get_connection,
+    )
+

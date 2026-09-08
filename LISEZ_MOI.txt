@@ -1,10 +1,12 @@
-JF Apps — Finances / Historique — étape 6
+JF Apps — Finances / Historique — étape 7
+
+À ajouter à la racine :
+- finances_history_writes.py
 
 À remplacer à la racine :
 - finances_data.py
-- finances_history_analysis.py
 
 Cette petite étape extrait seulement :
-list_month_unreconciled_transactions()
+set_transaction_reconciliation()
 
 Aucun changement visible, aucune migration. Finances reste V1.13.2.

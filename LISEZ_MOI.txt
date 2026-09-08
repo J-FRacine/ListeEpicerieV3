@@ -1,16 +1,21 @@
-JF Apps — Finances / Historique — lot regroupé
+JF Apps — Finances / Historique — lot actions et dialogues
 
-Base : main GitHub incluant déjà l'étape 7.
-
-À ajouter à la racine :
-- finances_history.py
+Base : main GitHub après validation du lot filtres + liste.
 
 À remplacer à la racine :
-- finances_part_08.pyfrag
+- finances_history.py
 - finances_part_09.pyfrag
 
-Le lot déplace les filtres et le rendu de la liste Historique dans
-finances_history.py. Les dialogues Ajouter/Modifier, Paiement de carte,
-Doublons et Non conciliées restent dans les fragments pour le prochain lot.
+Ce lot déplace l'exécution des actions et dialogues restants de l'Historique
+vers finances_history.py :
+- supprimer / confirmer une transaction
+- marquer conciliée / remettre à concilier
+- rendu d'une ligne
+- ouvrir / modifier une transaction ou un paiement de carte
+- recherche des doublons
+- vérification des non conciliées du mois
+
+Les anciennes copies restent temporairement dans les fragments mais sont
+remplacées avant l'affichage. Leur suppression physique viendra au nettoyage.
 
 Aucun changement visible, aucune migration. Finances reste V1.13.2.

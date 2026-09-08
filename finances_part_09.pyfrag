@@ -525,6 +525,44 @@
                     next_month = date(month_start.year, month_start.month + 1, 1)
                 return (next_month - timedelta(days=1)).isoformat()
 
+            history_actions = _history_ui.build_history_actions(
+                ui=ui,
+                panel=history_panel,
+                user_id=user_id,
+                TRANSACTION_TYPES=TRANSACTION_TYPES,
+                TRANSACTION_STATUSES=TRANSACTION_STATUSES,
+                RECONCILIATION_STATUSES=RECONCILIATION_STATUSES,
+                signed=_signed,
+                money=_money,
+                delete_transaction=delete_transaction,
+                set_transaction_status=set_transaction_status,
+                set_transaction_reconciliation=set_transaction_reconciliation,
+                get_card_payment_transfer=get_card_payment_transfer,
+                get_transaction=get_transaction,
+                card_payment_dialog=_card_payment_dialog,
+                transaction_dialog=_transaction_dialog,
+                find_potential_duplicate_transactions=(
+                    find_potential_duplicate_transactions
+                ),
+                list_month_unreconciled_transactions=(
+                    list_month_unreconciled_transactions
+                ),
+                set_bank_transaction_seen=set_bank_transaction_seen,
+                get_month_value=lambda: month_state.value,
+                refresh_all=refresh_all,
+            )
+
+            remove_dialog = history_actions.remove_dialog
+            confirm_transaction = history_actions.confirm_transaction
+            change_reconciliation = history_actions.change_reconciliation
+            render_transaction_row = history_actions.render_transaction_row
+            _open_history_row = history_actions.open_history_row
+            duplicate_search_dialog = history_actions.duplicate_search_dialog
+            monthly_unreconciled_dialog = (
+                history_actions.monthly_unreconciled_dialog
+            )
+            _add_month_label_end = history_actions.add_month_label_end
+
             @ui.refreshable
             def render_history():
                 _history_ui.render_history(

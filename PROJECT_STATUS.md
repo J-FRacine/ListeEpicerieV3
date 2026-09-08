@@ -245,6 +245,34 @@ sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
   PostgreSQL, NiceGUI, navigateur, notifications et Canner/Render réels ne sont
   pas validés.
 
+### Caractérisation de Conciliation avant refactor — 2026-09-08
+
+- 41 nouveaux tests protègent les vrais corps actuels : 25 tests de données
+  dans `tests/test_finances_reconciliation.py` et 16 tests UI dans
+  `tests/test_finances_reconciliation_ui.py`. Les 122 tests existants sont
+  inchangés; la suite compte 163 tests réussis.
+- Connexion et curseur simulés vérifient les filtres utilisateur/mode de
+  paiement, les requêtes, leurs paramètres, leur ordre et le commit final.
+  Les sélections doivent rester `confirmed` et `unreconciled`; les dépenses
+  s’ajoutent au total concilié et les revenus s’en soustraient.
+- Première référence et inclusion automatique du solde initial, références
+  successives et fallbacks historiques, seuil de différence, justification,
+  report, suppression du brouillon à la finalisation et conservation des
+  liens historiques après retrait/annulation sont caractérisés.
+- Les brouillons couvrent remplacement, sélection, dates, filtres, tri,
+  note, solde, explication d’écart et suppression. Aucun brouillon ne finalise
+  de séance ni ne marque les transactions conciliées.
+- Les fonctions UI restent dans les fragments. Tests AST et widgets simulés
+  couvrent sélection persistante, IDs inadmissibles, Tout/Aucun, changement de
+  mode, reprise, finalisation, choix d’écart, préremplissage du paiement de carte,
+  affectation en masse et rafraîchissements après modification de l’historique.
+- Aucun code de production, SQL, comportement, version ou schéma n’a changé.
+  Finances reste V1.13.2. Cette étape prépare le futur refactor Conciliation
+  sans réaliser d’extraction ni d’optimisation.
+- Suite et compilations documentées réussies, sources `finances.py` et
+  `finances_data.py` reconstruites et compilées. PostgreSQL, atomicité/rollback
+  réels, NiceGUI, navigateur, notifications et Canner/Render ne sont pas validés.
+
 ### Structure technique Finances
 
 Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
@@ -312,7 +340,7 @@ Le refactor doit être progressif, écran par écran, afin de réduire le risque
 ### Validation / qualité
 
 - Maintenir la compilation Python comme contrôle minimum.
-- Maintenir les 122 tests automatisés de calcul et de compatibilité; compléter
+- Maintenir les 163 tests automatisés de calcul et de compatibilité; compléter
   progressivement les protections de l’interface et des écritures SQL.
 - Conserver des tests ciblés pour :
   - mois à trois paies;

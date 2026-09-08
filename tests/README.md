@@ -7,6 +7,7 @@ python -m unittest discover -s tests -v
 python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py tests/test_finances_budget.py tests/test_finances_budget_ui.py tests/test_finances_budget_writes.py tests/test_finances_financing.py finances_budget.py finances_budget_writes.py finances_account.py finances_budget_data.py finances_financing_data.py finances_calculations.py finances_account_data.py finances_data.py finances.py finances_ui_state.py finances_validation.py finances_shared_loans_data.py
 python -m py_compile finances_financing_writes.py tests/test_finances_financing_writes.py
 python -m py_compile finances_financing.py tests/test_finances_financing_ui.py
+python -m py_compile tests/test_finances_reconciliation.py tests/test_finances_reconciliation_ui.py
 python -c "from pathlib import Path; [compile(''.join(p.read_text(encoding='utf-8') for p in sorted(Path('.').glob(prefix + '_part_*.pyfrag'))), prefix + '.py', 'exec') for prefix in ('finances_data', 'finances')]"
 ```
 
@@ -50,7 +51,7 @@ de notifications ou de PostgreSQL réel n’est ajouté.
 
 ## Extraction des données de Compte
 
-La suite comprend maintenant 122 tests : les 29 tests précédents (17 tests métier,
+La suite comprend maintenant 163 tests : les 29 tests précédents (17 tests métier,
 3 contrôles d’architecture des données et 9 tests du panneau Compte),
 plus 10 tests Budget, 6 tests de navigation/structure Budget et 3 contrôles
 d’architecture Budget, 3 contrôles des lectures Budget et 29 tests des écritures, 3 contrôles de leur extraction et 5 tests du contrat Budget et 1 contrôle du panneau extrait.
@@ -310,3 +311,66 @@ Le bloc UI conserve ses textes, styles, champs et ordre d’affichage. Aucun
 changement visible, métier, SQL ou migration; Finances reste V1.13.2. Ces tests
 simulent les widgets et services : ils ne valident pas NiceGUI, un navigateur,
 PostgreSQL, les notifications ou les déploiements Canner/Render réels.
+
+## Caractérisation de Conciliation avant refactor — 2026-09-08
+
+41 nouveaux tests portent la suite à **163 tests**; les 122 tests précédents
+restent inchangés. Aucun fichier de production n’est modifié. Finances reste
+V1.13.2, sans extraction, optimisation, modification SQL/métier ou migration.
+
+`test_finances_reconciliation.py` contient 25 tests, avec sous-cas distincts.
+Les fonctions publiques réellement utilisées sont exécutées depuis les fragments
+actuels de `finances_data`. Le curseur simulé partagé avec les tests Budget
+vérifie les séquences SQL attendues, paramètres, résultats, nombre de lignes
+affectées et commits; aucune nouvelle connexion PostgreSQL n’est ouverte.
+
+- Soldes confirmés/prévus, ajustement initial et signes dépenses/revenus.
+- Comptage des transactions confirmées sans mode : le filtre historique ne
+  porte pas sur leur statut de conciliation. Lecture des transactions admissibles
+  avec utilisateur, mode, dates, recherche, `confirmed` et `unreconciled`;
+  lecture sans mode avec limite et filtrage actuels.
+- Affectation en masse : validation du mode, IDs triés/dédupliqués, refus d’une
+  sélection vide ou incomplète, commit seulement après le contrôle de rowcount.
+- Création : verrouillages, référence initiale et inclusion automatique,
+  référence précédente prioritaire (`closing_reference_balance`, puis solde
+  du relevé, solde attendu, zéro), sélection devenue inadmissible et total net.
+- Différence strictement inférieure à 0,01 ou relevé vide : `balanced`;
+  refus à ±0,01 en mode `balanced`; justification obligatoire; clôture sur
+  relevé réel pour `justified`, sur solde attendu pour `carry`.
+  Le validateur arrondit le relevé au cent; le seuil strict est aussi exercé
+  avec un mouvement simulé sous le cent, sans prétendre à ce stockage en base.
+- Création des liens, transactions marquées conciliées, solde initial marqué,
+  brouillon du même utilisateur/mode supprimé avant l’unique commit.
+- Historique : filtres, tri, compteurs de liens actifs/retirés, détails et liens
+  conservés. Retrait : désactivation du lien, retour à concilier et vrais
+  recalculs modernes/historiques. Annulation : seules les transactions liées
+  actives sont remises à concilier, ajustement initial rétabli si inclus.
+- Brouillons : upsert de tous les champs, IDs sélectionnés, dates, solde,
+  note, explication d’écart, filtres, tri normalisé, lecture/reprise, suppression,
+  champs invalides et mode absent. Le brouillon stocke l’explication de l’écart;
+  aucun champ de différence numérique supplémentaire n’est inventé.
+
+`test_finances_reconciliation_ui.py` contient 16 tests. Ils compilent les vrais
+corps isolés par AST et exécutent leurs callbacks avec des widgets simulés :
+
+- emplacement du bloc avant Organisation et raccordement des filtres/tri;
+- sélection hors filtre conservée, IDs inadmissibles retirés, Tout limité aux
+  lignes visibles, Aucun vidant toute la sélection;
+- changement de mode avec reset et ordre des six sous-rendus dans
+  `refresh_reconciliation_screen()`;
+- sauvegarde et reprise de tous les champs du brouillon; abandon sans mutation
+  de séance finalisée ni perte de sélection;
+- balance alimentée par `payment_predicted_balance_summary`, visibilité du
+  solde initial et total dépenses moins revenus;
+- finalisation avec les valeurs actuelles, effacement après succès et
+  rafraîchissement écran/parent; refus/erreur conservant la sélection;
+- choix actuels du dialogue, explication obligatoire pour justifier, `carry`,
+  clôture/paiement de carte avec montant absolu du relevé ou repli sur l’attendu,
+  date d’échéance, statut prévu et autres valeurs de préremplissage;
+- affectation sans mode, retrait et annulation depuis l’historique, suivis des
+  rafraîchissements actuels uniquement après succès.
+
+Ces tests ne reproduisent pas un moteur SQL ni NiceGUI. Ils ne valident ni
+l’exécution PostgreSQL, ni son atomicité/rollback, ni un navigateur, des
+notifications ou un déploiement Canner/Render réels. Les commandes ci-dessus
+compilent les nouveaux tests et reconstruisent les deux sources à fragments.

@@ -177,3 +177,46 @@ def list_card_payment_transfers(user_id, limit=10000):
         limit=limit,
         get_connection=get_connection,
     )
+
+
+# Extraction progressive de l'écriture des paiements de carte liés.
+# La signature publique reste inchangée.
+import finances_card_payments_writes as _card_payments_writes
+
+
+def save_card_payment_transfer(
+    user_id,
+    source_payment_method_id,
+    destination_payment_method_id,
+    amount,
+    source_date,
+    destination_date=None,
+    description=None,
+    note=None,
+    status="planned",
+    bank_programmed=False,
+    reminder_enabled=False,
+    reminder_time=None,
+    transfer_id=None,
+):
+    return _card_payments_writes.save_card_payment_transfer(
+        user_id,
+        source_payment_method_id,
+        destination_payment_method_id,
+        amount,
+        source_date,
+        destination_date=destination_date,
+        description=description,
+        note=note,
+        status=status,
+        bank_programmed=bank_programmed,
+        reminder_enabled=reminder_enabled,
+        reminder_time=reminder_time,
+        transfer_id=transfer_id,
+        TRANSACTION_STATUSES=TRANSACTION_STATUSES,
+        money=_money,
+        text=_text,
+        normalize_reminder_time=_normalize_reminder_time,
+        get_connection=get_connection,
+        validate_card_payment_methods=_validate_card_payment_methods,
+    )

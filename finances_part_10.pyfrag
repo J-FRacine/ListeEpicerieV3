@@ -595,56 +595,33 @@
             render_goals()
 
         # CONCILIATION
-        with ui.tab_panel(reconciliation_tab).classes("px-0"):
-            payment_options = _payment_options(
-                user_id,
-                include_none=False,
-            )
-            saved_reconciliation_drafts = list_reconciliation_drafts(user_id)
-            draft_payment_id = (
-                int(saved_reconciliation_drafts[0]["payment_method_id"])
-                if saved_reconciliation_drafts
-                else None
-            )
-            first_payment_id = (
-                draft_payment_id
-                if draft_payment_id in payment_options
-                else (next(iter(payment_options)) if payment_options else None)
-            )
-            reconciliation_selected = set()
-            reconciliation_rows_by_id = {}
-            unassigned_selected = set()
-            reconciliation_method_rows = {
-                int(row["id"]): dict(row)
-                for row in list_payment_methods(user_id, include_inactive=True)
-            }
-
-            with ui.card().classes("w-full p-3"):
-                ui.label("Conciliation par relevé").classes(
-                    "text-xl font-bold"
-                )
-                ui.label(
-                    "Les soldes traversent les mois. Une transaction "
-                    "disparaît du solde confirmé dès sa conciliation."
-                ).classes("text-xs jf-muted")
-
-                reconciliation_payment = ui.select(
-                    payment_options,
-                    value=first_payment_id,
-                    label="Mode de paiement",
-                ).props(
-                    "dense outlined options-dense"
-                ).classes("w-full mt-2")
-
-                with ui.element("div").classes(
-                    "jf-finance-reconcile-toolbar mt-2"
-                ):
-                    reconciliation_start = ui.input(
-                        label="Du — facultatif",
-                        value="",
-                    ).props(
-                        "type=date dense outlined"
-                    ).classes("jf-finance-field")
-
-                    reconciliation_end = ui.input(
-                        label="Au — facultatif",
+        reconciliation_panel = build_reconciliation_panel(
+            RECONCILIATION_SESSION_STATUSES=RECONCILIATION_SESSION_STATUSES,
+            _balance_money=lambda *args, **kwargs: _balance_money(*args, **kwargs),
+            _card_payment_dialog=lambda *args, **kwargs: _card_payment_dialog(*args, **kwargs),
+            _money=lambda *args, **kwargs: _money(*args, **kwargs),
+            _payment_effect=lambda *args, **kwargs: _payment_effect(*args, **kwargs),
+            _payment_options=lambda *args, **kwargs: _payment_options(*args, **kwargs),
+            _signed=lambda *args, **kwargs: _signed(*args, **kwargs),
+            _transaction_dialog=lambda *args, **kwargs: _transaction_dialog(*args, **kwargs),
+            bulk_assign_payment_method=lambda *args, **kwargs: bulk_assign_payment_method(*args, **kwargs),
+            cancel_reconciliation_session=lambda *args, **kwargs: cancel_reconciliation_session(*args, **kwargs),
+            create_reconciliation_session=lambda *args, **kwargs: create_reconciliation_session(*args, **kwargs),
+            delete_reconciliation_draft=lambda *args, **kwargs: delete_reconciliation_draft(*args, **kwargs),
+            get_card_payment_transfer=lambda *args, **kwargs: get_card_payment_transfer(*args, **kwargs),
+            get_reconciliation_draft=lambda *args, **kwargs: get_reconciliation_draft(*args, **kwargs),
+            get_reconciliation_session=lambda *args, **kwargs: get_reconciliation_session(*args, **kwargs),
+            list_payment_methods=lambda *args, **kwargs: list_payment_methods(*args, **kwargs),
+            list_reconciliation_drafts=lambda *args, **kwargs: list_reconciliation_drafts(*args, **kwargs),
+            list_reconciliation_sessions=lambda *args, **kwargs: list_reconciliation_sessions(*args, **kwargs),
+            list_unassigned_transactions=lambda *args, **kwargs: list_unassigned_transactions(*args, **kwargs),
+            list_unreconciled_transactions=lambda *args, **kwargs: list_unreconciled_transactions(*args, **kwargs),
+            payment_predicted_balance_summary=lambda *args, **kwargs: payment_predicted_balance_summary(*args, **kwargs),
+            reconciliation_reference_summary=lambda *args, **kwargs: reconciliation_reference_summary(*args, **kwargs),
+            reconciliation_tab=reconciliation_tab,
+            refresh_all=lambda: refresh_all(),
+            remove_transaction_from_reconciliation_session=lambda *args, **kwargs: remove_transaction_from_reconciliation_session(*args, **kwargs),
+            save_reconciliation_draft=lambda *args, **kwargs: save_reconciliation_draft(*args, **kwargs),
+            ui=ui,
+            user_id=user_id,
+        )

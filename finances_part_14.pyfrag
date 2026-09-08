@@ -350,31 +350,5 @@
         budget_panel.refresh()
         financing_panel.refresh()
 
-        reconciliation_payment.options = _payment_options(
-            user_id,
-            include_none=False,
-        )
-        if (
-            reconciliation_payment.value
-            not in reconciliation_payment.options
-        ):
-            reconciliation_payment.value = (
-                next(iter(reconciliation_payment.options))
-                if reconciliation_payment.options
-                else None
-            )
-        reconciliation_payment.update()
-
-        unassigned_target.options = _payment_options(
-            user_id,
-            include_none=False,
-        )
-        if unassigned_target.value not in unassigned_target.options:
-            unassigned_target.value = (
-                next(iter(unassigned_target.options))
-                if unassigned_target.options
-                else None
-            )
-        unassigned_target.update()
-
-        refresh_reconciliation_screen()
+        reconciliation_panel.reload_options()
+        reconciliation_panel.refresh()

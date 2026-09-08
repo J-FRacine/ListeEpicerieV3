@@ -10,6 +10,7 @@ python -m py_compile finances_financing.py tests/test_finances_financing_ui.py
 python -m py_compile tests/test_finances_reconciliation.py tests/test_finances_reconciliation_ui.py
 python -m py_compile finances_reconciliation_data.py tests/test_finances_reconciliation_data.py
 python -m py_compile finances_reconciliation_writes.py tests/test_finances_reconciliation_writes.py
+python -m py_compile finances_reconciliation.py
 python -c "from pathlib import Path; [compile(''.join(p.read_text(encoding='utf-8') for p in sorted(Path('.').glob(prefix + '_part_*.pyfrag'))), prefix + '.py', 'exec') for prefix in ('finances_data', 'finances')]"
 ```
 
@@ -53,7 +54,7 @@ de notifications ou de PostgreSQL réel n’est ajouté.
 
 ## Extraction des données de Compte
 
-La suite comprend maintenant 170 tests : les 29 tests précédents (17 tests métier,
+La suite comprend maintenant 173 tests : les 29 tests précédents (17 tests métier,
 3 contrôles d’architecture des données et 9 tests du panneau Compte),
 plus 10 tests Budget, 6 tests de navigation/structure Budget et 3 contrôles
 d’architecture Budget, 3 contrôles des lectures Budget et 29 tests des écritures, 3 contrôles de leur extraction et 5 tests du contrat Budget et 1 contrôle du panneau extrait.
@@ -427,3 +428,27 @@ Compilations documentées, reconstructions des deux sources et comparaison des
 corps avec `main` sont vérifiées. Finances reste V1.13.2, sans migration ni
 changement métier, SQL ou transactionnel. PostgreSQL, atomicité/rollback réels,
 NiceGUI, navigateur, notifications et Canner/Render ne sont pas validés réellement.
+
+## Extraction de l’interface Conciliation — 2026-09-08
+
+`finances_reconciliation.py` contient le panneau complet et son handle.
+Les 16 tests UI de caractérisation lisent désormais les vrais corps dans ce
+module. Le contrôle de placement vérifie le raccordement entre les marqueurs
+Conciliation et Organisation; les attentes des callbacks restent conservées.
+
+Exactement 3 contrôles s’ajoutent dans `test_finances_reconciliation_ui.py` :
+import autonome avec seulement les imports standards autorisés, handle différé
+avec un appel par callback, et parent utilisant uniquement le handle dans
+`refresh_all()`. Ce dernier contrôle construit aussi le panneau complet avec
+widgets simulés, vérifie son handle et le rechargement des deux sélecteurs.
+La suite compte **173 tests réussis**.
+
+La logique de `reload_options()` est celle de l’ancien `refresh_all()`, sans
+changement. Le bloc UI, ses textes/styles, ses calculs, son ordre et ses callbacks
+sont conservés. Les lectures et écritures déjà extraites restent inchangées.
+Finances reste V1.13.2, sans migration ni changement SQL/métier.
+
+Compilations documentées, reconstructions des deux sources et comparaison du
+bloc/rechargement avec `main` sont vérifiées. Les tests simulent l’interface et
+les services : NiceGUI, navigateur, PostgreSQL, rollback réel, notifications et
+déploiements Canner/Render ne sont pas validés réellement.

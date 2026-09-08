@@ -315,6 +315,27 @@ sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
   fonctionnel, SQL ou transactionnel. PostgreSQL, rollback réel, NiceGUI,
   navigateur, notifications et Canner/Render ne sont pas validés réellement.
 
+### Extraction de l’interface Conciliation — 2026-09-08
+
+- `finances_reconciliation.py` contient maintenant le bloc UI complet,
+  `build_reconciliation_panel()` et `ReconciliationPanelHandle`.
+  Sélection persistante, filtres/tri, brouillons, soldes/références, finalisation,
+  programmation du paiement, affectation sans mode et historique sont conservés.
+- `reload_options()` reprend exactement la logique des deux sélecteurs qui
+  était dans `refresh_all()`. Le parent appelle désormais
+  `reconciliation_panel.reload_options()` puis `reconciliation_panel.refresh()`;
+  il ne connaît plus les widgets internes ni `refresh_reconciliation_screen`.
+- Les services et `ui` sont injectés, dont `refresh_all=lambda: refresh_all()`.
+  Le module importe seulement `dataclass`, `Callable`, `date` et `Decimal`.
+  Lectures/écritures et helper partagé ne changent pas d’emplacement.
+- 173 tests réussis : les 16 tests UI adaptés aux vrais corps extraits
+  conservent leurs attentes, et 3 contrôles protègent import, handle et parent
+  avec construction simulée du panneau. Bloc et rechargement comparés à `main`
+  à l’indentation près; compilations et reconstructions des deux sources réussies.
+- Finances reste V1.13.2, sans changement visible, métier ou SQL ni migration.
+  NiceGUI, navigateur, PostgreSQL, notifications et Canner/Render réels ne sont
+  pas validés.
+
 ### Structure technique Finances
 
 Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
@@ -334,6 +355,7 @@ Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
   - `finances_financing.py` : panneau Financements et contrat `FinancingPanelHandle`.
   - `finances_reconciliation_data.py` : lectures et résumés Conciliation.
   - `finances_reconciliation_writes.py` : écritures Conciliation.
+  - `finances_reconciliation.py` : panneau Conciliation et `ReconciliationPanelHandle`.
   - `finances_calculations.py`
   - `finances_validation.py`
   - `finances_shared_loans.py`
@@ -384,7 +406,7 @@ Le refactor doit être progressif, écran par écran, afin de réduire le risque
 ### Validation / qualité
 
 - Maintenir la compilation Python comme contrôle minimum.
-- Maintenir les 170 tests automatisés de calcul et de compatibilité; compléter
+- Maintenir les 173 tests automatisés de calcul et de compatibilité; compléter
   progressivement les protections de l’interface et des écritures SQL.
 - Conserver des tests ciblés pour :
   - mois à trois paies;

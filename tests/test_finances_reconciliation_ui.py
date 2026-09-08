@@ -5,9 +5,13 @@ from datetime import date
 from decimal import Decimal as D
 from functools import lru_cache
 import unittest
+import inspect
+import subprocess
+import sys
 from unittest.mock import MagicMock, Mock
 
 from test_finances_financing_ui import ROOT, SimulatedUi
+from finances_reconciliation import ReconciliationPanelHandle, build_reconciliation_panel
 
 DAY = date(2026, 9, 8)
 RENDERS = ['render_reconciliation_draft', 'render_reconciliation_balance',
@@ -16,6 +20,10 @@ RENDERS = ['render_reconciliation_draft', 'render_reconciliation_balance',
 
 @lru_cache(maxsize=1)
 def source():
+    return (ROOT / 'finances_reconciliation.py').read_text(encoding='utf-8')
+
+
+def parent_source():
     return ''.join(p.read_text(encoding='utf-8') for p in sorted(ROOT.glob('finances_part_*.pyfrag')))
 
 
@@ -72,14 +80,15 @@ def environment():
 
 class ReconciliationUiTests(unittest.TestCase):
     def test_block_location_and_filter_bindings_still_use_current_public_services(self):
-        text = source()
+        text = parent_source()
         start, end = text.index('        # CONCILIATION'), text.index('        # ORGANISATION')
-        block = text[start:end]
+        self.assertIn('reconciliation_panel = build_reconciliation_panel(', text[start:end])
+        block = source()
         self.assertIn('with ui.tab_panel(reconciliation_tab)', block)
         self.assertNotIn('with ui.tab_panel(organization_tab)', block)
         for name in ('save_current_reconciliation_draft', 'render_reconciliation_transactions', 'session_detail_dialog', 'refresh_reconciliation_screen'):
             self.assertIn('def ' + name, block)
-        names = {n.id for n in ast.walk(ast.parse('if True:\n' + block)) if isinstance(n, ast.Name)}
+        names = {n.id for n in ast.walk(tree()) if isinstance(n, ast.Name)}
         self.assertTrue({'create_reconciliation_session', 'payment_predicted_balance_summary', 'list_unreconciled_transactions',
                          'list_unassigned_transactions', 'bulk_assign_payment_method', 'save_reconciliation_draft',
                          'get_reconciliation_draft', 'delete_reconciliation_draft', 'list_reconciliation_drafts',
@@ -309,6 +318,77 @@ class ReconciliationUiTests(unittest.TestCase):
         self.assertIn("transaction['is_active'] and session['status'] == 'completed'", detail)
         self.assertIn('on_click=remove_one', detail)
         self.assertIn('on_click=cancel_session_now', detail)
+
+
+class ReconciliationPanelArchitectureTests(unittest.TestCase):
+    def test_independent_import_and_only_allowed_standard_imports(self):
+        script = '''
+import builtins
+real_import = builtins.__import__
+def guarded(name, *args, **kwargs):
+    if name.split('.')[0] in {'nicegui', 'finances', 'finances_data', 'db', 'psycopg'}:
+        raise AssertionError(name)
+    return real_import(name, *args, **kwargs)
+builtins.__import__ = guarded
+import finances_reconciliation
+'''
+        result = subprocess.run([sys.executable, '-B', '-c', script], cwd=ROOT,
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        imports = [n for n in ast.walk(tree()) if isinstance(n, (ast.Import, ast.ImportFrom))]
+        self.assertTrue(all(isinstance(n, ast.ImportFrom) for n in imports))
+        self.assertEqual({(n.module, a.name) for n in imports for a in n.names},
+                         {('dataclasses', 'dataclass'), ('typing', 'Callable'), ('datetime', 'date'), ('decimal', 'Decimal')})
+
+    def test_handle_construction_is_lazy_and_callbacks_are_called_once(self):
+        refresh, reload = Mock(), Mock()
+        handle = ReconciliationPanelHandle(refresh, reload)
+        refresh.assert_not_called()
+        reload.assert_not_called()
+        handle.refresh()
+        refresh.assert_called_once_with()
+        reload.assert_not_called()
+        handle.reload_options()
+        reload.assert_called_once_with()
+        refresh.assert_called_once_with()
+
+    def test_parent_uses_only_handle_and_extracted_builder_returns_it(self):
+        parent = ast.parse(parent_source())
+        internal = {n.name for n in ast.walk(node('build_reconciliation_panel')) if isinstance(n, ast.FunctionDef)} - {'build_reconciliation_panel'}
+        self.assertTrue(internal.isdisjoint({n.name for n in ast.walk(parent) if isinstance(n, ast.FunctionDef)}))
+        assignment = next(n for n in ast.walk(parent) if isinstance(n, ast.Assign)
+                          and any(isinstance(t, ast.Name) and t.id == 'reconciliation_panel' for t in n.targets))
+        self.assertEqual(ast.unparse(assignment.value.func), 'build_reconciliation_panel')
+        self.assertEqual(next(ast.unparse(k.value) for k in assignment.value.keywords if k.arg == 'refresh_all'), 'lambda: refresh_all()')
+        refresh = next(n for n in ast.walk(parent) if isinstance(n, ast.FunctionDef) and n.name == 'refresh_all')
+        names = {n.id for n in ast.walk(refresh) if isinstance(n, ast.Name)}
+        self.assertTrue({'reconciliation_payment', 'unassigned_target', 'refresh_reconciliation_screen'}.isdisjoint(names))
+        env = {name: MagicMock() for name in names}
+        events = []
+        env['reconciliation_panel'] = ReconciliationPanelHandle(lambda: events.append('refresh'), lambda: events.append('reload'))
+        exec(compile(ast.Module(body=[refresh], type_ignores=[]), '<parent>', 'exec'), env)
+        env['refresh_all']()
+        self.assertEqual(events, ['reload', 'refresh'])
+        # Build the entire extracted block with the same lightweight widgets
+        # used by the characterization tests; no real NiceGUI is started.
+        ui = SimulatedUi()
+        deps = {name: Mock() for name in inspect.signature(build_reconciliation_panel).parameters}
+        for name in ('list_payment_methods', 'list_reconciliation_drafts', 'list_unreconciled_transactions',
+                     'list_unassigned_transactions', 'list_reconciliation_sessions', 'payment_predicted_balance_summary'):
+            deps[name].return_value = []
+        deps.update(ui=ui, user_id=7, reconciliation_tab=object(), _money=str, _balance_money=str,
+                    _signed=lambda *args: '', _payment_effect=lambda *args: '', RECONCILIATION_SESSION_STATUSES={})
+        deps['_payment_options'].return_value = {4: 'Visa'}
+        deps['get_reconciliation_draft'].return_value = None
+        deps['reconciliation_reference_summary'].return_value = {'reference_balance': D('0')}
+        handle = build_reconciliation_panel(**deps)
+        self.assertIsInstance(handle, ReconciliationPanelHandle)
+        deps['_payment_options'].reset_mock()
+        handle.reload_options()
+        self.assertEqual(deps['_payment_options'].call_count, 2)
+        deps['_payment_options'].assert_called_with(7, include_none=False)
+        handle.refresh()
+        deps['refresh_all'].assert_not_called()
 
 
 if __name__ == '__main__':

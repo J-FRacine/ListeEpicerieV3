@@ -9,6 +9,7 @@ python -m py_compile finances_financing_writes.py tests/test_finances_financing_
 python -m py_compile finances_financing.py tests/test_finances_financing_ui.py
 python -m py_compile tests/test_finances_reconciliation.py tests/test_finances_reconciliation_ui.py
 python -m py_compile finances_reconciliation_data.py tests/test_finances_reconciliation_data.py
+python -m py_compile finances_reconciliation_writes.py tests/test_finances_reconciliation_writes.py
 python -c "from pathlib import Path; [compile(''.join(p.read_text(encoding='utf-8') for p in sorted(Path('.').glob(prefix + '_part_*.pyfrag'))), prefix + '.py', 'exec') for prefix in ('finances_data', 'finances')]"
 ```
 
@@ -52,7 +53,7 @@ de notifications ou de PostgreSQL réel n’est ajouté.
 
 ## Extraction des données de Compte
 
-La suite comprend maintenant 167 tests : les 29 tests précédents (17 tests métier,
+La suite comprend maintenant 170 tests : les 29 tests précédents (17 tests métier,
 3 contrôles d’architecture des données et 9 tests du panneau Compte),
 plus 10 tests Budget, 6 tests de navigation/structure Budget et 3 contrôles
 d’architecture Budget, 3 contrôles des lectures Budget et 29 tests des écritures, 3 contrôles de leur extraction et 5 tests du contrat Budget et 1 contrôle du panneau extrait.
@@ -402,3 +403,27 @@ comparaison des corps avec `main` sont vérifiés localement. Finances reste
 V1.13.2, sans migration ni changement SQL, fonctionnel ou transactionnel.
 PostgreSQL, atomicité/rollback réels, NiceGUI, navigateur, notifications et
 Canner/Render ne sont pas validés réellement.
+
+## Extraction des écritures Conciliation — 2026-09-08
+
+`finances_reconciliation_writes.py` contient les six écritures historiques,
+avec leurs corps et SQL inchangés. Les lectures restent dans
+`finances_reconciliation_data.py`, l’UI reste dans les fragments et le helper
+partagé `_refresh_reconciliation_session_totals` reste à son emplacement.
+Il est injecté au retrait et appelé avec le même curseur avant le commit final.
+
+`test_finances_reconciliation_writes.py` ajoute exactement 3 tests : import
+autonome avec seulement `date` et `Decimal`, signatures/délégation des six
+façades (y compris leurs valeurs par défaut), puis remplacements successifs
+des connexions, validateurs et helper partagé après import.
+
+Les 167 tests existants restent inchangés; **170 tests réussissent**. Les tests
+métier continuent d’exécuter les vrais corps via les façades : validations,
+références, solde initial, seuil de différence, justifications/reports, historique,
+brouillons et unique commit final. La suppression d’un brouillon sans mode
+retourne toujours zéro sans connexion. Aucun commit intermédiaire n’est ajouté.
+
+Compilations documentées, reconstructions des deux sources et comparaison des
+corps avec `main` sont vérifiées. Finances reste V1.13.2, sans migration ni
+changement métier, SQL ou transactionnel. PostgreSQL, atomicité/rollback réels,
+NiceGUI, navigateur, notifications et Canner/Render ne sont pas validés réellement.

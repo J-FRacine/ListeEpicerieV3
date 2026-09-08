@@ -1,18 +1,10 @@
-JF Apps — Finances / Organisation
-
-Base : main après Liste d’épicerie V1.2.0 (commit 90d72dac8ae5580f632da0eec7c90d42fecfc614).
+JF Apps — Finances / Historique — petite étape
 
 À ajouter à la racine :
-- finances_organization_data.py
-- finances_organization.py
+- finances_transactions_data.py
 
 À remplacer à la racine :
-- finances_data_part_02.pyfrag
-- finances_data_part_03.pyfrag
-- finances_part_12.pyfrag
-- finances_part_13.pyfrag
-- finances_part_14.pyfrag
+- finances_data.py
 
-Finances reste V1.13.2. Aucune migration et aucun changement utilisateur prévu.
-
-Après import, ouvrir Finances > Organisation et vérifier rapidement Catégories, Étiquettes et Modes de paiement.
+Cette étape extrait seulement les lectures list_transactions() et get_transaction().
+Aucun changement visible, aucune migration. Finances reste V1.13.2.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import timedelta
 from decimal import Decimal
 
 
@@ -77,3 +78,24 @@ def find_potential_duplicate_transactions(
         reverse=True,
     )
     return groups
+
+
+def list_month_unreconciled_transactions(
+    user_id,
+    month_value,
+    *,
+    month_start,
+    add_months,
+    list_transactions,
+):
+    month = month_start(month_value)
+    month_end = add_months(month, 1) - timedelta(days=1)
+    return list_transactions(
+        user_id,
+        start_date=month,
+        end_date=month_end,
+        status="confirmed",
+        reconciliation_status="unreconciled",
+        include_linked_transfer_destinations=True,
+        limit=10000,
+    )

@@ -1,12 +1,10 @@
-JF Apps — Finances / Historique — étape 5
-
-À ajouter à la racine :
-- finances_history_analysis.py
+JF Apps — Finances / Historique — étape 6
 
 À remplacer à la racine :
 - finances_data.py
+- finances_history_analysis.py
 
-Cette petite étape extrait seulement la recherche des doublons potentiels
-utilisée dans Historique.
+Cette petite étape extrait seulement :
+list_month_unreconciled_transactions()
 
 Aucun changement visible, aucune migration. Finances reste V1.13.2.

@@ -244,3 +244,13 @@ def find_potential_duplicate_transactions(
         limit=limit,
         list_transactions=list_transactions,
     )
+
+
+def list_month_unreconciled_transactions(user_id, month_value):
+    return _history_analysis.list_month_unreconciled_transactions(
+        user_id,
+        month_value,
+        month_start=_month_start,
+        add_months=_add_months,
+        list_transactions=list_transactions,
+    )

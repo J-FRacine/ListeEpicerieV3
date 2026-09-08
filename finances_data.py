@@ -156,3 +156,24 @@ def set_transaction_status(user_id, transaction_id, status):
         TRANSACTION_STATUSES=TRANSACTION_STATUSES,
         get_connection=get_connection,
     )
+
+
+# Extraction progressive des lectures des paiements de carte liés.
+# Les signatures publiques restent inchangées.
+import finances_card_payments_data as _card_payments_data
+
+
+def get_card_payment_transfer(user_id, transfer_id):
+    return _card_payments_data.get_card_payment_transfer(
+        user_id,
+        transfer_id,
+        get_connection=get_connection,
+    )
+
+
+def list_card_payment_transfers(user_id, limit=10000):
+    return _card_payments_data.list_card_payment_transfers(
+        user_id,
+        limit=limit,
+        get_connection=get_connection,
+    )

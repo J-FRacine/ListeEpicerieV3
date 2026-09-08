@@ -1,10 +1,12 @@
-JF Apps — Finances / Historique — étape 2
+JF Apps — Finances / Historique — étape 3
 
 À ajouter à la racine :
-- finances_transactions_writes.py
+- finances_card_payments_data.py
 
 À remplacer à la racine :
 - finances_data.py
 
-Cette étape extrait seulement save_transaction(), delete_transaction() et set_transaction_status().
+Cette petite étape extrait seulement les lectures des paiements de carte liés :
+get_card_payment_transfer() et list_card_payment_transfers().
+
 Aucun changement visible, aucune migration. Finances reste V1.13.2.

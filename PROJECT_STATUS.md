@@ -221,6 +221,30 @@ sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
   fonctionnel, SQL, transactionnel ou utilisateur. PostgreSQL, NiceGUI,
   navigateur, notifications et Canner/Render réels ne sont pas validés.
 
+### Extraction de l’interface Financements — 2026-09-08
+
+- `finances_financing.py` contient désormais `FinancingPanelHandle` et
+  `build_financing_panel()`, avec le panneau complet, ses dialogues, son aperçu
+  des intérêts, son avertissement d’incohérence et son rendu initial.
+- Le parent conserve l’unique `financing_month_state = MonthCursor()` et injecte
+  ce même objet. Précédent/suivant/mois courant actualisent seulement le panneau.
+  `refresh_all()` passe désormais par `financing_panel.refresh()`.
+- Les services sont injectés, dont `refresh_all=lambda: refresh_all()` pour
+  conserver sa résolution après construction. Aucun import de NiceGUI,
+  `finances`, `finances_data`, `db` ou psycopg dans le nouveau module.
+- Financements dispose maintenant de `finances_financing_data.py` pour les
+  lectures/calculs, `finances_financing_writes.py` pour les écritures et
+  `finances_financing.py` pour l’interface. `calculate_installment_payment()`
+  reste dans `finances_data`. La prochaine zone majeure à modulariser sera
+  **Conciliation**.
+- 122 tests réussis : les 114 précédents avec les deux tests UI adaptés à leur
+  nouvel emplacement, plus 8 tests du contrat et du panneau simulé. Le bloc
+  extrait est comparé à `main`, à l’indentation près; textes, styles, ordre,
+  calculs et callbacks sont conservés. Compilations et import autonome vérifiés.
+- Finances reste V1.13.2, sans changement visible, métier ou SQL ni migration.
+  PostgreSQL, NiceGUI, navigateur, notifications et Canner/Render réels ne sont
+  pas validés.
+
 ### Structure technique Finances
 
 Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
@@ -237,6 +261,7 @@ Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
   - `finances_budget_writes.py` : écritures spécifiques au Budget.
   - `finances_financing_data.py` : lectures et calculs Financements.
   - `finances_financing_writes.py` : écritures Financements.
+  - `finances_financing.py` : panneau Financements et contrat `FinancingPanelHandle`.
   - `finances_calculations.py`
   - `finances_validation.py`
   - `finances_shared_loans.py`
@@ -273,6 +298,7 @@ Le découpage en `.pyfrag` est une étape transitoire. Pour les futurs développ
 
 - Continuer à réduire la taille et les dépendances des gros fichiers.
 - Transformer progressivement les fragments Finances en modules fonctionnels cohérents.
+- Prochaine zone majeure après Financements : Conciliation.
 - Candidats naturels :
   - Compte;
   - Budget;
@@ -286,7 +312,7 @@ Le refactor doit être progressif, écran par écran, afin de réduire le risque
 ### Validation / qualité
 
 - Maintenir la compilation Python comme contrôle minimum.
-- Maintenir les 114 tests automatisés de calcul et de compatibilité; compléter
+- Maintenir les 122 tests automatisés de calcul et de compatibilité; compléter
   progressivement les protections de l’interface et des écritures SQL.
 - Conserver des tests ciblés pour :
   - mois à trois paies;

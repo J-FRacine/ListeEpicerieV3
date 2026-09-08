@@ -275,7 +275,9 @@ class FinancingMutationTests(unittest.TestCase):
 
 class FinancingUiTests(unittest.TestCase):
     def tree(self):return ast.parse("".join(p.read_text(encoding="utf-8") for p in sorted(ROOT.glob("finances_part_*.pyfrag"))))
-    def fn(self,name):return next(n for n in ast.walk(self.tree()) if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name==name)
+    def fn(self,name):
+        tree=ast.parse((ROOT/"finances_financing.py").read_text(encoding="utf-8"))
+        return next(n for n in ast.walk(tree) if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name==name)
 
     def test_single_cursor_and_targeted_navigation(self):
         tree=self.tree();assign=[n for n in ast.walk(tree) if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=="financing_month_state" for t in n.targets)]

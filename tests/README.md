@@ -6,6 +6,7 @@ Depuis la racine du dépôt, avec Python 3.10 ou plus récent :
 python -m unittest discover -s tests -v
 python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py tests/test_finances_budget.py tests/test_finances_budget_ui.py tests/test_finances_budget_writes.py tests/test_finances_financing.py finances_budget.py finances_budget_writes.py finances_account.py finances_budget_data.py finances_financing_data.py finances_calculations.py finances_account_data.py finances_data.py finances.py finances_ui_state.py finances_validation.py finances_shared_loans_data.py
 python -m py_compile finances_financing_writes.py tests/test_finances_financing_writes.py
+python -m py_compile finances_financing.py tests/test_finances_financing_ui.py
 python -c "from pathlib import Path; [compile(''.join(p.read_text(encoding='utf-8') for p in sorted(Path('.').glob(prefix + '_part_*.pyfrag'))), prefix + '.py', 'exec') for prefix in ('finances_data', 'finances')]"
 ```
 
@@ -49,7 +50,7 @@ de notifications ou de PostgreSQL réel n’est ajouté.
 
 ## Extraction des données de Compte
 
-La suite comprend maintenant 114 tests : les 29 tests précédents (17 tests métier,
+La suite comprend maintenant 122 tests : les 29 tests précédents (17 tests métier,
 3 contrôles d’architecture des données et 9 tests du panneau Compte),
 plus 10 tests Budget, 6 tests de navigation/structure Budget et 3 contrôles
 d’architecture Budget, 3 contrôles des lectures Budget et 29 tests des écritures, 3 contrôles de leur extraction et 5 tests du contrat Budget et 1 contrôle du panneau extrait.
@@ -277,3 +278,35 @@ prévisions `planned` et `unreconciled` sont supprimées/reconstruites.
 Finances reste V1.13.2, sans migration ni changement utilisateur.
 Les connexions sont simulées : PostgreSQL, rollback réel, NiceGUI, navigateur,
 notifications et déploiements Canner/Render ne sont pas validés.
+
+## Extraction de l’interface Financements — 2026-09-08
+
+Financements dispose maintenant de trois modules : `finances_financing_data.py`
+(lectures/calculs), `finances_financing_writes.py` (écritures) et
+`finances_financing.py` (panneau et contrat `FinancingPanelHandle`).
+`calculate_installment_payment()` reste dans `finances_data`.
+La prochaine zone majeure à modulariser sera Conciliation.
+
+Les deux tests UI existants dans `test_finances_financing.py` lisent désormais
+les fonctions extraites; leurs attentes sont conservées. Les tests métier/SQL
+restent inchangés. `test_finances_financing_ui.py` ajoute 8 tests, portant le
+total à 122 :
+
+- handle sans appel à la construction, callback courant appelé une fois;
+- import autonome, sans dépendances NiceGUI/base/façades ni cycle;
+- raccordement réel du parent avec le même curseur mensuel unique, services
+  différés remplaçables et `refresh_all` absent lors de la construction;
+- retrait des définitions internes des fragments, rendu initial avant retour
+  du handle et raccordement immédiatement suivi des Prêts partagés;
+- exécution du vrai `refresh_all()` via le handle, sans `render_financing`;
+- construction du panneau vide ou avec un plan, lectures du mois et navigation
+  précédent/suivant/reset avec seulement le rafraîchissement Financements;
+- dialogue réel avec widgets simulés : aperçu par `calculate_installment_payment`,
+  estimation/analyse, avertissement d’incohérence, confirmation, sauvegarde et erreur;
+- activation/désactivation et suppression suivies du rafraîchissement global,
+  sans rafraîchissement après échec de suppression.
+
+Le bloc UI conserve ses textes, styles, champs et ordre d’affichage. Aucun
+changement visible, métier, SQL ou migration; Finances reste V1.13.2. Ces tests
+simulent les widgets et services : ils ne valident pas NiceGUI, un navigateur,
+PostgreSQL, les notifications ou les déploiements Canner/Render réels.

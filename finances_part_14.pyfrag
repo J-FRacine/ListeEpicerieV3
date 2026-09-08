@@ -348,7 +348,7 @@
         account_panel.reload_options()
         account_panel.refresh()
         budget_panel.refresh()
-        render_financing.refresh()
+        financing_panel.refresh()
 
         reconciliation_payment.options = _payment_options(
             user_id,

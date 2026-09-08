@@ -1,0 +1,411 @@
+"""Panneau Financements construit avec ses dépendances injectées."""
+from dataclasses import dataclass
+from datetime import date
+from decimal import Decimal
+from typing import Callable
+
+
+@dataclass
+class FinancingPanelHandle:
+    on_refresh: Callable[[], None]
+
+    def refresh(self) -> None:
+        self.on_refresh()
+
+
+def build_financing_panel(
+    *,
+    ui,
+    user_id,
+    financing_tab,
+    financing_month_state,
+    INSTALLMENT_PLAN_TYPES,
+    FREQUENCY_UNITS,
+    _payment_options,
+    _category_options,
+    _tag_options,
+    list_installment_plans,
+    financing_month_summary,
+    save_installment_plan,
+    delete_installment_plan,
+    toggle_installment_plan,
+    calculate_installment_payment,
+    analyze_installment_progress,
+    _money,
+    _balance_money,
+    _month_label,
+    refresh_all,
+) -> FinancingPanelHandle:
+    # FINANCEMENTS ET VERSEMENTS
+    with ui.tab_panel(financing_tab).classes("px-0"):
+
+        def installment_plan_dialog(plan=None):
+            current = dict(plan) if plan else {}
+            with ui.dialog() as dialog:
+                with ui.card().classes("w-full max-w-3xl p-4"):
+                    ui.label(
+                        "Modifier le financement" if plan else "Nouveau financement"
+                    ).classes("text-xl font-bold")
+                    plan_type = ui.select(
+                        INSTALLMENT_PLAN_TYPES,
+                        value=current.get("plan_type", "merchant"),
+                        label="Type de financement",
+                    ).props("dense outlined options-dense").classes("w-full")
+                    with ui.element("div").classes("jf-finance-form-grid"):
+                        provider = ui.input(
+                            label="Magasin / programme", value=current.get("provider_name", "")
+                        ).props("dense outlined maxlength=160").classes("jf-finance-field")
+                        description_plan = ui.input(
+                            label="Achat / description", value=current.get("description", "")
+                        ).props("dense outlined maxlength=200").classes("jf-finance-field jf-finance-description")
+                        original_amount = ui.number(
+                            label="Montant initial", value=current.get("original_amount"), min=.01, step=.01
+                        ).props("dense outlined").classes("jf-finance-field")
+                        purchase_date = ui.input(
+                            label="Date d’achat — facultative",
+                            value=current.get("purchase_date").isoformat() if current.get("purchase_date") else "",
+                        ).props("type=date dense outlined clearable").classes("jf-finance-field")
+                        total_installments = ui.number(
+                            label="Nombre total de versements", value=current.get("total_installments", 18), min=1, step=1
+                        ).props("dense outlined").classes("jf-finance-field")
+                        completed_installments = ui.number(
+                            label="Versements déjà effectués — facultatif",
+                            value=(
+                                None
+                                if current.get("completed_installments_estimated")
+                                else current.get("completed_installments")
+                            ),
+                            min=0,
+                            step=1,
+                        ).props("dense outlined clearable").classes("jf-finance-field")
+                        remaining_balance = ui.number(
+                            label="Solde restant actuel — facultatif", value=current.get("remaining_balance"), min=0, step=.01
+                        ).props("dense outlined clearable").classes("jf-finance-field")
+                        installment_amount = ui.number(
+                            label="Montant du versement — auto si vide", value=current.get("installment_amount"), min=.01, step=.01
+                        ).props("dense outlined clearable").classes("jf-finance-field")
+                        annual_interest_rate = ui.number(
+                            label="Taux d’intérêt annuel %", value=current.get("annual_interest_rate", 0), min=0, step=.01
+                        ).props("dense outlined").classes("jf-finance-field")
+                        fees_total = ui.number(
+                            label="Frais totaux", value=current.get("fees_total", 0), min=0, step=.01
+                        ).props("dense outlined").classes("jf-finance-field")
+                        payment_includes_interest = ui.select(
+                            {True: "Oui — le versement est déjà le total", False: "Non — calculer le total avec intérêts"},
+                            value=bool(current.get("payment_includes_interest", True)),
+                            label="Le versement indiqué inclut-il les intérêts ?",
+                        ).props("dense outlined options-dense").classes("jf-finance-field")
+                        frequency_unit = ui.select(
+                            FREQUENCY_UNITS, value=current.get("frequency_unit", "month"), label="Fréquence"
+                        ).props("dense outlined options-dense").classes("jf-finance-field")
+                        frequency_interval = ui.number(
+                            label="Tous les…", value=current.get("frequency_interval", 1), min=1, step=1
+                        ).props("dense outlined").classes("jf-finance-field")
+                        next_due_date = ui.input(
+                            label="Prochaine échéance",
+                            value=current.get("next_due_date").isoformat() if current.get("next_due_date") else date.today().isoformat(),
+                        ).props("type=date dense outlined").classes("jf-finance-field")
+                        payment_method_plan = ui.select(
+                            _payment_options(user_id, include_none=False),
+                            value=current.get("payment_method_id"),
+                            label="Compte ou carte utilisé pour les versements",
+                        ).props("dense outlined clearable options-dense").classes("jf-finance-field")
+                        category_plan = ui.select(
+                            _category_options(user_id),
+                            value=current.get("category_id"),
+                            label="Catégorie de dépense",
+                        ).props("dense outlined clearable options-dense").classes("jf-finance-field")
+                    tags_plan = ui.select(
+                        _tag_options(user_id),
+                        value=current.get("tag_ids") or [],
+                        label="Étiquettes — facultatif", multiple=True,
+                    ).props("dense outlined use-chips clearable options-dense").classes("w-full")
+                    budget_excluded = ui.checkbox(
+                        "Exclure exceptionnellement les versements du budget (Hors budget)",
+                        value=bool(current.get("budget_excluded", False)),
+                    )
+                    note_plan = ui.textarea(
+                        label="Note facultative", value=current.get("note") or ""
+                    ).props("dense outlined autogrow maxlength=1000").classes("w-full")
+                    progress_hint = ui.label(
+                        "Si vous ne connaissez pas le nombre de versements déjà effectués, laissez ce champ vide : "
+                        "Finances l’estimera à partir du montant initial, du solde restant et du montant du versement. "
+                        "L’historique passé n’est jamais recréé automatiquement."
+                    ).classes("text-xs jf-muted")
+                    interest_preview = ui.label("").classes("text-xs text-primary font-semibold")
+
+                    def update_interest_preview(_event=None):
+                        rate = Decimal(str(annual_interest_rate.value or 0))
+                        payment_includes_interest.visible = rate > 0
+                        if rate <= 0 or payment_includes_interest.value is not False:
+                            interest_preview.set_text(
+                                "Le montant saisi sera utilisé comme versement total." if rate > 0 else ""
+                            )
+                            return
+                        try:
+                            total_count = int(total_installments.value or 0)
+                            if completed_installments.value not in (None, ""):
+                                completed_count = int(completed_installments.value or 0)
+                            elif (
+                                total_count > 0
+                                and remaining_balance.value not in (None, "")
+                                and installment_amount.value not in (None, "")
+                            ):
+                                progress_preview = analyze_installment_progress(
+                                    original_amount=original_amount.value or 0,
+                                    remaining_balance=remaining_balance.value,
+                                    installment_amount=installment_amount.value,
+                                    total_installments=total_count,
+                                    completed_installments=None,
+                                )
+                                completed_count = int(
+                                    progress_preview["estimated_completed_installments"] or 0
+                                )
+                            else:
+                                completed_count = 0
+                            remaining_count = max(1, total_count - completed_count)
+                            principal_value = remaining_balance.value if remaining_balance.value not in (None, "") else original_amount.value
+                            total_payment = calculate_installment_payment(
+                                principal_value or 0,
+                                remaining_count,
+                                rate,
+                                frequency_unit.value,
+                                int(frequency_interval.value or 1),
+                                fees_total.value or 0,
+                            )
+                            base_value = Decimal(str(installment_amount.value or 0))
+                            estimated_interest = max(Decimal("0"), total_payment - base_value)
+                            interest_preview.set_text(
+                                "Versement de base : " + _money(base_value)
+                                + " · intérêts estimés : " + _money(estimated_interest)
+                                + " · versement total calculé : " + _money(total_payment)
+                            )
+                        except Exception:
+                            interest_preview.set_text("Le versement total sera calculé à l’enregistrement.")
+
+                    for control in (
+                        annual_interest_rate, payment_includes_interest, remaining_balance,
+                        original_amount, total_installments, completed_installments,
+                        installment_amount, fees_total, frequency_unit, frequency_interval,
+                    ):
+                        control.on_value_change(update_interest_preview)
+                    update_interest_preview()
+
+                    def perform_plan_save():
+                        try:
+                            save_installment_plan(
+                                user_id=user_id,
+                                plan_id=current.get("id"),
+                                plan_type=plan_type.value,
+                                provider_name=provider.value,
+                                description=description_plan.value,
+                                original_amount=original_amount.value,
+                                purchase_date=purchase_date.value or None,
+                                total_installments=int(total_installments.value or 0),
+                                completed_installments=(
+                                    int(completed_installments.value)
+                                    if completed_installments.value not in (None, "")
+                                    else None
+                                ),
+                                remaining_balance=remaining_balance.value,
+                                installment_amount=installment_amount.value,
+                                annual_interest_rate=annual_interest_rate.value or 0,
+                                fees_total=fees_total.value or 0,
+                                payment_includes_interest=payment_includes_interest.value,
+                                frequency_unit=frequency_unit.value,
+                                frequency_interval=int(frequency_interval.value or 1),
+                                next_due_date=next_due_date.value,
+                                payment_method_id=payment_method_plan.value,
+                                category_id=category_plan.value,
+                                tag_ids=tags_plan.value or [],
+                                budget_excluded=budget_excluded.value,
+                                note=note_plan.value,
+                            )
+                        except Exception as error:
+                            ui.notify(str(error), type="warning")
+                            return
+                        dialog.close()
+                        ui.notify("Financement enregistré et versements projetés.", type="positive")
+                        refresh_all()
+
+                    def save_plan_now():
+                        manual_completed = completed_installments.value
+                        if (
+                            manual_completed not in (None, "")
+                            and remaining_balance.value not in (None, "")
+                            and installment_amount.value not in (None, "")
+                        ):
+                            try:
+                                analysis = analyze_installment_progress(
+                                    original_amount=original_amount.value,
+                                    remaining_balance=remaining_balance.value,
+                                    installment_amount=installment_amount.value,
+                                    total_installments=int(total_installments.value or 0),
+                                    completed_installments=int(manual_completed),
+                                )
+                            except Exception as error:
+                                ui.notify(str(error), type="warning")
+                                return
+                            if analysis.get("is_inconsistent"):
+                                estimated = analysis.get("estimated_completed_installments")
+                                expected = analysis.get("expected_remaining_balance")
+                                difference_value = analysis.get("balance_difference")
+                                with ui.dialog() as consistency_dialog:
+                                    with ui.card().classes("w-full max-w-lg p-4"):
+                                        ui.label("Les versements saisis semblent incohérents").classes("text-xl font-bold")
+                                        ui.label(
+                                            f"Selon le solde et le montant du versement, environ {estimated} versement(s) semblent avoir été effectués. "
+                                            f"Avec {int(manual_completed)} versement(s), le solde théorique serait {_money(expected)}; "
+                                            f"écart avec le solde saisi : {_balance_money(difference_value)}."
+                                        ).classes("text-sm")
+                                        if Decimal(str(annual_interest_rate.value or 0)) or Decimal(str(fees_total.value or 0)):
+                                            ui.label(
+                                                "Ce plan contient des intérêts ou des frais : l’écart peut être normal. Vous pouvez conserver la valeur saisie."
+                                            ).classes("text-xs jf-muted")
+                                        else:
+                                            ui.label(
+                                                "Pour un plan à 0 % et à versements fixes, vérifiez de préférence le nombre de versements ou le solde restant avant de continuer."
+                                            ).classes("text-xs text-warning")
+                                        with ui.row().classes("w-full justify-end gap-2 mt-2"):
+                                            ui.button("Retourner corriger", on_click=consistency_dialog.close).props("flat")
+                                            ui.button(
+                                                "Conserver quand même",
+                                                icon="done",
+                                                on_click=lambda: (consistency_dialog.close(), perform_plan_save()),
+                                            ).props("color=primary")
+                                consistency_dialog.open()
+                                return
+                        perform_plan_save()
+
+                    with ui.row().classes("w-full justify-end gap-2"):
+                        ui.button("Annuler", on_click=dialog.close).props("flat")
+                        ui.button("Enregistrer", icon="save", on_click=save_plan_now).props("color=primary")
+            dialog.open()
+
+        def remove_installment_plan(plan_id):
+            with ui.dialog() as dialog:
+                with ui.card().classes("w-full max-w-md p-4"):
+                    ui.label("Supprimer le financement ?").classes("text-xl font-bold")
+                    ui.label(
+                        "Les versements futurs non confirmés seront retirés. Les transactions déjà confirmées restent dans l’historique."
+                    ).classes("text-sm jf-muted")
+                    def remove_now():
+                        try:
+                            delete_installment_plan(user_id, plan_id)
+                        except Exception as error:
+                            ui.notify(str(error), type="warning")
+                            return
+                        dialog.close(); ui.notify("Financement supprimé.", type="positive"); refresh_all()
+                    with ui.row().classes("w-full justify-end gap-2"):
+                        ui.button("Annuler", on_click=dialog.close).props("flat")
+                        ui.button("Supprimer", icon="delete", on_click=remove_now).props("color=negative")
+            dialog.open()
+
+        def change_financing_month(offset, reset=False):
+            if reset:
+                financing_month_state.reset()
+            else:
+                financing_month_state.shift(offset)
+            render_financing.refresh()
+
+        @ui.refreshable
+        def render_financing():
+            plans = list_installment_plans(user_id, include_inactive=True)
+            financing_summary = financing_month_summary(user_id, financing_month_state.value)
+            with ui.row().classes("w-full items-start justify-between gap-2 flex-wrap"):
+                with ui.column().classes("gap-0"):
+                    ui.label("Financements et achats en versements").classes("text-xl font-bold")
+                    ui.label(
+                        "Magasins et plans de versements sur cartes. Chaque versement est une vraie dépense "
+                        "dans les KPI selon sa catégorie, sauf exclusion explicite."
+                    ).classes("text-xs jf-muted")
+                with ui.row().classes("gap-1 flex-wrap items-center"):
+                    ui.button(
+                        icon="chevron_left",
+                        on_click=lambda: change_financing_month(-1),
+                    ).props("flat round dense")
+                    ui.button(
+                        _month_label(financing_month_state.value),
+                        on_click=lambda: change_financing_month(0, reset=True),
+                    ).props("flat dense")
+                    ui.button(
+                        icon="chevron_right",
+                        on_click=lambda: change_financing_month(1),
+                    ).props("flat round dense")
+                    ui.button("Ajouter un financement", icon="add", on_click=lambda: installment_plan_dialog()).props("color=primary dense")
+            with ui.element("div").classes("jf-finance-summary-grid"):
+                for label, value in (
+                    ("Paiements du mois — " + _month_label(financing_month_state.value), financing_summary["payments"]),
+                    ("Soldes restants", financing_summary["remaining_balances"]),
+                ):
+                    with ui.element("div").classes("jf-finance-summary"):
+                        ui.label(label).classes("jf-finance-summary-label")
+                        ui.label(_money(value)).classes("jf-finance-summary-value")
+            if not plans:
+                with ui.card().classes("w-full p-4"):
+                    ui.label("Aucun financement enregistré.").classes("text-sm jf-muted")
+            with ui.element("div").classes("jf-finance-balance-grid"):
+                for plan in plans:
+                    with ui.element("section").classes("jf-finance-balance-card"):
+                        with ui.row().classes("w-full items-start justify-between gap-2"):
+                            with ui.column().classes("gap-0 min-w-0"):
+                                ui.label(plan["description"]).classes("font-bold truncate").tooltip(plan["description"])
+                                ui.label(
+                                    INSTALLMENT_PLAN_TYPES.get(plan["plan_type"], plan["plan_type"])
+                                    + (" — " + plan["provider_name"] if plan.get("provider_name") else "")
+                                ).classes("text-xs jf-muted")
+                            with ui.row().classes("gap-0"):
+                                ui.switch(
+                                    value=plan["is_active"],
+                                    on_change=lambda event, selected=plan["id"]: (toggle_installment_plan(user_id, selected, event.value), refresh_all()),
+                                ).props("dense")
+                                ui.button(icon="edit", on_click=lambda _event=None, selected=plan: installment_plan_dialog(selected)).props("flat dense round size=sm color=primary")
+                                ui.button(icon="delete", on_click=lambda _event=None, selected=plan["id"]: remove_installment_plan(selected)).props("flat dense round size=sm color=negative")
+                        with ui.element("div").classes("jf-finance-summary-grid mt-2"):
+                            for label, value in (
+                                ("Montant initial", plan["original_amount"]),
+                                ("Payé / estimé", Decimal(plan.get("original_amount", 0)) - Decimal(plan.get("estimated_remaining_balance", 0))),
+                                ("Solde restant", plan.get("estimated_remaining_balance", plan.get("remaining_balance", 0))),
+                                ("Versement", plan["installment_amount"]),
+                            ):
+                                with ui.element("div").classes("jf-finance-summary"):
+                                    ui.label(label).classes("jf-finance-summary-label")
+                                    ui.label(_money(value)).classes("jf-finance-summary-value")
+                        progress_text = (
+                            f"{plan.get('display_completed_installments', plan.get('completed_installments', 0))}/{plan['total_installments']} versements effectués — "
+                            f"{plan.get('display_remaining_installments', 0)} restant(s)"
+                        )
+                        if plan.get("progress_estimated"):
+                            progress_text += " — estimation"
+                        ui.label(progress_text).classes("text-xs jf-muted mt-1")
+                        modality = plan.get("payment_terms_label") or FREQUENCY_UNITS.get(
+                            plan.get("frequency_unit"), str(plan.get("frequency_unit") or "")
+                        )
+                        modality += " · " + _money(plan["installment_amount"])
+                        if plan.get("payment_method_name"):
+                            modality += " · " + str(plan["payment_method_name"])
+                        ui.label("Modalité : " + modality).classes("text-xs jf-muted")
+                        display_next = plan.get("display_next_due_date") or plan.get("next_due_date")
+                        if display_next:
+                            ui.label(
+                                "Prochaine échéance : " + display_next.strftime("%d/%m/%Y")
+                            ).classes("text-xs text-primary")
+                        if plan.get("estimated_end_date"):
+                            ui.label(
+                                "Fin prévue : " + plan["estimated_end_date"].strftime("%d/%m/%Y")
+                            ).classes("text-xs text-primary")
+                        if Decimal(plan.get("annual_interest_rate", 0)) or Decimal(plan.get("fees_total", 0)):
+                            ui.label(
+                                f"Intérêt : {plan.get('annual_interest_rate', 0)} % — Frais : {_money(plan.get('fees_total', 0))}"
+                            ).classes("text-xs jf-muted")
+                            if Decimal(plan.get("annual_interest_rate", 0)) > 0:
+                                if plan.get("payment_includes_interest", True):
+                                    ui.label("Le versement indiqué inclut déjà les intérêts.").classes("text-xs jf-muted")
+                                else:
+                                    ui.label(
+                                        "Base hors intérêts : " + _money(plan.get("base_installment_amount", 0))
+                                        + " · total utilisé : " + _money(plan.get("installment_amount", 0))
+                                    ).classes("text-xs text-primary")
+        render_financing()
+
+    return FinancingPanelHandle(on_refresh=lambda: render_financing.refresh())

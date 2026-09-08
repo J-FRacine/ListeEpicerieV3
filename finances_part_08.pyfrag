@@ -379,185 +379,42 @@
 
 
         # HISTORIQUE
-        with ui.tab_panel(
-            history_tab
-        ).classes(
-            "px-0"
-        ):
-            with ui.card().classes(
-                "w-full p-3"
-            ):
-                ui.label(
-                    "Historique compact"
-                ).classes(
-                    "text-lg font-bold"
-                )
+        with ui.tab_panel(history_tab).classes("px-0"):
+            import finances_history as _history_ui
 
-                with ui.expansion(
-                    "Filtres",
-                    icon="filter_alt",
-                ).classes(
-                    "w-full"
-                ):
-                    with ui.element(
-                        "div"
-                    ).classes(
-                        "jf-finance-form-grid"
-                    ):
-                        start = ui.input(
-                            label="Du",
-                            value=(
-                                month_state.value.isoformat()
-                            ),
-                        ).props(
-                            "type=date dense outlined"
-                        ).classes(
-                            "jf-finance-field"
-                        )
-                        end = ui.input(
-                            label="Au",
-                            value=(
-                                date.today().isoformat()
-                            ),
-                        ).props(
-                            "type=date dense outlined"
-                        ).classes(
-                            "jf-finance-field"
-                        )
-                        query = ui.input(
-                            label="Recherche"
-                        ).props(
-                            "dense outlined clearable"
-                        ).classes(
-                            "jf-finance-field "
-                            "jf-finance-description"
-                        )
-                        history_amount_exact = ui.input(
-                            label="Montant exact"
-                        ).props(
-                            "dense outlined clearable inputmode=decimal"
-                        ).classes("jf-finance-field")
-                        history_amount_min = ui.input(
-                            label="Montant min."
-                        ).props(
-                            "dense outlined clearable inputmode=decimal"
-                        ).classes("jf-finance-field")
-                        history_amount_max = ui.input(
-                            label="Montant max."
-                        ).props(
-                            "dense outlined clearable inputmode=decimal"
-                        ).classes("jf-finance-field")
-
-                    with ui.row().classes(
-                        "w-full gap-2 flex-wrap"
-                    ):
-                        history_type = ui.select(
-                            {
-                                "": "Tous les types",
-                                **TRANSACTION_TYPES,
-                            },
-                            value="",
-                            label="Type",
-                        ).props(
-                            "dense outlined options-dense"
-                        ).classes(
-                            "min-w-40 grow"
-                        )
-                        history_status = ui.select(
-                            {
-                                "": "Tous les statuts",
-                                **TRANSACTION_STATUSES,
-                            },
-                            value="",
-                            label="Transaction",
-                        ).props(
-                            "dense outlined options-dense"
-                        ).classes(
-                            "min-w-40 grow"
-                        )
-                        history_reconciliation = ui.select(
-                            {
-                                "": "Toutes",
-                                **RECONCILIATION_STATUSES,
-                            },
-                            value="",
-                            label="Conciliation",
-                        ).props(
-                            "dense outlined options-dense"
-                        ).classes(
-                            "min-w-40 grow"
-                        )
-
-                    with ui.row().classes(
-                        "w-full gap-2 flex-wrap"
-                    ):
-                        history_category = ui.select(
-                            {
-                                None: "Toutes",
-                                **_category_options(
-                                    user_id
-                                ),
-                            },
-                            value=None,
-                            label="Catégorie",
-                        ).props(
-                            "dense outlined clearable "
-                            "options-dense"
-                        ).classes(
-                            "min-w-52 grow"
-                        )
-                        history_tag = ui.select(
-                            {
-                                None: "Toutes",
-                                **_tag_options(
-                                    user_id
-                                ),
-                            },
-                            value=None,
-                            label="Étiquette",
-                        ).props(
-                            "dense outlined clearable "
-                            "options-dense"
-                        ).classes(
-                            "min-w-44 grow"
-                        )
-                        history_payment = ui.select(
-                            {
-                                None: "Tous",
-                                **_payment_options(
-                                    user_id,
-                                    include_none=False,
-                                ),
-                            },
-                            value=None,
-                            label="Mode de paiement",
-                        ).props(
-                            "dense outlined clearable "
-                            "options-dense"
-                        ).classes(
-                            "min-w-48 grow"
-                        )
-
-                    with ui.row().classes("w-full gap-2 flex-wrap"):
-                        ui.button(
-                            "Appliquer",
-                            icon="filter_alt",
-                            on_click=lambda: render_history.refresh(),
-                        ).props("outline dense color=primary")
-                        ui.button(
-                            "Rechercher les doublons",
-                            icon="content_copy",
-                            on_click=lambda: duplicate_search_dialog(),
-                        ).props("outline dense color=secondary")
-                        ui.button(
-                            "Vérifier les non conciliées du mois",
-                            icon="rule",
-                            on_click=lambda: monthly_unreconciled_dialog(),
-                        ).props("outline dense color=secondary")
-
-            history_box = ui.column().classes(
-                "jf-finance-history-list mt-2"
+            history_panel = _history_ui.build_history_panel(
+                ui=ui,
+                user_id=user_id,
+                month_value=month_state.value,
+                today_value=date.today(),
+                TRANSACTION_TYPES=TRANSACTION_TYPES,
+                TRANSACTION_STATUSES=TRANSACTION_STATUSES,
+                RECONCILIATION_STATUSES=RECONCILIATION_STATUSES,
+                category_options=lambda: _category_options(user_id),
+                tag_options=lambda: _tag_options(user_id),
+                payment_options=lambda: _payment_options(
+                    user_id,
+                    include_none=False,
+                ),
+                on_apply=lambda: render_history.refresh(),
+                on_duplicate_search=lambda: duplicate_search_dialog(),
+                on_monthly_unreconciled=lambda: monthly_unreconciled_dialog(),
             )
+
+            # Alias conservés pour les dialogues encore présents dans le parent.
+            start = history_panel.start
+            end = history_panel.end
+            query = history_panel.query
+            history_amount_exact = history_panel.amount_exact
+            history_amount_min = history_panel.amount_min
+            history_amount_max = history_panel.amount_max
+            history_type = history_panel.transaction_type
+            history_status = history_panel.status
+            history_reconciliation = history_panel.reconciliation
+            history_category = history_panel.category
+            history_tag = history_panel.tag
+            history_payment = history_panel.payment
+            history_box = history_panel.history_box
 
             def remove_dialog(
                 row,

@@ -527,6 +527,18 @@
 
             @ui.refreshable
             def render_history():
+                _history_ui.render_history(
+                    ui=ui,
+                    panel=history_panel,
+                    user_id=user_id,
+                    list_transactions=list_transactions,
+                    render_transaction_row=render_transaction_row,
+                    money=_money,
+                )
+                return
+
+                # Ancienne implémentation conservée temporairement ci-dessous
+                # pendant la transition des fragments; elle n'est plus exécutée.
                 history_box.clear()
 
                 try:

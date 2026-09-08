@@ -8,6 +8,7 @@ python -m py_compile tests/test_finances.py tests/test_finances_account.py tests
 python -m py_compile finances_financing_writes.py tests/test_finances_financing_writes.py
 python -m py_compile finances_financing.py tests/test_finances_financing_ui.py
 python -m py_compile tests/test_finances_reconciliation.py tests/test_finances_reconciliation_ui.py
+python -m py_compile finances_reconciliation_data.py tests/test_finances_reconciliation_data.py
 python -c "from pathlib import Path; [compile(''.join(p.read_text(encoding='utf-8') for p in sorted(Path('.').glob(prefix + '_part_*.pyfrag'))), prefix + '.py', 'exec') for prefix in ('finances_data', 'finances')]"
 ```
 
@@ -51,7 +52,7 @@ de notifications ou de PostgreSQL réel n’est ajouté.
 
 ## Extraction des données de Compte
 
-La suite comprend maintenant 163 tests : les 29 tests précédents (17 tests métier,
+La suite comprend maintenant 167 tests : les 29 tests précédents (17 tests métier,
 3 contrôles d’architecture des données et 9 tests du panneau Compte),
 plus 10 tests Budget, 6 tests de navigation/structure Budget et 3 contrôles
 d’architecture Budget, 3 contrôles des lectures Budget et 29 tests des écritures, 3 contrôles de leur extraction et 5 tests du contrat Budget et 1 contrôle du panneau extrait.
@@ -374,3 +375,30 @@ Ces tests ne reproduisent pas un moteur SQL ni NiceGUI. Ils ne valident ni
 l’exécution PostgreSQL, ni son atomicité/rollback, ni un navigateur, des
 notifications ou un déploiement Canner/Render réels. Les commandes ci-dessus
 compilent les nouveaux tests et reconstruisent les deux sources à fragments.
+
+## Extraction des lectures et résumés Conciliation — 2026-09-08
+
+Lectures/résumés Conciliation → `finances_reconciliation_data.py`.
+Les écritures et l’UI Conciliation restent dans les fragments.
+Prochaine étape : `finances_reconciliation_writes.py`.
+
+`test_finances_reconciliation_data.py` ajoute 4 contrôles, pour **167 tests** :
+
+- import du module dans un processus neuf interdisant `db`, `finances_data`,
+  `finances`, NiceGUI et psycopg; seul import direct : `Decimal`, sans cycle;
+- signatures historiques exactes des dix façades publiques;
+- délégation des arguments explicites, valeurs par défaut et résultats;
+- remplacements successifs de toutes les dépendances à chaque appel,
+  notamment `get_connection`, `list_transactions` et `_validate_payment_method`.
+
+Les 163 tests précédents restent inchangés. Les 25 tests de données Conciliation
+exécutent toujours les façades publiques réelles, désormais reliées aux corps
+extraits. Les attentes SQL, calculs, limites, filtres, références historiques,
+liens inactifs et données des brouillons sont conservés. Les six écritures et
+les autres fonctions historiques restent inchangées; aucun déplacement UI.
+
+La suite, les compilations documentées, les deux sources reconstruites et la
+comparaison des corps avec `main` sont vérifiés localement. Finances reste
+V1.13.2, sans migration ni changement SQL, fonctionnel ou transactionnel.
+PostgreSQL, atomicité/rollback réels, NiceGUI, navigateur, notifications et
+Canner/Render ne sont pas validés réellement.

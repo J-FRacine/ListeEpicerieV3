@@ -273,6 +273,29 @@ sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
   `finances_data.py` reconstruites et compilées. PostgreSQL, atomicité/rollback
   réels, NiceGUI, navigateur, notifications et Canner/Render ne sont pas validés.
 
+### Extraction des lectures et résumés Conciliation — 2026-09-08
+
+- `finances_reconciliation_data.py` contient désormais les dix lectures et
+  résumés : soldes prévus, comptage sans mode, transactions admissibles/sans
+  mode, listes/détails/liens des séances, référence et lectures des brouillons.
+- Les façades publiques de `finances_data` gardent exactement leurs signatures.
+  Connexion, `list_transactions` et `_validate_payment_method` sont injectés
+  avec leurs valeurs courantes à chaque appel. Le module importe seulement
+  `Decimal`, sans dépendance vers la base, les façades ou NiceGUI.
+- Lectures/résumés Conciliation → `finances_reconciliation_data.py`;
+  écritures Conciliation encore dans les fragments; UI Conciliation encore
+  dans les fragments. Prochaine étape : `finances_reconciliation_writes.py`.
+- Les corps déplacés, leur SQL, les calculs et les filtres sont conservés.
+  Les six écritures restent à leur emplacement, avec leurs corps inchangés.
+  Finances reste V1.13.2, sans changement fonctionnel ou transactionnel,
+  sans migration ni modification des autres panneaux.
+- 167 tests réussis : les 163 précédents inchangés, dont les 25 tests de données
+  Conciliation via les façades réelles, et 4 contrôles d’import, signatures,
+  délégation et résolution tardive. Compilations documentées, reconstruction
+  des deux sources et comparaison des corps avec `main` vérifiées.
+  PostgreSQL, NiceGUI, navigateur, notifications et Canner/Render réels
+  restent non validés.
+
 ### Structure technique Finances
 
 Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
@@ -290,6 +313,7 @@ Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
   - `finances_financing_data.py` : lectures et calculs Financements.
   - `finances_financing_writes.py` : écritures Financements.
   - `finances_financing.py` : panneau Financements et contrat `FinancingPanelHandle`.
+  - `finances_reconciliation_data.py` : lectures et résumés Conciliation.
   - `finances_calculations.py`
   - `finances_validation.py`
   - `finances_shared_loans.py`
@@ -340,7 +364,7 @@ Le refactor doit être progressif, écran par écran, afin de réduire le risque
 ### Validation / qualité
 
 - Maintenir la compilation Python comme contrôle minimum.
-- Maintenir les 163 tests automatisés de calcul et de compatibilité; compléter
+- Maintenir les 167 tests automatisés de calcul et de compatibilité; compléter
   progressivement les protections de l’interface et des écritures SQL.
 - Conserver des tests ciblés pour :
   - mois à trois paies;

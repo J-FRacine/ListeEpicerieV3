@@ -180,39 +180,20 @@ def save_reconciliation_draft(
 
 
 def get_reconciliation_draft(user_id, payment_method_id):
-    if payment_method_id in (None, ""):
-        return None
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT draft.*, method.name AS payment_method_name
-                FROM finance_reconciliation_drafts AS draft
-                JOIN finance_payment_methods AS method
-                  ON method.id=draft.payment_method_id
-                WHERE draft.user_id=%s AND draft.payment_method_id=%s;
-                """,
-                (user_id, int(payment_method_id)),
-            )
-            row = cur.fetchone()
-    return dict(row) if row else None
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _reconciliation_data.get_reconciliation_draft(
+        user_id,
+        payment_method_id,
+        get_connection=get_connection,
+    )
 
 
 def list_reconciliation_drafts(user_id):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT draft.*, method.name AS payment_method_name
-                FROM finance_reconciliation_drafts AS draft
-                JOIN finance_payment_methods AS method
-                  ON method.id=draft.payment_method_id
-                WHERE draft.user_id=%s
-                ORDER BY draft.updated_at DESC, draft.id DESC;
-                """,
-                (user_id,),
-            )
-            return cur.fetchall()
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _reconciliation_data.list_reconciliation_drafts(
+        user_id,
+        get_connection=get_connection,
+    )
 
 
 def delete_reconciliation_draft(user_id, payment_method_id):

@@ -65,22 +65,11 @@
 
 
 def list_reconciliation_session_links(user_id):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
-                    link.*,
-                    session.user_id
-                FROM finance_reconciliation_session_transactions AS link
-                JOIN finance_reconciliation_sessions AS session
-                    ON session.id = link.session_id
-                WHERE session.user_id = %s
-                ORDER BY link.session_id, link.transaction_id;
-                """,
-                (user_id,),
-            )
-            return cur.fetchall()
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _reconciliation_data.list_reconciliation_session_links(
+        user_id,
+        get_connection=get_connection,
+    )
 
 
 def _export_finances_v190(user_id):

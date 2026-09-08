@@ -27,131 +27,19 @@
 
 
 def payment_predicted_balance_summary(user_id):
-    """Soldes cumulatifs sans remise à zéro mensuelle."""
-
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
-                    method.id AS payment_method_id,
-                    method.name AS payment_method_name,
-                    method.method_type,
-                    method.statement_day,
-                    method.payment_day,
-                    method.opening_balance,
-                    method.opening_balance_date,
-                    method.opening_balance_reconciled,
-                    method.is_active,
-                    method.sort_order,
-                    CASE
-                        WHEN method.opening_balance_reconciled = FALSE
-                        THEN method.opening_balance
-                        ELSE 0
-                    END AS opening_balance_pending,
-                    COALESCE(
-                        SUM(transaction.amount) FILTER (
-                            WHERE transaction.reconciliation_status = 'unreconciled'
-                              AND transaction.status = 'confirmed'
-                              AND transaction.transaction_type = 'expense'
-                        ),
-                        0
-                    ) AS confirmed_expenses,
-                    COALESCE(
-                        SUM(transaction.amount) FILTER (
-                            WHERE transaction.reconciliation_status = 'unreconciled'
-                              AND transaction.status = 'confirmed'
-                              AND transaction.transaction_type = 'income'
-                        ),
-                        0
-                    ) AS confirmed_incomes,
-                    COALESCE(
-                        SUM(transaction.amount) FILTER (
-                            WHERE transaction.reconciliation_status = 'unreconciled'
-                              AND transaction.status = 'planned'
-                              AND transaction.transaction_type = 'expense'
-                        ),
-                        0
-                    ) AS planned_expenses,
-                    COALESCE(
-                        SUM(transaction.amount) FILTER (
-                            WHERE transaction.reconciliation_status = 'unreconciled'
-                              AND transaction.status = 'planned'
-                              AND transaction.transaction_type = 'income'
-                        ),
-                        0
-                    ) AS planned_incomes,
-                    COUNT(transaction.id) FILTER (
-                        WHERE transaction.reconciliation_status = 'unreconciled'
-                          AND transaction.status = 'confirmed'
-                    ) AS confirmed_count,
-                    COUNT(transaction.id) FILTER (
-                        WHERE transaction.reconciliation_status = 'unreconciled'
-                          AND transaction.status = 'planned'
-                    ) AS planned_count,
-                    MIN(transaction.transaction_date) FILTER (
-                        WHERE transaction.reconciliation_status = 'unreconciled'
-                          AND transaction.status = 'confirmed'
-                    ) AS oldest_unreconciled_date,
-                    (
-                        SELECT MAX(session.reconciliation_date)
-                        FROM finance_reconciliation_sessions AS session
-                        WHERE session.user_id = method.user_id
-                          AND session.payment_method_id = method.id
-                          AND session.status = 'completed'
-                    ) AS last_reconciliation_date
-                FROM finance_payment_methods AS method
-                LEFT JOIN finance_transactions AS transaction
-                    ON transaction.user_id = method.user_id
-                   AND transaction.payment_method_id = method.id
-                WHERE method.user_id = %s
-                GROUP BY method.id
-                ORDER BY
-                    method.is_active DESC,
-                    method.sort_order,
-                    LOWER(method.name),
-                    method.id;
-                """,
-                (user_id,),
-            )
-            rows = cur.fetchall()
-
-    result = []
-    for row in rows:
-        current_balance = (
-            Decimal(row["opening_balance_pending"])
-            + Decimal(row["confirmed_expenses"])
-            - Decimal(row["confirmed_incomes"])
-        )
-        planned_impact = (
-            Decimal(row["planned_expenses"])
-            - Decimal(row["planned_incomes"])
-        )
-        result.append(
-            {
-                **dict(row),
-                "current_balance": current_balance,
-                "planned_impact": planned_impact,
-                "predicted_balance": current_balance + planned_impact,
-            }
-        )
-    return result
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _reconciliation_data.payment_predicted_balance_summary(
+        user_id,
+        get_connection=get_connection,
+    )
 
 
 def count_unassigned_confirmed_transactions(user_id):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT COUNT(*) AS total
-                FROM finance_transactions
-                WHERE user_id = %s
-                  AND status = 'confirmed'
-                  AND payment_method_id IS NULL;
-                """,
-                (user_id,),
-            )
-            return int(cur.fetchone()["total"])
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _reconciliation_data.count_unassigned_confirmed_transactions(
+        user_id,
+        get_connection=get_connection,
+    )
 
 
 def list_unreconciled_transactions(
@@ -161,15 +49,14 @@ def list_unreconciled_transactions(
     end_date=None,
     query=None,
 ):
-    return list_transactions(
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _reconciliation_data.list_unreconciled_transactions(
         user_id,
-        start_date=start_date,
-        end_date=end_date,
-        status="confirmed",
-        payment_method_id=payment_method_id,
-        reconciliation_status="unreconciled",
-        query=query,
-        limit=10000,
+        payment_method_id,
+        start_date,
+        end_date,
+        query,
+        list_transactions=list_transactions,
     )
 
 
@@ -212,17 +99,13 @@ def list_unassigned_transactions(
     query=None,
     limit=500,
 ):
-    rows = list_transactions(
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _reconciliation_data.list_unassigned_transactions(
         user_id,
-        status="confirmed",
-        query=query,
-        limit=max(int(limit) * 5, 1000),
+        query,
+        limit,
+        list_transactions=list_transactions,
     )
-    return [
-        row
-        for row in rows
-        if row["payment_method_id"] is None
-    ][: int(limit)]
 
 
 def create_reconciliation_session(
@@ -490,95 +373,26 @@ def list_reconciliation_sessions(
     include_cancelled=True,
     limit=100,
 ):
-    conditions = ["session.user_id = %s"]
-    params = [user_id]
-    if payment_method_id:
-        conditions.append("session.payment_method_id = %s")
-        params.append(payment_method_id)
-    if not include_cancelled:
-        conditions.append("session.status = 'completed'")
-    params.append(int(limit))
-
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""
-                SELECT
-                    session.*,
-                    method.name AS payment_method_name,
-                    COUNT(link.transaction_id)
-                        FILTER (WHERE link.is_active = TRUE)
-                        AS active_transaction_count,
-                    COUNT(link.transaction_id)
-                        FILTER (WHERE link.is_active = FALSE)
-                        AS removed_transaction_count
-                FROM finance_reconciliation_sessions AS session
-                JOIN finance_payment_methods AS method
-                    ON method.id = session.payment_method_id
-                LEFT JOIN finance_reconciliation_session_transactions AS link
-                    ON link.session_id = session.id
-                WHERE {" AND ".join(conditions)}
-                GROUP BY session.id, method.id
-                ORDER BY
-                    session.statement_date DESC,
-                    session.id DESC
-                LIMIT %s;
-                """,
-                params,
-            )
-            return cur.fetchall()
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _reconciliation_data.list_reconciliation_sessions(
+        user_id,
+        payment_method_id,
+        include_cancelled,
+        limit,
+        get_connection=get_connection,
+    )
 
 
 def get_reconciliation_session(
     user_id,
     session_id,
 ):
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
-                    session.*,
-                    method.name AS payment_method_name
-                FROM finance_reconciliation_sessions AS session
-                JOIN finance_payment_methods AS method
-                    ON method.id = session.payment_method_id
-                WHERE session.id = %s
-                  AND session.user_id = %s;
-                """,
-                (session_id, user_id),
-            )
-            session = cur.fetchone()
-            if not session:
-                raise ValueError("Séance de conciliation introuvable.")
-
-            cur.execute(
-                """
-                SELECT
-                    transaction.id,
-                    transaction.transaction_date,
-                    transaction.transaction_type,
-                    transaction.amount,
-                    transaction.description,
-                    transaction.reconciliation_date,
-                    link.is_active,
-                    link.removed_at
-                FROM finance_reconciliation_session_transactions AS link
-                JOIN finance_transactions AS transaction
-                    ON transaction.id = link.transaction_id
-                WHERE link.session_id = %s
-                ORDER BY
-                    transaction.transaction_date,
-                    transaction.id;
-                """,
-                (session_id,),
-            )
-            transactions = cur.fetchall()
-
-    return {
-        "session": session,
-        "transactions": transactions,
-    }
+    """Délègue avec les dépendances courantes de finances_data."""
+    return _reconciliation_data.get_reconciliation_session(
+        user_id,
+        session_id,
+        get_connection=get_connection,
+    )
 
 
 def remove_transaction_from_reconciliation_session(

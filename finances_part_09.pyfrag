@@ -549,7 +549,7 @@
                 ),
                 set_bank_transaction_seen=set_bank_transaction_seen,
                 get_month_value=lambda: month_state.value,
-                refresh_all=refresh_all,
+                refresh_all=lambda: refresh_all(),
             )
 
             remove_dialog = history_actions.remove_dialog

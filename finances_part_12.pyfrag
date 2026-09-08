@@ -1,21 +1,25 @@
         # ORGANISATION
-        with ui.tab_panel(organization_tab).classes("px-0"):
-            with ui.tabs().classes("w-full") as organization_tabs:
-                categories_tab = ui.tab("Catégories")
-                tags_tab = ui.tab("Étiquettes")
-                payment_methods_tab = ui.tab(
-                    "Modes de paiement"
-                )
+        from finances_organization import build_organization_panel
 
-            with ui.tab_panels(
-                organization_tabs,
-                value=categories_tab,
-            ).classes("w-full bg-transparent"):
-                with ui.tab_panel(categories_tab).classes("px-0"):
-                    category_box = ui.column().classes("w-full gap-2")
+        organization_panel = build_organization_panel(
+            ui=ui,
+            user_id=user_id,
+            organization_tab=organization_tab,
+            PAYMENT_METHOD_TYPES=PAYMENT_METHOD_TYPES,
+            _balance_money=_balance_money,
+            list_categories=list_categories,
+            save_category=save_category,
+            set_category_dashboard_visible=set_category_dashboard_visible,
+            toggle_category=toggle_category,
+            list_tags=list_tags,
+            save_tag=save_tag,
+            set_tag_dashboard_visible=set_tag_dashboard_visible,
+            toggle_tag=toggle_tag,
+            list_payment_methods=list_payment_methods,
+            save_payment_method=save_payment_method,
+            toggle_payment_method=toggle_payment_method,
+            move_payment_method=move_payment_method,
+            refresh_all=lambda: refresh_all(),
+            render_dashboard=render_dashboard,
+        )
 
-                    def category_dialog(row=None):
-                        roots = {None: "Aucune — catégorie principale"}
-                        for candidate in list_categories(user_id):
-                            if candidate["parent_id"] is None and (
-                                not row or candidate["id"] != row["id"]

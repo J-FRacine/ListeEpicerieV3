@@ -1,72 +1,3 @@
-                                                )
-                                                text = "Solde utilisé de référence : " + _balance_money(used)
-                                                if limit is not None:
-                                                    text += (
-                                                        " — limite "
-                                                        + _balance_money(limit)
-                                                        + " — disponible "
-                                                        + _balance_money(limit - used)
-                                                    )
-                                                ui.label(text).classes(
-                                                    "text-xs jf-muted"
-                                                )
-                                            elif Decimal(
-                                                row["opening_balance"]
-                                            ) != 0:
-                                                ui.label(
-                                                    "Solde initial : "
-                                                    + _balance_money(
-                                                        row[
-                                                            "opening_balance"
-                                                        ]
-                                                    )
-                                                    + (
-                                                        " — concilié"
-                                                        if row[
-                                                            "opening_balance_reconciled"
-                                                        ]
-                                                        else " — à concilier"
-                                                    )
-                                                ).classes(
-                                                    "text-xs jf-muted"
-                                                )
-
-                                        with ui.row().classes(
-                                            "gap-1 shrink-0"
-                                        ):
-                                            ui.switch(
-                                                value=row[
-                                                    "is_active"
-                                                ],
-                                                on_change=(
-                                                    lambda event,
-                                                    selected=row["id"]:
-                                                    change_payment_state(
-                                                        selected,
-                                                        event.value,
-                                                    )
-                                                ),
-                                            ).props(
-                                                "dense"
-                                            )
-                                            ui.button(
-                                                icon="edit",
-                                                on_click=(
-                                                    lambda _event=None,
-                                                    selected=row:
-                                                    payment_method_dialog(
-                                                        selected
-                                                    )
-                                                ),
-                                            ).props(
-                                                "flat dense round "
-                                                "size=sm color=primary"
-                                            ).tooltip(
-                                                "Modifier"
-                                            )
-
-                    render_payment_methods()
-
         # IMPORTER ET EXPORTER
         with ui.tab_panel(export_tab).classes("px-0"):
             with ui.card().classes("w-full max-w-3xl p-4"):
@@ -342,9 +273,7 @@
         render_history.refresh()
         render_recurrences.refresh()
         render_goals.refresh()
-        render_categories.refresh()
-        render_tags.refresh()
-        render_payment_methods.refresh()
+        organization_panel.refresh()
         account_panel.reload_options()
         account_panel.refresh()
         budget_panel.refresh()

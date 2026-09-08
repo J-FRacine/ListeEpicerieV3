@@ -1,11 +1,12 @@
-JF Apps — Finances / Historique — étape 4
+JF Apps — Finances / Historique — étape 5
 
 À ajouter à la racine :
-- finances_card_payments_writes.py
+- finances_history_analysis.py
 
 À remplacer à la racine :
 - finances_data.py
 
-Cette petite étape extrait seulement save_card_payment_transfer().
+Cette petite étape extrait seulement la recherche des doublons potentiels
+utilisée dans Historique.
 
 Aucun changement visible, aucune migration. Finances reste V1.13.2.

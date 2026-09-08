@@ -220,3 +220,27 @@ def save_card_payment_transfer(
         get_connection=get_connection,
         validate_card_payment_methods=_validate_card_payment_methods,
     )
+
+
+# Extraction progressive des contrôles de l'Historique.
+import finances_history_analysis as _history_analysis
+
+
+def find_potential_duplicate_transactions(
+    user_id,
+    *,
+    start_date=None,
+    end_date=None,
+    same_type=True,
+    window_days=2,
+    limit=10000,
+):
+    return _history_analysis.find_potential_duplicate_transactions(
+        user_id,
+        start_date=start_date,
+        end_date=end_date,
+        same_type=same_type,
+        window_days=window_days,
+        limit=limit,
+        list_transactions=list_transactions,
+    )

@@ -67,8 +67,20 @@ Version actuelle de travail : **V1.13.5**
 - Créés : `finances_goals.py`, `tests/test_finances_goals_ui.py`.
 - Modifiés : `finances_part_01.pyfrag`, `finances_part_10.pyfrag`, `finances_part_14.pyfrag`, `PROJECT_STATUS.md`.
 - Validation locale : **254 tests réussis** (244 existants inchangés et 10 nouveaux); compilation des fichiers Python concernés et des deux assemblages; `git diff --check` sans erreur. Revue automatique du bloc déplacé et du parent : structures Python identiques hors raccordements attendus.
-- Finances reste **V1.13.5**; `app_versions.py`, les notes utilisateur et `manual.py` sont inchangés. Le déploiement Canner/Render et la validation navigateur de cette extraction restent à effectuer après publication; PostgreSQL de production n’a pas été testé indépendamment.
+- Finances reste **V1.13.5**; `app_versions.py`, les notes utilisateur et `manual.py` sont inchangés. La validation utilisateur après déploiement sur Canner/Render et dans le navigateur a réussi; PostgreSQL de production n’a pas été testé indépendamment.
 - Prochaine zone technique recommandée après revue : **Importer/Exporter**, dans une intervention séparée.
+
+### Extraction interne Importer/Exporter — 2026-09-09
+
+- Point de départ : `9d128bf849c986bef80b63d6271070a59bc8853b` (`9d128bf`), `origin/main` vérifiée et état Git propre; **254 tests de départ réussis**.
+- Le bloc Importer/Exporter est extrait de `finances_part_14.pyfrag` vers `finances_import_export.py`, avec `build_import_export_panel` et les huit dépendances injectées. Aucun handle nécessaire : aucun rafraîchissement externe du panneau.
+- Les imports standard `Path` et `tempfile`, utilisés uniquement par l’export, sont déplacés du parent au nouveau module. Aucun import direct de NiceGUI, `finances`, `finances_data`, `db` ou psycopg.
+- Prévisualisation CSV Spendee/JF Apps et JSON, doublons, postes de budget, erreurs, messages, rafraîchissement après import et téléchargements CSV/JSON conservés. Aucune modification fonctionnelle ou visuelle volontaire, aucun SQL, aucune migration et aucune nouvelle dépendance.
+- Créés : `finances_import_export.py`, `tests/test_finances_import_export_ui.py`.
+- Modifiés : `finances_part_01.pyfrag`, `finances_part_14.pyfrag`, `PROJECT_STATUS.md`.
+- Validation locale : **265 tests réussis** (254 existants inchangés et 11 nouveaux); compilation des fichiers Python concernés et des deux assemblages; `git diff --check` sans erreur. Revue automatique : bloc déplacé identique et parent inchangé hors raccordement et imports attendus.
+- Finances reste **V1.13.5**; versions, notes utilisateur et manuel inchangés. Le déploiement Canner/Render et la validation navigateur de cette extraction restent à effectuer après publication; PostgreSQL de production n’a pas été testé indépendamment.
+- Prochaine étape technique recommandée après revue : examiner l’extraction de **Saisie**, dans une intervention séparée.
 
 ### Changements récents terminés
 

@@ -176,7 +176,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.13.4",
+        "title": "Finances — V1.13.5",
         "icon": "account_balance_wallet",
         "caption": "Prévisions, Budget, financements, conciliation et prêts partagés",
         "keywords": (
@@ -185,6 +185,14 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "compte solde départ solde actuel plus bas prévu fin mois"
         ),
         "content": """
+### V1.13.5 — section des transactions prévues repliable
+
+Dans **Conciliation**, le titre indique le nombre de lignes, par exemple **Transactions prévues à confirmer (93)**. Cliquez sur la flèche pour ouvrir ou fermer la section. Elle est ouverte par défaut avec **10 transactions ou moins** (y compris zéro), et fermée au-delà.
+
+Votre choix reste conservé pendant les rafraîchissements du panneau, notamment après **Confirmer**. Changer de mode de paiement rétablit l’ouverture par défaut selon le nombre de transactions du nouveau mode. Quitter puis reconstruire la page rétablit également ce comportement par défaut.
+
+Il s’agit uniquement d’une amélioration d’affichage : **Confirmer** passe toujours la transaction existante de `planned` à `confirmed`, sans créer de transaction. Aucun calcul de solde, règle de conciliation ou comportement des Financements ne change. Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance Python.
+
 ### V1.13.4 — confirmer les transactions prévues depuis Conciliation
 
 Dans **Conciliation**, une nouvelle section **Transactions prévues à confirmer** apparaît pour le mode de paiement sélectionné. Elle contient notamment les **versements de financement** encore au statut **À confirmer**, ainsi que les autres transactions prévues de ce compte ou de cette carte.

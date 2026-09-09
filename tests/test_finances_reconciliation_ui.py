@@ -66,7 +66,7 @@ def environment():
                  'refresh_reconciliation_screen', 'refresh_all', '_card_payment_dialog', '_transaction_dialog',
                  'toggle_reconciliation_selection', 'toggle_unassigned'):
         env[name] = Mock(name=name)
-    env.update(ui=ui, user_id=7, date=date, Decimal=D, _money=str, _balance_money=str,
+    env.update(planned_expansion_state={"open": None}, ui=ui, user_id=7, date=date, Decimal=D, _money=str, _balance_money=str,
                _payment_effect=lambda amount, kind: str(amount), _signed=lambda amount, kind: str(amount),
                reconciliation_selected={2, 3}, reconciliation_rows_by_id={2: row(), 3: row(3, transaction_type='income', amount=D('30'))},
                unassigned_selected={2}, reconciliation_method_rows={4: {'method_type': 'credit_card'}},

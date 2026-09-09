@@ -1,6 +1,6 @@
 # JF Apps — État du projet
 
-Dernière mise à jour : 2026-09-08
+Dernière mise à jour : 2026-09-09
 
 Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversations. Le dépôt GitHub `J-FRacine/ListeEpicerieV3` sur `main` est la référence technique.
 
@@ -11,7 +11,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.1.2 |
 | Journal de pression | 1.2.1 |
-| Finances | 1.13.4 |
+| Finances | 1.13.5 |
 | Personnages JDR | 1.3.0 |
 | Commentaires et suggestions | 1.0.0 |
 
@@ -19,7 +19,19 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 
 ## Finances — état actuel
 
-Version actuelle de travail : **V1.13.4**
+Version actuelle de travail : **V1.13.5**
+
+### V1.13.5 — section des transactions prévues repliable — 2026-09-09
+
+- Point de départ vérifié : `main`, commit `96f014ff63db0a3b42f58ca3b6fe695ea5c7f781`; base de 211 tests réussis.
+- Le titre Transactions prévues à confirmer affiche le compteur et une expansion NiceGUI.
+- De 0 à 10 transactions : ouverte par défaut; au-delà : fermée.
+- Le choix manuel est conservé pendant les rafraîchissements du panneau, y compris après confirmation. Le changement de mode de paiement réinitialise ce choix.
+- Amélioration d’affichage uniquement : confirmation existante `planned` → `confirmed`, filtre conciliable `confirmed` seulement, soldes et Financements inchangés. Aucune transaction supplémentaire.
+- Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance Python.
+- Validation locale : compilation des cinq fichiers Python modifiés et des deux assemblages de fragments; `python -B -m unittest discover -s tests` : **216 tests réussis**. `git diff --check` sans erreur.
+- Fichiers modifiés : `finances_reconciliation.py`, `tests/test_finances_reconciliation_planned.py`, `tests/test_finances_reconciliation_ui.py`, `app_versions.py`, `manual.py`, `PROJECT_STATUS.md`.
+- Canner/Render, l’affichage dans un navigateur réel et PostgreSQL de production restent à valider après déploiement.
 
 ### Changements récents terminés
 

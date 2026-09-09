@@ -15,12 +15,26 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.0",
     "blood_pressure": "1.2.1",
-    "finances": "1.13.4",
+    "finances": "1.13.5",
     "rpg": "1.3.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.13.5",
+        "date": "2026-09-09",
+        "title": "Finances — section des transactions prévues repliable",
+        "summary": "Amélioration d’affichage uniquement dans Conciliation.",
+        "changes": [
+            "Transactions prévues à confirmer affiche un compteur et une flèche pour ouvrir ou fermer la section.",
+            "Ouverte par défaut jusqu’à 10 transactions inclusivement, fermée au-delà.",
+            "Le choix manuel reste conservé pendant les rafraîchissements du panneau; changer de mode de paiement rétablit le comportement par défaut.",
+            "Confirmer conserve son fonctionnement; aucun changement des soldes, des règles de conciliation ou des Financements.",
+            "Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance Python.",
+        ],
+    },
     {
         "app_key": "grocery",
         "version": "1.2.0",

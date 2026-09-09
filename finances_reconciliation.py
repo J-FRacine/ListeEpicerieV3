@@ -759,7 +759,6 @@ def build_reconciliation_panel(
                             type="positive",
                         )
                         refresh_reconciliation_screen()
-                        refresh_all()
 
                         method = reconciliation_method_rows.get(int(selected_payment_id or 0), {})
                         if program_payment and method.get("method_type") == "credit_card":
@@ -767,6 +766,10 @@ def build_reconciliation_panel(
                             if proposed is None:
                                 proposed = result.get("expected_balance")
                             proposed = abs(Decimal(proposed or 0))
+                            # Le rafraîchissement global est volontairement différé :
+                            # il détruisait le contexte NiceGUI avant l'ouverture du
+                            # dialogue de paiement. L'enregistrement du paiement appelle
+                            # refresh_all via le callback transmis au dialogue.
                             _card_payment_dialog(
                                 user_id,
                                 refresh_all,
@@ -784,6 +787,8 @@ def build_reconciliation_panel(
                                     ),
                                 },
                             )
+                        else:
+                            refresh_all()
 
                     def request_finalize(program_payment=False):
                         if (

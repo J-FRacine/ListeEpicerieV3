@@ -176,15 +176,23 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.13.2",
+        "title": "Finances — V1.13.3",
         "icon": "account_balance_wallet",
-        "caption": "Prévisions, Budget, financements et prêts partagés",
+        "caption": "Prévisions, Budget, financements, conciliation et prêts partagés",
         "keywords": (
             "finances budget prévisions pourcentage kpi financement intérêts "
             "archives à venir paies prêts partagés catégorie étiquette saisie rapide "
             "compte solde départ solde actuel plus bas prévu fin mois"
         ),
         "content": """
+### V1.13.3 — programmer le paiement après une conciliation de carte
+
+Pour une **Carte de crédit**, le bouton **Clore et programmer le paiement** termine la conciliation puis ouvre immédiatement le formulaire **Paiement de carte**. La carte, le montant du relevé (ou le solde attendu lorsque nécessaire), la date de paiement et le statut prévu sont proposés automatiquement.
+
+Vérifiez simplement le **Compte bancaire de départ**, les montants et les dates, puis utilisez **Enregistrer le paiement**. Le paiement demeure un mouvement lié entre le compte bancaire et la carte et reste automatiquement hors budget selon le fonctionnement existant.
+
+Si vous fermez le formulaire sans enregistrer le paiement, la conciliation qui vient d’être clôturée demeure enregistrée; seul le paiement de carte n’est pas créé.
+
 ### V1.13.2 — Solde de départ dans le tableau Compte
 
 Dans un **Compte bancaire**, le **Solde de départ** n’occupe plus une carte dans le résumé supérieur. Le haut de l’écran affiche maintenant seulement **Solde actuel**, **Plus bas prévu** et **Solde fin de mois**, sur une même rangée.

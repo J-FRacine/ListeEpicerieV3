@@ -11,7 +11,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.1.2 |
 | Journal de pression | 1.2.1 |
-| Finances | 1.13.2 |
+| Finances | 1.13.3 |
 | Personnages JDR | 1.3.0 |
 | Commentaires et suggestions | 1.0.0 |
 
@@ -19,7 +19,7 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 
 ## Finances — état actuel
 
-Version actuelle dans `main` : **V1.13.2**
+Version actuelle de travail : **V1.13.3**
 
 ### Changements récents terminés
 
@@ -336,6 +336,26 @@ sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
   NiceGUI, navigateur, PostgreSQL, notifications et Canner/Render réels ne sont
   pas validés.
 
+### Reprise locale Organisation depuis le main GitHub — 2026-09-08 (America/Toronto)
+
+- Contexte : les fichiers produits dans l'espace local Codex n'avaient jamais été recopiés dans le dépôt utilisateur. Le dépôt réel était donc encore le `main` au commit `28e8e3a...`, avec **173 tests réussis** avant cette reprise.
+- Reconstruction de la séparation Organisation à partir des corps réellement présents dans `finances_organization_data.py` : 3 lectures + 2 helpers purs restent dans ce module et 13 écritures sont déplacées textuellement dans `finances_organization_writes.py`.
+- Les 18 façades de `finances_data_part_02.pyfrag` sont conservées; les 13 écritures délèguent maintenant à `_organization_writes` et les lectures/helpers restent sur `_organization_data`.
+- Correction conservée pour `toggle_tag` et `set_tag_dashboard_visible` : `get_connection` est injecté explicitement au lieu de dépendre d'un nom global absent.
+- Ajout de **20 tests de récupération** : séparation/imports/façades/helpers/créations rapides et listes Organisation vides/remplies avec banques, marges, modes désactivés et callbacks UI simulés.
+- Suite après reconstruction Organisation : **193 tests réussis**. Les tests Codex exacts de l'espace local perdu n'étaient pas récupérables octet pour octet; cette suite remplace leur rôle avec des contrôles reconstruits sur le code réel.
+- Organisation est considérée terminée pour cette phase : lectures/helpers, écritures et UI sont séparés, avec façades compatibles. Aucun changement métier, visuel ou SQL et aucune migration PostgreSQL.
+
+### Finances V1.13.3 — Conciliation et nettoyage Historique — 2026-09-08 (America/Toronto)
+
+- Correctif utilisateur : **Clore et programmer le paiement** ouvre maintenant le formulaire de paiement de carte avant le rafraîchissement global qui pouvait auparavant détruire son contexte NiceGUI.
+- La carte, le montant du relevé (ou le solde attendu), la date de paiement et le statut planifié sont préremplis. L'enregistrement du paiement utilise le callback `refresh_all` existant.
+- Nettoyage Historique/transactions : retrait des anciennes copies mortes des actions, dialogues et ancien rendu situés dans les fragments 08–10. `finances_history.py` demeure l'implémentation active.
+- Ajout de **11 tests** de non-régression Historique/Conciliation. Suite finale : **204 tests réussis**.
+- Version Finances : **V1.13.3**. Manuel et notes de version actualisés.
+- Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance Python. PostgreSQL réel, navigateur/NiceGUI réel, notifications, Canner et Render n'ont pas été testés ici.
+- Prochaine zone de ménage recommandée : **Tableau**; Récurrences reste ensuite un candidat naturel.
+
 ### Structure technique Finances
 
 Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
@@ -406,7 +426,7 @@ Le refactor doit être progressif, écran par écran, afin de réduire le risque
 ### Validation / qualité
 
 - Maintenir la compilation Python comme contrôle minimum.
-- Maintenir les 173 tests automatisés de calcul et de compatibilité; compléter
+- Maintenir les 204 tests automatisés de calcul et de compatibilité; compléter
   progressivement les protections de l’interface et des écritures SQL.
 - Conserver des tests ciblés pour :
   - mois à trois paies;

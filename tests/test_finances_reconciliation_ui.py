@@ -272,6 +272,39 @@ class ReconciliationUiTests(unittest.TestCase):
                     'destination_payment_method_id': 4, 'amount': amount, 'payment_date': '2026-09-20',
                     'status': 'planned', 'bank_programmed': False, 'description': 'Paiement de carte — relevé du 08/09/2026'})
 
+    def test_credit_card_programming_opens_before_parent_refresh(self):
+        env, ui = environment()
+        env['statement_balance'].value = D('160')
+        result = dict(
+            transaction_count=2,
+            statement_balance=D('-160'),
+            expected_balance=D('150'),
+        )
+        events = []
+        env['create_reconciliation_session'].side_effect = (
+            lambda **kwargs: events.append('create') or result
+        )
+        env['refresh_reconciliation_screen'].side_effect = (
+            lambda: events.append('screen')
+        )
+        env['refresh_all'].side_effect = lambda: events.append('parent')
+        env['_card_payment_dialog'].side_effect = (
+            lambda *args, **kwargs: events.append('card')
+        )
+
+        load('render_reconciliation_selection', env)()
+        ui.click('Clore et programmer le paiement')
+        ui.find('textarea', 'Explication de l’écart')[3].value = 'écart accepté'
+        ui.click('Clore et programmer le paiement')
+
+        self.assertEqual(events, ['create', 'screen', 'card'])
+        env['refresh_all'].assert_not_called()
+        env['_card_payment_dialog'].assert_called_once()
+        self.assertIs(
+            env['_card_payment_dialog'].call_args.args[1],
+            env['refresh_all'],
+        )
+
     def test_empty_selection_or_failed_finalization_never_resets_or_refreshes(self):
         env, ui = environment()
         env['include_opening_balance'].value = False

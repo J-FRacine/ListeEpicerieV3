@@ -129,10 +129,11 @@
 
 
 import finances_organization_data as _organization_data
+import finances_organization_writes as _organization_writes
 
 
 def ensure_default_finance_categories(user_id):
-    return _organization_data.ensure_default_finance_categories(
+    return _organization_writes.ensure_default_finance_categories(
         user_id,
         get_connection=get_connection,
     )
@@ -147,7 +148,7 @@ def list_categories(user_id, include_inactive=False):
 
 
 def save_category(user_id, name, parent_id=None, category_type="both", category_id=None):
-    return _organization_data.save_category(
+    return _organization_writes.save_category(
         user_id,
         name,
         parent_id=parent_id,
@@ -159,7 +160,7 @@ def save_category(user_id, name, parent_id=None, category_type="both", category_
 
 
 def toggle_category(user_id, category_id, is_active):
-    return _organization_data.toggle_category(
+    return _organization_writes.toggle_category(
         user_id,
         category_id,
         is_active,
@@ -168,7 +169,7 @@ def toggle_category(user_id, category_id, is_active):
 
 
 def set_category_dashboard_visible(user_id, category_id, is_visible):
-    return _organization_data.set_category_dashboard_visible(
+    return _organization_writes.set_category_dashboard_visible(
         user_id,
         category_id,
         is_visible,
@@ -185,7 +186,7 @@ def list_tags(user_id, include_inactive=False):
 
 
 def save_tag(user_id, name, tag_id=None):
-    return _organization_data.save_tag(
+    return _organization_writes.save_tag(
         user_id,
         name,
         tag_id=tag_id,
@@ -205,7 +206,7 @@ def get_or_create_finance_category(
     parent_id=None,
     category_type="both",
 ):
-    return _organization_data.get_or_create_finance_category(
+    return _organization_writes.get_or_create_finance_category(
         user_id,
         name,
         parent_id=parent_id,
@@ -222,7 +223,7 @@ def get_or_create_finance_tag(
     user_id,
     name,
 ):
-    return _organization_data.get_or_create_finance_tag(
+    return _organization_writes.get_or_create_finance_tag(
         user_id,
         name,
         _text=_text,
@@ -234,7 +235,7 @@ def get_or_create_finance_tag(
 
 
 def toggle_tag(user_id, tag_id, is_active):
-    return _organization_data.toggle_tag(
+    return _organization_writes.toggle_tag(
         user_id,
         tag_id,
         is_active,
@@ -243,7 +244,7 @@ def toggle_tag(user_id, tag_id, is_active):
 
 
 def set_tag_dashboard_visible(user_id, tag_id, is_visible):
-    return _organization_data.set_tag_dashboard_visible(
+    return _organization_writes.set_tag_dashboard_visible(
         user_id,
         tag_id,
         is_visible,
@@ -252,7 +253,7 @@ def set_tag_dashboard_visible(user_id, tag_id, is_visible):
 
 
 def ensure_default_finance_payment_methods(user_id):
-    return _organization_data.ensure_default_finance_payment_methods(
+    return _organization_writes.ensure_default_finance_payment_methods(
         user_id,
         get_connection=get_connection,
         DEFAULT_PAYMENT_METHODS=DEFAULT_PAYMENT_METHODS,
@@ -287,7 +288,7 @@ def save_payment_method(
     credit_limit=None,
     note=None,
 ):
-    return _organization_data.save_payment_method(
+    return _organization_writes.save_payment_method(
         user_id,
         name,
         payment_method_id=payment_method_id,
@@ -311,7 +312,7 @@ def toggle_payment_method(
     payment_method_id,
     is_active,
 ):
-    return _organization_data.toggle_payment_method(
+    return _organization_writes.toggle_payment_method(
         user_id,
         payment_method_id,
         is_active,
@@ -324,7 +325,7 @@ def move_payment_method(
     payment_method_id,
     direction,
 ):
-    return _organization_data.move_payment_method(
+    return _organization_writes.move_payment_method(
         user_id,
         payment_method_id,
         direction,

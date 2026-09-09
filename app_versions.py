@@ -15,7 +15,7 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.0",
     "blood_pressure": "1.2.1",
-    "finances": "1.13.2",
+    "finances": "1.13.3",
     "rpg": "1.3.0",
     "feedback": "1.0.0",
 }
@@ -39,6 +39,23 @@ RELEASE_NOTES = [
             "Planification, Activité et Données restent disponibles dans leur barre d’outils secondaire.",
             "Le Mode courses conserve son écran simplifié et son fonctionnement actuel.",
             "Aucun changement de données, de schéma PostgreSQL, de migration ou de dépendance Python.",
+        ],
+    },
+    {
+        "app_key": "finances",
+        "version": "1.13.3",
+        "date": "2026-09-08",
+        "title": "Finances — programmation du paiement après conciliation",
+        "summary": (
+            "Le bouton Clore et programmer le paiement ouvre maintenant correctement "
+            "le formulaire de paiement de carte après la conciliation."
+        ),
+        "changes": [
+            "Après la clôture d’une conciliation de carte, le formulaire Paiement de carte s’ouvre avant tout rafraîchissement global susceptible de fermer le dialogue.",
+            "La carte, le montant du relevé (ou le solde attendu), la date de paiement et le statut À confirmer sont proposés automatiquement.",
+            "Le rafraîchissement global est exécuté lors de l’enregistrement du paiement; la finalisation sans programmation conserve son rafraîchissement immédiat.",
+            "Nettoyage interne de l’Historique : les anciennes copies mortes des actions et du rendu sont retirées des fragments 08 à 10; le module finances_history.py reste l’unique implémentation active.",
+            "Aucun changement de schéma PostgreSQL, aucune migration, aucun SQL manuel et aucune nouvelle dépendance Python.",
         ],
     },
     {

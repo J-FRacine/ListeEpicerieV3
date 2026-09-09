@@ -401,7 +401,7 @@
                 on_monthly_unreconciled=lambda: monthly_unreconciled_dialog(),
             )
 
-            # Alias conservés pour les dialogues encore présents dans le parent.
+            # Alias conservés pour les raccords existants du parent.
             start = history_panel.start
             end = history_panel.end
             query = history_panel.query
@@ -416,92 +416,55 @@
             history_payment = history_panel.payment
             history_box = history_panel.history_box
 
-            def remove_dialog(
-                row,
-            ):
-                with ui.dialog() as dialog:
-                    with ui.card().classes(
-                        "w-full max-w-md p-4"
-                    ):
-                        ui.label(
-                            "Supprimer cette transaction?"
-                        ).classes(
-                            "text-lg font-bold"
-                        )
-                        ui.label(
-                            (
-                                f"{row['description']} — "
-                                f"{_signed(row['amount'], row['transaction_type'])}"
-                            )
-                        )
-                        if row.get("linked_transfer_id"):
-                            ui.label(
-                                "Ce paiement est lié au compte bancaire et à la carte de crédit. Les deux côtés seront supprimés ensemble."
-                            ).classes("text-sm jf-muted")
+            history_actions = _history_ui.build_history_actions(
+                ui=ui,
+                panel=history_panel,
+                user_id=user_id,
+                TRANSACTION_TYPES=TRANSACTION_TYPES,
+                TRANSACTION_STATUSES=TRANSACTION_STATUSES,
+                RECONCILIATION_STATUSES=RECONCILIATION_STATUSES,
+                signed=_signed,
+                money=_money,
+                delete_transaction=delete_transaction,
+                set_transaction_status=set_transaction_status,
+                set_transaction_reconciliation=set_transaction_reconciliation,
+                get_card_payment_transfer=get_card_payment_transfer,
+                get_transaction=get_transaction,
+                card_payment_dialog=_card_payment_dialog,
+                transaction_dialog=_transaction_dialog,
+                find_potential_duplicate_transactions=(
+                    find_potential_duplicate_transactions
+                ),
+                list_month_unreconciled_transactions=(
+                    list_month_unreconciled_transactions
+                ),
+                set_bank_transaction_seen=set_bank_transaction_seen,
+                get_month_value=lambda: month_state.value,
+                refresh_all=lambda: refresh_all(),
+            )
 
-                        def remove():
-                            try:
-                                delete_transaction(
-                                    user_id,
-                                    row["id"],
-                                )
-                            except Exception as error:
-                                ui.notify(
-                                    str(error),
-                                    type="warning",
-                                )
-                                return
+            remove_dialog = history_actions.remove_dialog
+            confirm_transaction = history_actions.confirm_transaction
+            change_reconciliation = history_actions.change_reconciliation
+            render_transaction_row = history_actions.render_transaction_row
+            _open_history_row = history_actions.open_history_row
+            duplicate_search_dialog = history_actions.duplicate_search_dialog
+            monthly_unreconciled_dialog = (
+                history_actions.monthly_unreconciled_dialog
+            )
+            _add_month_label_end = history_actions.add_month_label_end
 
-                            dialog.close()
-                            ui.notify(
-                                "Transaction supprimée.",
-                                type="positive",
-                            )
-                            refresh_all()
-
-                        with ui.row().classes(
-                            "w-full justify-end gap-2"
-                        ):
-                            ui.button(
-                                "Annuler",
-                                on_click=dialog.close,
-                            ).props(
-                                "flat"
-                            )
-                            ui.button(
-                                "Supprimer",
-                                icon="delete",
-                                on_click=remove,
-                            ).props(
-                                "color=negative"
-                            )
-
-                dialog.open()
-
-            def confirm_transaction(
-                transaction_id,
-            ):
-                try:
-                    set_transaction_status(
-                        user_id,
-                        transaction_id,
-                        "confirmed",
-                    )
-                except Exception as error:
-                    ui.notify(
-                        str(error),
-                        type="warning",
-                    )
-                    return
-
-                ui.notify(
-                    "Transaction confirmée.",
-                    type="positive",
+            @ui.refreshable
+            def render_history():
+                _history_ui.render_history(
+                    ui=ui,
+                    panel=history_panel,
+                    user_id=user_id,
+                    list_transactions=list_transactions,
+                    render_transaction_row=render_transaction_row,
+                    money=_money,
                 )
-                refresh_all()
 
-            def change_reconciliation(
-                transaction_id,
-                current_status,
-            ):
-                new_status = (
+            render_history()
+
+

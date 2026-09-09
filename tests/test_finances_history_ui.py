@@ -145,7 +145,8 @@ import finances_history
         recurrences = text.index("        # RÉCURRENCES", render)
         self.assertLess(history, render)
         self.assertLess(render, recurrences)
-        self.assertIn("def recurrence_dialog", text[recurrences:])
+        self.assertIn("recurrences_panel = build_recurrences_panel(", text[recurrences:])
+        self.assertIn("def recurrence_dialog", (ROOT / "finances_recurrences.py").read_text(encoding="utf-8"))
 
     def test_building_actions_is_lazy(self):
         actions, deps = actions_environment()

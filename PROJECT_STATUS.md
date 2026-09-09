@@ -46,6 +46,19 @@ Version actuelle de travail : **V1.13.5**
 - Extraction validée localement. Le déploiement Canner/Render et la validation navigateur de cette extraction restent à effectuer après publication; PostgreSQL de production n’a pas été testé indépendamment.
 - Prochaine zone prévue : **Récurrences**.
 
+### Extraction interne de Récurrences — 2026-09-09
+
+- Point de départ : `60b9cc35651e94c7b9246f558890439cb963557f` (`60b9cc3`), `main` vérifiée, état Git propre après retrait des caches Python; **233 tests de départ réussis**.
+- Le bloc complet Récurrences est extrait de `finances_part_10.pyfrag` vers `finances_recurrences.py`, avec `RecurrencesPanelHandle` et `build_recurrences_panel`. Les services et `ui` sont injectés; aucun import direct de NiceGUI, `finances`, `finances_data` ou `db`.
+- Le parent rafraîchit le panneau via le handle. Compte ouvre le dialogue par un callback différé vers `recurrences_panel.open_dialog()`, sans connaître les widgets internes.
+- Ajout, édition, activation/désactivation, suppression et options des occurrences conservent leur comportement. La génération conserve `force_planned=False` à la création et `force_planned=True` à la modification. Aucune modification utilisateur ou visuelle volontaire, aucun SQL, aucune migration et aucune nouvelle dépendance.
+- Créés : `finances_recurrences.py`, `tests/test_finances_recurrences_ui.py`.
+- Modifiés : `finances_part_01.pyfrag`, `finances_part_05.pyfrag`, `finances_part_10.pyfrag`, `finances_part_14.pyfrag`, `tests/test_finances_account_ui.py`, `tests/test_finances_history_ui.py`, `PROJECT_STATUS.md`.
+- Les tests existants de raccordement Compte et de frontière Historique vérifient désormais le handle et le module extrait; leurs protections sont conservées.
+- Validation locale : **244 tests réussis** (233 existants et 11 nouveaux), compilation des fichiers Python concernés et des deux assemblages, `git diff --check` sans erreur. Revue automatique : structure Python du bloc déplacé identique au point de départ et raccordements parent vérifiés.
+- Finances reste **V1.13.5**; versions, notes utilisateur et manuel inchangés. Le déploiement Canner/Render et la validation navigateur de cette extraction restent à effectuer après publication; PostgreSQL de production n’a pas été testé indépendamment.
+- Prochaine étape recommandée après revue : extraction interne d’**Objectifs**, dans une intervention séparée; Exporter reste hors de cette étape.
+
 ### Changements récents terminés
 
 - Navigation Budget optimisée dans V1.13.1.

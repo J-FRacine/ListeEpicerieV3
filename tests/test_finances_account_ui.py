@@ -161,7 +161,10 @@ handle.refresh()
         for _ in range(2):
             for name in ('refresh_all', 'recurrence_dialog', '_transaction_dialog', '_card_payment_dialog'):
                 target = Mock()
-                namespace[name] = target
+                if name == 'recurrence_dialog':
+                    namespace['recurrences_panel'] = Mock(open_dialog=target)
+                else:
+                    namespace[name] = target
                 callbacks[name](1, test=True)
                 target.assert_called_once_with(1, test=True)
 

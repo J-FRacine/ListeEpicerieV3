@@ -271,7 +271,7 @@
 
         dashboard_panel.refresh()
         render_history.refresh()
-        render_recurrences.refresh()
+        recurrences_panel.refresh()
         render_goals.refresh()
         organization_panel.refresh()
         account_panel.reload_options()

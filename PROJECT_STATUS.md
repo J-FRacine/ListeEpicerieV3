@@ -11,7 +11,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.1.2 |
 | Journal de pression | 1.2.1 |
-| Finances | 1.13.3 |
+| Finances | 1.13.4 |
 | Personnages JDR | 1.3.0 |
 | Commentaires et suggestions | 1.0.0 |
 
@@ -19,7 +19,7 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 
 ## Finances — état actuel
 
-Version actuelle de travail : **V1.13.3**
+Version actuelle de travail : **V1.13.4**
 
 ### Changements récents terminés
 
@@ -356,6 +356,17 @@ sans changement utilisateur, sans nouveau SQL et sans migration PostgreSQL.
 - Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance Python. PostgreSQL réel, navigateur/NiceGUI réel, notifications, Canner et Render n'ont pas été testés ici.
 - Prochaine zone de ménage recommandée : **Tableau**; Récurrences reste ensuite un candidat naturel.
 
+### Finances V1.13.4 — transactions prévues dans Conciliation — 2026-09-09 (America/Toronto)
+
+- La Conciliation affiche maintenant une section séparée **Transactions prévues à confirmer** pour le mode de paiement sélectionné.
+- Les versements issus des Financements et les autres transactions `planned` / non conciliées y sont visibles sans être mélangés aux transactions déjà confirmées.
+- **Confirmer** réutilise `set_transaction_status(..., "confirmed")`; aucun nouveau SQL métier n'est ajouté. Après confirmation, `refresh_all()` fait passer immédiatement la même transaction dans la liste admissible à la conciliation.
+- Les lignes confirmées de la conciliation conservent leur filtre historique `status="confirmed"`; les lignes prévues utilisent `status="planned"`. Le résumé de solde existant reste inchangé : la confirmation déplace donc l'impact de prévu vers confirmé sans double comptage.
+- **7 tests** de non-régression sont ajoutés pour les filtres, la séparation des statuts, la confirmation, les dépendances injectées, le raccord parent et la documentation. Suite attendue : **211 tests réussis**.
+- Version Finances : **V1.13.4**. Manuel et notes de version actualisés.
+- Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance Python.
+- Après validation utilisateur de V1.13.4, la prochaine zone de ménage reste **Tableau**, puis **Récurrences**.
+
 ### Structure technique Finances
 
 Les anciens gros monolithes ont été scindés pour faciliter la maintenance :
@@ -426,7 +437,7 @@ Le refactor doit être progressif, écran par écran, afin de réduire le risque
 ### Validation / qualité
 
 - Maintenir la compilation Python comme contrôle minimum.
-- Maintenir les 204 tests automatisés de calcul et de compatibilité; compléter
+- Maintenir les 211 tests automatisés de calcul et de compatibilité; compléter
   progressivement les protections de l’interface et des écritures SQL.
 - Conserver des tests ciblés pour :
   - mois à trois paies;

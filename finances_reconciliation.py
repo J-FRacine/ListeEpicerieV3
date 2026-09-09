@@ -17,6 +17,46 @@ class ReconciliationPanelHandle:
         self.on_reload_options()
 
 
+def _list_planned_reconciliation_transactions(
+    user_id,
+    payment_method_id,
+    *,
+    list_transactions,
+    limit=500,
+):
+    # Transactions prevues du mode choisi, separees des lignes conciliables.
+    if payment_method_id in (None, ""):
+        return []
+    rows = list_transactions(
+        user_id,
+        status="planned",
+        payment_method_id=payment_method_id,
+        reconciliation_status="unreconciled",
+        limit=limit,
+    )
+    return sorted(
+        list(rows),
+        key=lambda row: (
+            row["transaction_date"],
+            int(row["id"]),
+        ),
+    )
+
+
+def _confirm_planned_reconciliation_transaction(
+    user_id,
+    transaction_id,
+    *,
+    set_transaction_status,
+):
+    # Reutilise l'ecriture existante; aucune nouvelle transaction n'est creee.
+    return set_transaction_status(
+        user_id,
+        transaction_id,
+        "confirmed",
+    )
+
+
 def build_reconciliation_panel(
     *,
     RECONCILIATION_SESSION_STATUSES,
@@ -39,12 +79,14 @@ def build_reconciliation_panel(
     list_reconciliation_sessions,
     list_unassigned_transactions,
     list_unreconciled_transactions,
+    list_transactions,
     payment_predicted_balance_summary,
     reconciliation_reference_summary,
     reconciliation_tab,
     refresh_all,
     remove_transaction_from_reconciliation_session,
     save_reconciliation_draft,
+    set_transaction_status,
     ui,
     user_id,
 ) -> ReconciliationPanelHandle:
@@ -331,6 +373,123 @@ def build_reconciliation_panel(
                                 icon="delete_outline",
                                 on_click=abandon_reconciliation_draft,
                             ).props("outline color=negative dense")
+
+        ui.label("Transactions prévues à confirmer").classes(
+            "text-lg font-bold mt-1"
+        )
+        ui.label(
+            "Les versements de financement et les autres transactions prévues "
+            "du mode de paiement sélectionné apparaissent ici séparément. "
+            "Confirmez seulement ce qui est réellement apparu; la transaction "
+            "passera ensuite dans la liste à concilier."
+        ).classes("text-xs jf-muted")
+        planned_transactions_box = ui.column().classes(
+            "w-full gap-1"
+        )
+
+        def confirm_planned_transaction(transaction_id):
+            try:
+                _confirm_planned_reconciliation_transaction(
+                    user_id,
+                    transaction_id,
+                    set_transaction_status=set_transaction_status,
+                )
+            except Exception as error:
+                ui.notify(str(error), type="warning")
+                return
+            ui.notify(
+                "Transaction confirmée; elle peut maintenant être conciliée.",
+                type="positive",
+            )
+            refresh_all()
+
+        @ui.refreshable
+        def render_planned_transactions():
+            planned_transactions_box.clear()
+            selected_id = reconciliation_payment.value
+
+            with planned_transactions_box:
+                if not selected_id:
+                    ui.label(
+                        "Aucun mode de paiement sélectionné."
+                    ).classes("text-sm jf-muted")
+                    return
+
+                try:
+                    rows = _list_planned_reconciliation_transactions(
+                        user_id,
+                        selected_id,
+                        list_transactions=list_transactions,
+                    )
+                except Exception as error:
+                    ui.label(str(error)).classes("text-negative")
+                    return
+
+                if not rows:
+                    ui.label(
+                        "Aucune transaction prévue pour ce mode de paiement."
+                    ).classes("text-sm jf-muted p-3")
+                    return
+
+                ui.label(
+                    f"{len(rows)} transaction(s) prévue(s)"
+                ).classes("text-xs jf-muted")
+
+                for row in rows:
+                    transaction_id = int(row["id"])
+                    with ui.element("div").classes(
+                        "jf-finance-reconcile-row"
+                    ):
+                        ui.icon("schedule").classes("text-warning")
+                        ui.label(
+                            row["transaction_date"].strftime("%d/%m/%Y")
+                        ).classes("jf-finance-reconcile-date")
+
+                        with ui.column().classes("gap-0 min-w-0"):
+                            ui.label(row["description"]).classes(
+                                "jf-finance-reconcile-description"
+                            )
+                            meta = []
+                            if row.get("installment_plan_id"):
+                                installment_meta = "Versement de financement"
+                                if row.get("installment_number"):
+                                    installment_meta += (
+                                        " #" + str(row["installment_number"])
+                                    )
+                                meta.append(installment_meta)
+                            elif row.get("linked_transfer_id"):
+                                meta.append("Paiement de carte lié")
+                            if row.get("category_full_name"):
+                                meta.append(row["category_full_name"])
+                            if row.get("bank_programmed"):
+                                meta.append("Programmé")
+                            ui.label(
+                                " — ".join(meta) or "À confirmer"
+                            ).classes("text-xs jf-muted truncate")
+
+                        amount_class = (
+                            "jf-finance-expense"
+                            if row["transaction_type"] == "expense"
+                            else "jf-finance-income"
+                        )
+                        ui.label(
+                            _payment_effect(
+                                row["amount"],
+                                row["transaction_type"],
+                            )
+                        ).classes(
+                            "jf-finance-reconcile-amount " + amount_class
+                        )
+                        ui.button(
+                            "Confirmer",
+                            icon="check_circle",
+                            on_click=(
+                                lambda _event=None, selected=transaction_id:
+                                confirm_planned_transaction(selected)
+                            ),
+                        ).props(
+                            "outline dense color=primary"
+                        )
 
         ui.label("Transactions non conciliées").classes(
             "text-lg font-bold mt-1"
@@ -1355,6 +1514,7 @@ def build_reconciliation_panel(
                 reconciliation_selected.clear()
             render_reconciliation_draft.refresh()
             render_reconciliation_balance.refresh()
+            render_planned_transactions.refresh()
             render_reconciliation_transactions.refresh()
             render_reconciliation_selection.refresh()
             render_sessions.refresh()
@@ -1382,6 +1542,7 @@ def build_reconciliation_panel(
 
         render_reconciliation_draft()
         render_reconciliation_balance()
+        render_planned_transactions()
         render_reconciliation_transactions()
         render_reconciliation_selection()
         render_sessions()

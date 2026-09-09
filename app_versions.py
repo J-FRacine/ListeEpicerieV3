@@ -15,7 +15,7 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.0",
     "blood_pressure": "1.2.1",
-    "finances": "1.13.3",
+    "finances": "1.13.4",
     "rpg": "1.3.0",
     "feedback": "1.0.0",
 }
@@ -39,6 +39,23 @@ RELEASE_NOTES = [
             "Planification, Activité et Données restent disponibles dans leur barre d’outils secondaire.",
             "Le Mode courses conserve son écran simplifié et son fonctionnement actuel.",
             "Aucun changement de données, de schéma PostgreSQL, de migration ou de dépendance Python.",
+        ],
+    },
+    {
+        "app_key": "finances",
+        "version": "1.13.4",
+        "date": "2026-09-09",
+        "title": "Finances — transactions prévues dans la conciliation",
+        "summary": (
+            "La Conciliation affiche maintenant les transactions prévues du mode "
+            "de paiement choisi et permet de les confirmer sans quitter l’écran."
+        ),
+        "changes": [
+            "Nouvelle section Transactions prévues à confirmer dans Conciliation.",
+            "Les versements de financement et les autres transactions prévues du mode sélectionné restent séparés des transactions déjà confirmées.",
+            "Le bouton Confirmer réutilise le changement de statut existant; la transaction devient immédiatement admissible à la conciliation.",
+            "La transaction ne change pas le solde prévu au moment de sa confirmation : elle passe de la composante prévue à la composante confirmée, sans double comptage.",
+            "Aucun changement de schéma PostgreSQL, aucune migration, aucun SQL manuel et aucune nouvelle dépendance Python.",
         ],
     },
     {

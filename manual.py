@@ -176,7 +176,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.13.3",
+        "title": "Finances — V1.13.4",
         "icon": "account_balance_wallet",
         "caption": "Prévisions, Budget, financements, conciliation et prêts partagés",
         "keywords": (
@@ -185,6 +185,14 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "compte solde départ solde actuel plus bas prévu fin mois"
         ),
         "content": """
+### V1.13.4 — confirmer les transactions prévues depuis Conciliation
+
+Dans **Conciliation**, une nouvelle section **Transactions prévues à confirmer** apparaît pour le mode de paiement sélectionné. Elle contient notamment les **versements de financement** encore au statut **À confirmer**, ainsi que les autres transactions prévues de ce compte ou de cette carte.
+
+Utilisez **Confirmer** seulement lorsque la transaction apparaît réellement sur votre relevé. Elle quitte alors la section des transactions prévues et devient immédiatement disponible dans **Transactions non conciliées**, où elle peut être sélectionnée pour le relevé en cours.
+
+La confirmation ne crée pas une deuxième dépense. La même transaction passe simplement du statut **Prévue** au statut **Confirmée** : le solde prévu conserve donc le même impact global, sans double comptage.
+
 ### V1.13.3 — programmer le paiement après une conciliation de carte
 
 Pour une **Carte de crédit**, le bouton **Clore et programmer le paiement** termine la conciliation puis ouvre immédiatement le formulaire **Paiement de carte**. La carte, le montant du relevé (ou le solde attendu lorsque nécessaire), la date de paiement et le statut prévu sont proposés automatiquement.

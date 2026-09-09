@@ -15,7 +15,8 @@ from finances_reconciliation import ReconciliationPanelHandle, build_reconciliat
 
 DAY = date(2026, 9, 8)
 RENDERS = ['render_reconciliation_draft', 'render_reconciliation_balance',
-           'render_reconciliation_transactions', 'render_reconciliation_selection', 'render_sessions', 'render_unassigned']
+           'render_planned_transactions', 'render_reconciliation_transactions',
+           'render_reconciliation_selection', 'render_sessions', 'render_unassigned']
 
 
 @lru_cache(maxsize=1)

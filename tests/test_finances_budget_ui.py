@@ -37,14 +37,16 @@ def load_function(name, namespace, tree=None):
 class BudgetNavigationTests(unittest.IsolatedAsyncioTestCase):
     async def test_dashboard_navigation_changes_shared_month_and_only_dashboard(self):
         cursor = MonthCursor(date(2026, 10, 1)); dashboard = Mock()
-        change = load_function("change_month", dict(month_state=cursor, render_dashboard=dashboard))
+        change = load_function("change_month", dict(month_state=cursor, render_dashboard=dashboard),
+                               ast.parse((ROOT / "finances_dashboard.py").read_text(encoding="utf-8")))
         await change(-1)
         self.assertEqual(cursor.value, date(2026, 9, 1))
         dashboard.refresh.assert_called_once_with()
 
     async def test_dashboard_reset_uses_monthcursor_current_month(self):
         cursor = MonthCursor(date(2026, 10, 1)); dashboard = Mock()
-        change = load_function("change_month", dict(month_state=cursor, render_dashboard=dashboard))
+        change = load_function("change_month", dict(month_state=cursor, render_dashboard=dashboard),
+                               ast.parse((ROOT / "finances_dashboard.py").read_text(encoding="utf-8")))
         with patch("finances_ui_state.month_start", return_value=date(2027, 2, 1)):
             await change(99, reset=True)
         self.assertEqual(cursor.value, date(2027, 2, 1))

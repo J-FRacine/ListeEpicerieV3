@@ -20,6 +20,6 @@
             toggle_payment_method=toggle_payment_method,
             move_payment_method=move_payment_method,
             refresh_all=lambda: refresh_all(),
-            render_dashboard=render_dashboard,
+            render_dashboard=dashboard_panel,
         )
 

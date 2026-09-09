@@ -269,7 +269,7 @@
         }
         history_payment.update()
 
-        render_dashboard.refresh()
+        dashboard_panel.refresh()
         render_history.refresh()
         render_recurrences.refresh()
         render_goals.refresh()

@@ -31,7 +31,20 @@ Version actuelle de travail : **V1.13.5**
 - Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance Python.
 - Validation locale : compilation des cinq fichiers Python modifiés et des deux assemblages de fragments; `python -B -m unittest discover -s tests` : **216 tests réussis**. `git diff --check` sans erreur.
 - Fichiers modifiés : `finances_reconciliation.py`, `tests/test_finances_reconciliation_planned.py`, `tests/test_finances_reconciliation_ui.py`, `app_versions.py`, `manual.py`, `PROJECT_STATUS.md`.
-- Canner/Render, l’affichage dans un navigateur réel et PostgreSQL de production restent à valider après déploiement.
+- La validation utilisateur après déploiement de V1.13.5 sur Canner/Render, dans un navigateur réel, a été effectuée avec succès. PostgreSQL de production n’a pas été testé indépendamment.
+
+### Extraction interne du Tableau — 2026-09-09
+
+- Point de départ vérifié : `main`, commit `40594c49b7c51ab344dd682a480e3ee27814028f`; les 216 tests de départ réussissent.
+- Le bloc complet Tableau est déplacé dans `finances_dashboard.py`, avec `DashboardPanelHandle` et `build_dashboard_panel`. Le module injecte `ui` et les services; aucun import de NiceGUI, `finances`, `finances_data` ou `db`.
+- Le parent conserve le handle et les raccordements. Tableau et Budget partagent toujours le même `month_state`; la navigation Budget garde son rafraîchissement limité au Budget.
+- Aucune modification fonctionnelle ou visuelle volontaire, aucun SQL ni calcul métier modifié, aucune migration et aucune nouvelle dépendance. Finances reste en **V1.13.5**, sans nouvelle note utilisateur ni modification du manuel.
+- Créés : `finances_dashboard.py`, `tests/test_finances_dashboard_ui.py`.
+- Modifiés : `finances_part_01.pyfrag`, `finances_part_03.pyfrag`, `finances_part_04.pyfrag` (désormais vide), `finances_part_05.pyfrag`, `finances_part_08.pyfrag`, `finances_part_12.pyfrag`, `finances_part_14.pyfrag`, `tests/test_finances_budget_ui.py`, `PROJECT_STATUS.md`.
+- Les deux tests existants de navigation Tableau dans `test_finances_budget_ui.py` lisent maintenant la fonction extraite; leurs assertions sont inchangées.
+- Validation locale : **233 tests réussis** (216 existants et 17 nouveaux); compilation des fichiers Python créés/modifiés et des deux assemblages de fragments; `git diff --check` sans erreur. La structure Python du bloc Tableau déplacé est identique à celle du commit de départ.
+- Extraction validée localement. Le déploiement Canner/Render et la validation navigateur de cette extraction restent à effectuer après publication; PostgreSQL de production n’a pas été testé indépendamment.
+- Prochaine zone prévue : **Récurrences**.
 
 ### Changements récents terminés
 

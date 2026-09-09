@@ -86,7 +86,7 @@
                                         else "info"
                                     ),
                                 )
-                                render_dashboard.refresh()
+                                dashboard_panel.refresh()
 
                             with ui.row().classes(
                                 "w-full justify-end gap-2 mt-2"
@@ -202,7 +202,7 @@
                                         else "info"
                                     ),
                                 )
-                                render_dashboard.refresh()
+                                dashboard_panel.refresh()
 
                             with ui.row().classes(
                                 "w-full justify-end gap-2 mt-2"

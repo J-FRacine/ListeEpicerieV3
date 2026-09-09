@@ -272,7 +272,7 @@
         dashboard_panel.refresh()
         render_history.refresh()
         recurrences_panel.refresh()
-        render_goals.refresh()
+        goals_panel.refresh()
         organization_panel.refresh()
         account_panel.reload_options()
         account_panel.refresh()

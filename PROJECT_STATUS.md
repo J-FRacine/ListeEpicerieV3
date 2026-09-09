@@ -56,8 +56,19 @@ Version actuelle de travail : **V1.13.5**
 - Modifiés : `finances_part_01.pyfrag`, `finances_part_05.pyfrag`, `finances_part_10.pyfrag`, `finances_part_14.pyfrag`, `tests/test_finances_account_ui.py`, `tests/test_finances_history_ui.py`, `PROJECT_STATUS.md`.
 - Les tests existants de raccordement Compte et de frontière Historique vérifient désormais le handle et le module extrait; leurs protections sont conservées.
 - Validation locale : **244 tests réussis** (233 existants et 11 nouveaux), compilation des fichiers Python concernés et des deux assemblages, `git diff --check` sans erreur. Revue automatique : structure Python du bloc déplacé identique au point de départ et raccordements parent vérifiés.
-- Finances reste **V1.13.5**; versions, notes utilisateur et manuel inchangés. Le déploiement Canner/Render et la validation navigateur de cette extraction restent à effectuer après publication; PostgreSQL de production n’a pas été testé indépendamment.
+- Finances reste **V1.13.5**; versions, notes utilisateur et manuel inchangés. La validation utilisateur après déploiement sur Canner/Render et dans le navigateur a réussi; PostgreSQL de production n’a pas été testé indépendamment.
 - Prochaine étape recommandée après revue : extraction interne d’**Objectifs**, dans une intervention séparée; Exporter reste hors de cette étape.
+
+### Extraction interne d’Objectifs — 2026-09-09
+
+- Point de départ : `c7ed820f1008a357ba0bcebec589c06ef9204bf3` (`c7ed820`), `origin/main` vérifiée et état Git propre; **244 tests de départ réussis**.
+- Le bloc Objectifs de `finances_part_10.pyfrag` est extrait dans `finances_goals.py`, avec `GoalsPanelHandle` et `build_goals_panel`. Le parent utilise `goals_panel.refresh()`; `ui` et les services sont injectés sans import de NiceGUI, `finances`, `finances_data`, `db` ou psycopg.
+- Ajout, modification, activation/désactivation, changement Catégorie/Étiquette avec remise à zéro de la cible, montant, dates et report conservent leurs paramètres et comportements. Aucune modification fonctionnelle ou visuelle volontaire, aucun SQL, aucune migration et aucune nouvelle dépendance.
+- Créés : `finances_goals.py`, `tests/test_finances_goals_ui.py`.
+- Modifiés : `finances_part_01.pyfrag`, `finances_part_10.pyfrag`, `finances_part_14.pyfrag`, `PROJECT_STATUS.md`.
+- Validation locale : **254 tests réussis** (244 existants inchangés et 10 nouveaux); compilation des fichiers Python concernés et des deux assemblages; `git diff --check` sans erreur. Revue automatique du bloc déplacé et du parent : structures Python identiques hors raccordements attendus.
+- Finances reste **V1.13.5**; `app_versions.py`, les notes utilisateur et `manual.py` sont inchangés. Le déploiement Canner/Render et la validation navigateur de cette extraction restent à effectuer après publication; PostgreSQL de production n’a pas été testé indépendamment.
+- Prochaine zone technique recommandée après revue : **Importer/Exporter**, dans une intervention séparée.
 
 ### Changements récents terminés
 

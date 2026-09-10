@@ -1,142 +1,4 @@
-from __future__ import annotations
-
-from collections import defaultdict
-from datetime import date, timedelta
-from decimal import Decimal
-import json
-
-from nicegui import ui
-
-from app_versions import version_label
-from blood_pressure_push import (
-    count_active_push_subscriptions,
-    get_vapid_public_key,
-    save_push_subscription,
-    set_push_channel_enabled,
-)
-from finances_data import (
-    BUDGET_INPUT_FREQUENCIES,
-    INSTALLMENT_PLAN_TYPES,
-    CARRY_POLICIES,
-    CONFIRMATION_MODES,
-    FREQUENCY_UNITS,
-    PAYMENT_METHOD_TYPES,
-    RECONCILIATION_SESSION_STATUSES,
-    RECONCILIATION_STATUSES,
-    TRANSACTION_STATUSES,
-    TRANSACTION_TYPES,
-    bank_cashflow_month,
-    bank_cashflow_year_summary,
-    analyze_installment_progress,
-    budget_summary,
-    budget_capacity_summary,
-    budget_forecast,
-    bulk_assign_payment_method,
-    calculate_installment_payment,
-    cancel_reconciliation_session,
-    count_unassigned_confirmed_transactions,
-    create_reconciliation_session,
-    dashboard_month_projection,
-    dashboard_summary,
-    delete_recurrence,
-    delete_installment_plan,
-    delete_financing_budget_group,
-    delete_reconciliation_draft,
-    delete_transaction,
-    ensure_default_finance_categories,
-    ensure_default_finance_payment_methods,
-    export_finances,
-    find_potential_duplicate_transactions,
-    financing_month_summary,
-    generate_due_recurrences,
-    get_or_create_finance_category,
-    get_or_create_finance_tag,
-    get_card_payment_transfer,
-    get_installment_plan,
-    get_reconciliation_draft,
-    get_finance_settings,
-    get_reconciliation_session,
-    get_transaction,
-    goal_progress,
-    import_finance_rows,
-    init_finances_schema,
-    list_bank_accounts,
-    list_budget_items,
-    list_card_payment_transfers,
-    list_categories,
-    list_goals,
-    list_installment_plans,
-    list_financing_budget_groups,
-    list_month_unreconciled_transactions,
-    list_payment_methods,
-    list_reconciliation_sessions,
-    list_reconciliation_drafts,
-    list_recurrences,
-    list_tags,
-    list_transactions,
-    list_unassigned_transactions,
-    list_unreconciled_transactions,
-    move_budget_item,
-    move_payment_method,
-    payment_predicted_balance_summary,
-    reconciliation_reference_summary,
-    prepare_finance_import,
-    remove_transaction_from_reconciliation_session,
-    save_budget_item,
-    save_financing_budget_group,
-    save_card_payment_transfer,
-    save_category,
-    save_goal,
-    save_installment_plan,
-    save_reconciliation_draft,
-    save_payment_method,
-    save_recurrence,
-    save_tag,
-    save_transaction,
-    set_bank_transaction_seen,
-    set_month_carryover,
-    set_category_dashboard_visible,
-    set_tag_dashboard_visible,
-    set_transaction_reconciliation,
-    set_transaction_status,
-    toggle_budget_item,
-    toggle_category,
-    toggle_goal,
-    toggle_installment_plan,
-    toggle_payment_method,
-    toggle_recurrence,
-    toggle_tag,
-)
-from finances_dialogs import build_finance_dialogs
-from finances_entry import build_entry_panel
-from finances_import_export import build_import_export_panel
-from finances_goals import build_goals_panel
-from finances_recurrences import build_recurrences_panel
-from finances_dashboard import build_dashboard_panel
-from finances_account import build_account_panel
-from finances_budget import build_budget_panel
-from finances_financing import build_financing_panel
-from finances_reconciliation import build_reconciliation_panel
-from finances_shared_loans import shared_loans_panel
-from finances_ui_state import MonthCursor, month_label as _month_label, shift_month as _shift_month
-
-
-ADD_CATEGORY_OPTION = "__jf_add_category__"
-ADD_TAG_OPTION = "__jf_add_tag__"
-CREATE_RECURRENCE_OPTION = "__jf_create_recurrence__"
-
-BUDGET_SORT_FIELDS = {
-    "custom": "Ordre personnalisé",
-    "description": "Alphabétique",
-    "monthly_amount": "Montant par mois",
-    "biweekly_amount": "Montant par paie",
-    "effective_start": "Date de début",
-}
-BUDGET_SORT_DIRECTIONS = {
-    "asc": "Croissant",
-    "desc": "Décroissant",
-}
-
+"""Styles de Finances, installés avec une interface injectée."""
 
 FINANCE_CSS = r"""
 .jf-finance-main-tabs {
@@ -656,3 +518,203 @@ FINANCE_CSS = r"""
         padding-inline: .58rem;
     }
     .jf-finance-main-tabs .q-tab__label {
+        font-size: .68rem;
+    }
+
+    .jf-finance-summary-label {
+        font-size: .59rem;
+    }
+    .jf-finance-summary-value {
+        font-size: .76rem;
+    }
+    .jf-finance-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "main amount"
+            "meta actions";
+    }
+    .jf-finance-amount {
+        min-width: 5.8rem;
+    }
+    .jf-finance-kpi-header,
+    .jf-finance-kpi-row {
+        grid-template-columns:
+            minmax(0, 1fr)
+            4.1rem
+            4.1rem
+            4.45rem
+            3.65rem;
+        gap: .25rem;
+    }
+    .jf-finance-kpi-header {
+        font-size: .52rem;
+    }
+    .jf-finance-kpi-name,
+    .jf-finance-kpi-value {
+        font-size: .65rem;
+    }
+}
+"""
+
+_FINANCE_LAYOUT_CSS = r"""
+    .jf-finance-balance-grid {
+        display:grid;
+        grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));
+        gap:.55rem;
+        width:100%;
+    }
+    .jf-finance-balance-card {
+        width:100%;
+        padding:.65rem .72rem;
+        border:1px solid var(--jf-border);
+        border-radius:12px;
+        background:var(--jf-surface);
+    }
+    .jf-finance-balance-main {
+        width:100%;
+        color:var(--jf-navy);
+        font-size:1.08rem;
+        font-weight:850;
+        text-align:right;
+        white-space:nowrap;
+    }
+    .body--dark .jf-finance-balance-main {color:#dceaf6;}
+    .jf-finance-balance-line {
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto;
+        align-items:center;
+        gap:.5rem;
+        width:100%;
+        font-size:.72rem;
+    }
+    .jf-finance-balance-line > :last-child {
+        min-width:6.5rem;
+        text-align:right;
+        font-weight:750;
+    }
+    .jf-finance-reconcile-toolbar {
+        display:grid;
+        grid-template-columns:minmax(12rem,1.3fr) minmax(9rem,.8fr)
+            minmax(9rem,.8fr) minmax(10rem,1fr);
+        align-items:end;
+        gap:.5rem;
+        width:100%;
+    }
+    .jf-finance-reconcile-row {
+        display:grid;
+        grid-template-columns:auto 5.4rem minmax(0,1fr) 7.5rem auto;
+        align-items:center;
+        gap:.45rem;
+        min-height:42px;
+        padding:.28rem .4rem;
+        border:1px solid var(--jf-border);
+        border-radius:9px;
+        background:var(--jf-surface);
+    }
+    .jf-finance-reconcile-date {
+        color:var(--jf-muted);
+        font-size:.7rem;
+        white-space:nowrap;
+    }
+    .jf-finance-reconcile-description {
+        min-width:0;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+        font-size:.8rem;
+        font-weight:750;
+    }
+    .jf-finance-reconcile-amount {
+        text-align:right;
+        font-size:.82rem;
+        font-weight:850;
+        white-space:nowrap;
+    }
+    .jf-finance-selection-summary {
+        position:sticky;
+        bottom:.35rem;
+        z-index:4;
+        width:100%;
+        padding:.65rem .75rem;
+        border:1px solid var(--jf-border);
+        border-radius:12px;
+        box-shadow:0 3px 12px rgba(0,0,0,.12);
+        background:var(--jf-surface);
+    }
+    .jf-finance-session-card {
+        width:100%;
+        padding:.6rem .7rem;
+        border:1px solid var(--jf-border);
+        border-radius:11px;
+        background:var(--jf-surface);
+    }
+    .jf-finance-session-cancelled {opacity:.68;}
+    .jf-finance-warning-card {
+        width:100%;
+        padding:.55rem .65rem;
+        border-left:4px solid #c6861a;
+        border-radius:10px;
+        background:rgba(198,134,26,.10);
+    }
+    @media(max-width:760px){
+        .jf-finance-reconcile-toolbar {
+            grid-template-columns:1fr 1fr;
+        }
+        .jf-finance-reconcile-search {grid-column:1/-1;}
+    }
+    @media(max-width:520px){
+        .jf-finance-reconcile-toolbar {grid-template-columns:1fr;}
+        .jf-finance-reconcile-search {grid-column:auto;}
+        .jf-finance-reconcile-row {
+            grid-template-columns:auto 4.5rem minmax(0,1fr) 6.5rem auto;
+            gap:.3rem;
+            padding-inline:.25rem;
+        }
+        .jf-finance-reconcile-description {font-size:.74rem;}
+        .jf-finance-reconcile-amount {font-size:.75rem;}
+    }
+    """
+
+_FINANCE_ACCOUNT_CSS = r"""
+    .jf-finance-bank-strip {
+        width: 100%; padding: .85rem 1rem;
+        border: 1px solid color-mix(in srgb, var(--jf-blue) 24%, var(--jf-border));
+        border-radius: 16px;
+        background: color-mix(in srgb, var(--jf-blue-soft) 70%, var(--jf-surface));
+    }
+    .jf-finance-cashflow-head,.jf-finance-cashflow-row {
+        display:grid; grid-template-columns:5.5rem minmax(12rem,1fr) 7rem 7rem 8rem;
+        gap:.6rem; align-items:center; width:100%;
+    }
+    .jf-finance-cashflow-head.jf-finance-bank-reconcile,
+    .jf-finance-cashflow-row.jf-finance-bank-reconcile {
+        grid-template-columns:2.5rem 5.5rem minmax(12rem,1fr) 7rem 7rem 8rem;
+    }
+    .jf-finance-cashflow-head {padding:.45rem .7rem;font-size:.72rem;font-weight:800;color:var(--jf-muted);}
+    .jf-finance-cashflow-row {padding:.65rem .7rem;border-top:1px solid var(--jf-border);font-size:.82rem;}
+    .jf-finance-cashflow-start {
+        background:color-mix(in srgb,var(--jf-blue-soft) 55%,var(--jf-surface));
+        font-weight:700;
+    }
+    .jf-finance-cashflow-money {text-align:right;font-variant-numeric:tabular-nums;}
+    .jf-finance-year-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.55rem;width:100%;}
+    .jf-finance-year-card {border:1px solid var(--jf-border);border-radius:12px;padding:.65rem .75rem;background:var(--jf-surface);cursor:pointer;}
+    .jf-finance-year-card:hover {border-color:var(--jf-blue);}
+    .jf-finance-budget-row {display:grid;grid-template-columns:minmax(12rem,1fr) 8.5rem 8.5rem auto;gap:.65rem;align-items:center;width:100%;padding:.7rem .8rem;border-top:1px solid var(--jf-border);}
+    .jf-finance-budget-money {text-align:right;font-variant-numeric:tabular-nums;font-weight:700;}
+    @media(max-width:700px){
+        .jf-finance-cashflow-head{display:none;}
+        .jf-finance-cashflow-row{grid-template-columns:4.5rem minmax(0,1fr) 7.3rem;gap:.35rem .55rem;}
+        .jf-finance-cashflow-row>:nth-child(3),.jf-finance-cashflow-row>:nth-child(4){display:none;}
+        .jf-finance-cashflow-row.jf-finance-bank-reconcile{grid-template-columns:2.2rem 4.5rem minmax(0,1fr) 7.3rem;}
+        .jf-finance-cashflow-row.jf-finance-bank-reconcile>:nth-child(4),
+        .jf-finance-cashflow-row.jf-finance-bank-reconcile>:nth-child(5){display:none;}
+        .jf-finance-budget-row{grid-template-columns:minmax(0,1fr) 7.2rem auto;}
+        .jf-finance-budget-row>:nth-child(3){display:none;}
+    }
+    """
+
+def install_finance_styles(ui):
+    ui.add_css(FINANCE_CSS, shared=True)
+    ui.add_css(_FINANCE_LAYOUT_CSS, shared=True)
+    ui.add_css(_FINANCE_ACCOUNT_CSS, shared=True)

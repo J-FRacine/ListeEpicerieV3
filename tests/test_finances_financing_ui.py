@@ -15,8 +15,7 @@ from test_finances_financing import ROOT, plan
 
 
 def parent_tree():
-    return ast.parse(''.join(p.read_text(encoding='utf-8')
-                            for p in sorted(ROOT.glob('finances_part_*.pyfrag'))))
+    return ast.parse((ROOT / "finances.py").read_text(encoding="utf-8"))
 
 
 def panel_tree():
@@ -156,8 +155,15 @@ assert callable(build_financing_panel)
         self.assertIsInstance(body[-1], ast.Return)
         self.assertEqual(ast.unparse(body[-2].body[-1]), 'render_financing()')
         self.assertIn('FinancingPanelHandle(on_refresh=lambda: render_financing.refresh())', ast.unparse(body[-1]))
-        fragment = (ROOT / 'finances_part_07.pyfrag').read_text(encoding='utf-8')
-        self.assertTrue(fragment.startswith('        financing_panel = build_financing_panel('))
+        fragment = (ROOT / 'finances.py').read_text(encoding='utf-8')
+        panels = next(n for n in ast.walk(parent_tree()) if isinstance(n, ast.With)
+                      and any('ui.tab_panels(' in ast.unparse(item.context_expr) for item in n.items))
+        index = next(i for i, n in enumerate(panels.body) if isinstance(n, ast.Assign)
+                     and any(isinstance(t, ast.Name) and t.id == 'financing_panel' for t in n.targets))
+        self.assertEqual(ast.unparse(panels.body[index - 1].targets[0]), 'budget_panel')
+        self.assertEqual(ast.unparse(panels.body[index].value.func), 'build_financing_panel')
+        self.assertEqual(ast.unparse(panels.body[index + 1].items[0].context_expr),
+                         "ui.tab_panel(shared_loans_tab).classes('px-0')")
         self.assertIn('        )\n\n        # PRÊTS PARTAGÉS', fragment)
 
     def test_real_parent_refresh_uses_handle_once(self):

@@ -35,7 +35,7 @@ def build(rows=None):
 
 
 def parent_tree():
-    return ast.parse(''.join(p.read_text(encoding='utf-8') for p in sorted(ROOT.glob('finances_part_*.pyfrag'))))
+    return ast.parse((ROOT / "finances.py").read_text(encoding="utf-8"))
 
 
 class GoalsUiTests(unittest.TestCase):
@@ -185,7 +185,7 @@ import finances_goals
         names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
         definitions = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
         self.assertTrue(internal.isdisjoint(names | definitions))
-        self.assertNotIn('with ui.tab_panel(goals_tab)', (ROOT / 'finances_part_10.pyfrag').read_text(encoding='utf-8'))
+        self.assertNotIn('with ui.tab_panel(goals_tab)', (ROOT / 'finances.py').read_text(encoding='utf-8'))
 
     def test_global_refresh_calls_handle(self):
         refresh = next(n for n in ast.walk(parent_tree()) if isinstance(n, ast.FunctionDef) and n.name == 'refresh_all')

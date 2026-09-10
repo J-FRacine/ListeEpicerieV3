@@ -28,12 +28,11 @@ Le propriétaire du projet n'est pas programmeur. Les changements doivent donc �
 
 - Privilégier progressivement des modules fonctionnels de taille raisonnable.
 - Éviter de recréer de très gros fichiers monolithiques.
-- Le découpage temporaire actuel de Finances utilise :
-  - `finances.py` comme petit chargeur;
-  - `finances_part_XX.pyfrag` pour l'interface;
+- `finances.py` est un module Python normal qui construit les panneaux extraits dans des modules dédiés.
+- `finances_styles.py` installe les styles communs; il n’existe plus de fragments interface.
+- Seule la couche de données utilise encore le mécanisme transitoire :
   - `finances_data.py` comme petit chargeur;
   - `finances_data_part_XX.pyfrag` pour la couche de données.
-- Cette structure existe pour faciliter les modifications après la croissance des anciens monolithes.
 - Pour les nouveaux développements importants de Finances, privilégier progressivement de vrais modules Python cohérents plutôt que d'agrandir indéfiniment les fragments.
 - Ne pas effectuer un gros refactor fonctionnel en même temps qu'une petite correction utilisateur, sauf demande explicite.
 
@@ -62,10 +61,7 @@ Pour toute nouvelle version d'une application :
 Toujours effectuer les vérifications raisonnablement disponibles après les changements :
 
 1. Compiler les fichiers Python modifiés avec `python -m py_compile`.
-2. Si Finances utilise encore les fragments, reconstruire en mémoire ou dans un fichier temporaire :
-   - `finances.py` à partir de tous les `finances_part_*.pyfrag`;
-   - `finances_data.py` à partir de tous les `finances_data_part_*.pyfrag`;
-   puis compiler ces sources reconstruites.
+2. Compiler directement `finances.py` et les modules interface concernés. Reconstruire en mémoire ou dans un fichier temporaire la source de `finances_data.py` à partir de tous les `finances_data_part_*.pyfrag`, puis compiler cette source de données.
 3. Rechercher et exécuter les tests existants pertinents.
 4. Si aucune suite de tests n'est disponible, l'indiquer explicitement au lieu de prétendre qu'elle a été exécutée.
 5. Vérifier les appels, imports et références directement touchés par la modification.

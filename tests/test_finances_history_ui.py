@@ -17,10 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def parent_source() -> str:
-    return "".join(
-        path.read_text(encoding="utf-8")
-        for path in sorted(ROOT.glob("finances_part_*.pyfrag"))
-    )
+    return (ROOT / "finances.py").read_text(encoding="utf-8")
 
 
 def history_block() -> str:

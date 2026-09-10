@@ -13,8 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def ui_source():
-    return ast.parse(''.join(p.read_text(encoding='utf-8')
-                            for p in sorted(ROOT.glob('finances_part_*.pyfrag'))))
+    return ast.parse((ROOT / "finances.py").read_text(encoding="utf-8"))
 
 
 def account_source():

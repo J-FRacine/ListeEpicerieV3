@@ -104,8 +104,22 @@ Version actuelle de travail : **V1.13.5**
 - Créés : `finances_dialogs.py`, `tests/test_finances_dialogs_ui.py`.
 - Modifiés : `finances_part_01.pyfrag`, `finances_part_02.pyfrag`, `finances_part_03.pyfrag`, `finances_part_05.pyfrag`, `finances_part_07.pyfrag`, `finances_part_08.pyfrag`, `finances_part_10.pyfrag`, `tests/test_finances_account_ui.py`, `tests/test_finances_entry_ui.py`, `PROJECT_STATUS.md`.
 - Deux tests existants de raccordement vérifient maintenant les callbacks du handle avec les mêmes assertions. Validation locale : **293 tests réussis** (280 existants et 13 nouveaux), compilation des fichiers Python concernés et des deux assemblages, imports interdits absents, `git diff --check` sans erreur. Revue automatique : les quatre fonctions déplacées sont identiques et le parent est inchangé hors raccordements et imports attendus.
-- Finances reste **V1.13.5**; versions, notes utilisateur et manuel inchangés. Le déploiement Canner/Render et la validation navigateur de cette extraction restent à effectuer après publication; PostgreSQL de production n’a pas été testé indépendamment.
+- Finances reste **V1.13.5**; versions, notes utilisateur et manuel inchangés. La validation utilisateur après déploiement sur Canner/Render et dans le navigateur a réussi; PostgreSQL de production n’a pas été testé indépendamment.
 - Prochaine étape recommandée après revue : **passe finale sur les fragments restants**.
+
+### Finalisation de la structure interface — 2026-09-10
+
+- Point de départ : `9441881f755ce837cd6f96f6b8ac3dfb762233dc` (`9441881`), `origin/main` vérifiée et état Git propre; **340 tests de départ réussis**. La source assemblée a été conservée temporairement avant modification pour comparaison.
+- `finances.py` est désormais un module Python normal : le chargeur dynamique interface est supprimé. Les 14 fichiers `finances_part_01.pyfrag` à `finances_part_14.pyfrag`, y compris ceux vides, sont supprimés. Les descriptions de fragments dans les entrées historiques ci-dessous restent des repères de leur époque.
+- `finances_styles.py` expose `FINANCE_CSS` et `install_finance_styles(ui)`. Les trois contenus CSS sont strictement identiques, installés au chargement de `finances.py` dans le même ordre avec `shared=True`; `FINANCE_CSS` reste disponible depuis `finances.py`.
+- Le corps de `finances_panel`, les helpers et `refresh_all()` conservent leur AST exact. L’ordre de construction des panneaux et les callbacks différés sont inchangés. Aucun module métier extrait n’est modifié.
+- Créés : `finances_styles.py`, `tests/test_finances_structure.py`.
+- Modifiés : `finances.py`, `AGENTS.md`, `GUIDE_CODEX_JF_APPS.md`, `tests/README.md`, `PROJECT_STATUS.md`; tests `test_finances_account_ui.py`, `test_finances_budget_ui.py`, `test_finances_dashboard_ui.py`, `test_finances_dialogs_ui.py`, `test_finances_entry_ui.py`, `test_finances_financing.py`, `test_finances_financing_ui.py`, `test_finances_goals_ui.py`, `test_finances_history_ui.py`, `test_finances_import_export_ui.py`, `test_finances_reconciliation_planned.py`, `test_finances_reconciliation_ui.py`, `test_finances_recurrences_ui.py` dans `tests/`.
+- Les tests existants lisent maintenant `finances.py`; les protections sont conservées, et l’ancien contrôle de début de fragment Financements vérifie désormais sa position entre Budget et Prêts partagés. Validation locale : **345 tests réussis** (340 existants, dont les nouveaux tests JDR, et 5 nouveaux tests Finances), compilation des fichiers Python concernés, reconstruction/compilation des données uniquement, comparaisons AST et CSS exactes, `git diff --check` sans erreur.
+- Aucun changement fonctionnel ou visuel, aucun calcul, SQL, migration ou nouvelle dépendance. `finances_data.py` et les 16 `finances_data_part_*.pyfrag` sont inchangés. Finances reste **V1.13.5**; versions, notes utilisateur et manuel inchangés.
+- Validation navigateur et Canner/Render de cette finalisation à effectuer après publication; PostgreSQL de production n’a pas été testé indépendamment. Prochain chantier possible après revue : finalisation séparée de la couche de données.
+
+- Les fichiers JDR et leurs tests, notamment `rpg_character_creation.py` et `rpg_combat_session.py`, sont conservés sans modification; leurs empreintes sont vérifiées avant livraison.
 
 ### Changements récents terminés
 

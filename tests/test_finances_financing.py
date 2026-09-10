@@ -274,7 +274,7 @@ class FinancingMutationTests(unittest.TestCase):
 
 
 class FinancingUiTests(unittest.TestCase):
-    def tree(self):return ast.parse("".join(p.read_text(encoding="utf-8") for p in sorted(ROOT.glob("finances_part_*.pyfrag"))))
+    def tree(self):return ast.parse((ROOT / "finances.py").read_text(encoding="utf-8"))
     def fn(self,name):
         tree=ast.parse((ROOT/"finances_financing.py").read_text(encoding="utf-8"))
         return next(n for n in ast.walk(tree) if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name==name)

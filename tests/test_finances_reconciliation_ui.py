@@ -25,7 +25,7 @@ def source():
 
 
 def parent_source():
-    return ''.join(p.read_text(encoding='utf-8') for p in sorted(ROOT.glob('finances_part_*.pyfrag')))
+    return (ROOT / "finances.py").read_text(encoding="utf-8")
 
 
 @lru_cache(maxsize=1)

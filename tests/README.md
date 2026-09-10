@@ -3,7 +3,7 @@
 Depuis la racine du dépôt, avec Python 3.10 ou plus récent :
 
 ```sh
-python -m unittest discover -s tests -v
+python -B -m unittest discover -s tests -v
 python -m py_compile tests/test_finances.py tests/test_finances_account.py tests/test_finances_account_ui.py tests/test_finances_budget.py tests/test_finances_budget_ui.py tests/test_finances_budget_writes.py tests/test_finances_financing.py finances_budget.py finances_budget_writes.py finances_account.py finances_budget_data.py finances_financing_data.py finances_calculations.py finances_account_data.py finances_data.py finances.py finances_ui_state.py finances_validation.py finances_shared_loans_data.py
 python -m py_compile finances_financing_writes.py tests/test_finances_financing_writes.py
 python -m py_compile finances_financing.py tests/test_finances_financing_ui.py
@@ -11,8 +11,13 @@ python -m py_compile tests/test_finances_reconciliation.py tests/test_finances_r
 python -m py_compile finances_reconciliation_data.py tests/test_finances_reconciliation_data.py
 python -m py_compile finances_reconciliation_writes.py tests/test_finances_reconciliation_writes.py
 python -m py_compile finances_reconciliation.py
-python -c "from pathlib import Path; [compile(''.join(p.read_text(encoding='utf-8') for p in sorted(Path('.').glob(prefix + '_part_*.pyfrag'))), prefix + '.py', 'exec') for prefix in ('finances_data', 'finances')]"
+python -m py_compile finances.py finances_styles.py tests/test_finances_structure.py
+python -c "from pathlib import Path; compile(''.join(p.read_text(encoding='utf-8') for p in sorted(Path('.').glob('finances_data_part_*.pyfrag'))), 'finances_data.py', 'exec')"
 ```
+
+Les tests UI analysent directement `finances.py`, maintenant un module Python normal. Seule la source de données est reconstruite à partir de fragments. Les trois blocs CSS de `finances_styles.py` sont protégés par des empreintes de référence, dans leur ordre d’installation.
+
+Les sections ci-dessous décrivent les protections ajoutées au fil des extractions; leurs anciens emplacements ne constituent pas la structure actuelle.
 
 Les tests utilisent `unittest`, inclus dans Python. Ils chargent les vrais
 fragments de `finances_data.py`. Le module `db` est remplacé pendant cet import
@@ -79,7 +84,7 @@ les tests métier, qui continuent à exécuter les vrais calculs extraits.
 - construction du panneau complet retournant un handle, pour banque, marge et absence de compte.
 
 Ces tests simulent l’interface sans lancer réellement NiceGUI. Les raccordements
-du parent sont exécutés depuis les fragments; ceux du panneau depuis
+du parent sont exécutés depuis `finances.py`; ceux du panneau depuis
 `finances_account.py`. Le constructeur complet est aussi exécuté avec des
 composants simulés. Les contrôles d’import interdisent NiceGUI et les modules
 historiques dans un processus neuf.
@@ -104,7 +109,7 @@ ciblée avec le même `MonthCursor`, remise au mois courant, ordre indicateur �
 attente du navigateur → rendu → masquage, masquage même après une exception,
 absence de curseur Budget indépendant et réutilisation du résumé de capacité
 comme résumé affiché et comme capacité initiale des prévisions.
-Le vrai `change_month()` est isolé depuis les fragments et exécuté avec des
+Le vrai `change_month()` est isolé depuis `finances_dashboard.py` et exécuté avec des
 composants simulés; les raccordements du rendu sont contrôlés par leur AST.
 Ces tests simulent NiceGUI sans le lancer et ne valident aucun navigateur réel.
 
@@ -235,7 +240,7 @@ catégorie, les étiquettes et `budget_excluded`. Elle protège aussi la génér
 des versements futurs, la conservation des transactions confirmées, les plans
 terminés, les incohérences de progression et les suppressions/activations.
 
-Les contrôles UI analysent et isolent les fonctions actuelles des fragments : un
+Les contrôles UI analysent et isolent les fonctions actuelles de `finances.py` et des modules extraits : un
 seul `financing_month_state`, navigation précédent/suivant/reset ciblée sur
 `render_financing.refresh()`, rendu alimenté par les deux lectures du mois,
 aperçu des intérêts, avertissement de progression et recours à `refresh_all()`
@@ -376,7 +381,7 @@ corps isolés par AST et exécutent leurs callbacks avec des widgets simulés :
 Ces tests ne reproduisent pas un moteur SQL ni NiceGUI. Ils ne valident ni
 l’exécution PostgreSQL, ni son atomicité/rollback, ni un navigateur, des
 notifications ou un déploiement Canner/Render réels. Les commandes ci-dessus
-compilent les nouveaux tests et reconstruisent les deux sources à fragments.
+compilent les nouveaux tests et `finances.py`, puis reconstruisent uniquement la source à fragments de `finances_data.py`.
 
 ## Extraction des lectures et résumés Conciliation — 2026-09-08
 

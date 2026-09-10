@@ -205,7 +205,7 @@ import finances_import_export
         self.assertEqual(imports, {'datetime', 'pathlib', 'tempfile'})
 
     def test_parent_lazy_injection_and_full_block_removed(self):
-        tree = ast.parse(''.join(p.read_text(encoding='utf-8') for p in sorted(ROOT.glob('finances_part_*.pyfrag'))))
+        tree = ast.parse((ROOT / "finances.py").read_text(encoding="utf-8"))
         call = next(n for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
                     and n.func.id == 'build_import_export_panel')
         env = {name: Mock() for name in ('ui', 'user_id', 'export_tab', 'build_import_export_panel')}
@@ -220,7 +220,7 @@ import finances_import_export
         names = {n.name for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
         self.assertTrue({'receive_import', 'confirm_import', 'do_export'}.isdisjoint(names))
         self.assertTrue({'Path', 'tempfile'}.isdisjoint({n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}))
-        self.assertNotIn('with ui.tab_panel(export_tab)', (ROOT / 'finances_part_14.pyfrag').read_text(encoding='utf-8'))
+        self.assertNotIn('with ui.tab_panel(export_tab)', (ROOT / 'finances.py').read_text(encoding='utf-8'))
 
 
 if __name__ == '__main__':

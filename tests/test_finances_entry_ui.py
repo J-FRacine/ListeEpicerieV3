@@ -64,7 +64,7 @@ def change(widget, value):
 
 
 def parent_tree():
-    return ast.parse(''.join(p.read_text(encoding='utf-8') for p in sorted(ROOT.glob('finances_part_*.pyfrag'))))
+    return ast.parse((ROOT / "finances.py").read_text(encoding="utf-8"))
 
 
 class EntryUiTests(unittest.TestCase):

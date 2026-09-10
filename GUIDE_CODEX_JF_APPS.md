@@ -1,6 +1,6 @@
 # Installer et utiliser Codex pour JF Apps — Windows
 
-Dernière mise à jour : 2026-09-04
+Dernière mise à jour : 2026-09-10
 
 ## Installation recommandée
 
@@ -25,8 +25,10 @@ La méthode la plus simple est d'utiliser la nouvelle application de bureau Chat
    - `finances_data.py`
    - `app_versions.py`
    - `manual.py`
-   - les `finances_part_XX.pyfrag`
+   - `finances_styles.py` et les modules interface extraits
    - les `finances_data_part_XX.pyfrag`
+
+   `finances.py` est un module Python normal; seuls `finances_data.py` et ses fragments utilisent encore le chargeur transitoire.
 
 6. Ajoute à la racine de ce dossier :
    - `AGENTS.md`

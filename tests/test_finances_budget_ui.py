@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def ui_tree():
-    return ast.parse("".join(p.read_text(encoding="utf-8") for p in sorted(ROOT.glob("finances_part_*.pyfrag"))))
+    return ast.parse((ROOT / "finances.py").read_text(encoding="utf-8"))
 
 
 def budget_tree():
@@ -139,7 +139,7 @@ assert callable(build_budget_panel)
         self.assertTrue(names.isdisjoint(fragment_defs))
         module_defs={n.name for n in ast.walk(budget_tree()) if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))}
         self.assertTrue(names.issubset(module_defs))
-        self.assertNotIn("# BUDGET GLOBAL",(ROOT/"finances_part_06.pyfrag").read_text(encoding="utf-8"))
+        self.assertNotIn("# BUDGET GLOBAL",(ROOT/"finances.py").read_text(encoding="utf-8"))
 
     def test_render_keeps_single_capacity_and_initial_forecast(self):
         render=function("render_budget",budget_tree()); calls=[n for n in ast.walk(render) if isinstance(n,ast.Call)]

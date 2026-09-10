@@ -164,7 +164,7 @@ class PlannedReconciliationTests(unittest.TestCase):
         self.assertIn('reconciliation_status="unreconciled"', source)
 
     def test_parent_wires_both_existing_services(self):
-        source = (ROOT / "finances_part_10.pyfrag").read_text(
+        source = (ROOT / "finances.py").read_text(
             encoding="utf-8"
         )
         self.assertIn(

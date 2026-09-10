@@ -247,7 +247,7 @@ import finances_dialogs
         self.assertEqual({n.module for n in imports}, {'dataclasses', 'datetime', 'decimal', 'typing'})
 
     def test_all_parent_consumers_forward_lazily_to_current_handle(self):
-        tree = ast.parse(''.join(p.read_text(encoding='utf-8') for p in sorted(ROOT.glob('finances_part_*.pyfrag'))))
+        tree = ast.parse((ROOT / "finances.py").read_text(encoding="utf-8"))
         definitions = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
         names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
         self.assertTrue({'_transaction_dialog', '_card_payment_dialog', '_bank_payment_source_options', '_credit_card_options'}.isdisjoint(definitions | names))
@@ -271,7 +271,7 @@ import finances_dialogs
                 env['refresh_all'].assert_not_called()
 
     def test_parent_builder_only_injects_late_services(self):
-        tree = ast.parse(''.join(p.read_text(encoding='utf-8') for p in sorted(ROOT.glob('finances_part_*.pyfrag'))))
+        tree = ast.parse((ROOT / "finances.py").read_text(encoding="utf-8"))
         assignment = next(n for n in ast.walk(tree) if isinstance(n, ast.Assign)
                           and any(isinstance(t, ast.Name) and t.id == 'dialogs' for t in n.targets))
         env = {name: Mock() for name in ('ui', 'TRANSACTION_TYPES', 'TRANSACTION_STATUSES', 'build_finance_dialogs')}

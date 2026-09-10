@@ -42,7 +42,7 @@ def build(rows=None):
 
 
 def parent_tree():
-    return ast.parse(''.join(p.read_text(encoding='utf-8') for p in sorted(ROOT.glob('finances_part_*.pyfrag'))))
+    return ast.parse((ROOT / "finances.py").read_text(encoding="utf-8"))
 
 
 class RecurrencesUiTests(unittest.TestCase):
@@ -214,7 +214,7 @@ import finances_recurrences
         names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
         definitions = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
         self.assertTrue(forbidden.isdisjoint(names | definitions))
-        fragment = (ROOT / 'finances_part_10.pyfrag').read_text(encoding='utf-8')
+        fragment = (ROOT / 'finances.py').read_text(encoding='utf-8')
         self.assertNotIn('with ui.tab_panel(recurring_tab)', fragment)
         self.assertIn('# OBJECTIFS', fragment)
 

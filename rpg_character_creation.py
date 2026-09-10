@@ -200,6 +200,13 @@ def creation_warnings(
     return warnings
 
 
+def race_selection_pending(character: Mapping[str, Any]) -> bool:
+    """Indique si un nouveau personnage attend encore le choix réel de sa race."""
+    race_key = str(character.get("race_key") or "custom").strip()
+    race_name = str(character.get("race") or "").strip()
+    return race_key == "custom" and not race_name
+
+
 def open_new_character_dialog(
     *,
     ui: Any,
@@ -303,8 +310,9 @@ def build_character_creation_panel(
     with ui.card().classes("w-full p-5"):
         ui.label("Création guidée").classes("text-2xl font-bold")
         ui.label(
-            "Chaque étape est enregistrée avant de passer à la suivante. Vous pouvez "
-            "quitter l’application et reprendre cet onglet plus tard."
+            "Chaque étape est enregistrée avant de passer à la suivante. Pour un nouveau "
+            "personnage dont la race n’est pas encore choisie, l’Identité est enregistrée "
+            "avec la Race à l’étape suivante."
         ).classes("text-sm jf-muted")
         ui.label(
             "Nouveau : des repères Fighter niveaux 1 à 4, un comparatif Humain/Elfe "
@@ -376,8 +384,9 @@ def build_character_creation_panel(
                             placeholder="Ex. Fighter ou Guerrier",
                         ).props("maxlength=120"),
                         "subclass_name": ui.input(
-                            label="Sous-classe facultative",
+                            label="Sous-classe / archétype (facultatif)",
                             value=working.get("subclass_name") or "",
+                            placeholder="Laisser vide pour un Fighter standard",
                         ).props("maxlength=160 clearable"),
                         "character_level": ui.number(
                             label="Niveau",
@@ -443,6 +452,21 @@ def build_character_creation_panel(
                         key: control.value
                         for key, control in identity_controls.items()
                     }
+
+                    # Un personnage créé par l'assistant commence volontairement avec
+                    # race_key='custom' et aucun nom de race. La couche de données
+                    # refuse d'enregistrer ce profil incomplet. On conserve donc
+                    # l'Identité dans l'état de l'assistant et on l'enregistre avec
+                    # la Race à l'étape suivante, sans inventer de race temporaire.
+                    if race_selection_pending(working):
+                        working.update(updates)
+                        ui.notify(
+                            "Identité prête. Choisissez maintenant la race; "
+                            "les deux étapes seront enregistrées ensemble.",
+                            type="info",
+                        )
+                        return True
+
                     try:
                         update_rpg_character_identity(
                             user_id,

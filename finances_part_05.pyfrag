@@ -23,6 +23,6 @@
             _month_label=lambda *args, **kwargs: _month_label(*args, **kwargs),
             refresh_all=lambda *args, **kwargs: refresh_all(*args, **kwargs),
             recurrence_dialog=lambda *args, **kwargs: recurrences_panel.open_dialog(*args, **kwargs),
-            _transaction_dialog=lambda *args, **kwargs: _transaction_dialog(*args, **kwargs),
-            _card_payment_dialog=lambda *args, **kwargs: _card_payment_dialog(*args, **kwargs),
+            _transaction_dialog=lambda *args, **kwargs: dialogs.transaction(*args, **kwargs),
+            _card_payment_dialog=lambda *args, **kwargs: dialogs.card_payment(*args, **kwargs),
         )

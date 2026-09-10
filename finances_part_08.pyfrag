@@ -50,8 +50,8 @@
                 set_transaction_reconciliation=set_transaction_reconciliation,
                 get_card_payment_transfer=get_card_payment_transfer,
                 get_transaction=get_transaction,
-                card_payment_dialog=_card_payment_dialog,
-                transaction_dialog=_transaction_dialog,
+                card_payment_dialog=lambda *args, **kwargs: dialogs.card_payment(*args, **kwargs),
+                transaction_dialog=lambda *args, **kwargs: dialogs.transaction(*args, **kwargs),
                 find_potential_duplicate_transactions=(
                     find_potential_duplicate_transactions
                 ),

@@ -91,8 +91,21 @@ Version actuelle de travail : **V1.13.5**
 - Créés : `finances_entry.py`, `tests/test_finances_entry_ui.py`.
 - Modifiés : `finances_part_01.pyfrag`, `finances_part_07.pyfrag`, `finances_part_08.pyfrag`, `finances_part_14.pyfrag`, `PROJECT_STATUS.md`.
 - Validation locale : **280 tests réussis** (265 existants inchangés et 15 nouveaux); compilation des fichiers Python concernés et des deux assemblages; `git diff --check` sans erreur. Revue automatique : bloc déplacé identique hors callback Tableau et rechargement identique; parent inchangé hors raccordements attendus.
-- Finances reste **V1.13.5**; versions, notes utilisateur et manuel inchangés. Le déploiement Canner/Render et la validation navigateur de cette extraction restent à effectuer après publication; PostgreSQL de production n’a pas été testé indépendamment.
+- Finances reste **V1.13.5**; versions, notes utilisateur et manuel inchangés. La validation utilisateur après déploiement sur Canner/Render et dans le navigateur a réussi; PostgreSQL de production n’a pas été testé indépendamment.
 - Prochaine étape technique recommandée après revue : examiner l’extraction des **dialogues partagés de transaction et de paiement de carte**, dans une intervention séparée.
+
+### Extraction des dialogues partagés — 2026-09-10
+
+- Point de départ : `3aa0624b320b1089accb206dbf651a333d770a29` (`3aa0624`), `origin/main` vérifiée et état Git propre; **280 tests de départ réussis**.
+- Les dialogues globaux de transaction et de paiement de carte sont extraits dans `finances_dialogs.py`, avec `FinanceDialogsHandle` et `build_finance_dialogs`. Leurs signatures fonctionnelles sont conservées par `transaction()` et `card_payment()`.
+- Les deux helpers de choix bancaire, utilisés uniquement par le paiement de carte, deviennent privés au module avec `list_payment_methods` injecté. Les options partagées de catégorie, étiquette et paiement restent dans le parent et sont injectées.
+- Les 12 callbacks consommateurs sont différés vers le handle : en-tête, Tableau, Compte, Saisie, Historique et Conciliation. `refresh_all()` n’est pas évalué pendant la construction. Le chemin Conciliation → Clore et programmer le paiement conserve son ordre d’ouverture avant rafraîchissement global.
+- Valeurs par défaut, paramètres, préremplissage, méthodes inactives en modification, rappels, arrondi du paiement, erreurs et ordre sauvegarde/fermeture/notification/callback conservés. Aucune modification fonctionnelle ou visuelle volontaire, aucun SQL, aucune migration et aucune nouvelle dépendance.
+- Créés : `finances_dialogs.py`, `tests/test_finances_dialogs_ui.py`.
+- Modifiés : `finances_part_01.pyfrag`, `finances_part_02.pyfrag`, `finances_part_03.pyfrag`, `finances_part_05.pyfrag`, `finances_part_07.pyfrag`, `finances_part_08.pyfrag`, `finances_part_10.pyfrag`, `tests/test_finances_account_ui.py`, `tests/test_finances_entry_ui.py`, `PROJECT_STATUS.md`.
+- Deux tests existants de raccordement vérifient maintenant les callbacks du handle avec les mêmes assertions. Validation locale : **293 tests réussis** (280 existants et 13 nouveaux), compilation des fichiers Python concernés et des deux assemblages, imports interdits absents, `git diff --check` sans erreur. Revue automatique : les quatre fonctions déplacées sont identiques et le parent est inchangé hors raccordements et imports attendus.
+- Finances reste **V1.13.5**; versions, notes utilisateur et manuel inchangés. Le déploiement Canner/Render et la validation navigateur de cette extraction restent à effectuer après publication; PostgreSQL de production n’a pas été testé indépendamment.
+- Prochaine étape recommandée après revue : **passe finale sur les fragments restants**.
 
 ### Changements récents terminés
 

@@ -49,7 +49,7 @@
             get_or_create_finance_category=lambda *args, **kwargs: get_or_create_finance_category(*args, **kwargs),
             get_or_create_finance_tag=lambda *args, **kwargs: get_or_create_finance_tag(*args, **kwargs),
             save_transaction=lambda *args, **kwargs: save_transaction(*args, **kwargs),
-            _card_payment_dialog=lambda *args, **kwargs: _card_payment_dialog(*args, **kwargs),
+            _card_payment_dialog=lambda *args, **kwargs: dialogs.card_payment(*args, **kwargs),
             refresh_all=lambda *args, **kwargs: refresh_all(*args, **kwargs),
             refresh_dashboard=lambda: dashboard_panel.refresh(),
         )

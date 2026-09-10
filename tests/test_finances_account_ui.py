@@ -163,6 +163,9 @@ handle.refresh()
                 target = Mock()
                 if name == 'recurrence_dialog':
                     namespace['recurrences_panel'] = Mock(open_dialog=target)
+                elif name in ('_transaction_dialog', '_card_payment_dialog'):
+                    method = 'transaction' if name == '_transaction_dialog' else 'card_payment'
+                    namespace['dialogs'] = Mock(**{method: target})
                 else:
                     namespace[name] = target
                 callbacks[name](1, test=True)

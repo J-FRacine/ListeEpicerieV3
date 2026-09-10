@@ -275,6 +275,8 @@ import finances_entry
         for _ in range(2):
             for name in ('save_transaction', '_card_payment_dialog', 'refresh_all'):
                 env[name] = Mock()
+                if name == '_card_payment_dialog':
+                    env['dialogs'] = Mock(card_payment=env[name])
                 kwargs[name](7, sample=True)
                 env[name].assert_called_once_with(7, sample=True)
             env['dashboard_panel'] = Mock()

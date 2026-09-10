@@ -964,7 +964,7 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
 """,
     },
     {
-        "title": "Personnages JDR — V1.3.0",
+        "title": "Personnages JDR — V1.4.0",
         "icon": "casino",
         "caption": "Progression, races, équipement et feuille Pathfinder / Ravenloft",
         "keywords": (
@@ -977,6 +977,18 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
             "progression niveau montée niveau sous-classe facultative historique dons capacités"
         ),
         "content": """
+### Création rapide ou guidée
+
+**Nouveau** propose deux modes : **Création rapide** conserve la saisie du nom et du joueur avec création immédiate. **Création guidée** crée et sélectionne le personnage, puis ouvre l’assistant : Identité, Race, Caractéristiques, Combat, Compétences, Équipement / Attaques et Résumé.
+
+L’onglet permanent **Création guidée** permet de reprendre un personnage existant. Les étapes enregistrent leurs données sur le vrai personnage. Le changement de race ne modifie pas silencieusement les six caractéristiques. Les choix non automatisés restent à vérifier; le résumé réutilise l’audit de feuille.
+
+### Combat rapide
+
+Le bouton **Combat rapide**, près des actions du personnage actif, affiche PV, dégâts non létaux, défenses, initiative, BMO/DMD, sauvegardes et attaques. Il permet d’appliquer dégâts, soins et dégâts non létaux, avec un modificateur temporaire d’attaque et des notes tactiques non persistantes.
+
+**Enregistrer les pertes** conserve les autres valeurs Combat et recharge la feuille Combat. **Voir la fiche Combat** ouvre la feuille complète. Les sept onglets existants et la progression guidée restent disponibles.
+
 ### Données privées et plusieurs personnages
 
 Chaque personnage appartient uniquement à l’utilisateur connecté. Il n’est pas partagé avec une famille ou un autre compte pendant cette version.

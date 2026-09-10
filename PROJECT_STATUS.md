@@ -17,6 +17,16 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 
 Important : ces versions sont celles présentes dans GitHub `main`. Leur validation réelle sur Canner/Render ou PostgreSQL de production doit être confirmée séparément après déploiement.
 
+## JDR — intégration V1.4.0 — 2026-09-10
+
+- Base GitHub vérifiée : `629b91ce85e11f3a6f4467459c23588825cc96e7`, état propre et 345 tests réussis. Livraison sur `review/jdr-v1.4-integration`; la table ci-dessus décrit le main de départ. JDR passe à **V1.4.0** dans cette branche.
+- Création rapide conservée; création guidée sur un personnage persistant, sélection automatique et onglet permanent pour reprendre les sept étapes. Aucun brouillon ni règle supplémentaire.
+- Combat rapide accessible depuis les actions du personnage, avec un seul handle par panneau. Le personnage est relu à l’ouverture pour conserver les dernières modifications de l’assistant. PV/non létaux sont enregistrés par le service existant en préservant les autres champs, puis la feuille Combat est rechargée. Notes tactiques temporaires sans stockage permanent.
+- Les modules préparés, les sept onglets existants, les calculs, les catalogues et Finances sont inchangés. Aucun SQL, migration ou nouvelle dépendance.
+- Modifiés : `rpg_character.py`, `app_versions.py`, `manual.py`, `PROJECT_STATUS.md`. Créé : `tests/test_rpg_character_integration.py`.
+- Validation locale : **352 tests réussis**, dont **54 tests JDR**, compilation des quatre fichiers Python concernés et `git diff --check` sans erreur. Revue des raccordements et des paramètres injectés effectuée.
+- Navigateur réel, Canner/Render et PostgreSQL de production non testés; validation utilisateur à effectuer après déploiement. Aucun déploiement réalisé par ce mandat.
+
 ## Finances — état actuel
 
 Version actuelle de travail : **V1.13.5**

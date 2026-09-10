@@ -4,6 +4,9 @@ from decimal import Decimal
 
 from nicegui import ui
 
+from rpg_character_creation import open_new_character_dialog, build_character_creation_panel
+from rpg_combat_session import build_combat_session
+
 from rpg_character_catalog import (
     ARMOR_CATEGORY_LABELS,
     EQUIPMENT_TYPE_LABELS,
@@ -752,85 +755,15 @@ def _character_url(
     return url
 
 
-def _create_character_dialog(
-    user_id,
-    player_default,
-):
-    with ui.dialog() as dialog:
-        with ui.card().classes(
-            "w-full max-w-lg p-5"
-        ):
-            ui.label(
-                "Créer un personnage"
-            ).classes(
-                "text-xl font-bold"
-            )
-
-            name_input = ui.input(
-                label="Nom du personnage",
-            ).props(
-                "autofocus maxlength=120"
-            ).classes(
-                "w-full"
-            )
-
-            player_input = ui.input(
-                label="Nom du joueur",
-                value=player_default,
-            ).props(
-                "maxlength=120"
-            ).classes(
-                "w-full"
-            )
-
-            def create():
-                try:
-                    character_id = (
-                        create_rpg_character(
-                            user_id,
-                            name_input.value,
-                            player_input.value,
-                        )
-                    )
-                except Exception as error:
-                    _safe_notify_error(
-                        error,
-                        (
-                            "Le personnage n’a pas "
-                            "pu être créé."
-                        ),
-                    )
-                    return
-
-                dialog.close()
-                ui.notify(
-                    "Personnage créé.",
-                    type="positive",
-                )
-                ui.navigate.to(
-                    _character_url(
-                        character_id
-                    )
-                )
-
-            with ui.row().classes(
-                "w-full justify-end gap-2 mt-3"
-            ):
-                ui.button(
-                    "Annuler",
-                    on_click=dialog.close,
-                ).props(
-                    "flat"
-                )
-                ui.button(
-                    "Créer",
-                    icon="person_add",
-                    on_click=create,
-                ).props(
-                    "color=primary"
-                )
-
-    dialog.open()
+def _create_character_dialog(user_id, player_default):
+    open_new_character_dialog(
+        ui=ui,
+        user_id=user_id,
+        player_default=player_default,
+        create_rpg_character=create_rpg_character,
+        character_url=_character_url,
+        notify_error=_safe_notify_error,
+    )
 
 
 def _delete_character_dialog(
@@ -5527,6 +5460,36 @@ def rpg_character_panel(
         current_id,
     )
 
+    combat_session = build_combat_session(
+        ui=ui,
+        user_id=user_id,
+        character=character,
+        list_rpg_attacks=list_rpg_attacks,
+        list_rpg_saves=list_rpg_saves,
+        update_rpg_character_combat=update_rpg_character_combat,
+        armor_class_total=armor_class_total,
+        touch_armor_class=touch_armor_class,
+        flat_footed_armor_class=flat_footed_armor_class,
+        initiative_total=initiative_total,
+        cmb_total=cmb_total,
+        cmd_total=cmd_total,
+        attack_total=attack_total,
+        save_total=save_total,
+        format_modifier=format_modifier,
+        character_url=_character_url,
+        notify_error=_safe_notify_error,
+    )
+
+    def open_combat_session():
+        try:
+            fresh = get_rpg_character(user_id, current_id)
+        except Exception as error:
+            _safe_notify_error(error, "Le personnage n’a pas pu être rechargé.")
+            return
+        character.clear()
+        character.update(fresh)
+        combat_session.open()
+
     with ui.card().classes(
         "w-full p-4"
     ):
@@ -5570,6 +5533,10 @@ def rpg_character_panel(
             ).props(
                 "outline color=primary"
             )
+
+            ui.button(
+                "Combat rapide", icon="sports_martial_arts", on_click=open_combat_session,
+            ).props("color=primary")
 
             ui.button(
                 icon="delete",
@@ -5699,6 +5666,7 @@ def rpg_character_panel(
     ).classes(
         "jf-rpg-main-tabs"
     ) as tabs:
+        creation_tab = ui.tab("Création guidée", icon="auto_fix_high")
         identity_tab = ui.tab(
             "Identité",
             icon="badge",
@@ -5734,6 +5702,7 @@ def rpg_character_panel(
     ).strip().lower()
 
     initial_tab = {
+        "creation": creation_tab,
         "identite": identity_tab,
         "identity": identity_tab,
         "progression": progression_tab,
@@ -5761,6 +5730,40 @@ def rpg_character_panel(
     ).classes(
         "w-full bg-transparent"
     ):
+        with ui.tab_panel(creation_tab).classes("px-0"):
+            build_character_creation_panel(
+                ui=ui,
+                user_id=user_id,
+                character=character,
+                get_rpg_character=get_rpg_character,
+                update_rpg_character_identity=update_rpg_character_identity,
+                update_rpg_character_combat=update_rpg_character_combat,
+                list_rpg_saves=list_rpg_saves,
+                update_rpg_saves=update_rpg_saves,
+                list_rpg_skills=list_rpg_skills,
+                update_rpg_skills=update_rpg_skills,
+                list_rpg_equipment=list_rpg_equipment,
+                list_rpg_attacks=list_rpg_attacks,
+                character_sheet_audit=character_sheet_audit,
+                apply_equipment_effects=apply_equipment_effects,
+                armor_class_total=armor_class_total,
+                touch_armor_class=touch_armor_class,
+                flat_footed_armor_class=flat_footed_armor_class,
+                initiative_total=initiative_total,
+                cmb_total=cmb_total,
+                cmd_total=cmd_total,
+                ability_modifier=ability_modifier,
+                format_modifier=format_modifier,
+                get_race_profile=get_race_profile,
+                race_labels=RACE_LABELS,
+                size_labels=SIZE_LABELS,
+                ability_labels=ABILITY_LABELS,
+                ability_long_labels=ABILITY_LONG_LABELS,
+                save_definitions=SAVE_DEFINITIONS,
+                character_url=_character_url,
+                notify_error=_safe_notify_error,
+            )
+
         with ui.tab_panel(
             identity_tab
         ).classes(

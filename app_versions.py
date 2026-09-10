@@ -16,11 +16,24 @@ APP_VERSIONS = {
     "grocery": "1.2.0",
     "blood_pressure": "1.2.1",
     "finances": "1.13.5",
-    "rpg": "1.3.0",
+    "rpg": "1.4.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "rpg",
+        "version": "1.4.0",
+        "date": "2026-09-10",
+        "title": "Personnages JDR — V1.4.0",
+        "summary": "Création guidée et nouvelle fenêtre Combat rapide.",
+        "changes": [
+            "Choix entre création rapide et assistant guidé, reprenable sur un personnage existant.",
+            "Combat rapide : suivi des PV et dégâts non létaux, statistiques et attaques du personnage.",
+            "Notes tactiques temporaires sans stockage permanent et accès à la feuille Combat complète.",
+            "Aucune nouvelle dépendance et aucun changement volontaire des règles existantes.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.13.5",

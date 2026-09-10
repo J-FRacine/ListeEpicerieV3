@@ -3,6 +3,20 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Callable, Mapping, Sequence
 
+from rpg_character_guides import (
+    FIGHTER_CLASS_SKILL_LABELS,
+    FIGHTER_PROFICIENCIES,
+    fighter_cumulative_milestones,
+    fighter_feat_counts,
+    fighter_reference,
+    fighter_skill_rank_budget,
+    gear_preset_options,
+    gear_reference_lines,
+    is_fighter,
+    is_fighter_class_skill,
+    race_comparison,
+)
+
 
 CREATION_STEPS = (
     ("identity", "Identité", "badge"),
@@ -88,6 +102,15 @@ def _as_decimal(value: Any) -> Decimal:
         return Decimal(str(value))
     except Exception:
         return Decimal("0")
+
+
+def _as_int(value: Any, default: int = 0) -> int:
+    if value in (None, ""):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def identity_payload(character: Mapping[str, Any], **updates: Any) -> dict[str, Any]:
@@ -283,6 +306,10 @@ def build_character_creation_panel(
             "Chaque étape est enregistrée avant de passer à la suivante. Vous pouvez "
             "quitter l’application et reprendre cet onglet plus tard."
         ).classes("text-sm jf-muted")
+        ui.label(
+            "Nouveau : des repères Fighter niveaux 1 à 4, un comparatif Humain/Elfe "
+            "et un catalogue d’armes/armures facilitent la saisie sans imposer vos choix."
+        ).classes("text-xs jf-muted mt-1")
 
     with ui.tabs().props(
         "dense no-caps mobile-arrows outside-arrows align=left"
@@ -294,10 +321,18 @@ def build_character_creation_panel(
     def go(key: str) -> None:
         step_tabs.set_value(tab_by_key[key])
 
-    def nav_buttons(previous: str | None, next_step: str | None, save: Callable[[], bool] | None = None) -> None:
+    def nav_buttons(
+        previous: str | None,
+        next_step: str | None,
+        save: Callable[[], bool] | None = None,
+    ) -> None:
         with ui.row().classes("w-full justify-between gap-2 mt-4 flex-wrap"):
             if previous:
-                ui.button("Précédent", icon="chevron_left", on_click=lambda: go(previous)).props("flat")
+                ui.button(
+                    "Précédent",
+                    icon="chevron_left",
+                    on_click=lambda: go(previous),
+                ).props("flat")
             else:
                 ui.element("div")
 
@@ -308,28 +343,112 @@ def build_character_creation_panel(
                     go(next_step)
 
             if next_step:
-                ui.button("Enregistrer et suivant", icon="chevron_right", on_click=next_clicked).props("color=primary")
+                ui.button(
+                    "Enregistrer et suivant",
+                    icon="chevron_right",
+                    on_click=next_clicked,
+                ).props("color=primary")
 
-    with ui.tab_panels(step_tabs, value=tab_by_key["identity"]).classes("w-full bg-transparent"):
+    with ui.tab_panels(
+        step_tabs,
+        value=tab_by_key["identity"],
+    ).classes("w-full bg-transparent"):
         with ui.tab_panel(tab_by_key["identity"]).classes("px-0"):
             with ui.card().classes("w-full p-5"):
                 ui.label("1. Identité").classes("text-xl font-bold")
                 with ui.element("div").classes("jf-rpg-grid mt-2"):
                     identity_controls = {
-                        "character_name": ui.input(label="Nom du personnage", value=working.get("character_name") or "").props("maxlength=120"),
-                        "player_name": ui.input(label="Joueur", value=working.get("player_name") or "").props("maxlength=120"),
-                        "campaign": ui.input(label="Campagne", value=working.get("campaign") or "").props("maxlength=160"),
-                        "class_name": ui.input(label="Classe", value=working.get("class_name") or "").props("maxlength=120"),
-                        "subclass_name": ui.input(label="Sous-classe facultative", value=working.get("subclass_name") or "").props("maxlength=160 clearable"),
-                        "character_level": ui.number(label="Niveau", value=working.get("character_level") or 1, min=1, max=100, step=1),
-                        "alignment": ui.input(label="Alignement", value=working.get("alignment") or "").props("maxlength=80"),
-                        "deity": ui.input(label="Divinité", value=working.get("deity") or "").props("maxlength=120"),
+                        "character_name": ui.input(
+                            label="Nom du personnage",
+                            value=working.get("character_name") or "",
+                        ).props("maxlength=120"),
+                        "player_name": ui.input(
+                            label="Joueur",
+                            value=working.get("player_name") or "",
+                        ).props("maxlength=120"),
+                        "campaign": ui.input(
+                            label="Campagne",
+                            value=working.get("campaign") or "",
+                        ).props("maxlength=160"),
+                        "class_name": ui.input(
+                            label="Classe",
+                            value=working.get("class_name") or "",
+                            placeholder="Ex. Fighter ou Guerrier",
+                        ).props("maxlength=120"),
+                        "subclass_name": ui.input(
+                            label="Sous-classe facultative",
+                            value=working.get("subclass_name") or "",
+                        ).props("maxlength=160 clearable"),
+                        "character_level": ui.number(
+                            label="Niveau",
+                            value=working.get("character_level") or 1,
+                            min=1,
+                            max=100,
+                            step=1,
+                        ),
+                        "alignment": ui.input(
+                            label="Alignement",
+                            value=working.get("alignment") or "",
+                        ).props("maxlength=80"),
+                        "deity": ui.input(
+                            label="Divinité",
+                            value=working.get("deity") or "",
+                        ).props("maxlength=120"),
                     }
 
+                @ui.refreshable
+                def fighter_identity_help() -> None:
+                    class_name = identity_controls["class_name"].value
+                    if not is_fighter(class_name):
+                        return
+                    level = _as_int(identity_controls["character_level"].value, 1)
+                    with ui.element("div").classes("jf-rpg-summary mt-3"):
+                        ui.label("Repères Fighter / Guerrier").classes("font-bold")
+                        reference = fighter_reference(level)
+                        if reference is None:
+                            ui.label(
+                                "Cette aide détaillée couvre actuellement les niveaux 1 à 4. "
+                                "La feuille reste entièrement modifiable au-delà."
+                            ).classes("text-sm jf-muted")
+                        else:
+                            ui.label(
+                                f"Niveau {level} : d10 de vie · BBA +{reference['bab']} · "
+                                f"Vigueur +{reference['fortitude']} · Réflexes +{reference['reflex']} · "
+                                f"Volonté +{reference['will']}."
+                            ).classes("text-sm")
+                            ui.label(
+                                "Capacités de ce niveau : " + ", ".join(reference["specials"])
+                            ).classes("text-sm")
+                            feats_no_race = fighter_feat_counts(level)
+                            ui.label(
+                                f"Dons cumulés sans bonus racial : {feats_no_race['total']} "
+                                f"({feats_no_race['general']} généraux + {feats_no_race['fighter_bonus']} bonus Fighter). "
+                                "Au niveau 4, un Humain standard en a normalement un de plus."
+                            ).classes("text-sm")
+                        ui.label("Maîtrises : " + FIGHTER_PROFICIENCIES).classes("text-xs jf-muted")
+                        ui.label(
+                            "Compétences de classe : " + ", ".join(FIGHTER_CLASS_SKILL_LABELS)
+                        ).classes("text-xs jf-muted")
+
+                identity_controls["class_name"].on_value_change(
+                    lambda _event: fighter_identity_help.refresh()
+                )
+                identity_controls["character_level"].on_value_change(
+                    lambda _event: fighter_identity_help.refresh()
+                )
+                fighter_identity_help()
+
                 def save_identity() -> bool:
-                    updates = {key: control.value for key, control in identity_controls.items()}
+                    updates = {
+                        key: control.value
+                        for key, control in identity_controls.items()
+                    }
                     try:
-                        update_rpg_character_identity(user_id, character_id, identity_payload(working, **updates))
+                        update_rpg_character_identity(
+                            user_id,
+                            character_id,
+                            identity_payload(working, **updates),
+                        )
                     except Exception as error:
                         notify_error(error, "L’identité n’a pas pu être enregistrée.")
                         return False
@@ -346,27 +465,103 @@ def build_character_creation_panel(
                     "Le profil racial suggère des valeurs de feuille, mais ne change jamais "
                     "automatiquement FOR, DEX, CON, INT, SAG ou CHA."
                 ).classes("text-sm jf-muted")
+
+                with ui.expansion(
+                    "Humain ou Elfe pour un Fighter avec une orientation magique?",
+                    icon="compare_arrows",
+                    value=True,
+                ).props("expand-separator").classes("w-full mt-2"):
+                    for race_key in ("human", "elf"):
+                        info = race_comparison(race_key) or {}
+                        with ui.element("div").classes("jf-rpg-summary mt-2"):
+                            ui.label(str(info.get("label") or race_key)).classes("font-bold")
+                            ui.label(
+                                "Caractéristiques : " + str(info.get("ability_adjustments") or "—")
+                            ).classes("text-sm")
+                            ui.label(str(info.get("combat") or "")).classes("text-sm")
+                            ui.label(str(info.get("skills") or "")).classes("text-sm")
+                            ui.label("Magie : " + str(info.get("magic") or "")).classes("text-sm")
+                            ui.label(str(info.get("fighter_note") or "")).classes("text-xs jf-muted")
+                    ui.label(
+                        "Important : être Elfe ne donne pas de sorts à un Fighter. Une future classe ou capacité "
+                        "de lanceur de sorts reste nécessaire."
+                    ).classes("text-xs jf-muted mt-2")
+
                 current_race_key = str(working.get("race_key") or "custom")
                 if current_race_key not in race_labels:
                     current_race_key = "custom"
                 with ui.element("div").classes("jf-rpg-grid mt-2"):
-                    race_select = ui.select(race_labels, label="Race principale", value=current_race_key).classes("w-full")
-                    custom_race = ui.input(label="Nom de la race personnalisée", value=(working.get("race") or "") if current_race_key == "custom" else "").props("maxlength=120").classes("w-full")
-                    heritage = ui.input(label="Héritage / sous-race", value=working.get("race_heritage") or "").props("maxlength=160")
-                    size = ui.select(size_labels, label="Catégorie de taille", value=working.get("size_key") or "medium")
-                    base_speed = ui.number(label="Vitesse de base (pi)", value=working.get("base_speed") or 30, min=0, max=500, step=5)
-                    creature_type = ui.input(label="Type de créature", value=working.get("creature_type") or "Humanoïde").props("maxlength=120")
-                    subtypes = ui.input(label="Sous-types", value=working.get("racial_subtypes") or "").props("maxlength=240")
-                    vision = ui.input(label="Vision / sens", value=working.get("vision") or "").props("maxlength=240")
-                    languages = ui.input(label="Langues", value=working.get("languages") or "").props("maxlength=500")
-                    ability_adjustments = ui.input(label="Ajustements raciaux", value=working.get("racial_ability_adjustments") or "").props("maxlength=240")
-                    carrying_multiplier = ui.number(label="Multiplicateur de charge", value=float(working.get("carrying_capacity_multiplier") or 1), min=.001, max=100, step=.25)
+                    race_select = ui.select(
+                        race_labels,
+                        label="Race principale",
+                        value=current_race_key,
+                    ).classes("w-full")
+                    custom_race = ui.input(
+                        label="Nom de la race personnalisée",
+                        value=(working.get("race") or "") if current_race_key == "custom" else "",
+                    ).props("maxlength=120").classes("w-full")
+                    heritage = ui.input(
+                        label="Héritage / sous-race",
+                        value=working.get("race_heritage") or "",
+                    ).props("maxlength=160")
+                    size = ui.select(
+                        size_labels,
+                        label="Catégorie de taille",
+                        value=working.get("size_key") or "medium",
+                    )
+                    base_speed = ui.number(
+                        label="Vitesse de base (pi)",
+                        value=working.get("base_speed") or 30,
+                        min=0,
+                        max=500,
+                        step=5,
+                    )
+                    creature_type = ui.input(
+                        label="Type de créature",
+                        value=working.get("creature_type") or "Humanoïde",
+                    ).props("maxlength=120")
+                    subtypes = ui.input(
+                        label="Sous-types",
+                        value=working.get("racial_subtypes") or "",
+                    ).props("maxlength=240")
+                    vision = ui.input(
+                        label="Vision / sens",
+                        value=working.get("vision") or "",
+                    ).props("maxlength=240")
+                    languages = ui.input(
+                        label="Langues",
+                        value=working.get("languages") or "",
+                    ).props("maxlength=500")
+                    ability_adjustments = ui.input(
+                        label="Ajustements raciaux",
+                        value=working.get("racial_ability_adjustments") or "",
+                    ).props("maxlength=240")
+                    carrying_multiplier = ui.number(
+                        label="Multiplicateur de charge",
+                        value=float(working.get("carrying_capacity_multiplier") or 1),
+                        min=.001,
+                        max=100,
+                        step=.25,
+                    )
                 with ui.row().classes("w-full gap-4 flex-wrap mt-2"):
-                    quadruped = ui.checkbox("Quadrupède", value=bool(working.get("is_quadruped")))
-                    ignore_armor_speed = ui.checkbox("L’armure ne réduit pas la vitesse", value=bool(working.get("ignore_armor_speed")))
-                    ignore_load_speed = ui.checkbox("L’encombrement ne réduit pas la vitesse", value=bool(working.get("ignore_encumbrance_speed")))
-                alternate_traits = ui.textarea(label="Traits raciaux alternatifs / personnalisés", value=working.get("alternate_racial_traits") or "").props("outlined autogrow maxlength=4000").classes("w-full")
+                    quadruped = ui.checkbox(
+                        "Quadrupède",
+                        value=bool(working.get("is_quadruped")),
+                    )
+                    ignore_armor_speed = ui.checkbox(
+                        "L’armure ne réduit pas la vitesse",
+                        value=bool(working.get("ignore_armor_speed")),
+                    )
+                    ignore_load_speed = ui.checkbox(
+                        "L’encombrement ne réduit pas la vitesse",
+                        value=bool(working.get("ignore_encumbrance_speed")),
+                    )
+                alternate_traits = ui.textarea(
+                    label="Traits raciaux alternatifs / personnalisés",
+                    value=working.get("alternate_racial_traits") or "",
+                ).props("outlined autogrow maxlength=4000").classes("w-full")
                 profile_label = ui.label("").classes("text-sm jf-muted")
+                magic_orientation_label = ui.label("").classes("text-xs jf-muted")
 
                 def selected_profile() -> Mapping[str, Any]:
                     return get_race_profile(str(race_select.value or "custom"))
@@ -377,17 +572,26 @@ def build_character_creation_panel(
                     profile_label.set_text(
                         "Profil suggéré — "
                         + "; ".join(
-                            part for part in (
+                            part
+                            for part in (
                                 f"taille {size_labels.get(profile.get('size_key'), profile.get('size_key'))}",
                                 f"vitesse {profile.get('base_speed')} pi",
                                 str(profile.get("vision") or ""),
                                 str(profile.get("languages") or ""),
                                 str(profile.get("ability_adjustments") or ""),
                                 ("traits : " + traits) if traits else "",
-                            ) if part
+                            )
+                            if part
                         )
                     )
                     custom_race.set_visibility(race_select.value == "custom")
+                    comparison = race_comparison(race_select.value)
+                    if comparison:
+                        magic_orientation_label.set_text(
+                            "Orientation magique — " + str(comparison.get("magic") or "")
+                        )
+                    else:
+                        magic_orientation_label.set_text("")
 
                 def apply_profile() -> None:
                     profile = selected_profile()
@@ -406,15 +610,26 @@ def build_character_creation_panel(
                     ):
                         control.value = value
                         control.update()
-                    ui.notify("Profil racial suggéré appliqué aux champs de race. Les caractéristiques restent inchangées.", type="positive")
+                    ui.notify(
+                        "Profil racial suggéré appliqué aux champs de race. Les caractéristiques restent inchangées.",
+                        type="positive",
+                    )
 
                 race_select.on_value_change(refresh_profile)
                 refresh_profile()
-                ui.button("Appliquer le profil racial", icon="auto_fix_high", on_click=apply_profile).props("outline color=primary")
+                ui.button(
+                    "Appliquer le profil racial",
+                    icon="auto_fix_high",
+                    on_click=apply_profile,
+                ).props("outline color=primary")
 
                 def save_race() -> bool:
                     key = str(race_select.value or "custom")
-                    race_name = custom_race.value if key == "custom" else race_labels.get(key)
+                    race_name = (
+                        custom_race.value
+                        if key == "custom"
+                        else race_labels.get(key)
+                    )
                     updates = {
                         "race_key": key,
                         "race": race_name,
@@ -433,7 +648,11 @@ def build_character_creation_panel(
                         "size_key": size.value,
                     }
                     try:
-                        update_rpg_character_identity(user_id, character_id, identity_payload(working, **updates))
+                        update_rpg_character_identity(
+                            user_id,
+                            character_id,
+                            identity_payload(working, **updates),
+                        )
                     except Exception as error:
                         notify_error(error, "Le profil racial n’a pas pu être enregistré.")
                         return False
@@ -451,26 +670,68 @@ def build_character_creation_panel(
                     "restent affichés comme aide et ne sont jamais appliqués silencieusement."
                 ).classes("text-sm jf-muted")
                 if working.get("racial_ability_adjustments"):
-                    ui.label("Rappel racial : " + str(working.get("racial_ability_adjustments"))).classes("jf-rpg-help")
+                    ui.label(
+                        "Rappel racial : " + str(working.get("racial_ability_adjustments"))
+                    ).classes("jf-rpg-help")
+                with ui.expansion(
+                    "Repère Fighter avec possible magie plus tard",
+                    icon="tips_and_updates",
+                    value=False,
+                ).classes("w-full mt-2"):
+                    ui.label(
+                        "Un Fighter de mêlée privilégie souvent FOR et CON; un profil agile peut valoriser DEX. "
+                        "Si une future magie basée sur l’INT est envisagée, l’INT devient aussi importante."
+                    ).classes("text-sm")
+                    ui.label(
+                        "Humain : +2 flexible. Elfe : +2 DEX, +2 INT, −2 CON. L’assistant ne choisit ni ne modifie ces scores à votre place."
+                    ).classes("text-xs jf-muted")
+
                 ability_controls: dict[str, Any] = {}
                 with ui.element("div").classes("jf-rpg-ability-grid mt-3"):
                     for key, short_label in ability_labels.items():
                         with ui.element("div").classes("jf-rpg-ability-card"):
-                            ui.label(f"{short_label} — {ability_long_labels.get(key, key)}").classes("font-bold")
-                            score = ui.number(label="Score", value=working.get(f"{key}_score") or 10, min=1, max=100, step=1)
+                            ui.label(
+                                f"{short_label} — {ability_long_labels.get(key, key)}"
+                            ).classes("font-bold")
+                            score = ui.number(
+                                label="Score",
+                                value=working.get(f"{key}_score") or 10,
+                                min=1,
+                                max=100,
+                                step=1,
+                            )
                             modifier = ui.label("").classes("jf-rpg-ability-modifier")
-                            def update_mod(_event: Any = None, *, control=score, label=modifier) -> None:
-                                label.set_text(format_modifier(ability_modifier(control.value)))
+
+                            def update_mod(
+                                _event: Any = None,
+                                *,
+                                control=score,
+                                label=modifier,
+                            ) -> None:
+                                label.set_text(
+                                    format_modifier(ability_modifier(control.value))
+                                )
+
                             score.on_value_change(update_mod)
                             update_mod()
                             ability_controls[key] = score
 
                 def save_abilities() -> bool:
-                    updates = {f"{key}_score": control.value for key, control in ability_controls.items()}
+                    updates = {
+                        f"{key}_score": control.value
+                        for key, control in ability_controls.items()
+                    }
                     try:
-                        update_rpg_character_combat(user_id, character_id, combat_payload(working, **updates))
+                        update_rpg_character_combat(
+                            user_id,
+                            character_id,
+                            combat_payload(working, **updates),
+                        )
                     except Exception as error:
-                        notify_error(error, "Les caractéristiques n’ont pas pu être enregistrées.")
+                        notify_error(
+                            error,
+                            "Les caractéristiques n’ont pas pu être enregistrées.",
+                        )
                         return False
                     working.update(updates)
                     ui.notify("Caractéristiques enregistrées.", type="positive")
@@ -482,20 +743,89 @@ def build_character_creation_panel(
             saves = [dict(row) for row in list_rpg_saves(user_id, character_id)]
             with ui.card().classes("w-full p-5"):
                 ui.label("4. Combat et sauvegardes").classes("text-xl font-bold")
+                ui.label(
+                    "Pour un Fighter standard niveaux 1 à 4, l’assistant peut préremplir uniquement "
+                    "le BBA et les sauvegardes de base. Les PV et autres choix restent manuels."
+                ).classes("text-xs jf-muted")
                 with ui.element("div").classes("jf-rpg-grid mt-2"):
-                    max_hp = ui.number(label="PV maximums", value=working.get("max_hp") or 0, step=1)
-                    current_hp = ui.number(label="PV actuels", value=working.get("current_hp") or 0, step=1)
-                    bab = ui.number(label="BBA", value=working.get("base_attack_bonus") or 0, step=1)
+                    max_hp = ui.number(
+                        label="PV maximums",
+                        value=working.get("max_hp") or 0,
+                        step=1,
+                    )
+                    current_hp = ui.number(
+                        label="PV actuels",
+                        value=working.get("current_hp") or 0,
+                        step=1,
+                    )
+                    bab = ui.number(
+                        label="BBA",
+                        value=working.get("base_attack_bonus") or 0,
+                        step=1,
+                    )
                 save_editors: list[tuple[dict[str, Any], Any]] = []
                 with ui.element("div").classes("jf-rpg-grid mt-3"):
                     for row in saves:
-                        definition = save_definitions.get(str(row.get("save_key")), {})
+                        definition = save_definitions.get(
+                            str(row.get("save_key")),
+                            {},
+                        )
                         base = ui.number(
                             label=f"{definition.get('label', row.get('save_key'))} — base",
                             value=row.get("base_save") or 0,
                             step=1,
                         )
                         save_editors.append((row, base))
+
+                fighter_combat_note = ui.label("").classes("text-sm jf-muted mt-2")
+
+                def apply_fighter_combat_reference() -> None:
+                    if not is_fighter(working.get("class_name")):
+                        ui.notify(
+                            "La classe enregistrée n’est pas Fighter / Guerrier.",
+                            type="warning",
+                        )
+                        return
+                    level = _as_int(working.get("character_level"), 1)
+                    reference = fighter_reference(level)
+                    if reference is None:
+                        ui.notify(
+                            "Le préremplissage Fighter couvre actuellement les niveaux 1 à 4.",
+                            type="warning",
+                        )
+                        return
+                    bab.value = reference["bab"]
+                    bab.update()
+                    targets = {
+                        "fortitude": reference["fortitude"],
+                        "reflex": reference["reflex"],
+                        "will": reference["will"],
+                    }
+                    for row, base in save_editors:
+                        key = str(row.get("save_key") or "")
+                        if key in targets:
+                            base.value = targets[key]
+                            base.update()
+                    note_parts = list(reference["specials"])
+                    if level >= 2:
+                        note_parts.append(
+                            "Bravoure +1 : bonus de Volonté contre la peur; à noter comme bonus conditionnel."
+                        )
+                    if level >= 3:
+                        note_parts.append(
+                            "Entraînement aux armures 1 : ACP 1 moins sévère, DEX max +1 et vitesse normale en armure intermédiaire."
+                        )
+                    fighter_combat_note.set_text(" · ".join(note_parts))
+                    ui.notify(
+                        f"Repères Fighter niveau {level} appliqués au BBA et aux sauvegardes de base.",
+                        type="positive",
+                    )
+
+                ui.button(
+                    "Appliquer les repères Fighter du niveau",
+                    icon="auto_fix_high",
+                    on_click=apply_fighter_combat_reference,
+                ).props("outline color=primary").classes("mt-2")
 
                 @ui.refreshable
                 def combat_preview() -> None:
@@ -519,7 +849,9 @@ def build_character_creation_panel(
                             ui.label(f"{label} : {value}")
 
                 for control in (max_hp, current_hp, bab):
-                    control.on_value_change(lambda _event: combat_preview.refresh())
+                    control.on_value_change(
+                        lambda _event: combat_preview.refresh()
+                    )
                 combat_preview()
 
                 def save_combat_and_saves() -> bool:
@@ -548,10 +880,20 @@ def build_character_creation_panel(
                             )
                         update_rpg_saves(user_id, character_id, save_rows)
                     except Exception as error:
-                        notify_error(error, "Le combat et les sauvegardes n’ont pas pu être enregistrés.")
+                        notify_error(
+                            error,
+                            "Le combat et les sauvegardes n’ont pas pu être enregistrés.",
+                        )
                         return False
-                    working.update(max_hp=max_hp.value, current_hp=current_hp.value, base_attack_bonus=bab.value)
-                    ui.notify("Combat et sauvegardes enregistrés.", type="positive")
+                    working.update(
+                        max_hp=max_hp.value,
+                        current_hp=current_hp.value,
+                        base_attack_bonus=bab.value,
+                    )
+                    ui.notify(
+                        "Combat et sauvegardes enregistrés.",
+                        type="positive",
+                    )
                     return True
 
                 nav_buttons("abilities", "skills", save_combat_and_saves)
@@ -562,27 +904,102 @@ def build_character_creation_panel(
                 ui.label("5. Compétences").classes("text-xl font-bold")
                 ui.label(
                     "Le nombre de rangs disponibles est une aide facultative. L’assistant ne "
-                    "devine pas les règles de votre classe."
+                    "devine pas les règles d’une autre classe ou d’un multiclassage."
                 ).classes("text-sm jf-muted")
-                available = ui.number(label="Rangs disponibles (facultatif)", min=0, step=1).props("clearable")
+                available = ui.number(
+                    label="Rangs disponibles (facultatif)",
+                    min=0,
+                    step=1,
+                ).props("clearable")
                 rank_controls: dict[int, Any] = {}
                 class_controls: dict[int, Any] = {}
                 summary = ui.label("").classes("jf-rpg-help")
                 for row in skills:
                     skill_id = int(row["id"])
                     with ui.row().classes("w-full items-center gap-2 flex-wrap"):
-                        ui.label(str(row.get("skill_name") or "Compétence")).classes("grow min-w-[180px]")
-                        rank_controls[skill_id] = ui.number(label="Rangs", value=float(row.get("ranks") or 0), min=0, step=1).classes("w-28")
-                        class_controls[skill_id] = ui.checkbox("Classe", value=bool(row.get("class_skill")))
+                        name = str(row.get("skill_name") or "Compétence")
+                        if is_fighter_class_skill(row):
+                            name += " · Fighter"
+                        ui.label(name).classes("grow min-w-[180px]")
+                        rank_controls[skill_id] = ui.number(
+                            label="Rangs",
+                            value=float(row.get("ranks") or 0),
+                            min=0,
+                            step=1,
+                        ).classes("w-28")
+                        class_controls[skill_id] = ui.checkbox(
+                            "Classe",
+                            value=bool(row.get("class_skill")),
+                        )
+
+                fighter_skill_note = ui.label("").classes("text-xs jf-muted mt-2")
+
+                def apply_fighter_skill_reference() -> None:
+                    if not is_fighter(working.get("class_name")):
+                        ui.notify(
+                            "La classe enregistrée n’est pas Fighter / Guerrier.",
+                            type="warning",
+                        )
+                        return
+                    marked = 0
+                    for row in skills:
+                        if not is_fighter_class_skill(row):
+                            continue
+                        control = class_controls.get(int(row["id"]))
+                        if control is None:
+                            continue
+                        if not bool(control.value):
+                            control.value = True
+                            control.update()
+                        marked += 1
+
+                    budget = fighter_skill_rank_budget(
+                        working.get("character_level") or 1,
+                        working.get("int_score") or 10,
+                        working.get("race_key"),
+                    )
+                    available.value = budget["total_without_favored_class"]
+                    available.update()
+                    refresh_rank_summary()
+                    note = (
+                        f"Fighter pur : {budget['per_level']} rang(s)/niveau avec l’INT actuelle; "
+                        f"{budget['fighter_total']} sur {working.get('character_level') or 1} niveau(x)."
+                    )
+                    if budget["human_standard_bonus"]:
+                        note += (
+                            f" Humain standard : +{budget['human_standard_bonus']} rang(s) via Skilled."
+                        )
+                    note += (
+                        " Le bonus éventuel de classe favorite n’est pas inclus. "
+                        "Si un trait racial remplace Skilled ou si le personnage est multiclassé, ajustez le total."
+                    )
+                    fighter_skill_note.set_text(note)
+                    ui.notify(
+                        f"{marked} compétence(s) Fighter marquée(s) comme compétences de classe.",
+                        type="positive",
+                    )
+
+                ui.button(
+                    "Appliquer les repères de compétences Fighter",
+                    icon="school",
+                    on_click=apply_fighter_skill_reference,
+                ).props("outline color=primary").classes("mt-2")
 
                 def refresh_rank_summary(_event: Any = None) -> None:
-                    used = used_skill_ranks({key: control.value for key, control in rank_controls.items()})
+                    used = used_skill_ranks(
+                        {
+                            key: control.value
+                            for key, control in rank_controls.items()
+                        }
+                    )
                     if available.value in (None, ""):
                         summary.set_text(f"Rangs utilisés : {used}")
                         return
                     total = _as_decimal(available.value)
                     remaining = total - used
-                    text = f"Rangs utilisés : {used} / {total} — reste : {remaining}"
+                    text = (
+                        f"Rangs utilisés : {used} / {total} — reste : {remaining}"
+                    )
                     if remaining < 0:
                         text += " — dépassement à vérifier"
                     summary.set_text(text)
@@ -594,13 +1011,22 @@ def build_character_creation_panel(
                 def save_skills() -> bool:
                     rows = skill_update_rows(
                         skills,
-                        ranks={key: control.value for key, control in rank_controls.items()},
-                        class_skills={key: control.value for key, control in class_controls.items()},
+                        ranks={
+                            key: control.value
+                            for key, control in rank_controls.items()
+                        },
+                        class_skills={
+                            key: control.value
+                            for key, control in class_controls.items()
+                        },
                     )
                     try:
                         update_rpg_skills(user_id, character_id, rows)
                     except Exception as error:
-                        notify_error(error, "Les compétences n’ont pas pu être enregistrées.")
+                        notify_error(
+                            error,
+                            "Les compétences n’ont pas pu être enregistrées.",
+                        )
                         return False
                     ui.notify("Compétences enregistrées.", type="positive")
                     return True
@@ -613,21 +1039,70 @@ def build_character_creation_panel(
             with ui.card().classes("w-full p-5"):
                 ui.label("6. Équipement et attaques").classes("text-xl font-bold")
                 ui.label(
-                    "Les formulaires complets existent déjà dans la feuille. Cette étape vous "
-                    "dirige vers eux sans créer une deuxième logique."
+                    "Les formulaires complets existent déjà dans la feuille. Les armures et boucliers "
+                    "équipés influencent automatiquement CA, DEX max, pénalité d’armure, poids et vitesse; "
+                    "les attaques enregistrées alimentent Attaques et Combat rapide."
                 ).classes("text-sm jf-muted")
                 ui.label(f"Équipements enregistrés : {len(equipment)}").classes("font-bold")
                 ui.label(f"Attaques enregistrées : {len(attacks)}").classes("font-bold")
-                with ui.row().classes("gap-2 flex-wrap"):
+
+                with ui.expansion(
+                    "Catalogue de référence — armes et armures courantes",
+                    icon="inventory_2",
+                    value=True,
+                ).props("expand-separator").classes("w-full mt-3"):
+                    ui.label(
+                        "Choisissez un objet pour voir les valeurs Pathfinder à saisir. "
+                        "Aucune donnée n’est enregistrée automatiquement."
+                    ).classes("text-xs jf-muted")
+                    preset_select = ui.select(
+                        gear_preset_options(),
+                        label="Objet de référence",
+                        value="breastplate",
+                    ).props("options-dense").classes("w-full")
+
+                    @ui.refreshable
+                    def gear_reference() -> None:
+                        lines = gear_reference_lines(preset_select.value)
+                        with ui.element("div").classes("jf-rpg-summary mt-2"):
+                            for index, line in enumerate(lines):
+                                ui.label(line).classes(
+                                    "font-bold" if index == 0 else "text-sm"
+                                )
+                            ui.label(
+                                "Pour une arme possédée : ajoutez-la dans Équipement pour son poids, puis dans Attaques "
+                                "pour le bonus d’attaque, les dégâts, le critique et la portée."
+                            ).classes("text-xs jf-muted mt-1")
+                            ui.label(
+                                "Fighter niveau 3–6 standard : Entraînement aux armures 1 réduit l’ACP de 1, "
+                                "augmente la DEX max de 1 et permet la vitesse normale en armure intermédiaire. "
+                                "Cette capacité de classe reste un repère manuel tant que l’app ne suit pas les niveaux par classe/archétype."
+                            ).classes("text-xs jf-muted mt-1")
+                            ui.label(
+                                "Si vous prévoyez de la magie profane plus tard, surveillez le champ Échec sorts profanes : "
+                                "l’armure et le bouclier peuvent gêner les sorts avec composantes somatiques. "
+                                "Elven Magic n’annule pas ce risque."
+                            ).classes("text-xs jf-muted mt-1")
+
+                    preset_select.on_value_change(
+                        lambda _event: gear_reference.refresh()
+                    )
+                    gear_reference()
+
+                with ui.row().classes("gap-2 flex-wrap mt-3"):
                     ui.button(
                         "Ouvrir Équipement",
                         icon="backpack",
-                        on_click=lambda: ui.navigate.to(character_url(character_id, "equipement")),
+                        on_click=lambda: ui.navigate.to(
+                            character_url(character_id, "equipement")
+                        ),
                     ).props("outline color=primary")
                     ui.button(
                         "Ouvrir Attaques",
                         icon="sports_martial_arts",
-                        on_click=lambda: ui.navigate.to(character_url(character_id, "attaques")),
+                        on_click=lambda: ui.navigate.to(
+                            character_url(character_id, "attaques")
+                        ),
                     ).props("outline color=primary")
                 ui.label(
                     "Après avoir ajouté vos éléments, revenez dans l’onglet Création pour poursuivre."
@@ -641,10 +1116,22 @@ def build_character_creation_panel(
                 @ui.refreshable
                 def summary_panel() -> None:
                     fresh = reload_character()
-                    saves_now = [dict(row) for row in list_rpg_saves(user_id, character_id)]
-                    skills_now = [dict(row) for row in list_rpg_skills(user_id, character_id)]
-                    equipment_now = [dict(row) for row in list_rpg_equipment(user_id, character_id)]
-                    attacks_now = [dict(row) for row in list_rpg_attacks(user_id, character_id)]
+                    saves_now = [
+                        dict(row)
+                        for row in list_rpg_saves(user_id, character_id)
+                    ]
+                    skills_now = [
+                        dict(row)
+                        for row in list_rpg_skills(user_id, character_id)
+                    ]
+                    equipment_now = [
+                        dict(row)
+                        for row in list_rpg_equipment(user_id, character_id)
+                    ]
+                    attacks_now = [
+                        dict(row)
+                        for row in list_rpg_attacks(user_id, character_id)
+                    ]
                     effective = apply_equipment_effects(fresh, equipment_now)
                     with ui.element("div").classes("jf-rpg-grid"):
                         for label, value in (
@@ -652,24 +1139,83 @@ def build_character_creation_panel(
                             ("Race", fresh.get("race") or "—"),
                             ("Classe", fresh.get("class_name") or "—"),
                             ("Niveau", fresh.get("character_level") or 1),
-                            ("PV", f"{fresh.get('current_hp') or 0}/{fresh.get('max_hp') or 0}"),
+                            (
+                                "PV",
+                                f"{fresh.get('current_hp') or 0}/{fresh.get('max_hp') or 0}",
+                            ),
                             ("CA", armor_class_total(effective)),
-                            ("Initiative", format_modifier(initiative_total(effective))),
-                            ("BMO / CMB", format_modifier(cmb_total(effective))),
+                            (
+                                "Initiative",
+                                format_modifier(initiative_total(effective)),
+                            ),
+                            (
+                                "BMO / CMB",
+                                format_modifier(cmb_total(effective)),
+                            ),
                             ("DMD / CMD", str(cmd_total(effective))),
                         ):
                             with ui.column().classes("gap-0"):
                                 ui.label(label).classes("text-xs jf-muted")
                                 ui.label(str(value)).classes("font-bold")
                     ability_line = " · ".join(
-                        f"{ability_labels[key]} {fresh.get(f'{key}_score') or 10} ({format_modifier(ability_modifier(fresh.get(f'{key}_score') or 10))})"
+                        f"{ability_labels[key]} {fresh.get(f'{key}_score') or 10} "
+                        f"({format_modifier(ability_modifier(fresh.get(f'{key}_score') or 10))})"
                         for key in ability_labels
                     )
                     ui.label(ability_line).classes("text-sm")
                     ui.label(
-                        f"Compétences avec rangs : {sum(1 for row in skills_now if _as_decimal(row.get('ranks')) > 0)} · "
+                        f"Compétences avec rangs : "
+                        f"{sum(1 for row in skills_now if _as_decimal(row.get('ranks')) > 0)} · "
                         f"Équipement : {len(equipment_now)} · Attaques : {len(attacks_now)}"
                     ).classes("text-sm")
+
+                    effects = effective.get("equipment_effects") or {}
+                    armor = effects.get("equipped_armor")
+                    shield = effects.get("equipped_shield")
+                    if armor or shield:
+                        ui.label(
+                            "Protection équipée : "
+                            + " · ".join(
+                                part
+                                for part in (
+                                    str(armor.get("item_name")) if armor else "",
+                                    str(shield.get("item_name")) if shield else "",
+                                )
+                                if part
+                            )
+                            + f" · vitesse {effects.get('final_speed', '—')} pi"
+                        ).classes("text-sm")
+
+                    if is_fighter(fresh.get("class_name")):
+                        level = _as_int(fresh.get("character_level"), 1)
+                        reference = fighter_reference(level)
+                        with ui.expansion(
+                            "Résumé Fighter",
+                            icon="shield",
+                            value=True,
+                        ).classes("w-full mt-3"):
+                            if reference:
+                                ui.label(
+                                    f"BBA attendu +{reference['bab']} · sauvegardes de base : "
+                                    f"Vig +{reference['fortitude']}, Réf +{reference['reflex']}, Vol +{reference['will']}."
+                                ).classes("text-sm")
+                                for line in fighter_cumulative_milestones(level):
+                                    ui.label("• " + line).classes("text-sm")
+                                feats = fighter_feat_counts(level, fresh.get("race_key"))
+                                ui.label(
+                                    f"Dons de référence : {feats['general']} généraux + "
+                                    f"{feats['fighter_bonus']} bonus Fighter + "
+                                    f"{feats['human_bonus']} racial humain = {feats['total']}."
+                                ).classes("text-sm")
+                            else:
+                                ui.label(
+                                    "Les repères détaillés Fighter couvrent actuellement les niveaux 1 à 4."
+                                ).classes("text-sm jf-muted")
+                            comparison = race_comparison(fresh.get("race_key"))
+                            if comparison:
+                                ui.label(
+                                    "Race et magie : " + str(comparison.get("magic") or "")
+                                ).classes("text-xs jf-muted")
 
                     warnings = creation_warnings(
                         fresh,
@@ -680,22 +1226,44 @@ def build_character_creation_panel(
                     )
                     audit = character_sheet_audit(effective, skills_now)
                     for warning in audit.get("warnings") or ():
-                        detail = str(warning.get("detail") or warning.get("title") or "").strip()
+                        detail = str(
+                            warning.get("detail")
+                            or warning.get("title")
+                            or ""
+                        ).strip()
                         if detail:
                             warnings.append(detail)
                     if warnings:
-                        with ui.expansion("Éléments à vérifier", icon="warning", value=True).props("expand-separator").classes("w-full mt-3"):
+                        with ui.expansion(
+                            "Éléments à vérifier",
+                            icon="warning",
+                            value=True,
+                        ).props("expand-separator").classes("w-full mt-3"):
                             for warning in warnings:
                                 ui.label("• " + warning).classes("text-sm")
                     else:
-                        ui.label("Aucun élément évident à compléter.").classes("text-positive font-bold mt-3")
+                        ui.label(
+                            "Aucun élément évident à compléter."
+                        ).classes("text-positive font-bold mt-3")
 
                 summary_panel()
-                with ui.row().classes("w-full justify-between gap-2 mt-4 flex-wrap"):
-                    ui.button("Précédent", icon="chevron_left", on_click=lambda: go("gear")).props("flat")
-                    ui.button("Actualiser le résumé", icon="refresh", on_click=summary_panel.refresh).props("outline color=primary")
+                with ui.row().classes(
+                    "w-full justify-between gap-2 mt-4 flex-wrap"
+                ):
+                    ui.button(
+                        "Précédent",
+                        icon="chevron_left",
+                        on_click=lambda: go("gear"),
+                    ).props("flat")
+                    ui.button(
+                        "Actualiser le résumé",
+                        icon="refresh",
+                        on_click=summary_panel.refresh,
+                    ).props("outline color=primary")
                     ui.button(
                         "Terminer la création",
                         icon="check_circle",
-                        on_click=lambda: ui.navigate.to(character_url(character_id, "identite")),
+                        on_click=lambda: ui.navigate.to(
+                            character_url(character_id, "identite")
+                        ),
                     ).props("color=primary")

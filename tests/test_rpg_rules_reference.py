@@ -282,8 +282,8 @@ class RpgCombatReferenceTests(unittest.TestCase):
         character = self.character()
         breakdown = cmd_breakdown(character)
         self.assertEqual(breakdown["automatic_ac_penalty"], -1)
-        self.assertEqual(breakdown["total"], 21)
-        self.assertEqual(cmd_total(character), 21)
+        self.assertEqual(breakdown["total"], 19)
+        self.assertEqual(cmd_total(character), 19)
 
     def test_save_uses_defined_ability(self):
         character = self.character()

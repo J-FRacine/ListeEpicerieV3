@@ -4,7 +4,7 @@ JF Apps est une suite d'applications personnelles développée avec Python, Nice
 
 Le propriétaire du projet n'est pas programmeur. Les changements doivent donc être livrés de façon complète, claire et sans exiger de modifications manuelles de code.
 
-## Référence du projet
+## Référence du projet 
 
 - Dépôt principal : `J-FRacine/ListeEpicerieV3`
 - Branche de référence : `main`

@@ -34,126 +34,22 @@
 
 
         # SAISIE
-        with ui.tab_panel(
-            entry_tab
-        ).classes(
-            "px-0"
-        ):
-            with ui.card().classes(
-                "w-full max-w-2xl p-4"
-            ):
-                with ui.row().classes("w-full items-center justify-between gap-2 flex-wrap"):
-                    ui.label(
-                        "Saisie rapide"
-                    ).classes(
-                        "text-xl font-bold"
-                    )
-                    ui.button(
-                        "Paiement de carte",
-                        icon="credit_card",
-                        on_click=lambda: _card_payment_dialog(user_id, refresh_all),
-                    ).props("outline color=primary dense")
-
-                kind = ui.toggle(
-                    TRANSACTION_TYPES,
-                    value="expense",
-                ).props(
-                    "dense spread no-caps"
-                ).classes(
-                    "w-full"
-                )
-
-                with ui.element(
-                    "div"
-                ).classes(
-                    "jf-finance-form-grid"
-                ):
-                    amount = ui.number(
-                        label="Montant",
-                        min=.01,
-                        step=.01,
-                    ).props(
-                        "dense outlined"
-                    ).classes(
-                        "jf-finance-field"
-                    )
-                    when = ui.input(
-                        label="Date",
-                        value=(
-                            date.today().isoformat()
-                        ),
-                    ).props(
-                        "type=date dense outlined"
-                    ).classes(
-                        "jf-finance-field"
-                    )
-                    description = ui.input(
-                        label="Description"
-                    ).props(
-                        "dense outlined maxlength=160"
-                    ).classes(
-                        "jf-finance-field "
-                        "jf-finance-description"
-                    )
-
-                with ui.row().classes(
-                    "w-full gap-2 flex-wrap"
-                ):
-                    category = ui.select(
-                        _quick_category_options(
-                            user_id
-                        ),
-                        label=(
-                            "Catégorie ou "
-                            "sous-catégorie"
-                        ),
-                    ).props(
-                        "dense outlined clearable "
-                        "options-dense"
-                    ).classes(
-                        "min-w-56 grow"
-                    )
-                    payment_method = ui.select(
-                        _payment_options(
-                            user_id
-                        ),
-                        label="Mode de paiement",
-                    ).props(
-                        "dense outlined clearable "
-                        "options-dense"
-                    ).classes(
-                        "min-w-48 grow"
-                    )
-
-                tags = ui.select(
-                    _quick_tag_options(
-                        user_id
-                    ),
-                    label="Étiquettes",
-                    multiple=True,
-                ).props(
-                    "dense outlined use-chips "
-                    "clearable options-dense"
-                ).classes(
-                    "w-full"
-                )
-
-                def quick_parent_options():
-                    options = {
-                        None: "Catégorie principale",
-                    }
-                    current_type = kind.value or "expense"
-                    for row in list_categories(user_id):
-                        if row.get("parent_id") is not None:
-                            continue
-                        if row.get("category_type") not in (
-                            "both",
-                            current_type,
-                        ):
-                            continue
-                        options[int(row["id"])] = row["name"]
-                    return options
-
-                def open_quick_category_dialog():
-                    with ui.dialog() as dialog:
-                        with ui.card().classes(
+        entry_panel = build_entry_panel(
+            ui=ui,
+            user_id=user_id,
+            entry_tab=entry_tab,
+            TRANSACTION_TYPES=TRANSACTION_TYPES,
+            TRANSACTION_STATUSES=TRANSACTION_STATUSES,
+            ADD_CATEGORY_OPTION=ADD_CATEGORY_OPTION,
+            ADD_TAG_OPTION=ADD_TAG_OPTION,
+            _quick_category_options=lambda *args, **kwargs: _quick_category_options(*args, **kwargs),
+            _quick_tag_options=lambda *args, **kwargs: _quick_tag_options(*args, **kwargs),
+            _payment_options=lambda *args, **kwargs: _payment_options(*args, **kwargs),
+            list_categories=lambda *args, **kwargs: list_categories(*args, **kwargs),
+            get_or_create_finance_category=lambda *args, **kwargs: get_or_create_finance_category(*args, **kwargs),
+            get_or_create_finance_tag=lambda *args, **kwargs: get_or_create_finance_tag(*args, **kwargs),
+            save_transaction=lambda *args, **kwargs: save_transaction(*args, **kwargs),
+            _card_payment_dialog=lambda *args, **kwargs: _card_payment_dialog(*args, **kwargs),
+            refresh_all=lambda *args, **kwargs: refresh_all(*args, **kwargs),
+            refresh_dashboard=lambda: dashboard_panel.refresh(),
+        )

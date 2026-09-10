@@ -107,6 +107,7 @@ from finances_data import (
     toggle_recurrence,
     toggle_tag,
 )
+from finances_entry import build_entry_panel
 from finances_import_export import build_import_export_panel
 from finances_goals import build_goals_panel
 from finances_recurrences import build_recurrences_panel

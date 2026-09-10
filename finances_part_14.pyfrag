@@ -14,24 +14,7 @@
         # Actualiser les listes déjà visibles après l’ajout ou
         # la modification d’une catégorie, d’une étiquette ou
         # d’un mode de paiement.
-        category.options = (
-            _quick_category_options(
-                user_id
-            )
-        )
-        category.update()
-
-        tags.options = _quick_tag_options(
-            user_id
-        )
-        tags.update()
-
-        payment_method.options = (
-            _payment_options(
-                user_id
-            )
-        )
-        payment_method.update()
+        entry_panel.reload_options()
 
         history_category.options = {
             None: "Toutes",

@@ -1,6 +1,6 @@
 # JF Apps — État du projet
 
-Dernière mise à jour : 2026-09-09
+Dernière mise à jour : 2026-09-10
 
 Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversations. Le dépôt GitHub `J-FRacine/ListeEpicerieV3` sur `main` est la référence technique.
 
@@ -79,8 +79,20 @@ Version actuelle de travail : **V1.13.5**
 - Créés : `finances_import_export.py`, `tests/test_finances_import_export_ui.py`.
 - Modifiés : `finances_part_01.pyfrag`, `finances_part_14.pyfrag`, `PROJECT_STATUS.md`.
 - Validation locale : **265 tests réussis** (254 existants inchangés et 11 nouveaux); compilation des fichiers Python concernés et des deux assemblages; `git diff --check` sans erreur. Revue automatique : bloc déplacé identique et parent inchangé hors raccordement et imports attendus.
-- Finances reste **V1.13.5**; versions, notes utilisateur et manuel inchangés. Le déploiement Canner/Render et la validation navigateur de cette extraction restent à effectuer après publication; PostgreSQL de production n’a pas été testé indépendamment.
+- Finances reste **V1.13.5**; versions, notes utilisateur et manuel inchangés. La validation utilisateur après déploiement sur Canner/Render et dans le navigateur a réussi; PostgreSQL de production n’a pas été testé indépendamment.
 - Prochaine étape technique recommandée après revue : examiner l’extraction de **Saisie**, dans une intervention séparée.
+
+### Extraction interne de Saisie — 2026-09-10
+
+- Point de départ : `446c70357b56b74c3d7a890cf46c08fb29f86de0` (`446c703`), `origin/main` vérifiée et état Git propre; **265 tests de départ réussis**.
+- Le panneau Saisie rapide est extrait des fragments 07 et 08 vers `finances_entry.py`, avec `EntryPanelHandle` et `build_entry_panel`. Le parent utilise `entry_panel.reload_options()` avant les filtres Historique; les options des trois widgets sont rechargées sans reset supplémentaire des sélections.
+- Les services et `ui` sont injectés. Un callback `refresh_dashboard` conserve le rafraîchissement limité au Tableau après création/réutilisation d’une catégorie ou étiquette. Le dialogue global de paiement de carte reste dans le parent et est appelé par une dépendance différée.
+- Paramètres de sauvegarde, valeurs par défaut, options avancées, notifications, erreurs et resets après succès conservés. Aucune modification fonctionnelle ou visuelle volontaire, aucun SQL, aucune migration et aucune nouvelle dépendance.
+- Créés : `finances_entry.py`, `tests/test_finances_entry_ui.py`.
+- Modifiés : `finances_part_01.pyfrag`, `finances_part_07.pyfrag`, `finances_part_08.pyfrag`, `finances_part_14.pyfrag`, `PROJECT_STATUS.md`.
+- Validation locale : **280 tests réussis** (265 existants inchangés et 15 nouveaux); compilation des fichiers Python concernés et des deux assemblages; `git diff --check` sans erreur. Revue automatique : bloc déplacé identique hors callback Tableau et rechargement identique; parent inchangé hors raccordements attendus.
+- Finances reste **V1.13.5**; versions, notes utilisateur et manuel inchangés. Le déploiement Canner/Render et la validation navigateur de cette extraction restent à effectuer après publication; PostgreSQL de production n’a pas été testé indépendamment.
+- Prochaine étape technique recommandée après revue : examiner l’extraction des **dialogues partagés de transaction et de paiement de carte**, dans une intervention séparée.
 
 ### Changements récents terminés
 

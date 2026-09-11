@@ -4,12 +4,14 @@ L'implémentation NiceGUI principale est isolée dans ``rpg_character_ui.py``.
 Cette façade conserve le point d'import historique ``rpg_character`` afin de
 ne pas modifier les autres applications ni les appels existants.
 
-Phase 2 de modularisation : le panneau Sauvegardes est fourni par
-``rpg_character_saves.py`` et raccordé ici sans changer l'API publique.
+Modularisation :
+- Sauvegardes : ``rpg_character_saves.py``
+- Progression : ``rpg_character_progression.py``
 """
 from __future__ import annotations
 
 import rpg_character_ui as _impl
+from rpg_character_progression import build_progression_panel
 from rpg_character_saves import build_saves_panel
 
 
@@ -32,9 +34,30 @@ def _saves_panel(user_id, character):
     )
 
 
-# rpg_character_panel cherche _saves_panel dans le dictionnaire global du
-# module rpg_character_ui au moment où le panneau est construit.
+def _progression_panel(user_id, character):
+    """Raccorde le panneau Progression modularisé aux dépendances existantes."""
+    return build_progression_panel(
+        ui=_impl.ui,
+        user_id=user_id,
+        character=character,
+        list_rpg_skills=_impl.list_rpg_skills,
+        list_rpg_level_history=_impl.list_rpg_level_history,
+        format_modifier=_impl.format_modifier,
+        format_number=_impl.format_number,
+        ability_labels=_impl.ABILITY_LABELS,
+        ability_long_labels=_impl.ABILITY_LONG_LABELS,
+        skill_display_name=_impl._skill_display_name,
+        apply_rpg_level_up=_impl.apply_rpg_level_up,
+        notify_error=_impl._safe_notify_error,
+        character_url=_impl._character_url,
+    )
+
+
+# Les fonctions du module rpg_character_ui sont résolues par son dictionnaire
+# global au moment de l'exécution. On remplace donc uniquement les panneaux
+# déjà extraits, sans modifier le gros fichier pendant cette phase.
 _impl._saves_panel = _saves_panel
+_impl._progression_panel = _progression_panel
 
 rpg_character_panel = _impl.rpg_character_panel
 

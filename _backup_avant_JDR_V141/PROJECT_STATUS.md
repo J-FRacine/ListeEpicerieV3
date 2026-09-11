@@ -1,6 +1,6 @@
 # JF Apps — État du projet
 
-Dernière mise à jour : 2026-09-11
+Dernière mise à jour : 2026-09-10
 
 Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversations. Le dépôt GitHub `J-FRacine/ListeEpicerieV3` sur `main` est la référence technique.
 
@@ -9,10 +9,10 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Application | Version |
 |---|---:|
 | Portail JF Apps | 1.4.0 |
-| Liste d'épicerie | 1.2.0 |
+| Liste d'épicerie | 1.1.2 |
 | Journal de pression | 1.2.1 |
 | Finances | 1.13.5 |
-| Personnages JDR | 1.4.1 |
+| Personnages JDR | 1.3.0 |
 | Commentaires et suggestions | 1.0.0 |
 
 Important : ces versions sont celles présentes dans GitHub `main`. Leur validation réelle sur Canner/Render ou PostgreSQL de production doit être confirmée séparément après déploiement.
@@ -26,18 +26,6 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Modifiés : `rpg_character.py`, `app_versions.py`, `manual.py`, `PROJECT_STATUS.md`. Créé : `tests/test_rpg_character_integration.py`.
 - Validation locale : **352 tests réussis**, dont **54 tests JDR**, compilation des quatre fichiers Python concernés et `git diff --check` sans erreur. Revue des raccordements et des paramètres injectés effectuée.
 - Navigateur réel, Canner/Render et PostgreSQL de production non testés; validation utilisateur à effectuer après déploiement. Aucun déploiement réalisé par ce mandat.
-
-## JDR — finalisation V1.4.1 — 2026-09-11
-
-- Base GitHub utilisée pour la finalisation : `fde33144220983233e351f0c4a4dbf53a57e1a2a` (`main`).
-- JDR passe officiellement à **V1.4.1**; Finances reste **V1.13.5**.
-- La création guidée accepte maintenant l’enchaînement Identité → Race d’un nouveau personnage lorsque la race n’est pas encore choisie; la sous-classe / l’archétype reste facultatif.
-- Aide **Fighter / Guerrier** niveaux 1 à 4 : progression de classe, dons, compétences, comparaison Humain / Elfe et orientation magique non destructive.
-- Aide **Clerc / Cleric** niveaux 1 à 4 : progression, canalisation, sorts divins, Sagesse/Charisme, dons, compétences et domaines.
-- Le catalogue armes/armures sert de référence seulement; les onglets Équipement et Attaques demeurent les sources réelles utilisées par les calculs et Combat rapide.
-- Aucun changement de schéma PostgreSQL, aucune migration, aucun SQL manuel et aucune nouvelle dépendance.
-- La validation utilisateur sur Canner/dans le navigateur a confirmé le fonctionnement de la création guidée, de Combat rapide et des aides Fighter/Clerc. PostgreSQL de production n’a pas été testé indépendamment dans cette finalisation.
-- Prochaine intervention technique recommandée : modularisation progressive de `rpg_character.py`, dans une livraison séparée et sans changement fonctionnel volontaire.
 
 ## Finances — état actuel
 

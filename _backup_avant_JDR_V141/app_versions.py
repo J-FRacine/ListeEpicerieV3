@@ -16,26 +16,11 @@ APP_VERSIONS = {
     "grocery": "1.2.0",
     "blood_pressure": "1.2.1",
     "finances": "1.13.5",
-    "rpg": "1.4.1",
+    "rpg": "1.4.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
-    {
-        "app_key": "rpg",
-        "version": "1.4.1",
-        "date": "2026-09-11",
-        "title": "Personnages JDR — V1.4.1",
-        "summary": "Aides de création Fighter et Clerc niveaux 1 à 4, avec repères d’équipement et correction de l’enchaînement Identité/Race.",
-        "changes": [
-            "Création guidée : un nouveau personnage peut compléter Identité puis Race sans être bloqué par la race encore non choisie; les deux étapes sont enregistrées ensemble lorsque nécessaire.",
-            "Aide Fighter / Guerrier niveaux 1 à 4 : BBA, sauvegardes de base, dons, compétences de classe, budget de rangs et rappels de progression.",
-            "Comparaison Humain / Elfe pour un Fighter orienté vers la magie, sans modifier automatiquement les caractéristiques ni imposer une multiclassification.",
-            "Aide Clerc / Cleric niveaux 1 à 4 : BBA, sauvegardes, canalisation, sorts par jour, Sagesse, Charisme, dons et compétences de classe.",
-            "Catalogue de référence pour des armes, armures et boucliers courants; l’Équipement et les Attaques existants restent les données réelles utilisées par la feuille et Combat rapide.",
-            "Aucun changement de schéma PostgreSQL, aucune migration, aucun SQL manuel et aucune nouvelle dépendance Python.",
-        ],
-    },
     {
         "app_key": "rpg",
         "version": "1.4.0",

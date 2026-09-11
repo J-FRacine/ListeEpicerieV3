@@ -1,22 +1,22 @@
 """Façade publique de l'application Personnages JDR.
 
 L'implémentation NiceGUI principale est isolée dans ``rpg_character_ui.py``.
-Cette façade conserve le point d'import historique ``rpg_character`` afin de
-ne pas modifier les autres applications ni les appels existants.
+Cette façade conserve le point d'import historique ``rpg_character``.
 
 Modularisation :
 - Sauvegardes : ``rpg_character_saves.py``
 - Progression : ``rpg_character_progression.py``
+- Attaques : ``rpg_character_attacks.py``
 """
 from __future__ import annotations
 
 import rpg_character_ui as _impl
+from rpg_character_attacks import build_attacks_panel
 from rpg_character_progression import build_progression_panel
 from rpg_character_saves import build_saves_panel
 
 
 def _saves_panel(user_id, character):
-    """Raccorde le panneau Sauvegardes modularisé aux dépendances existantes."""
     return build_saves_panel(
         ui=_impl.ui,
         user_id=user_id,
@@ -35,7 +35,6 @@ def _saves_panel(user_id, character):
 
 
 def _progression_panel(user_id, character):
-    """Raccorde le panneau Progression modularisé aux dépendances existantes."""
     return build_progression_panel(
         ui=_impl.ui,
         user_id=user_id,
@@ -53,11 +52,26 @@ def _progression_panel(user_id, character):
     )
 
 
-# Les fonctions du module rpg_character_ui sont résolues par son dictionnaire
-# global au moment de l'exécution. On remplace donc uniquement les panneaux
-# déjà extraits, sans modifier le gros fichier pendant cette phase.
+def _attacks_panel(user_id, character):
+    return build_attacks_panel(
+        ui=_impl.ui,
+        user_id=user_id,
+        character=character,
+        ability_labels=_impl.ABILITY_LABELS,
+        attack_total=_impl.attack_total,
+        format_modifier=_impl.format_modifier,
+        list_rpg_attacks=_impl.list_rpg_attacks,
+        create_rpg_attack=_impl.create_rpg_attack,
+        update_rpg_attack=_impl.update_rpg_attack,
+        delete_rpg_attack=_impl.delete_rpg_attack,
+        notify_error=_impl._safe_notify_error,
+        character_url=_impl._character_url,
+    )
+
+
 _impl._saves_panel = _saves_panel
 _impl._progression_panel = _progression_panel
+_impl._attacks_panel = _attacks_panel
 
 rpg_character_panel = _impl.rpg_character_panel
 
@@ -65,10 +79,8 @@ __all__ = ["rpg_character_panel"]
 
 
 def __getattr__(name):
-    """Préserve l'accès aux attributs historiques pendant la modularisation."""
     return getattr(_impl, name)
 
 
 def __dir__():
-    """Expose aussi les attributs de l'implémentation aux outils d'inspection."""
     return sorted(set(globals()) | set(dir(_impl)))

@@ -964,7 +964,7 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
 """,
     },
     {
-        "title": "Personnages JDR — V1.4.0",
+        "title": "Personnages JDR — V1.4.1",
         "icon": "casino",
         "caption": "Progression, races, équipement et feuille Pathfinder / Ravenloft",
         "keywords": (
@@ -974,9 +974,55 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
             "compétence attaque points vie audit vérification calcul "
             "race héritage traits raciaux équipement armure bouclier "
             "poids encombrement charge légère moyenne lourde vitesse "
-            "progression niveau montée niveau sous-classe facultative historique dons capacités"
+            "progression niveau montée niveau sous-classe facultative historique dons capacités "
+            "fighter guerrier cleric clerc humain elfe magie canalisation domaines sorts divins"
         ),
         "content": """
+### V1.4.1 — aides Fighter et Clerc
+
+La création guidée contient maintenant des repères spécialisés pour **Fighter / Guerrier** et **Clerc / Cleric** aux niveaux 1 à 4. Ces aides servent de référence et n’écrasent pas silencieusement les choix déjà inscrits sur la feuille.
+
+Pour un nouveau personnage dont la race n’est pas encore choisie, l’étape **Identité** peut maintenant être complétée avant **Race** : lorsque la sélection raciale est encore en attente, les deux étapes sont enregistrées ensemble au moment approprié au lieu de bloquer l’assistant. Le champ **Sous-classe / archétype** demeure facultatif.
+
+#### Fighter / Guerrier
+
+L’aide Fighter présente notamment :
+
+- le dé de vie **d10**;
+- le BBA et les sauvegardes de base des niveaux 1 à 4;
+- les rappels de Bravoure, Entraînement aux armures et augmentation de caractéristique;
+- le nombre de dons généraux, de dons de combat bonus et le don racial supplémentaire de l’Humain;
+- les compétences de classe du Fighter et un repère du budget de rangs;
+- une comparaison **Humain / Elfe** pour un Fighter qui souhaite garder une orientation magique;
+- un rappel que l’Elfe ne donne pas à lui seul de progression de sorts de classe et qu’un futur choix magique doit rester volontaire.
+
+Les changements de race restent non destructifs : ils ne modifient jamais automatiquement les six scores de caractéristiques.
+
+#### Clerc / Cleric
+
+L’aide Clerc présente notamment :
+
+- le dé de vie **d8**;
+- le BBA et les sauvegardes de base des niveaux 1 à 4;
+- la canalisation d’énergie et ses repères de dés, d’utilisations quotidiennes et de DD;
+- les sorts divins par jour jusqu’au niveau 4, avec le niveau maximal de sorts accessible;
+- la **Sagesse** comme caractéristique principale des sorts et le **Charisme** pour la canalisation;
+- les dons et le bonus racial de l’Humain;
+- les compétences de classe du Clerc et un repère du budget de rangs;
+- le rappel des **deux domaines** à choisir selon la divinité ou les règles de campagne.
+
+#### Armes, armures et boucliers
+
+L’assistant offre aussi un **catalogue de référence** pour des armes, armures et boucliers courants. Il sert à faciliter la saisie, mais ne crée pas une seconde logique concurrente :
+
+- l’onglet **Équipement** reste la source réelle pour ce qui est transporté ou équipé;
+- les armures et boucliers équipés continuent d’alimenter la CA, la DEX maximale, les pénalités aux tests, le poids et la vitesse;
+- le risque d’échec des sorts profanes reste visible lorsqu’une armure est pertinente pour une orientation magique;
+- l’onglet **Attaques** reste la source réelle pour les dégâts, critique, portée, type, bonus et munitions;
+- **Combat rapide** continue d’utiliser les attaques enregistrées sur la feuille.
+
+V1.4.1 n’ajoute aucune table de base de données et ne nécessite aucune migration PostgreSQL.
+
 ### Création rapide ou guidée
 
 **Nouveau** propose deux modes : **Création rapide** conserve la saisie du nom et du joueur avec création immédiate. **Création guidée** crée et sélectionne le personnage, puis ouvre l’assistant : Identité, Race, Caractéristiques, Combat, Compétences, Équipement / Attaques et Résumé.

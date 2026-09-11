@@ -86,6 +86,95 @@ FIGHTER_LEVELS: dict[int, dict[str, Any]] = {
     },
 }
 
+
+CLERIC_ALIASES = {
+    "cleric",
+    "clerc",
+}
+
+CLERIC_CLASS_SKILL_KEYS = {
+    "appraise",
+    "craft_1",
+    "craft_2",
+    "craft_3",
+    "diplomacy",
+    "heal",
+    "knowledge_arcana",
+    "knowledge_history",
+    "knowledge_nobility",
+    "knowledge_planes",
+    "knowledge_religion",
+    "linguistics",
+    "profession_1",
+    "profession_2",
+    "sense_motive",
+    "spellcraft",
+}
+
+CLERIC_CLASS_SKILL_LABELS = (
+    "Estimation",
+    "Artisanat",
+    "Diplomatie",
+    "Premiers secours",
+    "Connaissances (mystères)",
+    "Connaissances (histoire)",
+    "Connaissances (noblesse)",
+    "Connaissances (plans)",
+    "Connaissances (religion)",
+    "Linguistique",
+    "Profession",
+    "Psychologie",
+    "Art de la magie",
+)
+
+CLERIC_PROFICIENCIES = (
+    "Armes simples, arme de prédilection de la divinité, armures légères et "
+    "intermédiaires, boucliers sauf le pavois."
+)
+
+CLERIC_LEVELS: dict[int, dict[str, Any]] = {
+    1: {
+        "bab": 0,
+        "fortitude": 2,
+        "reflex": 0,
+        "will": 2,
+        "channel_dice": "1d6",
+        "spells_per_day": {0: "3", 1: "1+1 domaine"},
+        "specials": ("Aura", "Canalisation d’énergie 1d6", "Domaines", "Oraisons"),
+        "general_notes": ("Don général de niveau 1",),
+    },
+    2: {
+        "bab": 1,
+        "fortitude": 3,
+        "reflex": 0,
+        "will": 3,
+        "channel_dice": "1d6",
+        "spells_per_day": {0: "4", 1: "2+1 domaine"},
+        "specials": (),
+        "general_notes": (),
+    },
+    3: {
+        "bab": 2,
+        "fortitude": 3,
+        "reflex": 1,
+        "will": 3,
+        "channel_dice": "2d6",
+        "spells_per_day": {0: "4", 1: "2+1 domaine", 2: "1+1 domaine"},
+        "specials": ("Canalisation d’énergie 2d6",),
+        "general_notes": ("Don général de niveau 3",),
+    },
+    4: {
+        "bab": 3,
+        "fortitude": 4,
+        "reflex": 1,
+        "will": 4,
+        "channel_dice": "2d6",
+        "spells_per_day": {0: "4", 1: "3+1 domaine", 2: "2+1 domaine"},
+        "specials": (),
+        "general_notes": ("Augmentation générale de caractéristique +1",),
+    },
+}
+
 RACE_COMPARISON: dict[str, dict[str, Any]] = {
     "human": {
         "label": "Humain standard",
@@ -99,6 +188,10 @@ RACE_COMPARISON: dict[str, dict[str, Any]] = {
         "fighter_note": (
             "Au niveau 4, un Fighter humain standard peut normalement avoir 6 dons au total : "
             "2 dons généraux, 3 dons bonus de Fighter et 1 don racial humain."
+        ),
+        "cleric_note": (
+            "Pour un Clerc humain, le +2 flexible peut renforcer la SAG; le don racial bonus et "
+            "Skilled (+1 rang de compétence par niveau) restent très utiles."
         ),
     },
     "elf": {
@@ -420,6 +513,139 @@ def is_fighter_class_skill(skill: Mapping[str, Any]) -> bool:
         for prefix in ("artisanat", "craft", "profession")
     )
 
+
+
+def is_cleric(class_name: Any) -> bool:
+    normalized = _normalize(class_name)
+    return normalized in CLERIC_ALIASES or normalized.startswith("cleric ") or normalized.startswith("clerc ")
+
+
+def cleric_reference(level: Any) -> dict[str, Any] | None:
+    try:
+        normalized = int(level)
+    except (TypeError, ValueError):
+        return None
+    if normalized not in CLERIC_LEVELS:
+        return None
+    result = deepcopy(CLERIC_LEVELS[normalized])
+    result["level"] = normalized
+    result["hit_die"] = "d8"
+    result["skill_ranks"] = "2 + mod. INT par niveau"
+    result["proficiencies"] = CLERIC_PROFICIENCIES
+    result["max_spell_level"] = max(result["spells_per_day"])
+    return result
+
+
+def cleric_cumulative_milestones(level: Any) -> list[str]:
+    try:
+        normalized = max(0, min(4, int(level)))
+    except (TypeError, ValueError):
+        return []
+    lines: list[str] = []
+    for current in range(1, normalized + 1):
+        row = CLERIC_LEVELS[current]
+        pieces = list(row["specials"]) + list(row["general_notes"])
+        if pieces:
+            lines.append(f"Niveau {current} : " + "; ".join(pieces))
+    return lines
+
+
+def cleric_feat_counts(level: Any, race_key: Any = None) -> dict[str, int]:
+    try:
+        normalized = max(0, int(level))
+    except (TypeError, ValueError):
+        normalized = 0
+    general = sum(1 for feat_level in range(1, normalized + 1, 2))
+    human_bonus = 1 if _normalize(race_key) in {"human", "humain"} and normalized >= 1 else 0
+    return {
+        "general": general,
+        "human_bonus": human_bonus,
+        "total": general + human_bonus,
+    }
+
+
+def cleric_skill_rank_budget(level: Any, int_score: Any, race_key: Any = None) -> dict[str, int]:
+    try:
+        normalized_level = max(0, int(level))
+    except (TypeError, ValueError):
+        normalized_level = 0
+    per_level = max(1, 2 + ability_modifier(int_score))
+    class_total = per_level * normalized_level
+    human_bonus = normalized_level if _normalize(race_key) in {"human", "humain"} else 0
+    return {
+        "per_level": per_level,
+        "cleric_total": class_total,
+        "human_standard_bonus": human_bonus,
+        "total_without_favored_class": class_total + human_bonus,
+    }
+
+
+def is_cleric_class_skill(skill: Mapping[str, Any]) -> bool:
+    key = _normalize(skill.get("skill_key")).replace(" ", "_")
+    if key in CLERIC_CLASS_SKILL_KEYS:
+        return True
+    if key.startswith("craft_") or key.startswith("profession_"):
+        return True
+
+    name = _normalize(skill.get("skill_name"))
+    english = _normalize(skill.get("english_name"))
+    names = {name, english}
+    exact = {
+        "estimation", "appraise",
+        "diplomatie", "diplomacy",
+        "premiers secours", "heal",
+        "connaissances (mysteres)", "knowledge (arcana)",
+        "connaissances (histoire)", "knowledge (history)",
+        "connaissances (noblesse)", "knowledge (nobility)",
+        "connaissances (plans)", "knowledge (planes)",
+        "connaissances (religion)", "knowledge (religion)",
+        "linguistique", "linguistics",
+        "psychologie", "sense motive",
+        "art de la magie", "spellcraft",
+    }
+    if names & exact:
+        return True
+    return any(
+        value.startswith(prefix)
+        for value in names
+        for prefix in ("artisanat", "craft", "profession")
+    )
+
+
+def cleric_spell_reference(level: Any, wisdom_score: Any = None, charisma_score: Any = None) -> dict[str, Any] | None:
+    reference = cleric_reference(level)
+    if reference is None:
+        return None
+    wis_mod = ability_modifier(wisdom_score) if wisdom_score not in (None, "") else None
+    cha_mod = ability_modifier(charisma_score) if charisma_score not in (None, "") else None
+    max_spell_level = int(reference["max_spell_level"])
+    minimum_wisdom = 10 + max_spell_level
+    save_dcs = (
+        {spell_level: 10 + spell_level + wis_mod for spell_level in range(1, max_spell_level + 1)}
+        if wis_mod is not None
+        else {}
+    )
+    channel_uses = max(0, 3 + cha_mod) if cha_mod is not None else None
+    channel_dc = (
+        10 + int(reference["level"]) // 2 + cha_mod
+        if cha_mod is not None
+        else None
+    )
+    return {
+        "level": reference["level"],
+        "spells_per_day": deepcopy(reference["spells_per_day"]),
+        "max_spell_level": max_spell_level,
+        "minimum_wisdom": minimum_wisdom,
+        "wisdom_modifier": wis_mod,
+        "save_dcs": save_dcs,
+        "channel_dice": reference["channel_dice"],
+        "channel_uses_per_day": channel_uses,
+        "channel_dc": channel_dc,
+        "notes": (
+            "Les emplacements indiqués sont les emplacements de base de la classe; les sorts bonus liés à la SAG "
+            "ne sont pas inclus. Le +1 indiqué aux niveaux de sorts est l’emplacement de domaine."
+        ),
+    }
 
 def race_comparison(race_key: Any) -> dict[str, Any] | None:
     key = _normalize(race_key)

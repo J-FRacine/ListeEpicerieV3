@@ -4,14 +4,23 @@ from decimal import Decimal
 from typing import Any, Callable, Mapping, Sequence
 
 from rpg_character_guides import (
+    CLERIC_CLASS_SKILL_LABELS,
+    CLERIC_PROFICIENCIES,
     FIGHTER_CLASS_SKILL_LABELS,
     FIGHTER_PROFICIENCIES,
+    cleric_cumulative_milestones,
+    cleric_feat_counts,
+    cleric_reference,
+    cleric_skill_rank_budget,
+    cleric_spell_reference,
     fighter_cumulative_milestones,
     fighter_feat_counts,
     fighter_reference,
     fighter_skill_rank_budget,
     gear_preset_options,
     gear_reference_lines,
+    is_cleric,
+    is_cleric_class_skill,
     is_fighter,
     is_fighter_class_skill,
     race_comparison,
@@ -315,7 +324,7 @@ def build_character_creation_panel(
             "avec la Race à l’étape suivante."
         ).classes("text-sm jf-muted")
         ui.label(
-            "Nouveau : des repères Fighter niveaux 1 à 4, un comparatif Humain/Elfe "
+            "Nouveau : des repères Fighter et Clerc niveaux 1 à 4, une aide raciale "
             "et un catalogue d’armes/armures facilitent la saisie sans imposer vos choix."
         ).classes("text-xs jf-muted mt-1")
 
@@ -381,12 +390,12 @@ def build_character_creation_panel(
                         "class_name": ui.input(
                             label="Classe",
                             value=working.get("class_name") or "",
-                            placeholder="Ex. Fighter ou Guerrier",
+                            placeholder="Ex. Clerc, Cleric, Fighter ou Guerrier",
                         ).props("maxlength=120"),
                         "subclass_name": ui.input(
                             label="Sous-classe / archétype (facultatif)",
                             value=working.get("subclass_name") or "",
-                            placeholder="Laisser vide pour un Fighter standard",
+                            placeholder="Laisser vide pour une classe standard",
                         ).props("maxlength=160 clearable"),
                         "character_level": ui.number(
                             label="Niveau",
@@ -406,46 +415,77 @@ def build_character_creation_panel(
                     }
 
                 @ui.refreshable
-                def fighter_identity_help() -> None:
+                def class_identity_help() -> None:
                     class_name = identity_controls["class_name"].value
-                    if not is_fighter(class_name):
-                        return
                     level = _as_int(identity_controls["character_level"].value, 1)
-                    with ui.element("div").classes("jf-rpg-summary mt-3"):
-                        ui.label("Repères Fighter / Guerrier").classes("font-bold")
-                        reference = fighter_reference(level)
-                        if reference is None:
+                    if is_fighter(class_name):
+                        with ui.element("div").classes("jf-rpg-summary mt-3"):
+                            ui.label("Repères Fighter / Guerrier").classes("font-bold")
+                            reference = fighter_reference(level)
+                            if reference is None:
+                                ui.label(
+                                    "Cette aide détaillée couvre actuellement les niveaux 1 à 4. "
+                                    "La feuille reste entièrement modifiable au-delà."
+                                ).classes("text-sm jf-muted")
+                            else:
+                                ui.label(
+                                    f"Niveau {level} : d10 de vie · BBA +{reference['bab']} · "
+                                    f"Vigueur +{reference['fortitude']} · Réflexes +{reference['reflex']} · "
+                                    f"Volonté +{reference['will']}."
+                                ).classes("text-sm")
+                                ui.label(
+                                    "Capacités de ce niveau : " + ", ".join(reference["specials"])
+                                ).classes("text-sm")
+                                feats_no_race = fighter_feat_counts(level)
+                                ui.label(
+                                    f"Dons cumulés sans bonus racial : {feats_no_race['total']} "
+                                    f"({feats_no_race['general']} généraux + {feats_no_race['fighter_bonus']} bonus Fighter). "
+                                    "Un Humain standard en a normalement un de plus."
+                                ).classes("text-sm")
+                            ui.label("Maîtrises : " + FIGHTER_PROFICIENCIES).classes("text-xs jf-muted")
                             ui.label(
-                                "Cette aide détaillée couvre actuellement les niveaux 1 à 4. "
-                                "La feuille reste entièrement modifiable au-delà."
-                            ).classes("text-sm jf-muted")
-                        else:
+                                "Compétences de classe : " + ", ".join(FIGHTER_CLASS_SKILL_LABELS)
+                            ).classes("text-xs jf-muted")
+                    elif is_cleric(class_name):
+                        with ui.element("div").classes("jf-rpg-summary mt-3"):
+                            ui.label("Repères Clerc / Cleric").classes("font-bold")
+                            reference = cleric_reference(level)
+                            if reference is None:
+                                ui.label(
+                                    "Cette aide détaillée couvre actuellement les niveaux 1 à 4. "
+                                    "La feuille reste entièrement modifiable au-delà."
+                                ).classes("text-sm jf-muted")
+                            else:
+                                ui.label(
+                                    f"Niveau {level} : d8 de vie · BBA +{reference['bab']} · "
+                                    f"Vigueur +{reference['fortitude']} · Réflexes +{reference['reflex']} · "
+                                    f"Volonté +{reference['will']}."
+                                ).classes("text-sm")
+                                ui.label(
+                                    f"Canalisation : {reference['channel_dice']} · "
+                                    f"niveau de sorts maximal : {reference['max_spell_level']}."
+                                ).classes("text-sm")
+                                feats = cleric_feat_counts(level)
+                                ui.label(
+                                    f"Dons généraux cumulés sans bonus racial : {feats['general']}. "
+                                    "Un Humain standard reçoit aussi son don racial bonus."
+                                ).classes("text-sm")
+                                ui.label(
+                                    "À choisir : divinité ou concept divin, deux domaines, énergie positive/négative "
+                                    "selon l’alignement et les règles de la campagne."
+                                ).classes("text-sm")
+                            ui.label("Maîtrises : " + CLERIC_PROFICIENCIES).classes("text-xs jf-muted")
                             ui.label(
-                                f"Niveau {level} : d10 de vie · BBA +{reference['bab']} · "
-                                f"Vigueur +{reference['fortitude']} · Réflexes +{reference['reflex']} · "
-                                f"Volonté +{reference['will']}."
-                            ).classes("text-sm")
-                            ui.label(
-                                "Capacités de ce niveau : " + ", ".join(reference["specials"])
-                            ).classes("text-sm")
-                            feats_no_race = fighter_feat_counts(level)
-                            ui.label(
-                                f"Dons cumulés sans bonus racial : {feats_no_race['total']} "
-                                f"({feats_no_race['general']} généraux + {feats_no_race['fighter_bonus']} bonus Fighter). "
-                                "Au niveau 4, un Humain standard en a normalement un de plus."
-                            ).classes("text-sm")
-                        ui.label("Maîtrises : " + FIGHTER_PROFICIENCIES).classes("text-xs jf-muted")
-                        ui.label(
-                            "Compétences de classe : " + ", ".join(FIGHTER_CLASS_SKILL_LABELS)
-                        ).classes("text-xs jf-muted")
+                                "Compétences de classe : " + ", ".join(CLERIC_CLASS_SKILL_LABELS)
+                            ).classes("text-xs jf-muted")
 
                 identity_controls["class_name"].on_value_change(
-                    lambda _event: fighter_identity_help.refresh()
+                    lambda _event: class_identity_help.refresh()
                 )
                 identity_controls["character_level"].on_value_change(
-                    lambda _event: fighter_identity_help.refresh()
+                    lambda _event: class_identity_help.refresh()
                 )
-                fighter_identity_help()
+                class_identity_help()
 
                 def save_identity() -> bool:
                     updates = {
@@ -490,26 +530,54 @@ def build_character_creation_panel(
                     "automatiquement FOR, DEX, CON, INT, SAG ou CHA."
                 ).classes("text-sm jf-muted")
 
-                with ui.expansion(
-                    "Humain ou Elfe pour un Fighter avec une orientation magique?",
-                    icon="compare_arrows",
-                    value=True,
-                ).props("expand-separator").classes("w-full mt-2"):
-                    for race_key in ("human", "elf"):
-                        info = race_comparison(race_key) or {}
-                        with ui.element("div").classes("jf-rpg-summary mt-2"):
-                            ui.label(str(info.get("label") or race_key)).classes("font-bold")
+                @ui.refreshable
+                def race_class_help() -> None:
+                    class_name = identity_controls["class_name"].value
+                    if is_fighter(class_name):
+                        with ui.expansion(
+                            "Humain ou Elfe pour un Fighter avec une orientation magique?",
+                            icon="compare_arrows",
+                            value=True,
+                        ).props("expand-separator").classes("w-full mt-2"):
+                            for race_key in ("human", "elf"):
+                                info = race_comparison(race_key) or {}
+                                with ui.element("div").classes("jf-rpg-summary mt-2"):
+                                    ui.label(str(info.get("label") or race_key)).classes("font-bold")
+                                    ui.label(
+                                        "Caractéristiques : " + str(info.get("ability_adjustments") or "—")
+                                    ).classes("text-sm")
+                                    ui.label(str(info.get("combat") or "")).classes("text-sm")
+                                    ui.label(str(info.get("skills") or "")).classes("text-sm")
+                                    ui.label("Magie : " + str(info.get("magic") or "")).classes("text-sm")
+                                    ui.label(str(info.get("fighter_note") or "")).classes("text-xs jf-muted")
                             ui.label(
-                                "Caractéristiques : " + str(info.get("ability_adjustments") or "—")
+                                "Important : être Elfe ne donne pas de sorts à un Fighter. Une future classe ou capacité "
+                                "de lanceur de sorts reste nécessaire."
+                            ).classes("text-xs jf-muted mt-2")
+                    elif is_cleric(class_name):
+                        info = race_comparison("human") or {}
+                        with ui.expansion(
+                            "Humain pour un Clerc",
+                            icon="person",
+                            value=True,
+                        ).props("expand-separator").classes("w-full mt-2"):
+                            ui.label(
+                                "Caractéristiques : " + str(info.get("ability_adjustments") or "+2 au choix")
                             ).classes("text-sm")
-                            ui.label(str(info.get("combat") or "")).classes("text-sm")
-                            ui.label(str(info.get("skills") or "")).classes("text-sm")
-                            ui.label("Magie : " + str(info.get("magic") or "")).classes("text-sm")
-                            ui.label(str(info.get("fighter_note") or "")).classes("text-xs jf-muted")
-                    ui.label(
-                        "Important : être Elfe ne donne pas de sorts à un Fighter. Une future classe ou capacité "
-                        "de lanceur de sorts reste nécessaire."
-                    ).classes("text-xs jf-muted mt-2")
+                            ui.label(
+                                "Pour un Clerc, placer le +2 en SAG est souvent un choix simple pour améliorer "
+                                "les sorts et leurs DD; l’app ne l’applique jamais automatiquement."
+                            ).classes("text-sm")
+                            ui.label(str(info.get("cleric_note") or "")).classes("text-sm")
+                            ui.label(
+                                "La race ne fournit pas les sorts : ils viennent de la classe Clerc. "
+                                "Le choix de la divinité et des domaines reste à faire séparément."
+                            ).classes("text-xs jf-muted")
+
+                identity_controls["class_name"].on_value_change(
+                    lambda _event: race_class_help.refresh()
+                )
+                race_class_help()
 
                 current_race_key = str(working.get("race_key") or "custom")
                 if current_race_key not in race_labels:
@@ -610,9 +678,15 @@ def build_character_creation_panel(
                     )
                     custom_race.set_visibility(race_select.value == "custom")
                     comparison = race_comparison(race_select.value)
-                    if comparison:
+                    class_name = identity_controls["class_name"].value
+                    if comparison and is_fighter(class_name):
                         magic_orientation_label.set_text(
                             "Orientation magique — " + str(comparison.get("magic") or "")
+                        )
+                    elif comparison and is_cleric(class_name):
+                        note = str(comparison.get("cleric_note") or "")
+                        magic_orientation_label.set_text(
+                            "Repère Clerc — " + note if note else ""
                         )
                     else:
                         magic_orientation_label.set_text("")
@@ -697,18 +771,45 @@ def build_character_creation_panel(
                     ui.label(
                         "Rappel racial : " + str(working.get("racial_ability_adjustments"))
                     ).classes("jf-rpg-help")
-                with ui.expansion(
-                    "Repère Fighter avec possible magie plus tard",
-                    icon="tips_and_updates",
-                    value=False,
-                ).classes("w-full mt-2"):
-                    ui.label(
-                        "Un Fighter de mêlée privilégie souvent FOR et CON; un profil agile peut valoriser DEX. "
-                        "Si une future magie basée sur l’INT est envisagée, l’INT devient aussi importante."
-                    ).classes("text-sm")
-                    ui.label(
-                        "Humain : +2 flexible. Elfe : +2 DEX, +2 INT, −2 CON. L’assistant ne choisit ni ne modifie ces scores à votre place."
-                    ).classes("text-xs jf-muted")
+                @ui.refreshable
+                def ability_class_help() -> None:
+                    class_name = identity_controls["class_name"].value
+                    if is_fighter(class_name):
+                        with ui.expansion(
+                            "Repère Fighter avec possible magie plus tard",
+                            icon="tips_and_updates",
+                            value=False,
+                        ).classes("w-full mt-2"):
+                            ui.label(
+                                "Un Fighter de mêlée privilégie souvent FOR et CON; un profil agile peut valoriser DEX. "
+                                "Si une future magie basée sur l’INT est envisagée, l’INT devient aussi importante."
+                            ).classes("text-sm")
+                            ui.label(
+                                "Humain : +2 flexible. Elfe : +2 DEX, +2 INT, −2 CON. "
+                                "L’assistant ne choisit ni ne modifie ces scores à votre place."
+                            ).classes("text-xs jf-muted")
+                    elif is_cleric(class_name):
+                        with ui.expansion(
+                            "Repères de caractéristiques Clerc",
+                            icon="auto_awesome",
+                            value=True,
+                        ).classes("w-full mt-2"):
+                            ui.label(
+                                "SAG gouverne les sorts de Clerc : il faut au minimum 10 + niveau du sort pour le lancer, "
+                                "et le DD est 10 + niveau du sort + mod. SAG."
+                            ).classes("text-sm")
+                            ui.label(
+                                "CHA influence le nombre de canalisations d’énergie par jour (3 + mod. CHA) et leur DD. "
+                                "CON aide les PV; FOR/DEX dépendent surtout du style de combat."
+                            ).classes("text-sm")
+                            ui.label(
+                                "Humain : le +2 racial est flexible; le placer en SAG est un choix fréquent mais jamais automatique."
+                            ).classes("text-xs jf-muted")
+
+                identity_controls["class_name"].on_value_change(
+                    lambda _event: ability_class_help.refresh()
+                )
+                ability_class_help()
 
                 ability_controls: dict[str, Any] = {}
                 with ui.element("div").classes("jf-rpg-ability-grid mt-3"):
@@ -768,8 +869,8 @@ def build_character_creation_panel(
             with ui.card().classes("w-full p-5"):
                 ui.label("4. Combat et sauvegardes").classes("text-xl font-bold")
                 ui.label(
-                    "Pour un Fighter standard niveaux 1 à 4, l’assistant peut préremplir uniquement "
-                    "le BBA et les sauvegardes de base. Les PV et autres choix restent manuels."
+                    "Pour Fighter et Clerc standards niveaux 1 à 4, l’assistant peut préremplir le BBA "
+                    "et les sauvegardes de base. Les PV et les choix propres au personnage restent manuels."
                 ).classes("text-xs jf-muted")
                 with ui.element("div").classes("jf-rpg-grid mt-2"):
                     max_hp = ui.number(
@@ -801,23 +902,34 @@ def build_character_creation_panel(
                         )
                         save_editors.append((row, base))
 
-                fighter_combat_note = ui.label("").classes("text-sm jf-muted mt-2")
+                class_combat_note = ui.label("").classes("text-sm jf-muted mt-2")
 
-                def apply_fighter_combat_reference() -> None:
-                    if not is_fighter(working.get("class_name")):
+                def apply_class_combat_reference() -> None:
+                    class_name = working.get("class_name") or identity_controls["class_name"].value
+                    level = _as_int(working.get("character_level") or identity_controls["character_level"].value, 1)
+                    if is_fighter(class_name):
+                        reference = fighter_reference(level)
+                        if reference is None:
+                            ui.notify(
+                                "Le préremplissage Fighter couvre actuellement les niveaux 1 à 4.",
+                                type="warning",
+                            )
+                            return
+                    elif is_cleric(class_name):
+                        reference = cleric_reference(level)
+                        if reference is None:
+                            ui.notify(
+                                "Le préremplissage Clerc couvre actuellement les niveaux 1 à 4.",
+                                type="warning",
+                            )
+                            return
+                    else:
                         ui.notify(
-                            "La classe enregistrée n’est pas Fighter / Guerrier.",
+                            "Les repères automatiques couvrent actuellement Fighter et Clerc.",
                             type="warning",
                         )
                         return
-                    level = _as_int(working.get("character_level"), 1)
-                    reference = fighter_reference(level)
-                    if reference is None:
-                        ui.notify(
-                            "Le préremplissage Fighter couvre actuellement les niveaux 1 à 4.",
-                            type="warning",
-                        )
-                        return
+
                     bab.value = reference["bab"]
                     bab.update()
                     targets = {
@@ -830,25 +942,45 @@ def build_character_creation_panel(
                         if key in targets:
                             base.value = targets[key]
                             base.update()
-                    note_parts = list(reference["specials"])
-                    if level >= 2:
-                        note_parts.append(
-                            "Bravoure +1 : bonus de Volonté contre la peur; à noter comme bonus conditionnel."
+
+                    if is_fighter(class_name):
+                        note_parts = list(reference["specials"])
+                        if level >= 2:
+                            note_parts.append(
+                                "Bravoure +1 : bonus de Volonté contre la peur; à noter comme bonus conditionnel."
+                            )
+                        if level >= 3:
+                            note_parts.append(
+                                "Entraînement aux armures 1 : ACP 1 moins sévère, DEX max +1 et vitesse normale en armure intermédiaire."
+                            )
+                        class_combat_note.set_text(" · ".join(note_parts))
+                        label = "Fighter"
+                    else:
+                        spell_info = cleric_spell_reference(
+                            level,
+                            working.get("wis_score") or 10,
+                            working.get("cha_score") or 10,
                         )
-                    if level >= 3:
-                        note_parts.append(
-                            "Entraînement aux armures 1 : ACP 1 moins sévère, DEX max +1 et vitesse normale en armure intermédiaire."
+                        spell_slots = ", ".join(
+                            f"niv. {spell_level}: {slots}"
+                            for spell_level, slots in spell_info["spells_per_day"].items()
                         )
-                    fighter_combat_note.set_text(" · ".join(note_parts))
+                        class_combat_note.set_text(
+                            f"Canalisation {spell_info['channel_dice']} · "
+                            f"{spell_info['channel_uses_per_day']} utilisation(s)/jour avec le CHA actuel · "
+                            f"DD canalisation {spell_info['channel_dc']} · sorts de base/jour : {spell_slots}. "
+                            "Les sorts bonus de SAG ne sont pas inclus."
+                        )
+                        label = "Clerc"
                     ui.notify(
-                        f"Repères Fighter niveau {level} appliqués au BBA et aux sauvegardes de base.",
+                        f"Repères {label} niveau {level} appliqués au BBA et aux sauvegardes de base.",
                         type="positive",
                     )
 
                 ui.button(
-                    "Appliquer les repères Fighter du niveau",
+                    "Appliquer les repères de classe du niveau",
                     icon="auto_fix_high",
-                    on_click=apply_fighter_combat_reference,
+                    on_click=apply_class_combat_reference,
                 ).props("outline color=primary").classes("mt-2")
 
                 @ui.refreshable
@@ -944,6 +1076,8 @@ def build_character_creation_panel(
                         name = str(row.get("skill_name") or "Compétence")
                         if is_fighter_class_skill(row):
                             name += " · Fighter"
+                        if is_cleric_class_skill(row):
+                            name += " · Clerc"
                         ui.label(name).classes("grow min-w-[180px]")
                         rank_controls[skill_id] = ui.number(
                             label="Rangs",
@@ -956,18 +1090,38 @@ def build_character_creation_panel(
                             value=bool(row.get("class_skill")),
                         )
 
-                fighter_skill_note = ui.label("").classes("text-xs jf-muted mt-2")
+                class_skill_note = ui.label("").classes("text-xs jf-muted mt-2")
 
-                def apply_fighter_skill_reference() -> None:
-                    if not is_fighter(working.get("class_name")):
+                def apply_class_skill_reference() -> None:
+                    class_name = working.get("class_name") or identity_controls["class_name"].value
+                    if is_fighter(class_name):
+                        matcher = is_fighter_class_skill
+                        budget = fighter_skill_rank_budget(
+                            working.get("character_level") or 1,
+                            working.get("int_score") or 10,
+                            working.get("race_key"),
+                        )
+                        class_total = budget["fighter_total"]
+                        class_label = "Fighter"
+                    elif is_cleric(class_name):
+                        matcher = is_cleric_class_skill
+                        budget = cleric_skill_rank_budget(
+                            working.get("character_level") or 1,
+                            working.get("int_score") or 10,
+                            working.get("race_key"),
+                        )
+                        class_total = budget["cleric_total"]
+                        class_label = "Clerc"
+                    else:
                         ui.notify(
-                            "La classe enregistrée n’est pas Fighter / Guerrier.",
+                            "Les repères de compétences couvrent actuellement Fighter et Clerc.",
                             type="warning",
                         )
                         return
+
                     marked = 0
                     for row in skills:
-                        if not is_fighter_class_skill(row):
+                        if not matcher(row):
                             continue
                         control = class_controls.get(int(row["id"]))
                         if control is None:
@@ -977,17 +1131,12 @@ def build_character_creation_panel(
                             control.update()
                         marked += 1
 
-                    budget = fighter_skill_rank_budget(
-                        working.get("character_level") or 1,
-                        working.get("int_score") or 10,
-                        working.get("race_key"),
-                    )
                     available.value = budget["total_without_favored_class"]
                     available.update()
                     refresh_rank_summary()
                     note = (
-                        f"Fighter pur : {budget['per_level']} rang(s)/niveau avec l’INT actuelle; "
-                        f"{budget['fighter_total']} sur {working.get('character_level') or 1} niveau(x)."
+                        f"{class_label} pur : {budget['per_level']} rang(s)/niveau avec l’INT actuelle; "
+                        f"{class_total} sur {working.get('character_level') or 1} niveau(x)."
                     )
                     if budget["human_standard_bonus"]:
                         note += (
@@ -997,16 +1146,16 @@ def build_character_creation_panel(
                         " Le bonus éventuel de classe favorite n’est pas inclus. "
                         "Si un trait racial remplace Skilled ou si le personnage est multiclassé, ajustez le total."
                     )
-                    fighter_skill_note.set_text(note)
+                    class_skill_note.set_text(note)
                     ui.notify(
-                        f"{marked} compétence(s) Fighter marquée(s) comme compétences de classe.",
+                        f"{marked} compétence(s) {class_label} marquée(s) comme compétences de classe.",
                         type="positive",
                     )
 
                 ui.button(
-                    "Appliquer les repères de compétences Fighter",
+                    "Appliquer les repères de compétences de classe",
                     icon="school",
-                    on_click=apply_fighter_skill_reference,
+                    on_click=apply_class_skill_reference,
                 ).props("outline color=primary").classes("mt-2")
 
                 def refresh_rank_summary(_event: Any = None) -> None:
@@ -1097,16 +1246,25 @@ def build_character_creation_panel(
                                 "Pour une arme possédée : ajoutez-la dans Équipement pour son poids, puis dans Attaques "
                                 "pour le bonus d’attaque, les dégâts, le critique et la portée."
                             ).classes("text-xs jf-muted mt-1")
-                            ui.label(
-                                "Fighter niveau 3–6 standard : Entraînement aux armures 1 réduit l’ACP de 1, "
-                                "augmente la DEX max de 1 et permet la vitesse normale en armure intermédiaire. "
-                                "Cette capacité de classe reste un repère manuel tant que l’app ne suit pas les niveaux par classe/archétype."
-                            ).classes("text-xs jf-muted mt-1")
-                            ui.label(
-                                "Si vous prévoyez de la magie profane plus tard, surveillez le champ Échec sorts profanes : "
-                                "l’armure et le bouclier peuvent gêner les sorts avec composantes somatiques. "
-                                "Elven Magic n’annule pas ce risque."
-                            ).classes("text-xs jf-muted mt-1")
+                            class_name = working.get("class_name") or identity_controls["class_name"].value
+                            if is_fighter(class_name):
+                                ui.label(
+                                    "Fighter niveau 3–6 standard : Entraînement aux armures 1 réduit l’ACP de 1, "
+                                    "augmente la DEX max de 1 et permet la vitesse normale en armure intermédiaire. "
+                                    "Cette capacité reste un repère manuel."
+                                ).classes("text-xs jf-muted mt-1")
+                                ui.label(
+                                    "Si vous prévoyez de la magie profane plus tard, surveillez le champ Échec sorts profanes."
+                                ).classes("text-xs jf-muted mt-1")
+                            elif is_cleric(class_name):
+                                ui.label(
+                                    "Clerc standard : maîtrise des armures légères et intermédiaires et des boucliers sauf le pavois; "
+                                    "le harnois complet exige normalement une maîtrise d’armure lourde obtenue autrement."
+                                ).classes("text-xs jf-muted mt-1")
+                                ui.label(
+                                    "Les sorts de Clerc sont divins : le pourcentage Échec sorts profanes de l’armure ou du bouclier "
+                                    "ne s’applique normalement pas à ces sorts."
+                                ).classes("text-xs jf-muted mt-1")
 
                     preset_select.on_value_change(
                         lambda _event: gear_reference.refresh()
@@ -1240,6 +1398,52 @@ def build_character_creation_panel(
                                 ui.label(
                                     "Race et magie : " + str(comparison.get("magic") or "")
                                 ).classes("text-xs jf-muted")
+
+                    if is_cleric(fresh.get("class_name")):
+                        level = _as_int(fresh.get("character_level"), 1)
+                        reference = cleric_reference(level)
+                        with ui.expansion(
+                            "Résumé Clerc",
+                            icon="auto_awesome",
+                            value=True,
+                        ).classes("w-full mt-3"):
+                            if reference:
+                                ui.label(
+                                    f"BBA attendu +{reference['bab']} · sauvegardes de base : "
+                                    f"Vig +{reference['fortitude']}, Réf +{reference['reflex']}, Vol +{reference['will']}."
+                                ).classes("text-sm")
+                                for line in cleric_cumulative_milestones(level):
+                                    ui.label("• " + line).classes("text-sm")
+                                feats = cleric_feat_counts(level, fresh.get("race_key"))
+                                ui.label(
+                                    f"Dons de référence : {feats['general']} généraux + "
+                                    f"{feats['human_bonus']} racial humain = {feats['total']}."
+                                ).classes("text-sm")
+                                spell_info = cleric_spell_reference(
+                                    level,
+                                    fresh.get("wis_score") or 10,
+                                    fresh.get("cha_score") or 10,
+                                )
+                                slots = ", ".join(
+                                    f"niv. {spell_level}: {count}"
+                                    for spell_level, count in spell_info["spells_per_day"].items()
+                                )
+                                ui.label(
+                                    f"Canalisation {spell_info['channel_dice']} · "
+                                    f"{spell_info['channel_uses_per_day']} utilisation(s)/jour · "
+                                    f"DD {spell_info['channel_dc']}."
+                                ).classes("text-sm")
+                                ui.label(
+                                    f"Sorts de base/jour : {slots}. {spell_info['notes']}"
+                                ).classes("text-sm")
+                                ui.label(
+                                    "À vérifier avant de terminer : divinité/concept, deux domaines, arme de prédilection, "
+                                    "énergie canalisée et sorts préparés."
+                                ).classes("text-xs jf-muted")
+                            else:
+                                ui.label(
+                                    "Les repères détaillés Clerc couvrent actuellement les niveaux 1 à 4."
+                                ).classes("text-sm jf-muted")
 
                     warnings = creation_warnings(
                         fresh,

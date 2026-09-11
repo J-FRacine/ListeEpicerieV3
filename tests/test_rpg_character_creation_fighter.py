@@ -39,8 +39,8 @@ class FighterCreationIntegrationTests(unittest.TestCase):
         text = MODULE.read_text(encoding="utf-8")
         for expected in (
             "Repères Fighter / Guerrier",
-            "Appliquer les repères Fighter du niveau",
-            "Appliquer les repères de compétences Fighter",
+            "Appliquer les repères de classe du niveau",
+            "Appliquer les repères de compétences de classe",
             "Humain ou Elfe pour un Fighter avec une orientation magique?",
             "Catalogue de référence — armes et armures courantes",
             "Entraînement aux armures 1",
@@ -57,6 +57,8 @@ class FighterCreationIntegrationTests(unittest.TestCase):
             "fighter_reference", "fighter_feat_counts", "fighter_skill_rank_budget",
             "is_fighter", "is_fighter_class_skill", "race_comparison",
             "gear_preset_options", "gear_reference_lines",
+            "cleric_reference", "cleric_spell_reference", "cleric_skill_rank_budget",
+            "is_cleric", "is_cleric_class_skill",
         ):
             self.assertIn(expected, imported)
 
@@ -68,6 +70,24 @@ class FighterCreationIntegrationTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, text)
         self.assertTrue(GUIDES.exists())
+
+
+    def test_new_character_with_unselected_race_is_detected(self):
+        self.assertTrue(
+            mod.race_selection_pending({"race_key": "custom", "race": None})
+        )
+        self.assertFalse(
+            mod.race_selection_pending({"race_key": "human", "race": "Humain"})
+        )
+        self.assertFalse(
+            mod.race_selection_pending({"race_key": "custom", "race": "Dhampir"})
+        )
+
+    def test_identity_step_defers_persistence_until_race_when_needed(self):
+        text = MODULE.read_text(encoding="utf-8")
+        self.assertIn("if race_selection_pending(working):", text)
+        self.assertIn("les deux étapes seront enregistrées ensemble", text)
+        self.assertIn("Sous-classe / archétype (facultatif)", text)
 
     def test_steps_remain_unchanged(self):
         self.assertEqual(

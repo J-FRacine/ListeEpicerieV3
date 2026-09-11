@@ -5,6 +5,7 @@ Cette façade conserve le point d'import historique ``rpg_character``.
 
 Modularisation :
 - Identité : ``rpg_character_identity.py``
+- Équipement : ``rpg_character_equipment.py``
 - Sauvegardes : ``rpg_character_saves.py``
 - Progression : ``rpg_character_progression.py``
 - Attaques : ``rpg_character_attacks.py``
@@ -13,6 +14,7 @@ from __future__ import annotations
 
 import rpg_character_ui as _impl
 from rpg_character_attacks import build_attacks_panel
+from rpg_character_equipment import build_equipment_panel
 from rpg_character_identity import build_identity_panel
 from rpg_character_progression import build_progression_panel
 from rpg_character_saves import build_saves_panel
@@ -30,6 +32,25 @@ def _identity_panel(user_id, character):
         update_rpg_character_identity=_impl.update_rpg_character_identity,
         notify_error=_impl._safe_notify_error,
         character_url=_impl._character_url,
+    )
+
+
+def _equipment_panel(user_id, character):
+    return build_equipment_panel(
+        ui=_impl.ui,
+        user_id=user_id,
+        character=character,
+        list_rpg_equipment=_impl.list_rpg_equipment,
+        apply_equipment_effects=_impl.apply_equipment_effects,
+        equipment_type_labels=_impl.EQUIPMENT_TYPE_LABELS,
+        armor_category_labels=_impl.ARMOR_CATEGORY_LABELS,
+        format_number=_impl.format_number,
+        format_modifier=_impl.format_modifier,
+        update_rpg_equipment_state=_impl.update_rpg_equipment_state,
+        notify_error=_impl._safe_notify_error,
+        character_url=_impl._character_url,
+        equipment_dialog=_impl._equipment_dialog,
+        delete_equipment_dialog=_impl._delete_equipment_dialog,
     )
 
 
@@ -87,6 +108,7 @@ def _attacks_panel(user_id, character):
 
 
 _impl._identity_panel = _identity_panel
+_impl._equipment_panel = _equipment_panel
 _impl._saves_panel = _saves_panel
 _impl._progression_panel = _progression_panel
 _impl._attacks_panel = _attacks_panel

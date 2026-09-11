@@ -105,10 +105,10 @@ class CharacterIntegrationTests(unittest.TestCase):
             self.assertTrue({'rpg_character', 'nicegui', 'db'}.isdisjoint(imports))
 
     def test_jdr_version_and_release_note(self):
-        self.assertEqual(app_versions.APP_VERSIONS['rpg'], '1.4.0')
+        self.assertEqual(app_versions.APP_VERSIONS['rpg'], '1.4.1')
         self.assertEqual(app_versions.APP_VERSIONS['finances'], '1.13.5')
         note = next(n for n in app_versions.RELEASE_NOTES if n['app_key'] == 'rpg')
-        self.assertEqual(note['version'], '1.4.0')
+        self.assertEqual(note['version'], '1.4.1')
 
 
 if __name__ == '__main__':

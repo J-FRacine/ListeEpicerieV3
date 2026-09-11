@@ -10,13 +10,39 @@ from rpg_character_creation import open_new_character_dialog, build_character_cr
 from rpg_combat_session import build_combat_session
 
 ROOT = Path(__file__).resolve().parents[1]
+IMPLEMENTATION_PATH = ROOT / 'rpg_character_ui.py'
+PUBLIC_PATH = ROOT / 'rpg_character.py'
 
 
 def tree():
-    return ast.parse((ROOT / 'rpg_character.py').read_text(encoding='utf-8'))
+    return ast.parse(IMPLEMENTATION_PATH.read_text(encoding='utf-8'))
+
+
+def public_tree():
+    return ast.parse(PUBLIC_PATH.read_text(encoding='utf-8'))
 
 
 class CharacterIntegrationTests(unittest.TestCase):
+    def test_public_module_is_thin_compatibility_facade(self):
+        parsed = public_tree()
+        imported_modules = {
+            alias.name
+            for node in parsed.body
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        }
+        functions = {
+            node.name
+            for node in parsed.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        source = ast.unparse(parsed)
+
+        self.assertIn('rpg_character_ui', imported_modules)
+        self.assertIn('rpg_character_panel = _impl.rpg_character_panel', source)
+        self.assertEqual(functions, {'__getattr__', '__dir__'})
+        self.assertLess(len(PUBLIC_PATH.read_text(encoding='utf-8').splitlines()), 80)
+
     def test_builders_receive_complete_existing_dependencies(self):
         parsed = tree()
         available = {n.name for n in parsed.body if isinstance(n, ast.FunctionDef)}
@@ -102,7 +128,7 @@ class CharacterIntegrationTests(unittest.TestCase):
             parsed = ast.parse((ROOT / (name + '.py')).read_text(encoding='utf-8'))
             imports = {n.module for n in ast.walk(parsed) if isinstance(n, ast.ImportFrom)}
             imports |= {a.name for n in ast.walk(parsed) if isinstance(n, ast.Import) for a in n.names}
-            self.assertTrue({'rpg_character', 'nicegui', 'db'}.isdisjoint(imports))
+            self.assertTrue({'rpg_character', 'rpg_character_ui', 'nicegui', 'db'}.isdisjoint(imports))
 
     def test_jdr_version_and_release_note(self):
         self.assertEqual(app_versions.APP_VERSIONS['rpg'], '1.4.1')

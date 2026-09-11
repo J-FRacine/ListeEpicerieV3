@@ -4,6 +4,7 @@ L'implémentation NiceGUI principale est isolée dans ``rpg_character_ui.py``.
 Cette façade conserve le point d'import historique ``rpg_character``.
 
 Modularisation :
+- Identité : ``rpg_character_identity.py``
 - Sauvegardes : ``rpg_character_saves.py``
 - Progression : ``rpg_character_progression.py``
 - Attaques : ``rpg_character_attacks.py``
@@ -12,8 +13,24 @@ from __future__ import annotations
 
 import rpg_character_ui as _impl
 from rpg_character_attacks import build_attacks_panel
+from rpg_character_identity import build_identity_panel
 from rpg_character_progression import build_progression_panel
 from rpg_character_saves import build_saves_panel
+
+
+def _identity_panel(user_id, character):
+    return build_identity_panel(
+        ui=_impl.ui,
+        user_id=user_id,
+        character=character,
+        race_labels=_impl.RACE_LABELS,
+        size_labels=_impl.SIZE_LABELS,
+        infer_race_key=_impl.infer_race_key,
+        get_race_profile=_impl.get_race_profile,
+        update_rpg_character_identity=_impl.update_rpg_character_identity,
+        notify_error=_impl._safe_notify_error,
+        character_url=_impl._character_url,
+    )
 
 
 def _saves_panel(user_id, character):
@@ -69,6 +86,7 @@ def _attacks_panel(user_id, character):
     )
 
 
+_impl._identity_panel = _identity_panel
 _impl._saves_panel = _saves_panel
 _impl._progression_panel = _progression_panel
 _impl._attacks_panel = _attacks_panel

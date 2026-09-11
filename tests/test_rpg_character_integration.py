@@ -12,6 +12,7 @@ from rpg_combat_session import build_combat_session
 ROOT = Path(__file__).resolve().parents[1]
 IMPLEMENTATION_PATH = ROOT / 'rpg_character_ui.py'
 PUBLIC_PATH = ROOT / 'rpg_character.py'
+SAVES_PATH = ROOT / 'rpg_character_saves.py'
 
 
 def tree():
@@ -31,6 +32,11 @@ class CharacterIntegrationTests(unittest.TestCase):
             if isinstance(node, ast.Import)
             for alias in node.names
         }
+        imported_from = {
+            node.module
+            for node in parsed.body
+            if isinstance(node, ast.ImportFrom)
+        }
         functions = {
             node.name
             for node in parsed.body
@@ -39,9 +45,34 @@ class CharacterIntegrationTests(unittest.TestCase):
         source = ast.unparse(parsed)
 
         self.assertIn('rpg_character_ui', imported_modules)
+        self.assertIn('rpg_character_saves', imported_from)
         self.assertIn('rpg_character_panel = _impl.rpg_character_panel', source)
-        self.assertEqual(functions, {'__getattr__', '__dir__'})
-        self.assertLess(len(PUBLIC_PATH.read_text(encoding='utf-8').splitlines()), 80)
+        self.assertIn('_impl._saves_panel = _saves_panel', source)
+        self.assertEqual(functions, {'_saves_panel', '__getattr__', '__dir__'})
+        self.assertLess(len(PUBLIC_PATH.read_text(encoding='utf-8').splitlines()), 100)
+
+    def test_saves_module_has_no_back_reference_or_direct_framework_dependency(self):
+        parsed = ast.parse(SAVES_PATH.read_text(encoding='utf-8'))
+        imports = {
+            node.module
+            for node in ast.walk(parsed)
+            if isinstance(node, ast.ImportFrom)
+        }
+        imports |= {
+            alias.name
+            for node in ast.walk(parsed)
+            if isinstance(node, ast.Import)
+            for alias in node.names
+        }
+        self.assertTrue(
+            {'rpg_character', 'rpg_character_ui', 'nicegui', 'db'}.isdisjoint(imports)
+        )
+        functions = {
+            node.name
+            for node in parsed.body
+            if isinstance(node, ast.FunctionDef)
+        }
+        self.assertEqual(functions, {'build_saves_panel'})
 
     def test_builders_receive_complete_existing_dependencies(self):
         parsed = tree()
@@ -124,7 +155,7 @@ class CharacterIntegrationTests(unittest.TestCase):
     def test_modules_imported_without_back_reference(self):
         modules = {n.module for n in tree().body if isinstance(n, ast.ImportFrom)}
         self.assertTrue({'rpg_character_creation', 'rpg_combat_session'} <= modules)
-        for name in ('rpg_character_creation', 'rpg_combat_session'):
+        for name in ('rpg_character_creation', 'rpg_combat_session', 'rpg_character_saves'):
             parsed = ast.parse((ROOT / (name + '.py')).read_text(encoding='utf-8'))
             imports = {n.module for n in ast.walk(parsed) if isinstance(n, ast.ImportFrom)}
             imports |= {a.name for n in ast.walk(parsed) if isinstance(n, ast.Import) for a in n.names}

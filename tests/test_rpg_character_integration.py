@@ -14,6 +14,7 @@ IMPLEMENTATION_PATH = ROOT / 'rpg_character_ui.py'
 PUBLIC_PATH = ROOT / 'rpg_character.py'
 SAVES_PATH = ROOT / 'rpg_character_saves.py'
 PROGRESSION_PATH = ROOT / 'rpg_character_progression.py'
+ATTACKS_PATH = ROOT / 'rpg_character_attacks.py'
 
 
 def tree():
@@ -47,24 +48,36 @@ class CharacterIntegrationTests(unittest.TestCase):
 
         self.assertIn('rpg_character_ui', imported_modules)
         self.assertTrue(
-            {'rpg_character_saves', 'rpg_character_progression'} <= imported_from
+            {
+                'rpg_character_saves',
+                'rpg_character_progression',
+                'rpg_character_attacks',
+            } <= imported_from
         )
         self.assertIn('rpg_character_panel = _impl.rpg_character_panel', source)
         self.assertIn('_impl._saves_panel = _saves_panel', source)
         self.assertIn('_impl._progression_panel = _progression_panel', source)
+        self.assertIn('_impl._attacks_panel = _attacks_panel', source)
         self.assertEqual(
             functions,
-            {'_saves_panel', '_progression_panel', '__getattr__', '__dir__'},
+            {
+                '_saves_panel',
+                '_progression_panel',
+                '_attacks_panel',
+                '__getattr__',
+                '__dir__',
+            },
         )
         self.assertLess(
             len(PUBLIC_PATH.read_text(encoding='utf-8').splitlines()),
-            130,
+            160,
         )
 
     def test_extracted_modules_have_no_back_reference_or_framework_dependency(self):
         for path, expected_function in (
             (SAVES_PATH, 'build_saves_panel'),
             (PROGRESSION_PATH, 'build_progression_panel'),
+            (ATTACKS_PATH, 'build_attacks_panel'),
         ):
             parsed = ast.parse(path.read_text(encoding='utf-8'))
             imports = {
@@ -174,6 +187,7 @@ class CharacterIntegrationTests(unittest.TestCase):
             'rpg_combat_session',
             'rpg_character_saves',
             'rpg_character_progression',
+            'rpg_character_attacks',
         ):
             parsed = ast.parse((ROOT / (name + '.py')).read_text(encoding='utf-8'))
             imports = {n.module for n in ast.walk(parsed) if isinstance(n, ast.ImportFrom)}

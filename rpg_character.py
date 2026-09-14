@@ -3,8 +3,14 @@
 L'implémentation NiceGUI principale reste dans ``rpg_character_ui.py``.
 Les panneaux déjà extraits sont raccordés ici sans changer le point d'import
 historique ``rpg_character_panel``.
+
+Diagnostic temporaire Phase 7 :
+les erreurs techniques non prévues sont également écrites dans la sortie
+standard afin d'apparaître dans le journal Canner.
 """
 from __future__ import annotations
+
+import traceback
 
 import rpg_character_data as _data
 import rpg_character_ui as _impl
@@ -15,6 +21,26 @@ from rpg_character_identity import build_identity_panel
 from rpg_character_progression import build_progression_panel
 from rpg_character_saves import build_saves_panel
 from rpg_character_skills import build_skills_panel
+
+
+_ORIGINAL_SAFE_NOTIFY_ERROR = _impl._safe_notify_error
+
+
+def _safe_notify_error(error, fallback):
+    """Conserve l'affichage actuel et journalise les erreurs inattendues."""
+    if not isinstance(error, (ValueError, PermissionError)):
+        print(
+            "[JDR] ERREUR TECHNIQUE NON GÉRÉE",
+            f"{type(error).__name__}: {error}",
+            flush=True,
+        )
+        traceback.print_exception(
+            type(error),
+            error,
+            error.__traceback__,
+        )
+
+    return _ORIGINAL_SAFE_NOTIFY_ERROR(error, fallback)
 
 
 def _ensure_equipment_schema():
@@ -139,6 +165,9 @@ def _attacks_panel(user_id, character):
     )
 
 
+# Le diagnostic est branché d'abord afin que les anciens dialogues encore
+# présents dans rpg_character_ui.py l'utilisent aussi.
+_impl._safe_notify_error = _safe_notify_error
 _impl.get_rpg_character = _get_rpg_character
 _impl._identity_panel = _identity_panel
 _impl._equipment_panel = _equipment_panel

@@ -25,9 +25,7 @@ SAVE_TARGET_LABELS = {
 }
 
 FEAT_TEMPLATES = {
-    "": {
-        "label": "Saisie libre",
-    },
+    "": {"label": "Saisie libre"},
     "power_attack": {
         "label": "Attaque en puissance — Power Attack",
         "feat_name": "Attaque en puissance",
@@ -89,6 +87,56 @@ FEAT_TEMPLATES = {
         ),
         "attack_modifier": 0,
         "initiative_modifier": 4,
+        "cmb_modifier": 0,
+        "cmd_modifier": 0,
+        "save_key": "",
+        "save_modifier": 0,
+        "damage_note": "",
+    },
+    "combat_casting": {
+        "label": "Incantation en combat — Combat Casting",
+        "feat_name": "Incantation en combat",
+        "english_name": "Combat Casting",
+        "feat_kind": "active",
+        "source_text": "Pathfinder RPG — Core Rulebook",
+        "prerequisites": "",
+        "summary": (
+            "Bonus de +4 aux tests de concentration pour lancer un sort ou utiliser "
+            "un pouvoir magique en lançant sur la défensive ou en étant agrippé."
+        ),
+        "effects": (
+            "Don situationnel. Combat rapide permet de le cocher comme rappel, "
+            "mais ne calcule pas encore les tests de concentration; le bonus de +4 "
+            "doit donc être appliqué au test de concentration approprié."
+        ),
+        "attack_modifier": 0,
+        "initiative_modifier": 0,
+        "cmb_modifier": 0,
+        "cmd_modifier": 0,
+        "save_key": "",
+        "save_modifier": 0,
+        "damage_note": "",
+    },
+    "selective_channeling": {
+        "label": "Canalisation sélective — Selective Channeling",
+        "feat_name": "Canalisation sélective",
+        "english_name": "Selective Channeling",
+        "feat_kind": "active",
+        "source_text": "Pathfinder RPG — Core Rulebook",
+        "prerequisites": "CHA 13; aptitude de classe Canalisation d’énergie",
+        "summary": (
+            "Permet d’exclure certaines créatures de la zone d’une canalisation "
+            "d’énergie."
+        ),
+        "effects": (
+            "À chaque canalisation, choisissez un nombre de cibles dans la zone "
+            "pouvant aller jusqu’au modificateur de Charisme du personnage; ces "
+            "cibles ne sont pas affectées par cette canalisation. Combat rapide "
+            "l’affiche comme don activable, sans modifier automatiquement les dés "
+            "ou le DD de canalisation."
+        ),
+        "attack_modifier": 0,
+        "initiative_modifier": 0,
         "cmb_modifier": 0,
         "cmd_modifier": 0,
         "save_key": "",

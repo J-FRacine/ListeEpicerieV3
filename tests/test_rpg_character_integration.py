@@ -14,8 +14,10 @@ IMPLEMENTATION_PATH = ROOT / 'rpg_character_ui.py'
 PUBLIC_PATH = ROOT / 'rpg_character.py'
 IDENTITY_PATH = ROOT / 'rpg_character_identity.py'
 EQUIPMENT_PATH = ROOT / 'rpg_character_equipment.py'
+EQUIPMENT_SCHEMA_PATH = ROOT / 'rpg_character_equipment_schema.py'
 SAVES_PATH = ROOT / 'rpg_character_saves.py'
 PROGRESSION_PATH = ROOT / 'rpg_character_progression.py'
+SKILLS_PATH = ROOT / 'rpg_character_skills.py'
 ATTACKS_PATH = ROOT / 'rpg_character_attacks.py'
 
 
@@ -49,21 +51,26 @@ class CharacterIntegrationTests(unittest.TestCase):
         source = ast.unparse(parsed)
 
         self.assertIn('rpg_character_ui', imported_modules)
+        self.assertIn('rpg_character_data', imported_modules)
         self.assertTrue(
             {
                 'rpg_character_identity',
                 'rpg_character_equipment',
+                'rpg_character_equipment_schema',
                 'rpg_character_saves',
                 'rpg_character_progression',
+                'rpg_character_skills',
                 'rpg_character_attacks',
             } <= imported_from
         )
         self.assertIn('rpg_character_panel = _impl.rpg_character_panel', source)
         for binding in (
+            '_impl.get_rpg_character = _get_rpg_character',
             '_impl._identity_panel = _identity_panel',
             '_impl._equipment_panel = _equipment_panel',
             '_impl._saves_panel = _saves_panel',
             '_impl._progression_panel = _progression_panel',
+            '_impl._skills_panel = _skills_panel',
             '_impl._attacks_panel = _attacks_panel',
         ):
             self.assertIn(binding, source)
@@ -71,10 +78,13 @@ class CharacterIntegrationTests(unittest.TestCase):
         self.assertEqual(
             functions,
             {
+                '_ensure_equipment_schema',
+                '_get_rpg_character',
                 '_identity_panel',
                 '_equipment_panel',
                 '_saves_panel',
                 '_progression_panel',
+                '_skills_panel',
                 '_attacks_panel',
                 '__getattr__',
                 '__dir__',
@@ -82,22 +92,24 @@ class CharacterIntegrationTests(unittest.TestCase):
         )
         self.assertLess(
             len(PUBLIC_PATH.read_text(encoding='utf-8').splitlines()),
-            230,
+            260,
         )
 
     def test_extracted_modules_have_no_back_reference_or_framework_dependency(self):
         for path, expected_function in (
             (IDENTITY_PATH, 'build_identity_panel'),
             (EQUIPMENT_PATH, 'build_equipment_panel'),
+            (EQUIPMENT_SCHEMA_PATH, 'ensure_equipment_schema'),
             (SAVES_PATH, 'build_saves_panel'),
             (PROGRESSION_PATH, 'build_progression_panel'),
+            (SKILLS_PATH, 'build_skills_panel'),
             (ATTACKS_PATH, 'build_attacks_panel'),
         ):
             parsed = ast.parse(path.read_text(encoding='utf-8'))
             imports = {
                 node.module
                 for node in ast.walk(parsed)
-                if isinstance(node, ast.ImportFrom)
+                if isinstance(node, ast.ImportFrom) and node.module
             }
             imports |= {
                 alias.name
@@ -312,8 +324,10 @@ class CharacterIntegrationTests(unittest.TestCase):
             'rpg_combat_session',
             'rpg_character_identity',
             'rpg_character_equipment',
+            'rpg_character_equipment_schema',
             'rpg_character_saves',
             'rpg_character_progression',
+            'rpg_character_skills',
             'rpg_character_attacks',
         ):
             parsed = ast.parse(
@@ -322,7 +336,7 @@ class CharacterIntegrationTests(unittest.TestCase):
             imports = {
                 n.module
                 for n in ast.walk(parsed)
-                if isinstance(n, ast.ImportFrom)
+                if isinstance(n, ast.ImportFrom) and n.module
             }
             imports |= {
                 a.name

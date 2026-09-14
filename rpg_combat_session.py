@@ -46,12 +46,26 @@ def _as_int(value: Any, default: int = 0) -> int:
         return default
 
 
-def adjusted_current_hp(current_hp: Any, *, damage: Any = 0, healing: Any = 0) -> int:
+def adjusted_current_hp(
+    current_hp: Any,
+    *,
+    damage: Any = 0,
+    healing: Any = 0,
+) -> int:
     """Applique rapidement dégâts et soins aux PV actuels."""
-    return _as_int(current_hp) - max(0, _as_int(damage)) + max(0, _as_int(healing))
+    return (
+        _as_int(current_hp)
+        - max(0, _as_int(damage))
+        + max(0, _as_int(healing))
+    )
 
 
-def adjusted_nonlethal(current_nonlethal: Any, *, added: Any = 0, removed: Any = 0) -> int:
+def adjusted_nonlethal(
+    current_nonlethal: Any,
+    *,
+    added: Any = 0,
+    removed: Any = 0,
+) -> int:
     """Met à jour les dégâts non létaux sans permettre une valeur négative."""
     return max(
         0,
@@ -85,11 +99,16 @@ def hp_update_payload(
     nonlethal_damage: Any,
 ) -> dict[str, Any]:
     """Préserve tout le contrat Combat et ne change que les pertes rapides."""
-    payload = {field: character.get(field) for field in COMBAT_FIELDS}
+    payload = {
+        field: character.get(field)
+        for field in COMBAT_FIELDS
+    }
     payload["current_hp"] = current_hp
     payload["nonlethal_damage"] = nonlethal_damage
     if payload.get("grapple_misc_modifier") in (None, ""):
-        payload["grapple_misc_modifier"] = payload.get("cmb_misc_modifier") or 0
+        payload["grapple_misc_modifier"] = (
+            payload.get("cmb_misc_modifier") or 0
+        )
     return payload
 
 
@@ -106,19 +125,39 @@ def combat_summary(
     initiative_total: Callable[[Mapping[str, Any]], Any],
     cmb_total: Callable[[Mapping[str, Any]], Any],
     cmd_total: Callable[[Mapping[str, Any]], Any],
-    attack_total: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
-    save_total: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
+    attack_total: Callable[
+        [Mapping[str, Any], Mapping[str, Any]],
+        Any,
+    ],
+    save_total: Callable[
+        [Mapping[str, Any], Mapping[str, Any]],
+        Any,
+    ],
+    feat_effects: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Construit les chiffres utiles d'une fenêtre de combat sans modifier la feuille."""
+    """Construit les chiffres utiles de Combat rapide."""
+    effects = dict(feat_effects or {})
     selected = find_attack(attacks, selected_attack_id)
     selected_total = None
     if selected is not None:
-        selected_total = _as_int(attack_total(character, selected)) + _as_int(
-            temporary_attack_bonus
+        selected_total = (
+            _as_int(attack_total(character, selected))
+            + _as_int(temporary_attack_bonus)
+            + _as_int(effects.get("attack_modifier"))
         )
 
+    save_modifiers = effects.get("save_modifiers") or {}
+    all_save_mod = _as_int(save_modifiers.get("all"))
     save_totals = {
-        str(row.get("save_key") or ""): save_total(character, row)
+        str(row.get("save_key") or ""): (
+            _as_int(save_total(character, row))
+            + all_save_mod
+            + _as_int(
+                save_modifiers.get(
+                    str(row.get("save_key") or "")
+                )
+            )
+        )
         for row in saves
         if row.get("save_key")
     }
@@ -126,16 +165,28 @@ def combat_summary(
     return {
         "current_hp": _as_int(character.get("current_hp")),
         "max_hp": _as_int(character.get("max_hp")),
-        "nonlethal_damage": _as_int(character.get("nonlethal_damage")),
+        "nonlethal_damage": _as_int(
+            character.get("nonlethal_damage")
+        ),
         "armor_class": armor_class_total(character),
         "touch_armor_class": touch_armor_class(character),
         "flat_footed_armor_class": flat_footed_armor_class(character),
-        "initiative": initiative_total(character),
-        "cmb": cmb_total(character),
-        "cmd": cmd_total(character),
+        "initiative": (
+            _as_int(initiative_total(character))
+            + _as_int(effects.get("initiative_modifier"))
+        ),
+        "cmb": (
+            _as_int(cmb_total(character))
+            + _as_int(effects.get("cmb_modifier"))
+        ),
+        "cmd": (
+            _as_int(cmd_total(character))
+            + _as_int(effects.get("cmd_modifier"))
+        ),
         "selected_attack": selected,
         "selected_attack_total": selected_total,
         "save_totals": save_totals,
+        "feat_effects": effects,
     }
 
 
@@ -152,8 +203,16 @@ def build_combat_session(
     ui: Any,
     user_id: int,
     character: Mapping[str, Any],
-    list_rpg_attacks: Callable[..., Sequence[Mapping[str, Any]]],
-    list_rpg_saves: Callable[..., Sequence[Mapping[str, Any]]],
+    list_rpg_attacks: Callable[
+        ..., Sequence[Mapping[str, Any]]
+    ],
+    list_rpg_saves: Callable[
+        ..., Sequence[Mapping[str, Any]]
+    ],
+    list_rpg_feats: Callable[
+        ..., Sequence[Mapping[str, Any]]
+    ],
+    collect_feat_combat_effects: Callable[..., Mapping[str, Any]],
     update_rpg_character_combat: Callable[..., Any],
     armor_class_total: Callable[[Mapping[str, Any]], Any],
     touch_armor_class: Callable[[Mapping[str, Any]], Any],
@@ -161,38 +220,65 @@ def build_combat_session(
     initiative_total: Callable[[Mapping[str, Any]], Any],
     cmb_total: Callable[[Mapping[str, Any]], Any],
     cmd_total: Callable[[Mapping[str, Any]], Any],
-    attack_total: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
-    save_total: Callable[[Mapping[str, Any], Mapping[str, Any]], Any],
+    attack_total: Callable[
+        [Mapping[str, Any], Mapping[str, Any]],
+        Any,
+    ],
+    save_total: Callable[
+        [Mapping[str, Any], Mapping[str, Any]],
+        Any,
+    ],
     format_modifier: Callable[[Any], str],
     character_url: Callable[..., str],
     notify_error: Callable[[Exception, str], None],
 ) -> CombatSessionHandle:
-    """Prépare une fenêtre de combat rapide sans nouvelle table ni logique métier."""
+    """Prépare une fenêtre Combat rapide avec les dons structurés."""
 
     def open_dialog() -> None:
-        attacks = list(list_rpg_attacks(user_id, character["id"]))
-        saves = list(list_rpg_saves(user_id, character["id"]))
+        attacks = list(
+            list_rpg_attacks(user_id, character["id"])
+        )
+        saves = list(
+            list_rpg_saves(user_id, character["id"])
+        )
+        feats = list(
+            list_rpg_feats(user_id, character["id"])
+        )
 
         attack_options = {
-            int(row["id"]): str(row.get("attack_name") or f"Attaque {row['id']}")
+            int(row["id"]): str(
+                row.get("attack_name") or f"Attaque {row['id']}"
+            )
             for row in attacks
         }
         first_attack = next(iter(attack_options), None)
 
         with ui.dialog() as dialog:
-            with ui.card().classes("w-full max-w-5xl p-4 max-h-[92vh] overflow-auto"):
+            with ui.card().classes(
+                "w-full max-w-5xl p-4 "
+                "max-h-[92vh] overflow-auto"
+            ):
                 with ui.row().classes(
-                    "w-full items-start justify-between gap-3 flex-wrap"
+                    "w-full items-start justify-between "
+                    "gap-3 flex-wrap"
                 ):
                     with ui.column().classes("gap-0"):
-                        ui.label("Combat rapide").classes("text-2xl font-bold")
+                        ui.label("Combat rapide").classes(
+                            "text-2xl font-bold"
+                        )
                         ui.label(
-                            "Consultez les principaux chiffres, choisissez une attaque "
-                            "et notez rapidement les pertes de PV."
+                            "Consultez les principaux chiffres, choisissez "
+                            "une attaque, activez vos dons et notez rapidement "
+                            "les pertes de PV."
                         ).classes("text-sm jf-muted")
-                    ui.button(icon="close", on_click=dialog.close).props("flat round")
+                    ui.button(
+                        icon="close",
+                        on_click=dialog.close,
+                    ).props("flat round")
 
-                with ui.element("div").classes("jf-rpg-result-grid mt-3"):
+                with ui.element("div").classes(
+                    "jf-rpg-result-grid mt-3"
+                ):
                     stat_labels = {}
                     for key, label in (
                         ("hp", "PV"),
@@ -206,12 +292,20 @@ def build_combat_session(
                         ("reflex", "Réflexes"),
                         ("will", "Volonté"),
                     ):
-                        with ui.element("div").classes("jf-rpg-result-item"):
-                            ui.label(label).classes("text-xs jf-muted")
-                            stat_labels[key] = ui.label("—").classes("jf-rpg-stat-value")
+                        with ui.element("div").classes(
+                            "jf-rpg-result-item"
+                        ):
+                            ui.label(label).classes(
+                                "text-xs jf-muted"
+                            )
+                            stat_labels[key] = ui.label("—").classes(
+                                "jf-rpg-stat-value"
+                            )
 
                 with ui.card().classes("w-full p-4 mt-3"):
-                    ui.label("Attaque utilisée").classes("text-lg font-bold")
+                    ui.label("Attaque utilisée").classes(
+                        "text-lg font-bold"
+                    )
                     attack_select = ui.select(
                         attack_options,
                         label="Arme / attaque",
@@ -219,10 +313,13 @@ def build_combat_session(
                     ).props("options-dense").classes("w-full")
                     if not attack_options:
                         ui.label(
-                            "Aucune attaque enregistrée. Ajoutez-en depuis l’onglet Attaques."
+                            "Aucune attaque enregistrée. Ajoutez-en "
+                            "depuis l’onglet Attaques."
                         ).classes("text-sm jf-muted")
 
-                    with ui.element("div").classes("jf-rpg-grid mt-2"):
+                    with ui.element("div").classes(
+                        "jf-rpg-grid mt-2"
+                    ):
                         temporary_bonus = ui.number(
                             label="Bonus/malus temporaire",
                             value=0,
@@ -241,21 +338,118 @@ def build_combat_session(
                             value="—",
                         ).props("readonly")
 
-                    ui.textarea(
-                        label="Dons, tactique ou modificateurs utilisés pendant ce combat",
-                        placeholder=(
-                            "Ex. Attaque en puissance, bonus de flanc, bénédiction, "
-                            "malus circonstanciel…"
+                    feat_damage_label = ui.label("").classes(
+                        "text-sm text-primary font-bold mt-2"
+                    )
+                    feat_damage_label.set_visibility(False)
+
+                    tactics_input = ui.textarea(
+                        label=(
+                            "Tactique ou autres modificateurs "
+                            "utilisés pendant ce combat"
                         ),
-                    ).props("outlined autogrow maxlength=2000").classes("w-full mt-2")
+                        placeholder=(
+                            "Ex. flanc, bénédiction, malus circonstanciel…"
+                        ),
+                    ).props(
+                        "outlined autogrow maxlength=2000"
+                    ).classes("w-full mt-2")
                     ui.label(
-                        "Cette note est temporaire dans cette première version et n’est "
-                        "pas enregistrée dans la fiche."
+                        "Cette note reste temporaire et n’est pas "
+                        "enregistrée dans la fiche."
                     ).classes("text-xs jf-muted")
 
+                active_controls = {}
+                if feats:
+                    with ui.card().classes("w-full p-4 mt-3"):
+                        ui.label("Dons").classes(
+                            "text-lg font-bold"
+                        )
+                        ui.label(
+                            "Les dons passifs sont toujours pris en compte. "
+                            "Cochez seulement les dons activables utilisés "
+                            "pour cette action ou ce round."
+                        ).classes("text-sm jf-muted")
+
+                        for feat in feats:
+                            kind = str(
+                                feat.get("feat_kind") or "info"
+                            )
+                            title = str(
+                                feat.get("feat_name") or "Don"
+                            )
+                            english = str(
+                                feat.get("english_name") or ""
+                            ).strip()
+                            if english:
+                                title += f" — {english}"
+
+                            with ui.element("div").classes(
+                                "w-full py-2 border-b "
+                                "border-gray-200"
+                            ):
+                                with ui.row().classes(
+                                    "w-full items-start "
+                                    "justify-between gap-2 flex-wrap"
+                                ):
+                                    with ui.column().classes(
+                                        "gap-0 grow min-w-0"
+                                    ):
+                                        ui.label(title).classes(
+                                            "font-bold"
+                                        )
+                                        if feat.get("summary"):
+                                            ui.label(
+                                                feat["summary"]
+                                            ).classes(
+                                                "text-xs jf-muted"
+                                            )
+                                        if feat.get(
+                                            "linked_attack_name"
+                                        ):
+                                            ui.label(
+                                                "Lié à : "
+                                                + str(
+                                                    feat[
+                                                        "linked_attack_name"
+                                                    ]
+                                                )
+                                            ).classes(
+                                                "text-xs jf-muted"
+                                            )
+
+                                    if kind == "active":
+                                        control = ui.checkbox(
+                                            "Utiliser",
+                                            value=False,
+                                        )
+                                        active_controls[
+                                            int(feat["id"])
+                                        ] = control
+                                    elif kind == "passive":
+                                        ui.badge(
+                                            "Passif",
+                                            color="positive",
+                                        )
+                                    else:
+                                        ui.badge(
+                                            "Info",
+                                            color="grey",
+                                        )
+
+                        feat_summary_label = ui.label("").classes(
+                            "text-xs jf-muted mt-2"
+                        )
+                else:
+                    feat_summary_label = None
+
                 with ui.card().classes("w-full p-4 mt-3"):
-                    ui.label("Pertes et soins rapides").classes("text-lg font-bold")
-                    with ui.element("div").classes("jf-rpg-grid mt-2"):
+                    ui.label("Pertes et soins rapides").classes(
+                        "text-lg font-bold"
+                    )
+                    with ui.element("div").classes(
+                        "jf-rpg-grid mt-2"
+                    ):
                         current_hp = ui.number(
                             label="PV actuels",
                             value=character.get("current_hp") or 0,
@@ -275,7 +469,10 @@ def build_combat_session(
                         ).props("inputmode=numeric")
                         current_nonlethal = ui.number(
                             label="Dégâts non létaux",
-                            value=character.get("nonlethal_damage") or 0,
+                            value=(
+                                character.get("nonlethal_damage")
+                                or 0
+                            ),
                             min=0,
                             step=1,
                         ).props("inputmode=numeric")
@@ -305,6 +502,7 @@ def build_combat_session(
                         )
                         current_hp.update()
                         current_nonlethal.update()
+
                         damage_taken.value = 0
                         healing_received.value = 0
                         nonlethal_added.value = 0
@@ -322,12 +520,31 @@ def build_combat_session(
                         "Appliquer les pertes / soins",
                         icon="calculate",
                         on_click=apply_quick_changes,
-                    ).props("outline color=primary").classes("mt-2")
+                    ).props(
+                        "outline color=primary"
+                    ).classes("mt-2")
+
+                def selected_active_ids():
+                    return {
+                        feat_id
+                        for feat_id, control
+                        in active_controls.items()
+                        if bool(control.value)
+                    }
 
                 def refresh_stats(_event=None) -> None:
                     draft = dict(character)
                     draft["current_hp"] = current_hp.value
-                    draft["nonlethal_damage"] = current_nonlethal.value
+                    draft["nonlethal_damage"] = (
+                        current_nonlethal.value
+                    )
+
+                    effects = collect_feat_combat_effects(
+                        feats,
+                        active_feat_ids=selected_active_ids(),
+                        selected_attack_id=attack_select.value,
+                    )
+
                     snapshot = combat_summary(
                         character=draft,
                         attacks=attacks,
@@ -336,46 +553,119 @@ def build_combat_session(
                         temporary_attack_bonus=temporary_bonus.value,
                         armor_class_total=armor_class_total,
                         touch_armor_class=touch_armor_class,
-                        flat_footed_armor_class=flat_footed_armor_class,
+                        flat_footed_armor_class=(
+                            flat_footed_armor_class
+                        ),
                         initiative_total=initiative_total,
                         cmb_total=cmb_total,
                         cmd_total=cmd_total,
                         attack_total=attack_total,
                         save_total=save_total,
+                        feat_effects=effects,
                     )
+
                     stat_labels["hp"].set_text(
-                        f"{snapshot['current_hp']}/{snapshot['max_hp']}"
+                        f"{snapshot['current_hp']}/"
+                        f"{snapshot['max_hp']}"
                     )
-                    stat_labels["ac"].set_text(str(snapshot["armor_class"]))
-                    stat_labels["touch"].set_text(str(snapshot["touch_armor_class"]))
+                    stat_labels["ac"].set_text(
+                        str(snapshot["armor_class"])
+                    )
+                    stat_labels["touch"].set_text(
+                        str(snapshot["touch_armor_class"])
+                    )
                     stat_labels["flat"].set_text(
                         str(snapshot["flat_footed_armor_class"])
                     )
                     stat_labels["initiative"].set_text(
                         format_modifier(snapshot["initiative"])
                     )
-                    stat_labels["cmb"].set_text(format_modifier(snapshot["cmb"]))
-                    stat_labels["cmd"].set_text(str(snapshot["cmd"]))
+                    stat_labels["cmb"].set_text(
+                        format_modifier(snapshot["cmb"])
+                    )
+                    stat_labels["cmd"].set_text(
+                        str(snapshot["cmd"])
+                    )
                     stat_labels["fortitude"].set_text(
-                        format_modifier(snapshot["save_totals"].get("fortitude", 0))
+                        format_modifier(
+                            snapshot["save_totals"].get(
+                                "fortitude",
+                                0,
+                            )
+                        )
                     )
                     stat_labels["reflex"].set_text(
-                        format_modifier(snapshot["save_totals"].get("reflex", 0))
+                        format_modifier(
+                            snapshot["save_totals"].get(
+                                "reflex",
+                                0,
+                            )
+                        )
                     )
                     stat_labels["will"].set_text(
-                        format_modifier(snapshot["save_totals"].get("will", 0))
+                        format_modifier(
+                            snapshot["save_totals"].get(
+                                "will",
+                                0,
+                            )
+                        )
                     )
+
                     selected = snapshot["selected_attack"]
                     if selected is None:
                         attack_total_display.value = "—"
                         damage_display.value = "—"
                         critical_display.value = "—"
                     else:
-                        attack_total_display.value = format_modifier(
-                            snapshot["selected_attack_total"]
+                        attack_total_display.value = (
+                            format_modifier(
+                                snapshot["selected_attack_total"]
+                            )
                         )
-                        damage_display.value = selected.get("damage") or "—"
-                        critical_display.value = selected.get("critical") or "—"
+                        damage_display.value = (
+                            selected.get("damage") or "—"
+                        )
+                        critical_display.value = (
+                            selected.get("critical") or "—"
+                        )
+
+                    damage_notes = (
+                        snapshot["feat_effects"].get(
+                            "damage_notes"
+                        )
+                        or []
+                    )
+                    if damage_notes:
+                        feat_damage_label.set_text(
+                            "Dons — dégâts : "
+                            + " · ".join(damage_notes)
+                        )
+                        feat_damage_label.set_visibility(True)
+                    else:
+                        feat_damage_label.set_text("")
+                        feat_damage_label.set_visibility(False)
+
+                    if feat_summary_label is not None:
+                        applied = (
+                            snapshot["feat_effects"].get(
+                                "applied_feats"
+                            )
+                            or []
+                        )
+                        if applied:
+                            feat_summary_label.set_text(
+                                "Appliqués : "
+                                + ", ".join(
+                                    str(row["name"])
+                                    for row in applied
+                                )
+                            )
+                        else:
+                            feat_summary_label.set_text(
+                                "Aucun don modifiant les chiffres "
+                                "n’est actif."
+                            )
+
                     attack_total_display.update()
                     damage_display.update()
                     critical_display.update()
@@ -384,6 +674,9 @@ def build_combat_session(
                 temporary_bonus.on_value_change(refresh_stats)
                 current_hp.on_value_change(refresh_stats)
                 current_nonlethal.on_value_change(refresh_stats)
+                for control in active_controls.values():
+                    control.on_value_change(refresh_stats)
+
                 refresh_stats()
 
                 def save_losses() -> None:
@@ -394,18 +687,30 @@ def build_combat_session(
                             hp_update_payload(
                                 character,
                                 current_hp=current_hp.value,
-                                nonlethal_damage=current_nonlethal.value,
+                                nonlethal_damage=(
+                                    current_nonlethal.value
+                                ),
                             ),
                         )
                     except Exception as error:
                         notify_error(
                             error,
-                            "Les pertes de combat n’ont pas pu être enregistrées.",
+                            "Les pertes de combat n’ont pas "
+                            "pu être enregistrées.",
                         )
                         return
+
                     dialog.close()
-                    ui.notify("État de combat enregistré.", type="positive")
-                    ui.navigate.to(character_url(character["id"], "combat"))
+                    ui.notify(
+                        "État de combat enregistré.",
+                        type="positive",
+                    )
+                    ui.navigate.to(
+                        character_url(
+                            character["id"],
+                            "combat",
+                        )
+                    )
 
                 with ui.row().classes(
                     "w-full justify-between gap-2 mt-4 flex-wrap"
@@ -414,11 +719,17 @@ def build_combat_session(
                         "Voir la fiche Combat",
                         icon="shield",
                         on_click=lambda: ui.navigate.to(
-                            character_url(character["id"], "combat")
+                            character_url(
+                                character["id"],
+                                "combat",
+                            )
                         ),
                     ).props("flat")
                     with ui.row().classes("gap-2"):
-                        ui.button("Fermer", on_click=dialog.close).props("flat")
+                        ui.button(
+                            "Fermer",
+                            on_click=dialog.close,
+                        ).props("flat")
                         ui.button(
                             "Enregistrer les pertes",
                             icon="save",

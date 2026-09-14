@@ -1,8 +1,8 @@
 """Coquille NiceGUI principale de la fiche Personnage JDR.
 
-Les panneaux fonctionnels sont maintenant dans des modules dédiés et sont
-raccordés par ``rpg_character.py``. Ce fichier conserve seulement la structure
-générale de la fiche, la création/suppression de personnage et le Combat rapide.
+Les panneaux fonctionnels sont dans des modules dédiés et sont raccordés par
+``rpg_character.py``. Ce fichier conserve la structure générale de la fiche,
+la création/suppression de personnage et Combat rapide.
 """
 from __future__ import annotations
 
@@ -31,6 +31,8 @@ from rpg_character_data import (
     update_rpg_saves,
     update_rpg_skills,
 )
+from rpg_character_feats_data import list_rpg_feats
+from rpg_character_feats_rules import collect_feat_combat_effects
 from rpg_character_rules import (
     ABILITY_LABELS,
     ABILITY_LONG_LABELS,
@@ -62,7 +64,6 @@ def _safe_notify_error(error, fallback):
     else:
         message = fallback
         notification_type = "negative"
-
     ui.notify(message, type=notification_type)
 
 
@@ -93,7 +94,7 @@ def _delete_character_dialog(user_id, character):
             ui.label(character["character_name"]).classes("font-bold")
             ui.label(
                 "Cette suppression est définitive. Les sauvegardes, "
-                "compétences et attaques du personnage seront supprimées."
+                "compétences, dons et attaques seront supprimés."
             ).classes("text-sm text-negative")
 
             def confirm():
@@ -114,13 +115,15 @@ def _delete_character_dialog(user_id, character):
                 ui.navigate.to("/?tab=jdr")
 
             with ui.row().classes("w-full justify-end gap-2 mt-3"):
-                ui.button("Annuler", on_click=dialog.close).props("flat")
+                ui.button(
+                    "Annuler",
+                    on_click=dialog.close,
+                ).props("flat")
                 ui.button(
                     "Supprimer",
                     icon="delete",
                     on_click=confirm,
                 ).props("color=negative")
-
     dialog.open()
 
 
@@ -167,8 +170,9 @@ def rpg_character_panel(
                 "text-xl font-bold"
             )
             ui.label(
-                "La phase 1 comprend l’identité, les caractéristiques, "
-                "le combat, les sauvegardes, les compétences et les attaques."
+                "La feuille comprend la création guidée, l’identité, "
+                "la progression, les dons, le combat, l’équipement, les "
+                "sauvegardes, les compétences et les attaques."
             ).classes("text-sm jf-muted max-w-xl")
             ui.button(
                 "Créer un personnage",
@@ -195,8 +199,6 @@ def rpg_character_panel(
         else int(characters[0]["id"])
     )
 
-    # La façade remplace cette fonction par la version qui garantit la
-    # migration équipement avant le chargement du personnage.
     character = get_rpg_character(user_id, current_id)
 
     combat_session = build_combat_session(
@@ -205,6 +207,8 @@ def rpg_character_panel(
         character=character,
         list_rpg_attacks=list_rpg_attacks,
         list_rpg_saves=list_rpg_saves,
+        list_rpg_feats=list_rpg_feats,
+        collect_feat_combat_effects=collect_feat_combat_effects,
         update_rpg_character_combat=update_rpg_character_combat,
         armor_class_total=armor_class_total,
         touch_armor_class=touch_armor_class,
@@ -342,6 +346,7 @@ def rpg_character_panel(
             "Progression",
             icon="trending_up",
         )
+        feats_tab = ui.tab("Dons", icon="military_tech")
         combat_tab = ui.tab("Combat", icon="shield")
         equipment_tab = ui.tab("Équipement", icon="backpack")
         saves_tab = ui.tab("Sauvegardes", icon="security")
@@ -362,6 +367,10 @@ def rpg_character_panel(
         "progression": progression_tab,
         "niveau": progression_tab,
         "level": progression_tab,
+        "dons": feats_tab,
+        "don": feats_tab,
+        "feats": feats_tab,
+        "feat": feats_tab,
         "combat": combat_tab,
         "caracteristiques": combat_tab,
         "equipement": equipment_tab,
@@ -419,6 +428,9 @@ def rpg_character_panel(
         with ui.tab_panel(progression_tab).classes("px-0"):
             _progression_panel(user_id, character)
 
+        with ui.tab_panel(feats_tab).classes("px-0"):
+            _feats_panel(user_id, character)
+
         with ui.tab_panel(combat_tab).classes("px-0"):
             _combat_panel(user_id, character)
 
@@ -435,10 +447,9 @@ def rpg_character_panel(
             _attacks_panel(user_id, character)
 
     with ui.element("div").classes("jf-rpg-help"):
-        ui.label("Phase 1").classes("font-bold")
+        ui.label("Dons structurés").classes("font-bold")
         ui.label(
-            "La progression guidée conserve maintenant les choix de niveau, "
-            "les rangs de compétences et une sous-classe facultative. "
-            "Les modules détaillés de dons, sorts, PDF et campagnes restent "
-            "prévus ensuite."
+            "Les dons possèdent maintenant leur propre onglet. "
+            "Les dons passifs ou activables peuvent alimenter Combat rapide "
+            "sans modifier silencieusement les valeurs permanentes de la fiche."
         ).classes("text-sm")

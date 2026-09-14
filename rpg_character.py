@@ -1,9 +1,4 @@
-"""Façade publique de l'application Personnages JDR.
-
-La coquille NiceGUI principale est dans ``rpg_character_ui.py``.
-Les panneaux et dialogues sont raccordés ici sans changer le point d'import
-historique ``rpg_character_panel``.
-"""
+"""Façade publique de l'application Personnages JDR."""
 from __future__ import annotations
 
 import rpg_character_catalog as _catalog
@@ -18,6 +13,18 @@ from rpg_character_equipment_dialogs import (
     open_equipment_dialog,
 )
 from rpg_character_equipment_schema import ensure_equipment_schema
+from rpg_character_feats import build_feats_panel
+from rpg_character_feats_catalog import (
+    FEAT_KIND_LABELS,
+    FEAT_TEMPLATES,
+    SAVE_TARGET_LABELS,
+)
+from rpg_character_feats_data import (
+    create_rpg_feat,
+    delete_rpg_feat,
+    list_rpg_feats,
+    update_rpg_feat,
+)
 from rpg_character_identity import build_identity_panel
 from rpg_character_progression import build_progression_panel
 from rpg_character_rules_dialog import open_calculation_rules_dialog
@@ -141,6 +148,43 @@ def _identity_panel(user_id, character):
     )
 
 
+def _progression_panel(user_id, character):
+    return build_progression_panel(
+        ui=_impl.ui,
+        user_id=user_id,
+        character=character,
+        list_rpg_skills=_data.list_rpg_skills,
+        list_rpg_level_history=_data.list_rpg_level_history,
+        format_modifier=_rules.format_modifier,
+        format_number=_rules.format_number,
+        ability_labels=_rules.ABILITY_LABELS,
+        ability_long_labels=_rules.ABILITY_LONG_LABELS,
+        skill_display_name=_skill_display_name,
+        apply_rpg_level_up=_data.apply_rpg_level_up,
+        notify_error=_impl._safe_notify_error,
+        character_url=_impl._character_url,
+    )
+
+
+def _feats_panel(user_id, character):
+    return build_feats_panel(
+        ui=_impl.ui,
+        user_id=user_id,
+        character=character,
+        list_rpg_feats=list_rpg_feats,
+        list_rpg_attacks=_data.list_rpg_attacks,
+        create_rpg_feat=create_rpg_feat,
+        update_rpg_feat=update_rpg_feat,
+        delete_rpg_feat=delete_rpg_feat,
+        feat_kind_labels=FEAT_KIND_LABELS,
+        save_target_labels=SAVE_TARGET_LABELS,
+        feat_templates=FEAT_TEMPLATES,
+        format_modifier=_rules.format_modifier,
+        notify_error=_impl._safe_notify_error,
+        character_url=_impl._character_url,
+    )
+
+
 def _combat_panel(user_id, character):
     _ensure_equipment_schema()
     return build_combat_panel(
@@ -205,24 +249,6 @@ def _saves_panel(user_id, character):
     )
 
 
-def _progression_panel(user_id, character):
-    return build_progression_panel(
-        ui=_impl.ui,
-        user_id=user_id,
-        character=character,
-        list_rpg_skills=_data.list_rpg_skills,
-        list_rpg_level_history=_data.list_rpg_level_history,
-        format_modifier=_rules.format_modifier,
-        format_number=_rules.format_number,
-        ability_labels=_rules.ABILITY_LABELS,
-        ability_long_labels=_rules.ABILITY_LONG_LABELS,
-        skill_display_name=_skill_display_name,
-        apply_rpg_level_up=_data.apply_rpg_level_up,
-        notify_error=_impl._safe_notify_error,
-        character_url=_impl._character_url,
-    )
-
-
 def _skills_panel(user_id, character):
     return build_skills_panel(
         ui=_impl.ui,
@@ -263,7 +289,6 @@ def _attacks_panel(user_id, character):
     )
 
 
-# Raccordements lus à l'exécution par rpg_character_panel.
 _impl.get_rpg_character = _get_rpg_character
 _impl._skill_display_name = _skill_display_name
 _impl._skill_breakdown_text = _skill_breakdown_text
@@ -272,10 +297,11 @@ _impl._equipment_dialog = _equipment_dialog
 _impl._delete_equipment_dialog = _delete_equipment_dialog
 _impl._calculation_rules_dialog = _calculation_rules_dialog
 _impl._identity_panel = _identity_panel
+_impl._progression_panel = _progression_panel
+_impl._feats_panel = _feats_panel
 _impl._combat_panel = _combat_panel
 _impl._equipment_panel = _equipment_panel
 _impl._saves_panel = _saves_panel
-_impl._progression_panel = _progression_panel
 _impl._skills_panel = _skills_panel
 _impl._attacks_panel = _attacks_panel
 

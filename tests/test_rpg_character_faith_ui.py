@@ -82,6 +82,7 @@ class FaithPanelTests(unittest.TestCase):
             },
             get_rpg_faith=get_faith,
             update_rpg_faith=update,
+            deity_profiles={},
             notify_error=Mock(),
             character_url=character_url,
         )
@@ -125,6 +126,7 @@ class FaithPanelTests(unittest.TestCase):
                 }
             ),
             update_rpg_faith=Mock(),
+            deity_profiles={},
             notify_error=Mock(),
             character_url=Mock(),
         )

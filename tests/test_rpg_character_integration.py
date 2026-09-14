@@ -1,4 +1,4 @@
-"""Raccordements structuraux JDR — Phase 11."""
+"""Raccordements structuraux JDR — V1.5.0."""
 from __future__ import annotations
 
 import ast
@@ -6,6 +6,7 @@ import inspect
 from pathlib import Path
 import unittest
 
+import app_versions
 from rpg_combat_session import build_combat_session
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -108,6 +109,23 @@ class CharacterIntegrationTests(unittest.TestCase):
 
     def test_ui_shell_remains_compact(self):
         self.assertLess(UI_PATH.stat().st_size, 32_000)
+
+
+    def test_declared_versions(self):
+        self.assertEqual(
+            app_versions.APP_VERSIONS["rpg"],
+            "1.5.0",
+        )
+        self.assertEqual(
+            app_versions.APP_VERSIONS["finances"],
+            "1.13.5",
+        )
+        note = next(
+            row
+            for row in app_versions.RELEASE_NOTES
+            if row["app_key"] == "rpg"
+        )
+        self.assertEqual(note["version"], "1.5.0")
 
 
 if __name__ == "__main__":

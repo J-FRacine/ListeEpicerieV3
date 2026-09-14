@@ -964,9 +964,9 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
 """,
     },
     {
-        "title": "Personnages JDR — V1.5.0",
+        "title": "Personnages JDR — V1.6.0",
         "icon": "casino",
-        "caption": "Dons, foi, progression, équipement et feuille Pathfinder / Ravenloft",
+        "caption": "Portrait, dons, foi, progression et feuille Pathfinder / Ravenloft",
         "keywords": (
             "jdr personnage ravenloft pathfinder feuille force "
             "dextérité constitution intelligence sagesse charisme "
@@ -977,9 +977,27 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
             "progression niveau montée niveau sous-classe facultative historique dons capacités "
             "fighter guerrier cleric clerc humain elfe magie canalisation domaines sorts divins "
             "foi divinité iomedae guerre war soleil sun sous-domaine "
-            "combat casting selective channeling"
+            "combat casting selective channeling portrait photo image "
+            "jpeg jpg png webp"
         ),
         "content": """
+### V1.6.0 — portrait / photo du personnage
+
+La V1.6.0 ajoute un **portrait persistant** directement dans la bannière de la fiche, à gauche du nom du personnage.
+
+Le bouton **Photo** permet :
+
+- d’ajouter un portrait;
+- de remplacer le portrait existant;
+- de supprimer uniquement la photo sans supprimer le personnage;
+- de cliquer sur le portrait pour l’afficher en plus grand.
+
+Les formats **JPEG, PNG et WEBP** sont acceptés. Avant l’enregistrement, la photo est automatiquement orientée selon ses informations EXIF, réduite à **1000 × 1000 px maximum**, convertie en JPEG et, si nécessaire, sa transparence est aplatie sur fond blanc.
+
+Le fichier choisi est limité à **8 Mo** et à **25 mégapixels** avant traitement.
+
+Le portrait est conservé dans PostgreSQL dans la table privée `rpg_character_portraits`, avec une seule image par personnage. La suppression d’un personnage supprime automatiquement son portrait. La table est créée automatiquement de façon non destructive; aucun SQL manuel n’est requis.
+
 ### V1.5.0 — dons structurés et foi / domaines
 
 La V1.5.0 officialise les nouvelles sections **Dons** et **Foi**, ainsi que leur intégration contrôlée à Combat rapide.
@@ -1393,7 +1411,7 @@ Le bonus total combine le bonus de base à l’attaque, le modificateur de carac
 
 La section Équipement automatise d’abord les armures, les boucliers, le poids et l’encombrement. Les armes et possessions sont enregistrées, mais leurs effets spéciaux ne sont pas tous interprétés automatiquement.
 
-Les dons et la foi sont maintenant structurés. Le portrait du personnage, les armes détaillées liées entre Équipement et Attaques, les capacités spéciales avancées, les sorts, l’impression PDF et les groupes de campagne restent prévus pour des versions ultérieures.
+Les dons, la foi et le portrait sont maintenant structurés. Les armes détaillées liées entre Équipement et Attaques, les capacités spéciales avancées, les sorts, l’impression PDF et les groupes de campagne restent prévus pour des versions ultérieures.
 """,
     },
     {

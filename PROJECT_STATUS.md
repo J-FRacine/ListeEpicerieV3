@@ -12,7 +12,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Liste d'épicerie | 1.2.0 |
 | Journal de pression | 1.2.1 |
 | Finances | 1.13.5 |
-| Personnages JDR | 1.5.0 |
+| Personnages JDR | 1.6.0 |
 | Commentaires et suggestions | 1.0.0 |
 
 Important : ces versions sont celles présentes dans GitHub `main`. Leur validation réelle sur Canner/Render ou PostgreSQL de production doit être confirmée séparément après déploiement.
@@ -52,7 +52,21 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - La table des dons et les colonnes de foi/domaines sont créées ou ajoutées automatiquement de façon non destructive; aucun SQL manuel.
 - L’utilisateur a validé en déploiement les Dons, Combat rapide avec dons, Combat Casting, Selective Channeling, Foi et le préréglage Iomedae Guerre/Soleil.
 - PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.
-- Prochaine fonction JDR prévue : **portrait / photo du personnage**, puis armes détaillées liées aux Attaques, puis sorts après stabilisation des domaines.
+- Le portrait a ensuite été complété et officialisé en V1.6.0.
+
+## JDR — finalisation V1.6.0 — 2026-09-14
+
+- JDR passe officiellement à **V1.6.0**; Finances reste **V1.13.5**.
+- Le **portrait du personnage** est intégré directement à gauche du nom dans la bannière.
+- Le portrait peut être ajouté, remplacé, agrandi ou supprimé sans supprimer le personnage.
+- Formats acceptés : JPEG, PNG et WEBP; orientation EXIF appliquée, réduction à 1000 × 1000 px maximum, transparence aplatie sur fond blanc et conversion JPEG.
+- Les fichiers de départ sont limités à 8 Mo et 25 mégapixels.
+- Le portrait est conservé dans PostgreSQL dans `rpg_character_portraits`, une ligne par personnage, avec contrôle de propriété utilisateur et `ON DELETE CASCADE`.
+- La table est créée automatiquement de façon idempotente et non destructive; aucun SQL manuel.
+- La dépendance **Pillow** est utilisée pour le traitement des images.
+- L’utilisateur a validé en déploiement l’ajout, l’affichage et le fonctionnement du portrait.
+- PostgreSQL de production et Canner n’ont pas été testés indépendamment par ChatGPT; la validation fonctionnelle provient du test réel de l’utilisateur.
+- Prochaine fonction JDR prévue : **armes détaillées et lien Équipement ↔ Attaques**.
 
 ## Finances — état actuel
 

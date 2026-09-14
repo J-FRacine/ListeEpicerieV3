@@ -16,11 +16,30 @@ APP_VERSIONS = {
     "grocery": "1.2.0",
     "blood_pressure": "1.2.1",
     "finances": "1.13.5",
-    "rpg": "1.5.0",
+    "rpg": "1.6.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "rpg",
+        "version": "1.6.0",
+        "date": "2026-09-14",
+        "title": "Personnages JDR — V1.6.0",
+        "summary": (
+            "Portrait persistant du personnage directement dans la bannière, "
+            "avec ajout, remplacement, agrandissement et suppression."
+        ),
+        "changes": [
+            "Le portrait apparaît directement à gauche du nom du personnage dans la bannière.",
+            "Ajout, remplacement, aperçu agrandi et suppression de la photo sans supprimer le personnage.",
+            "Formats JPEG, PNG et WEBP acceptés; orientation automatique, réduction à 1000 px maximum et conversion JPEG avant stockage.",
+            "Les photos de départ sont limitées à 8 Mo et 25 mégapixels afin de garder un stockage raisonnable.",
+            "Le portrait est conservé dans PostgreSQL dans une table privée dédiée, une image par personnage, avec suppression automatique lorsque le personnage est supprimé.",
+            "Création automatique non destructive de la table rpg_character_portraits; aucun SQL manuel.",
+            "Ajout de Pillow pour le traitement local des images avant leur enregistrement.",
+        ],
+    },
     {
         "app_key": "rpg",
         "version": "1.5.0",

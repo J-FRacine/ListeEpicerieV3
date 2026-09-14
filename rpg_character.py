@@ -1,23 +1,31 @@
 """Façade publique de l'application Personnages JDR.
 
-L'implémentation NiceGUI principale est isolée dans ``rpg_character_ui.py``.
-Cette façade conserve le point d'import historique ``rpg_character``.
-
-Modularisation :
-- Identité : ``rpg_character_identity.py``
-- Équipement : ``rpg_character_equipment.py``
-- Sauvegardes : ``rpg_character_saves.py``
-- Progression : ``rpg_character_progression.py``
-- Attaques : ``rpg_character_attacks.py``
+L'implémentation NiceGUI principale reste dans ``rpg_character_ui.py``.
+Les panneaux déjà extraits sont raccordés ici sans changer le point d'import
+historique ``rpg_character_panel``.
 """
 from __future__ import annotations
 
+import rpg_character_data as _data
 import rpg_character_ui as _impl
 from rpg_character_attacks import build_attacks_panel
 from rpg_character_equipment import build_equipment_panel
+from rpg_character_equipment_schema import ensure_equipment_schema
 from rpg_character_identity import build_identity_panel
 from rpg_character_progression import build_progression_panel
 from rpg_character_saves import build_saves_panel
+from rpg_character_skills import build_skills_panel
+
+
+def _ensure_equipment_schema():
+    ensure_equipment_schema(get_connection=_data.get_connection)
+
+
+def _get_rpg_character(user_id, character_id):
+    # La fiche lit l'équipement avant même d'afficher l'onglet Équipement.
+    # La migration doit donc être faite avant le chargement du personnage.
+    _ensure_equipment_schema()
+    return _data.get_rpg_character(user_id, character_id)
 
 
 def _identity_panel(user_id, character):
@@ -36,6 +44,7 @@ def _identity_panel(user_id, character):
 
 
 def _equipment_panel(user_id, character):
+    _ensure_equipment_schema()
     return build_equipment_panel(
         ui=_impl.ui,
         user_id=user_id,
@@ -90,6 +99,29 @@ def _progression_panel(user_id, character):
     )
 
 
+def _skills_panel(user_id, character):
+    return build_skills_panel(
+        ui=_impl.ui,
+        user_id=user_id,
+        character=character,
+        list_rpg_skills=_impl.list_rpg_skills,
+        character_sheet_audit=_impl.character_sheet_audit,
+        create_custom_rpg_skill=_impl.create_custom_rpg_skill,
+        delete_custom_rpg_skill=_impl.delete_custom_rpg_skill,
+        update_rpg_skills=_impl.update_rpg_skills,
+        skill_total=_impl.skill_total,
+        skill_breakdown=_impl.skill_breakdown,
+        format_number=_impl.format_number,
+        ability_labels=_impl.ABILITY_LABELS,
+        skill_dialog=_impl._skill_dialog,
+        skill_display_name=_impl._skill_display_name,
+        skill_breakdown_text=_impl._skill_breakdown_text,
+        notify_error=_impl._safe_notify_error,
+        character_url=_impl._character_url,
+        calculation_rules_dialog=_impl._calculation_rules_dialog,
+    )
+
+
 def _attacks_panel(user_id, character):
     return build_attacks_panel(
         ui=_impl.ui,
@@ -107,10 +139,12 @@ def _attacks_panel(user_id, character):
     )
 
 
+_impl.get_rpg_character = _get_rpg_character
 _impl._identity_panel = _identity_panel
 _impl._equipment_panel = _equipment_panel
 _impl._saves_panel = _saves_panel
 _impl._progression_panel = _progression_panel
+_impl._skills_panel = _skills_panel
 _impl._attacks_panel = _attacks_panel
 
 rpg_character_panel = _impl.rpg_character_panel

@@ -6,6 +6,7 @@ import rpg_character_data as _data
 import rpg_character_rules as _rules
 import rpg_character_ui as _impl
 from rpg_character_attacks import build_attacks_panel
+from rpg_character_deities_catalog import DEITY_PROFILES
 from rpg_character_combat import build_combat_panel
 from rpg_character_equipment import build_equipment_panel
 from rpg_character_equipment_dialogs import (
@@ -160,6 +161,7 @@ def _faith_panel(user_id, character):
         character=character,
         get_rpg_faith=get_rpg_faith,
         update_rpg_faith=update_rpg_faith,
+        deity_profiles=DEITY_PROFILES,
         notify_error=_impl._safe_notify_error,
         character_url=_impl._character_url,
     )

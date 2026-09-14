@@ -13,6 +13,7 @@ def build_faith_panel(
     character,
     get_rpg_faith,
     update_rpg_faith,
+    deity_profiles,
     notify_error,
     character_url,
 ):
@@ -63,7 +64,7 @@ def build_faith_panel(
         deity_input = ui.input(
             label="Divinité",
             value=faith.get("deity") or "",
-            placeholder="Ex. divinité, culte ou puissance vénérée",
+            placeholder="Ex. Iomedae",
         ).props("maxlength=160").classes("w-full mt-3")
 
         ui.label("Domaines").classes("text-lg font-bold mt-3")
@@ -76,7 +77,7 @@ def build_faith_panel(
             domain_1_input = ui.input(
                 label="Domaine 1",
                 value=faith.get("domain_1") or "",
-                placeholder="Ex. Guérison",
+                placeholder="Ex. Glory",
             ).props("maxlength=160").classes("w-full")
             subdomain_1_input = ui.input(
                 label="Sous-domaine 1 (facultatif)",
@@ -85,12 +86,138 @@ def build_faith_panel(
             domain_2_input = ui.input(
                 label="Domaine 2",
                 value=faith.get("domain_2") or "",
-                placeholder="Ex. Protection",
+                placeholder="Ex. War",
             ).props("maxlength=160").classes("w-full")
             subdomain_2_input = ui.input(
                 label="Sous-domaine 2 (facultatif)",
                 value=faith.get("subdomain_2") or "",
             ).props("maxlength=160").classes("w-full")
+
+        iomedae = deity_profiles.get("iomedae") or {}
+        if iomedae:
+            with ui.expansion(
+                "Préconfiguration Iomedae",
+                icon="auto_awesome",
+                value=(
+                    str(faith.get("deity") or "").strip().lower()
+                    == "iomedae"
+                ),
+            ).props(
+                "expand-separator"
+            ).classes("w-full mt-3"):
+                ui.label(
+                    "Profil de référence Pathfinder 1e. "
+                    "Pour ce personnage, le bouton préremplit aussi "
+                    "les domaines choisis : Guerre (War) et Soleil (Sun). "
+                    "Les champs restent modifiables."
+                ).classes("text-sm jf-muted")
+
+                with ui.element("div").classes("jf-rpg-grid mt-2"):
+                    for label, value in (
+                        ("Alignement", iomedae.get("alignment")),
+                        (
+                            "Domaines",
+                            ", ".join(
+                                (iomedae.get("domains") or {}).keys()
+                            ),
+                        ),
+                        (
+                            "Arme favorite",
+                            iomedae.get("favored_weapon"),
+                        ),
+                        ("Symbole", iomedae.get("symbol")),
+                        (
+                            "Couleurs sacrées",
+                            iomedae.get("sacred_colors"),
+                        ),
+                        (
+                            "Animal sacré",
+                            iomedae.get("sacred_animal"),
+                        ),
+                    ):
+                        with ui.card().classes("w-full p-3"):
+                            ui.label(label).classes(
+                                "text-xs jf-muted"
+                            )
+                            ui.label(value or "—").classes(
+                                "font-bold"
+                            )
+
+                ui.label("Domaines et sous-domaines").classes(
+                    "font-bold mt-3"
+                )
+                for domain_name, subdomains in (
+                    iomedae.get("domains") or {}
+                ).items():
+                    ui.label(
+                        f"{domain_name} : "
+                        + ", ".join(subdomains)
+                    ).classes("text-sm")
+                if iomedae.get("domain_note"):
+                    ui.label(
+                        iomedae["domain_note"]
+                    ).classes("text-xs jf-muted")
+
+                ui.label("Domaines à choisir").classes(
+                    "font-bold mt-3"
+                )
+                ui.label(
+                    "Iomedae offre Glory, Good, Law, Sun et War. "
+                    "Le préréglage personnel de ce personnage utilise "
+                    "War et Sun, conformément à votre choix actuel."
+                ).classes("text-sm")
+
+                if iomedae.get("unique_cleric_spells"):
+                    ui.label(
+                        "Sorts particuliers Clerc / Warpriest"
+                    ).classes("font-bold mt-3")
+                    ui.label(
+                        " · ".join(
+                            iomedae["unique_cleric_spells"]
+                        )
+                    ).classes("text-sm")
+
+                if iomedae.get("future_equipment_reference"):
+                    ui.label("Équipement").classes(
+                        "font-bold mt-3"
+                    )
+                    ui.label(
+                        iomedae["future_equipment_reference"]
+                    ).classes("text-sm")
+
+                if iomedae.get("source_text"):
+                    ui.label(
+                        f"Source : {iomedae['source_text']}"
+                    ).classes("text-xs jf-muted mt-2")
+
+                def preset_iomedae():
+                    deity_input.value = iomedae["deity_name"]
+                    preset_domains = tuple(
+                        iomedae.get("personal_domain_preset") or ()
+                    )
+                    if len(preset_domains) >= 1:
+                        domain_1_input.value = preset_domains[0]
+                    if len(preset_domains) >= 2:
+                        domain_2_input.value = preset_domains[1]
+
+                    for control in (
+                        deity_input,
+                        domain_1_input,
+                        domain_2_input,
+                    ):
+                        control.update()
+
+                    ui.notify(
+                        "Iomedae préconfigurée avec Guerre / War "
+                        "et Soleil / Sun.",
+                        type="positive",
+                    )
+
+                ui.button(
+                    "Préconfigurer Iomedae + Guerre / Soleil",
+                    icon="auto_awesome",
+                    on_click=preset_iomedae,
+                ).props("outline color=primary").classes("mt-3")
 
         notes_input = ui.textarea(
             label="Notes de foi / campagne",

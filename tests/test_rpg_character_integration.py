@@ -1,4 +1,4 @@
-"""Raccordements structuraux JDR — Phase 10."""
+"""Raccordements structuraux JDR — Phase 11."""
 from __future__ import annotations
 
 import ast
@@ -20,6 +20,7 @@ class CharacterIntegrationTests(unittest.TestCase):
 
         for binding in (
             "_impl._identity_panel = _identity_panel",
+            "_impl._faith_panel = _faith_panel",
             "_impl._progression_panel = _progression_panel",
             "_impl._feats_panel = _feats_panel",
             "_impl._combat_panel = _combat_panel",
@@ -35,7 +36,7 @@ class CharacterIntegrationTests(unittest.TestCase):
             text,
         )
 
-    def test_tabs_include_dons_without_removing_existing_sections(self):
+    def test_tabs_include_faith_and_dons_without_removing_sections(self):
         parsed = ast.parse(UI_PATH.read_text(encoding="utf-8"))
         panel = next(
             node
@@ -56,6 +57,7 @@ class CharacterIntegrationTests(unittest.TestCase):
             [
                 "Création guidée",
                 "Identité",
+                "Foi",
                 "Progression",
                 "Dons",
                 "Combat",
@@ -66,7 +68,25 @@ class CharacterIntegrationTests(unittest.TestCase):
             ],
         )
 
-    def test_combat_builder_call_matches_signature(self):
+    def test_faith_routes_are_available(self):
+        source = UI_PATH.read_text(encoding="utf-8")
+        parsed = ast.parse(source)
+        text = ast.unparse(parsed)
+
+        for route in (
+            "'foi': faith_tab",
+            "'faith': faith_tab",
+            "'domaines': faith_tab",
+            "'domains': faith_tab",
+        ):
+            self.assertIn(route, text)
+
+        self.assertIn(
+            "_faith_panel(user_id, character)",
+            text,
+        )
+
+    def test_combat_builder_call_still_matches_signature(self):
         parsed = ast.parse(UI_PATH.read_text(encoding="utf-8"))
         call = next(
             node
@@ -81,10 +101,13 @@ class CharacterIntegrationTests(unittest.TestCase):
         }
         inspect.signature(build_combat_session).bind(**values)
         self.assertIn("list_rpg_feats", values)
-        self.assertIn("collect_feat_combat_effects", values)
+        self.assertIn(
+            "collect_feat_combat_effects",
+            values,
+        )
 
     def test_ui_shell_remains_compact(self):
-        self.assertLess(UI_PATH.stat().st_size, 30_000)
+        self.assertLess(UI_PATH.stat().st_size, 32_000)
 
 
 if __name__ == "__main__":

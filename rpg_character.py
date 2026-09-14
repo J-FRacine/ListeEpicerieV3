@@ -15,6 +15,7 @@ import traceback
 import rpg_character_data as _data
 import rpg_character_ui as _impl
 from rpg_character_attacks import build_attacks_panel
+from rpg_character_combat import build_combat_panel
 from rpg_character_equipment import build_equipment_panel
 from rpg_character_equipment_schema import ensure_equipment_schema
 from rpg_character_identity import build_identity_panel
@@ -66,6 +67,32 @@ def _identity_panel(user_id, character):
         update_rpg_character_identity=_impl.update_rpg_character_identity,
         notify_error=_impl._safe_notify_error,
         character_url=_impl._character_url,
+    )
+
+
+def _combat_panel(user_id, character):
+    _ensure_equipment_schema()
+    return build_combat_panel(
+        ui=_impl.ui,
+        user_id=user_id,
+        character=character,
+        list_rpg_equipment=_impl.list_rpg_equipment,
+        ability_labels=_impl.ABILITY_LABELS,
+        ability_long_labels=_impl.ABILITY_LONG_LABELS,
+        ability_modifier=_impl.ability_modifier,
+        format_modifier=_impl.format_modifier,
+        apply_equipment_effects=_impl.apply_equipment_effects,
+        armor_class_total=_impl.armor_class_total,
+        touch_armor_class=_impl.touch_armor_class,
+        flat_footed_armor_class=_impl.flat_footed_armor_class,
+        initiative_total=_impl.initiative_total,
+        cmb_total=_impl.cmb_total,
+        cmd_total=_impl.cmd_total,
+        format_number=_impl.format_number,
+        update_rpg_character_combat=_impl.update_rpg_character_combat,
+        notify_error=_impl._safe_notify_error,
+        character_url=_impl._character_url,
+        calculation_rules_dialog=_impl._calculation_rules_dialog,
     )
 
 
@@ -170,6 +197,7 @@ def _attacks_panel(user_id, character):
 _impl._safe_notify_error = _safe_notify_error
 _impl.get_rpg_character = _get_rpg_character
 _impl._identity_panel = _identity_panel
+_impl._combat_panel = _combat_panel
 _impl._equipment_panel = _equipment_panel
 _impl._saves_panel = _saves_panel
 _impl._progression_panel = _progression_panel

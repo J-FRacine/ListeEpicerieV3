@@ -284,6 +284,8 @@ def rpg_character_panel(
         with ui.row().classes(
             "w-full items-start justify-between gap-4 flex-wrap"
         ):
+            _portrait_block(user_id, character)
+
             with ui.column().classes("gap-0 grow min-w-0"):
                 ui.label(character["character_name"]).classes(
                     "text-2xl font-bold"

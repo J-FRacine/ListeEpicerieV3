@@ -32,6 +32,17 @@ from rpg_character_faith_data import (
     update_rpg_faith,
 )
 from rpg_character_identity import build_identity_panel
+from rpg_character_portrait import build_portrait_block
+from rpg_character_portrait_data import (
+    delete_rpg_portrait,
+    get_rpg_portrait,
+    save_rpg_portrait,
+)
+from rpg_character_portrait_images import (
+    normalize_portrait,
+    portrait_to_data_url,
+    read_upload_event,
+)
 from rpg_character_progression import build_progression_panel
 from rpg_character_rules_dialog import open_calculation_rules_dialog
 from rpg_character_saves import build_saves_panel
@@ -136,6 +147,21 @@ def _calculation_rules_dialog(user_id, character):
         skill_breakdown=_rules.skill_breakdown,
         attack_breakdown=_rules.attack_breakdown,
         skill_display_name=_skill_display_name,
+    )
+
+
+def _portrait_block(user_id, character):
+    return build_portrait_block(
+        ui=_impl.ui,
+        user_id=user_id,
+        character=character,
+        get_rpg_portrait=get_rpg_portrait,
+        save_rpg_portrait=save_rpg_portrait,
+        delete_rpg_portrait=delete_rpg_portrait,
+        normalize_portrait=normalize_portrait,
+        portrait_to_data_url=portrait_to_data_url,
+        read_upload_event=read_upload_event,
+        notify_error=_impl._safe_notify_error,
     )
 
 
@@ -315,6 +341,7 @@ _impl._skill_dialog = _skill_dialog
 _impl._equipment_dialog = _equipment_dialog
 _impl._delete_equipment_dialog = _delete_equipment_dialog
 _impl._calculation_rules_dialog = _calculation_rules_dialog
+_impl._portrait_block = _portrait_block
 _impl._identity_panel = _identity_panel
 _impl._faith_panel = _faith_panel
 _impl._progression_panel = _progression_panel

@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 IMPLEMENTATION_PATH = ROOT / 'rpg_character_ui.py'
 PUBLIC_PATH = ROOT / 'rpg_character.py'
 IDENTITY_PATH = ROOT / 'rpg_character_identity.py'
+COMBAT_PATH = ROOT / 'rpg_character_combat.py'
 EQUIPMENT_PATH = ROOT / 'rpg_character_equipment.py'
 EQUIPMENT_SCHEMA_PATH = ROOT / 'rpg_character_equipment_schema.py'
 SAVES_PATH = ROOT / 'rpg_character_saves.py'
@@ -55,6 +56,7 @@ class CharacterIntegrationTests(unittest.TestCase):
         self.assertTrue(
             {
                 'rpg_character_identity',
+                'rpg_character_combat',
                 'rpg_character_equipment',
                 'rpg_character_equipment_schema',
                 'rpg_character_saves',
@@ -67,6 +69,7 @@ class CharacterIntegrationTests(unittest.TestCase):
         for binding in (
             '_impl.get_rpg_character = _get_rpg_character',
             '_impl._identity_panel = _identity_panel',
+            '_impl._combat_panel = _combat_panel',
             '_impl._equipment_panel = _equipment_panel',
             '_impl._saves_panel = _saves_panel',
             '_impl._progression_panel = _progression_panel',
@@ -78,9 +81,11 @@ class CharacterIntegrationTests(unittest.TestCase):
         self.assertEqual(
             functions,
             {
+                '_safe_notify_error',
                 '_ensure_equipment_schema',
                 '_get_rpg_character',
                 '_identity_panel',
+                '_combat_panel',
                 '_equipment_panel',
                 '_saves_panel',
                 '_progression_panel',
@@ -92,12 +97,13 @@ class CharacterIntegrationTests(unittest.TestCase):
         )
         self.assertLess(
             len(PUBLIC_PATH.read_text(encoding='utf-8').splitlines()),
-            260,
+            310,
         )
 
     def test_extracted_modules_have_no_back_reference_or_framework_dependency(self):
         for path, expected_function in (
             (IDENTITY_PATH, 'build_identity_panel'),
+            (COMBAT_PATH, 'build_combat_panel'),
             (EQUIPMENT_PATH, 'build_equipment_panel'),
             (EQUIPMENT_SCHEMA_PATH, 'ensure_equipment_schema'),
             (SAVES_PATH, 'build_saves_panel'),
@@ -323,6 +329,7 @@ class CharacterIntegrationTests(unittest.TestCase):
             'rpg_character_creation',
             'rpg_combat_session',
             'rpg_character_identity',
+            'rpg_character_combat',
             'rpg_character_equipment',
             'rpg_character_equipment_schema',
             'rpg_character_saves',

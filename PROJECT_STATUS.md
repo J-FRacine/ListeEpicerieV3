@@ -1,6 +1,6 @@
 # JF Apps — État du projet
 
-Dernière mise à jour : 2026-09-11
+Dernière mise à jour : 2026-09-14
 
 Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversations. Le dépôt GitHub `J-FRacine/ListeEpicerieV3` sur `main` est la référence technique.
 
@@ -12,7 +12,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Liste d'épicerie | 1.2.0 |
 | Journal de pression | 1.2.1 |
 | Finances | 1.13.5 |
-| Personnages JDR | 1.4.1 |
+| Personnages JDR | 1.5.0 |
 | Commentaires et suggestions | 1.0.0 |
 
 Important : ces versions sont celles présentes dans GitHub `main`. Leur validation réelle sur Canner/Render ou PostgreSQL de production doit être confirmée séparément après déploiement.
@@ -37,7 +37,22 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Le catalogue armes/armures sert de référence seulement; les onglets Équipement et Attaques demeurent les sources réelles utilisées par les calculs et Combat rapide.
 - Aucun changement de schéma PostgreSQL, aucune migration, aucun SQL manuel et aucune nouvelle dépendance.
 - La validation utilisateur sur Canner/dans le navigateur a confirmé le fonctionnement de la création guidée, de Combat rapide et des aides Fighter/Clerc. PostgreSQL de production n’a pas été testé indépendamment dans cette finalisation.
-- Prochaine intervention technique recommandée : modularisation progressive de `rpg_character.py`, dans une livraison séparée et sans changement fonctionnel volontaire.
+- La modularisation progressive annoncée à cette étape a ensuite été réalisée et finalisée avant V1.5.0.
+
+## JDR — finalisation V1.5.0 — 2026-09-14
+
+- Base GitHub utilisée pour cette finalisation : `2e354943f3c280760520192539d38796eae93e19` (`main`).
+- JDR passe officiellement à **V1.5.0**; Finances reste **V1.13.5**.
+- La modularisation structurelle JDR est terminée et les phases de nettoyage ont été validées dans le navigateur/Canner par l’utilisateur.
+- Nouvel onglet **Dons** : dons Passifs, Activables et Informatifs, détails, prérequis, effets et lien facultatif vers une attaque.
+- **Combat rapide** applique les effets structurés des dons sans réécrire silencieusement les valeurs permanentes de la fiche. Les dons activables restent temporaires à la session.
+- Les modèles comprennent notamment Combat Casting et Selective Channeling; les effets qui n’ont pas encore de statistique dédiée restent documentés plutôt qu’inventés.
+- Nouvel onglet **Foi** : divinité, deux domaines, sous-domaines facultatifs et notes de campagne. La divinité réutilise le même champ qu’Identité.
+- Référence **Iomedae** ajoutée avec ses repères Pathfinder; le personnage de référence utilise le préréglage personnel **Guerre / Soleil**, toujours modifiable.
+- La table des dons et les colonnes de foi/domaines sont créées ou ajoutées automatiquement de façon non destructive; aucun SQL manuel.
+- L’utilisateur a validé en déploiement les Dons, Combat rapide avec dons, Combat Casting, Selective Channeling, Foi et le préréglage Iomedae Guerre/Soleil.
+- PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.
+- Prochaine fonction JDR prévue : **portrait / photo du personnage**, puis armes détaillées liées aux Attaques, puis sorts après stabilisation des domaines.
 
 ## Finances — état actuel
 

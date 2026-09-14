@@ -16,11 +16,32 @@ APP_VERSIONS = {
     "grocery": "1.2.0",
     "blood_pressure": "1.2.1",
     "finances": "1.13.5",
-    "rpg": "1.4.1",
+    "rpg": "1.5.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "rpg",
+        "version": "1.5.0",
+        "date": "2026-09-14",
+        "title": "Personnages JDR — V1.5.0",
+        "summary": (
+            "Dons structurés, intégration à Combat rapide et nouvelle section "
+            "Foi / Domaines avec référence Iomedae."
+        ),
+        "changes": [
+            "Nouvel onglet Dons avec ajout, modification, suppression et fiche détaillée des dons du personnage.",
+            "Les dons peuvent être Passifs, Activables ou Informatifs; les dons passifs et activables peuvent alimenter Combat rapide sans réécrire silencieusement les valeurs permanentes de la fiche.",
+            "Combat rapide tient compte des modificateurs structurés de dons pour l’attaque, l’initiative, le BMO/CMB, le DMD/CMD et les sauvegardes ciblées; un don peut être lié à une attaque précise.",
+            "Catalogue de dons préinscrits comprenant notamment Power Attack, Weapon Focus, Improved Initiative, Combat Casting et Selective Channeling.",
+            "Nouvel onglet Foi : divinité, deux domaines, sous-domaines facultatifs et notes de foi/campagne.",
+            "La divinité reste le même champ que dans Identité; elle n’est pas dupliquée.",
+            "Profil de référence Iomedae avec alignement, domaines, sous-domaines, arme favorite et repères religieux; le préréglage personnel Guerre / Soleil reste modifiable.",
+            "Création automatique de la table rpg_character_feats et ajout automatique des colonnes de domaines/foi avec migrations non destructives; aucun SQL manuel.",
+            "La modularisation de la fiche JDR est terminée : les panneaux, dialogues, styles et règles sont maintenant répartis en modules de taille plus raisonnable.",
+        ],
+    },
     {
         "app_key": "rpg",
         "version": "1.4.1",

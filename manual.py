@@ -964,9 +964,9 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
 """,
     },
     {
-        "title": "Personnages JDR — V1.4.1",
+        "title": "Personnages JDR — V1.5.0",
         "icon": "casino",
-        "caption": "Progression, races, équipement et feuille Pathfinder / Ravenloft",
+        "caption": "Dons, foi, progression, équipement et feuille Pathfinder / Ravenloft",
         "keywords": (
             "jdr personnage ravenloft pathfinder feuille force "
             "dextérité constitution intelligence sagesse charisme "
@@ -975,9 +975,65 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
             "race héritage traits raciaux équipement armure bouclier "
             "poids encombrement charge légère moyenne lourde vitesse "
             "progression niveau montée niveau sous-classe facultative historique dons capacités "
-            "fighter guerrier cleric clerc humain elfe magie canalisation domaines sorts divins"
+            "fighter guerrier cleric clerc humain elfe magie canalisation domaines sorts divins "
+            "foi divinité iomedae guerre war soleil sun sous-domaine "
+            "combat casting selective channeling"
         ),
         "content": """
+### V1.5.0 — dons structurés et foi / domaines
+
+La V1.5.0 officialise les nouvelles sections **Dons** et **Foi**, ainsi que leur intégration contrôlée à Combat rapide.
+
+#### Dons structurés
+
+L’onglet **Dons** permet d’ajouter, modifier, consulter et supprimer les dons du personnage.
+
+Chaque don peut conserver :
+
+- un nom français et anglais;
+- un type **Passif**, **Activable** ou **Informatif**;
+- une source et des prérequis;
+- un résumé et des effets détaillés;
+- des notes personnelles;
+- un lien facultatif vers une attaque précise;
+- des modificateurs structurés d’attaque, d’initiative, de BMO/CMB, de DMD/CMD ou de sauvegarde;
+- une note textuelle pour les dégâts lorsque l’effet ne doit pas être transformé automatiquement en formule.
+
+Les dons **Passifs** sont pris en compte automatiquement dans **Combat rapide**. Les dons **Activables** apparaissent avec une case **Utiliser** et restent actifs seulement pour la session de combat en cours. Les dons **Informatifs** ne changent jamais les chiffres.
+
+Lorsqu’un don est lié à une attaque précise, son modificateur d’attaque ne s’applique qu’à cette attaque.
+
+Le catalogue de modèles comprend notamment **Power Attack**, **Weapon Focus**, **Improved Initiative**, **Great Fortitude**, **Lightning Reflexes**, **Iron Will**, **Toughness**, **Combat Casting** et **Selective Channeling**.
+
+**Combat Casting** conserve le rappel du +4 aux tests de concentration dans les situations prévues par le don, mais la feuille ne calcule pas encore la concentration. **Selective Channeling** conserve ses prérequis et son effet comme référence sans modifier automatiquement les dés ou le DD de canalisation.
+
+#### Foi, divinité et domaines
+
+L’onglet **Foi** conserve :
+
+- la divinité;
+- le domaine 1 et son sous-domaine facultatif;
+- le domaine 2 et son sous-domaine facultatif;
+- des notes de foi ou de campagne.
+
+La **Divinité** est le même champ que dans **Identité**. Une modification faite dans l’un des deux écrans est donc reprise dans l’autre après rechargement.
+
+Pour un Clerc, la feuille rappelle le principe des deux domaines, mais elle ne choisit rien automatiquement et ne modifie pas les sorts, pouvoirs de domaine, DD, canalisation ou caractéristiques.
+
+Les champs de domaines sont ajoutés automatiquement à la base avec une migration non destructive. Aucun SQL manuel n’est requis.
+
+#### Référence Iomedae
+
+Un profil de référence **Iomedae** est disponible dans Foi. Il présente notamment l’alignement, les domaines autorisés, des sous-domaines, l’arme favorite **épée longue**, le symbole, les couleurs sacrées et d’autres repères utiles.
+
+Pour le personnage de référence actuellement configuré, le bouton **Préconfigurer Iomedae + Guerre / Soleil** remplit :
+
+- Divinité : **Iomedae**;
+- Domaine 1 : **War / Guerre**;
+- Domaine 2 : **Sun / Soleil**.
+
+Ce duo Guerre / Soleil est un **préréglage personnel**, pas une règle générale d’Iomedae. Les champs restent entièrement modifiables.
+
 ### V1.4.1 — aides Fighter et Clerc
 
 La création guidée contient maintenant des repères spécialisés pour **Fighter / Guerrier** et **Clerc / Cleric** aux niveaux 1 à 4. Ces aides servent de référence et n’écrasent pas silencieusement les choix déjà inscrits sur la feuille.
@@ -1033,7 +1089,7 @@ L’onglet permanent **Création guidée** permet de reprendre un personnage exi
 
 Le bouton **Combat rapide**, près des actions du personnage actif, affiche PV, dégâts non létaux, défenses, initiative, BMO/DMD, sauvegardes et attaques. Il permet d’appliquer dégâts, soins et dégâts non létaux, avec un modificateur temporaire d’attaque et des notes tactiques non persistantes.
 
-**Enregistrer les pertes** conserve les autres valeurs Combat et recharge la feuille Combat. **Voir la fiche Combat** ouvre la feuille complète. Les sept onglets existants et la progression guidée restent disponibles.
+**Enregistrer les pertes** conserve les autres valeurs Combat et recharge la feuille Combat. **Voir la fiche Combat** ouvre la feuille complète. Les onglets existants et la progression guidée restent disponibles.
 
 ### Données privées et plusieurs personnages
 
@@ -1337,7 +1393,7 @@ Le bonus total combine le bonus de base à l’attaque, le modificateur de carac
 
 La section Équipement automatise d’abord les armures, les boucliers, le poids et l’encombrement. Les armes et possessions sont enregistrées, mais leurs effets spéciaux ne sont pas tous interprétés automatiquement.
 
-Les dons, capacités spéciales, sorts, impression PDF, progression avancée et groupes de campagne restent prévus pour des versions ultérieures.
+Les dons et la foi sont maintenant structurés. Le portrait du personnage, les armes détaillées liées entre Équipement et Attaques, les capacités spéciales avancées, les sorts, l’impression PDF et les groupes de campagne restent prévus pour des versions ultérieures.
 """,
     },
     {

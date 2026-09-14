@@ -1,4 +1,4 @@
-"""Raccordements structuraux JDR — V1.5.0."""
+"""Raccordements structuraux JDR — V1.6.0."""
 from __future__ import annotations
 
 import ast
@@ -20,6 +20,7 @@ class CharacterIntegrationTests(unittest.TestCase):
         text = ast.unparse(ast.parse(source))
 
         for binding in (
+            "_impl._portrait_block = _portrait_block",
             "_impl._identity_panel = _identity_panel",
             "_impl._faith_panel = _faith_panel",
             "_impl._progression_panel = _progression_panel",
@@ -114,7 +115,7 @@ class CharacterIntegrationTests(unittest.TestCase):
     def test_declared_versions(self):
         self.assertEqual(
             app_versions.APP_VERSIONS["rpg"],
-            "1.5.0",
+            "1.6.0",
         )
         self.assertEqual(
             app_versions.APP_VERSIONS["finances"],
@@ -125,7 +126,7 @@ class CharacterIntegrationTests(unittest.TestCase):
             for row in app_versions.RELEASE_NOTES
             if row["app_key"] == "rpg"
         )
-        self.assertEqual(note["version"], "1.5.0")
+        self.assertEqual(note["version"], "1.6.0")
 
 
 if __name__ == "__main__":

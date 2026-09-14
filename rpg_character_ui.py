@@ -171,7 +171,7 @@ def rpg_character_panel(
             )
             ui.label(
                 "La feuille comprend la création guidée, l’identité, "
-                "la progression, les dons, le combat, l’équipement, les "
+                "la foi, la progression, les dons, le combat, l’équipement, les "
                 "sauvegardes, les compétences et les attaques."
             ).classes("text-sm jf-muted max-w-xl")
             ui.button(
@@ -342,6 +342,7 @@ def rpg_character_panel(
             icon="auto_fix_high",
         )
         identity_tab = ui.tab("Identité", icon="badge")
+        faith_tab = ui.tab("Foi", icon="church")
         progression_tab = ui.tab(
             "Progression",
             icon="trending_up",
@@ -364,6 +365,10 @@ def rpg_character_panel(
         "creation": creation_tab,
         "identite": identity_tab,
         "identity": identity_tab,
+        "foi": faith_tab,
+        "faith": faith_tab,
+        "domaines": faith_tab,
+        "domains": faith_tab,
         "progression": progression_tab,
         "niveau": progression_tab,
         "level": progression_tab,
@@ -425,6 +430,9 @@ def rpg_character_panel(
         with ui.tab_panel(identity_tab).classes("px-0"):
             _identity_panel(user_id, character)
 
+        with ui.tab_panel(faith_tab).classes("px-0"):
+            _faith_panel(user_id, character)
+
         with ui.tab_panel(progression_tab).classes("px-0"):
             _progression_panel(user_id, character)
 
@@ -447,9 +455,10 @@ def rpg_character_panel(
             _attacks_panel(user_id, character)
 
     with ui.element("div").classes("jf-rpg-help"):
-        ui.label("Dons structurés").classes("font-bold")
+        ui.label("Dons et foi structurés").classes("font-bold")
         ui.label(
-            "Les dons possèdent maintenant leur propre onglet. "
-            "Les dons passifs ou activables peuvent alimenter Combat rapide "
-            "sans modifier silencieusement les valeurs permanentes de la fiche."
+            "Les dons possèdent leur propre onglet et peuvent alimenter "
+            "Combat rapide. La section Foi conserve maintenant la divinité, "
+            "les deux domaines et leurs sous-domaines sans imposer les choix "
+            "de la campagne."
         ).classes("text-sm")

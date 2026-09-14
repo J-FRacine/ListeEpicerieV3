@@ -25,6 +25,11 @@ from rpg_character_feats_data import (
     list_rpg_feats,
     update_rpg_feat,
 )
+from rpg_character_faith import build_faith_panel
+from rpg_character_faith_data import (
+    get_rpg_faith,
+    update_rpg_faith,
+)
 from rpg_character_identity import build_identity_panel
 from rpg_character_progression import build_progression_panel
 from rpg_character_rules_dialog import open_calculation_rules_dialog
@@ -143,6 +148,18 @@ def _identity_panel(user_id, character):
         infer_race_key=_catalog.infer_race_key,
         get_race_profile=_catalog.get_race_profile,
         update_rpg_character_identity=_data.update_rpg_character_identity,
+        notify_error=_impl._safe_notify_error,
+        character_url=_impl._character_url,
+    )
+
+
+def _faith_panel(user_id, character):
+    return build_faith_panel(
+        ui=_impl.ui,
+        user_id=user_id,
+        character=character,
+        get_rpg_faith=get_rpg_faith,
+        update_rpg_faith=update_rpg_faith,
         notify_error=_impl._safe_notify_error,
         character_url=_impl._character_url,
     )
@@ -297,6 +314,7 @@ _impl._equipment_dialog = _equipment_dialog
 _impl._delete_equipment_dialog = _delete_equipment_dialog
 _impl._calculation_rules_dialog = _calculation_rules_dialog
 _impl._identity_panel = _identity_panel
+_impl._faith_panel = _faith_panel
 _impl._progression_panel = _progression_panel
 _impl._feats_panel = _feats_panel
 _impl._combat_panel = _combat_panel

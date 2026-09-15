@@ -29,11 +29,13 @@ def open_magic_item_dialog(
                 else "Ajouter un objet magique"
             ).classes("text-xl font-bold")
 
+            template_options = {"": "Aucun modèle"}
+            template_options.update({
+                key: value["label"]
+                for key, value in magic_item_templates.items()
+            })
             template_input = ui.select(
-                {
-                    key: value["label"]
-                    for key, value in magic_item_templates.items()
-                },
+                template_options,
                 label="Modèle facultatif",
                 value=original.get("magic_template_key") or "",
             ).props("options-dense").classes("w-full")
@@ -126,11 +128,18 @@ def open_magic_item_dialog(
                     max=100000,
                     step=1,
                 ).props("clearable").classes("w-full")
+                container_select_options = {"": "Aucun conteneur"}
+                container_select_options.update(container_options)
                 container_input = ui.select(
-                    container_options,
+                    container_select_options,
                     label="Rangé dans",
-                    value=original.get("container_equipment_id"),
-                ).props("options-dense clearable").classes("w-full")
+                    value=(
+                        original.get("container_equipment_id")
+                        if original.get("container_equipment_id")
+                        not in (None, "")
+                        else ""
+                    ),
+                ).props("options-dense").classes("w-full")
 
             requires_equipped_input = ui.checkbox(
                 "L’effet exige que l’objet soit équipé / porté",

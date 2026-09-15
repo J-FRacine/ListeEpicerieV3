@@ -10,8 +10,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class MagicArchitectureTests(unittest.TestCase):
-    def test_phase_is_official_v180(self):
-        self.assertEqual(app_versions.APP_VERSIONS["rpg"], "1.8.0")
+    def test_magic_phase_remains_available_after_v180(self):
+        version = tuple(
+            int(part)
+            for part in app_versions.APP_VERSIONS["rpg"].split(".")
+        )
+        self.assertGreaterEqual(version, (1, 8, 0))
 
     def test_magic_schema_is_non_destructive(self):
         source = (

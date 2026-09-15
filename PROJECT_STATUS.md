@@ -130,7 +130,21 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - JDR passe officiellement à **V1.9.0** après validation fonctionnelle réussie de la Phase 15A.
 - Validation locale finale : **29 tests ciblés Phase 15A**, **197 tests JDR** et **501 tests JF Apps**, tous réussis; compilation Python complète réussie.
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur, incluant préparation, utilisation/restauration, repos, domaines, persistance, les quatre Protection from... et les indicateurs visuels. PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.
-- Prochaine étape : **Phase 15B** — lancement d’un sort, consommation guidée, effets de référence et intégration progressive à Combat rapide.
+- La prochaine évolution est maintenant **Phase 15B**, installée en validation sous V1.9.0.
+
+## JDR — Phase 15B lancement guidé des sorts — validation en cours — 2026-09-15
+
+- Base : `main` après finalisation officielle **JDR V1.9.0**. La version officielle reste **V1.9.0** pendant les tests navigateur; la version cible après validation est **V1.10.0**.
+- Chaque sort préparé possède une action **Lancer** ouvrant un résumé avant consommation : niveau du sort, niveau de lanceur, DD, portée, cible/zone, durée, formule de référence, résumé, source et notes lorsque disponibles.
+- Les sorts de niveau 1+ consomment leur utilisation avec une opération PostgreSQL atomique utilisant `FOR UPDATE`; les oraisons sont vérifiées mais restent réutilisables.
+- La conversion spontanée **Cure / Inflict** utilise un emplacement normal préparé de niveau suffisant. Les oraisons et les créneaux de domaine sont exclus de cette conversion.
+- Le DD d’une conversion spontanée utilise le niveau réel du Cure/Inflict lancé.
+- **Combat rapide** contient une section Sorts préparés, le résumé restant/utilisé, un sélecteur des sorts disponibles et **Lancer le sort**. La consommation utilise la même action que l’onglet Sorts.
+- Aucun effet n’est appliqué automatiquement à une cible dans cette phase : dégâts, soins, états, bonus et malus restent décidés/appliqués manuellement. Les détails inconnus affichent **À vérifier**.
+- Quelques sorts courants reçoivent des repères courts de durée/cible/formule; les sorts de domaine qui existent aussi dans le catalogue Clerc réutilisent leurs détails.
+- Aucune nouvelle table, colonne ou migration PostgreSQL; les tables de V1.9.0 sont réutilisées.
+- Nouveaux modules séparés : `rpg_character_spell_casting.py` (règles pures) et `rpg_character_spell_cast_dialog.py` (dialogue de lancement), afin de ne pas grossir la coquille principale.
+- Validation locale réussie : **50 tests ciblés Phase 15B**, **210 tests JDR** et **514 tests JF Apps**, tous réussis; compilation Python complète réussie. Validation navigateur/Canner non encore effectuée pour cette phase.
 
 ## Finances — état actuel
 

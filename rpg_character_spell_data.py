@@ -481,6 +481,72 @@ def set_prepared_spell_used_count(
             return used
 
 
+
+def cast_prepared_spell(user_id, character_id, preparation_id):
+    """Consomme atomiquement une utilisation d'un sort préparé.
+
+    Les oraisons sont validées mais ne sont jamais dépensées. Le verrou SQL
+    évite qu'une double action dans deux écrans réutilise le même emplacement.
+    """
+    _ensure()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            _require_character(cur, user_id, character_id)
+            cur.execute(
+                """
+                SELECT id, spell_name, spell_level, slot_kind,
+                       prepared_count, used_count
+                FROM rpg_character_prepared_spells
+                WHERE id=%s AND character_id=%s
+                FOR UPDATE;
+                """,
+                (preparation_id, character_id),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise ValueError("Ce sort préparé n’existe plus.")
+
+            prepared = max(0, int(row["prepared_count"] or 0))
+            used = max(0, int(row["used_count"] or 0))
+            level = int(row["spell_level"] or 0)
+            if level == 0:
+                conn.commit()
+                return {
+                    "id": int(row["id"]),
+                    "spell_name": row["spell_name"],
+                    "spell_level": level,
+                    "slot_kind": row["slot_kind"],
+                    "prepared_count": prepared,
+                    "used_count": 0,
+                    "remaining": prepared,
+                    "reusable": True,
+                }
+
+            if used >= prepared:
+                raise ValueError("Tous les exemplaires préparés de ce sort sont déjà utilisés.")
+
+            new_used = used + 1
+            cur.execute(
+                """
+                UPDATE rpg_character_prepared_spells
+                SET used_count=%s, updated_at=NOW()
+                WHERE id=%s AND character_id=%s;
+                """,
+                (new_used, preparation_id, character_id),
+            )
+            conn.commit()
+            return {
+                "id": int(row["id"]),
+                "spell_name": row["spell_name"],
+                "spell_level": level,
+                "slot_kind": row["slot_kind"],
+                "prepared_count": prepared,
+                "used_count": new_used,
+                "remaining": max(0, prepared - new_used),
+                "reusable": False,
+            }
+
+
 def reset_spell_usage(user_id, character_id):
     _ensure()
     with get_connection() as conn:

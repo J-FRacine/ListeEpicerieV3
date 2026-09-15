@@ -33,6 +33,12 @@ from rpg_character_data import (
 )
 from rpg_character_feats_data import list_rpg_feats
 from rpg_character_feats_rules import collect_feat_combat_effects
+from rpg_character_spell_catalog import catalog_by_key as spell_catalog_by_key
+from rpg_character_spell_data import (
+    cast_prepared_spell,
+    get_spellcasting_profile,
+    list_prepared_spells,
+)
 from rpg_character_rules import (
     ABILITY_LABELS,
     ABILITY_LONG_LABELS,
@@ -209,6 +215,10 @@ def rpg_character_panel(
         list_rpg_saves=list_rpg_saves,
         list_rpg_feats=list_rpg_feats,
         collect_feat_combat_effects=collect_feat_combat_effects,
+        get_spellcasting_profile=get_spellcasting_profile,
+        list_prepared_spells=list_prepared_spells,
+        cast_prepared_spell=cast_prepared_spell,
+        spell_catalog_by_key=spell_catalog_by_key,
         update_rpg_character_combat=update_rpg_character_combat,
         armor_class_total=armor_class_total,
         touch_armor_class=touch_armor_class,

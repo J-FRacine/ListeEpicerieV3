@@ -127,6 +127,111 @@ CLERIC_SPELLS = {
 }
 
 
+# Détails courts utilisés par le lancement guidé. Ils complètent le résumé sans
+# reproduire le texte intégral des sorts. Les entrées absentes restent affichées
+# avec « À vérifier » plutôt que d'inventer une durée ou une cible.
+CASTING_DETAILS = {
+    "cure_light_wounds": {
+        "duration_text": "Instantanée",
+        "target_text": "Créature touchée",
+        "roll_text": "1d8 + min(niveau de lanceur, 5)",
+    },
+    "cure_moderate_wounds": {
+        "duration_text": "Instantanée",
+        "target_text": "Créature touchée",
+        "roll_text": "2d8 + min(niveau de lanceur, 10)",
+    },
+    "cure_serious_wounds": {
+        "duration_text": "Instantanée",
+        "target_text": "Créature touchée",
+        "roll_text": "3d8 + min(niveau de lanceur, 15)",
+    },
+    "cure_critical_wounds": {
+        "duration_text": "Instantanée",
+        "target_text": "Créature touchée",
+        "roll_text": "4d8 + min(niveau de lanceur, 20)",
+    },
+    "bless": {
+        "range_text": "50 ft",
+        "duration_text": "1 min./niveau",
+        "target_text": "Alliés dans une explosion de 50 ft centrée sur le lanceur",
+    },
+    "aid": {
+        "range_text": "Touch",
+        "duration_text": "1 min./niveau",
+        "target_text": "Créature vivante touchée",
+        "roll_text": "1d8 + niveau de lanceur (max +10) PV temporaires",
+    },
+    "divine_favor": {
+        "range_text": "Personal",
+        "duration_text": "1 minute",
+        "target_text": "Le lanceur",
+    },
+    "shield_of_faith": {
+        "range_text": "Touch",
+        "duration_text": "1 min./niveau",
+        "target_text": "Créature touchée",
+    },
+    "bulls_strength": {
+        "range_text": "Touch",
+        "duration_text": "1 min./niveau",
+        "target_text": "Créature touchée",
+    },
+    "bears_endurance": {
+        "range_text": "Touch",
+        "duration_text": "1 min./niveau",
+        "target_text": "Créature touchée",
+    },
+    "eagles_splendor": {
+        "range_text": "Touch",
+        "duration_text": "1 min./niveau",
+        "target_text": "Créature touchée",
+    },
+    "owls_wisdom": {
+        "range_text": "Touch",
+        "duration_text": "1 min./niveau",
+        "target_text": "Créature touchée",
+    },
+    "spiritual_weapon": {
+        "duration_text": "1 round/niveau",
+        "target_text": "Arme de force créée par le sort",
+    },
+    "magic_weapon": {
+        "range_text": "Touch",
+        "duration_text": "1 min./niveau",
+        "target_text": "Arme touchée",
+    },
+    "magic_vestment": {
+        "range_text": "Touch",
+        "duration_text": "1 heure/niveau",
+        "target_text": "Armure ou bouclier touché",
+    },
+    "divine_power": {
+        "range_text": "Personal",
+        "duration_text": "1 round/niveau",
+        "target_text": "Le lanceur",
+    },
+}
+
+for _alignment_key in (
+    "protection_from_chaos",
+    "protection_from_evil",
+    "protection_from_good",
+    "protection_from_law",
+):
+    CASTING_DETAILS[_alignment_key] = {
+        "range_text": "Touch",
+        "duration_text": "1 min./niveau",
+        "target_text": "Créature touchée",
+    }
+
+
+def _with_casting_details(row):
+    result = dict(row)
+    result.update(CASTING_DETAILS.get(str(result.get("key") or ""), {}))
+    return result
+
+
 DOMAIN_SPELLS = {
     "war": {
         1: "Magic Weapon",
@@ -180,8 +285,26 @@ def domain_spell_rows(domains, max_spell_level=9):
             if key in seen:
                 continue
             seen.add(key)
-            rows.append(
-                {
+            base_spell = next(
+                (
+                    _with_casting_details(row)
+                    for row in CLERIC_SPELLS.values()
+                    if str(row.get("name") or "").casefold() == str(name).casefold()
+                ),
+                None,
+            )
+            if base_spell:
+                domain_row = dict(base_spell)
+                domain_row.update(
+                    {
+                        "key": f"domain_{normalized}_{level}",
+                        "spell_level": level,
+                        "slot_kind": "domain",
+                        "domain_source": display_domain,
+                    }
+                )
+            else:
+                domain_row = {
                     "key": f"domain_{normalized}_{level}",
                     "name": name,
                     "spell_level": level,
@@ -192,14 +315,14 @@ def domain_spell_rows(domains, max_spell_level=9):
                     "slot_kind": "domain",
                     "domain_source": display_domain,
                 }
-            )
+            rows.append(domain_row)
     return rows
 
 
 def catalog_rows(*, max_spell_level=9, domains=()):
     maximum = int(max_spell_level)
     rows = [
-        dict(row)
+        _with_casting_details(row)
         for row in CLERIC_SPELLS.values()
         if int(row["spell_level"]) <= maximum
     ]

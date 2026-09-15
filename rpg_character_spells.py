@@ -1,5 +1,7 @@
-"""Panneau Sorts — préparation du Clerc, Phase 15A."""
+"""Panneau Sorts — préparation et lancement guidé du Clerc."""
 from __future__ import annotations
+
+from rpg_character_spell_cast_dialog import open_spell_cast_dialog
 
 
 def build_spells_panel(
@@ -14,6 +16,7 @@ def build_spells_panel(
     save_prepared_spell,
     delete_prepared_spell,
     set_prepared_spell_used_count,
+    cast_prepared_spell,
     reset_spell_usage,
     catalog_by_key,
     domain_spell_rows,
@@ -299,8 +302,8 @@ def build_spells_panel(
                 with ui.column().classes("gap-0"):
                     ui.label("Sorts préparés").classes("text-xl font-bold")
                     ui.label(
-                        "Phase 15A — préparation du Clerc, emplacements quotidiens, "
-                        "créneau de domaine et suivi des utilisations."
+                        "Phase 15B — préparation, emplacements quotidiens et lancement "
+                        "guidé des sorts du Clerc."
                     ).classes("text-sm jf-muted")
                 with ui.row().classes("gap-2"):
                     ui.button(
@@ -339,8 +342,8 @@ def build_spells_panel(
 
             mode = profile.get("spontaneous_mode") or "cure"
             mode_text = {
-                "cure": "Les emplacements normaux de niveau 1+ peuvent servir à la conversion spontanée en sorts de soins; l’automatisation du lancement viendra en Phase 15B.",
-                "inflict": "Les emplacements normaux de niveau 1+ peuvent servir à la conversion spontanée en sorts de blessures; l’automatisation du lancement viendra en Phase 15B.",
+                "cure": "Les emplacements normaux de niveau 1+ peuvent être convertis spontanément en sorts Cure depuis l’action Lancer.",
+                "inflict": "Les emplacements normaux de niveau 1+ peuvent être convertis spontanément en sorts Inflict depuis l’action Lancer.",
                 "none": "Aucune conversion spontanée n’est suivie pour ce profil.",
             }[mode]
             ui.label(mode_text).classes("text-xs jf-muted mt-2")
@@ -502,7 +505,29 @@ def build_spells_panel(
                                     ui.label(" • ".join(meta)).classes("text-xs jf-muted")
                                 if row.get("summary"):
                                     ui.label(str(row["summary"])).classes("text-sm mt-1")
-                            with ui.row().classes("gap-1"):
+                            with ui.row().classes("gap-1 items-center"):
+                                def launch_spell(_event=None, selected=dict(row)):
+                                    open_spell_cast_dialog(
+                                        ui=ui,
+                                        user_id=user_id,
+                                        character=character,
+                                        profile=profile,
+                                        prepared_spell=selected,
+                                        cast_prepared_spell=cast_prepared_spell,
+                                        catalog_by_key=catalog_by_key,
+                                        notify_error=notify_error,
+                                        on_cast=render_spells.refresh,
+                                    )
+
+                                launch_button = ui.button(
+                                    "Lancer",
+                                    icon="auto_fix_high",
+                                    on_click=launch_spell,
+                                ).props("dense color=primary")
+                                if level > 0 and remaining <= 0:
+                                    launch_button.disable()
+                                    launch_button.tooltip("Tous les exemplaires préparés sont utilisés")
+
                                 if level > 0:
                                     def mark_used(_event=None, selected=dict(row)):
                                         current = int(selected.get("used_count") or 0)
@@ -538,8 +563,8 @@ def build_spells_panel(
                                             return
                                         render_spells.refresh()
 
-                                    ui.button(icon="remove_circle_outline", on_click=mark_used).props("flat round dense color=primary").tooltip("Marquer 1 emplacement utilisé")
-                                    ui.button(icon="add_circle_outline", on_click=restore_one).props("flat round dense color=primary").tooltip("Rendre 1 utilisation")
+                                    ui.button(icon="remove_circle_outline", on_click=mark_used).props("flat round dense color=primary").tooltip("Marquer 1 emplacement utilisé — ajustement manuel")
+                                    ui.button(icon="add_circle_outline", on_click=restore_one).props("flat round dense color=primary").tooltip("Rendre 1 utilisation — ajustement manuel")
                                 ui.button(
                                     icon="edit",
                                     on_click=lambda _event=None, selected=dict(row): open_preparation_dialog(profile, selected),

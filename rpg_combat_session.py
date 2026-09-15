@@ -3,6 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
 
+from rpg_character_spell_cast_dialog import open_spell_cast_dialog
+from rpg_character_spell_casting import (
+    available_prepared_spells,
+    remaining_prepared_uses,
+)
+
 
 COMBAT_FIELDS = (
     "str_score",
@@ -213,6 +219,10 @@ def build_combat_session(
         ..., Sequence[Mapping[str, Any]]
     ],
     collect_feat_combat_effects: Callable[..., Mapping[str, Any]],
+    get_spellcasting_profile: Callable[..., Mapping[str, Any]],
+    list_prepared_spells: Callable[..., Sequence[Mapping[str, Any]]],
+    cast_prepared_spell: Callable[..., Mapping[str, Any]],
+    spell_catalog_by_key: Callable[..., Mapping[str, Mapping[str, Any]]],
     update_rpg_character_combat: Callable[..., Any],
     armor_class_total: Callable[[Mapping[str, Any]], Any],
     touch_armor_class: Callable[[Mapping[str, Any]], Any],
@@ -267,8 +277,8 @@ def build_combat_session(
                             "text-2xl font-bold"
                         )
                         ui.label(
-                            "Consultez les principaux chiffres, choisissez "
-                            "une attaque, activez vos dons et notez rapidement "
+                            "Consultez les principaux chiffres, choisissez une attaque, "
+                            "activez vos dons, lancez vos sorts préparés et notez rapidement "
                             "les pertes de PV."
                         ).classes("text-sm jf-muted")
                     ui.button(
@@ -442,6 +452,124 @@ def build_combat_session(
                         )
                 else:
                     feat_summary_label = None
+
+                @ui.refreshable
+                def render_combat_spells():
+                    with ui.card().classes("w-full p-4 mt-3"):
+                        ui.label("Sorts préparés").classes("text-lg font-bold")
+                        ui.label(
+                            "Lancez un sort sans quitter Combat rapide. La même utilisation "
+                            "est immédiatement consommée dans l’onglet Sorts."
+                        ).classes("text-sm jf-muted")
+
+                        try:
+                            spell_profile = dict(
+                                get_spellcasting_profile(user_id, character["id"])
+                            )
+                            prepared_spells = list(
+                                list_prepared_spells(user_id, character["id"])
+                            )
+                        except Exception as error:
+                            notify_error(
+                                error,
+                                "Les sorts préparés n’ont pas pu être chargés.",
+                            )
+                            return
+
+                        available = available_prepared_spells(prepared_spells)
+                        if not prepared_spells:
+                            ui.label(
+                                "Aucun sort préparé. Utilisez l’onglet Sorts pour préparer la journée."
+                            ).classes("text-sm jf-muted mt-2")
+                            return
+
+                        remaining_slots = sum(
+                            remaining_prepared_uses(row)
+                            for row in prepared_spells
+                            if int(row.get("spell_level") or 0) > 0
+                        )
+                        used_slots = sum(
+                            int(row.get("used_count") or 0)
+                            for row in prepared_spells
+                            if int(row.get("spell_level") or 0) > 0
+                        )
+                        with ui.row().classes("gap-2 items-center flex-wrap mt-2"):
+                            ui.badge(
+                                f"{remaining_slots} emplacement(s) préparé(s) restant(s)"
+                            ).props(
+                                "color=positive" if remaining_slots > 0 else "color=negative"
+                            ).classes("text-sm font-bold px-2 py-1")
+                            ui.badge(
+                                f"{used_slots} utilisé(s)",
+                                color="grey-7",
+                            ).classes("text-sm font-bold px-2 py-1")
+
+                        if not available:
+                            ui.label(
+                                "Tous les sorts préparés de niveau 1+ sont utilisés. "
+                                "Les oraisons préparées resteraient disponibles ici."
+                            ).classes("text-sm text-warning mt-2")
+                            return
+
+                        options = {}
+                        rows_by_id = {}
+                        for spell in available:
+                            spell_id = int(spell["id"])
+                            rows_by_id[spell_id] = spell
+                            level = int(spell.get("spell_level") or 0)
+                            if level == 0:
+                                suffix = "réutilisable"
+                            else:
+                                suffix = f"{remaining_prepared_uses(spell)} restant(s)"
+                            domain_label = " • domaine" if spell.get("slot_kind") == "domain" else ""
+                            options[spell_id] = (
+                                f"Niv. {level} — {spell.get('spell_name') or 'Sort'}"
+                                f"{domain_label} — {suffix}"
+                            )
+
+                        first_spell = next(iter(options), None)
+                        spell_select = ui.select(
+                            options,
+                            label="Sort à lancer",
+                            value=first_spell,
+                        ).props("options-dense use-input").classes("w-full mt-2")
+
+                        def launch_selected_spell():
+                            try:
+                                selected_id = int(spell_select.value)
+                            except (TypeError, ValueError):
+                                ui.notify("Choisissez un sort à lancer.", type="warning")
+                                return
+                            selected = rows_by_id.get(selected_id)
+                            if not selected:
+                                ui.notify("Ce sort n’est plus disponible.", type="warning")
+                                render_combat_spells.refresh()
+                                return
+                            open_spell_cast_dialog(
+                                ui=ui,
+                                user_id=user_id,
+                                character=character,
+                                profile=spell_profile,
+                                prepared_spell=selected,
+                                cast_prepared_spell=cast_prepared_spell,
+                                catalog_by_key=spell_catalog_by_key,
+                                notify_error=notify_error,
+                                on_cast=render_combat_spells.refresh,
+                            )
+
+                        with ui.row().classes("w-full justify-end mt-2"):
+                            ui.button(
+                                "Lancer le sort",
+                                icon="auto_fix_high",
+                                on_click=launch_selected_spell,
+                            ).props("color=primary")
+
+                        ui.label(
+                            "Les dégâts, soins et états restent à appliquer manuellement dans "
+                            "cette phase; le résumé du sort est affiché avant confirmation."
+                        ).classes("text-xs jf-muted mt-2")
+
+                render_combat_spells()
 
                 with ui.card().classes("w-full p-4 mt-3"):
                     ui.label("Pertes et soins rapides").classes(

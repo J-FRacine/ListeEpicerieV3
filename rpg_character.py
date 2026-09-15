@@ -58,6 +58,7 @@ from rpg_character_spell_catalog import (
     domain_spell_rows,
 )
 from rpg_character_spell_data import (
+    cast_prepared_spell,
     delete_prepared_spell,
     get_spellcasting_profile,
     list_prepared_spells,
@@ -622,6 +623,7 @@ def _spells_panel(user_id, character):
         save_prepared_spell=save_prepared_spell,
         delete_prepared_spell=delete_prepared_spell,
         set_prepared_spell_used_count=set_prepared_spell_used_count,
+        cast_prepared_spell=cast_prepared_spell,
         reset_spell_usage=reset_spell_usage,
         catalog_by_key=spell_catalog_by_key,
         domain_spell_rows=domain_spell_rows,

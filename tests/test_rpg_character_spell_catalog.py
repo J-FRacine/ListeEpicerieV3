@@ -48,6 +48,15 @@ class SpellCatalogTests(unittest.TestCase):
             self.assertEqual(CLERIC_SPELLS[key]["school"], "Abjuration")
             self.assertEqual(CLERIC_SPELLS[key]["range_text"], "Touch")
 
+    def test_guided_casting_details_exist_for_common_spells(self):
+        from rpg_character_spell_catalog import catalog_by_key
+
+        catalog = catalog_by_key(max_spell_level=4, domains=[])
+        self.assertEqual(catalog["cure_light_wounds"]["duration_text"], "Instantanée")
+        self.assertIn("niveau", catalog["cure_light_wounds"]["roll_text"])
+        self.assertEqual(catalog["protection_from_evil"]["duration_text"], "1 min./niveau")
+        self.assertEqual(catalog["aid"]["target_text"], "Créature vivante touchée")
+
     def test_war_and_sun_domain_lists_are_available(self):
         rows = domain_spell_rows(["War", "Sun"], 4)
         names = {(row["domain_source"], row["spell_level"], row["name"]) for row in rows}

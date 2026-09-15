@@ -109,6 +109,13 @@ class CharacterIntegrationTests(unittest.TestCase):
             "collect_feat_combat_effects",
             values,
         )
+        for spell_dependency in (
+            "get_spellcasting_profile",
+            "list_prepared_spells",
+            "cast_prepared_spell",
+            "spell_catalog_by_key",
+        ):
+            self.assertIn(spell_dependency, values)
 
     def test_ui_shell_remains_compact(self):
         self.assertLess(UI_PATH.stat().st_size, 32_000)

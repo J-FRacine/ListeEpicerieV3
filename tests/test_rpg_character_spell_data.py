@@ -58,5 +58,114 @@ class SpellDataNormalizationTests(unittest.TestCase):
             )
 
 
+class _FakeCursor:
+    def __init__(self, rows):
+        self.rows = list(rows)
+        self.executed = []
+        self.rowcount = 1
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def execute(self, sql, params=()):
+        self.executed.append((sql, params))
+
+    def fetchone(self):
+        return self.rows.pop(0) if self.rows else None
+
+
+class _FakeConnection:
+    def __init__(self, rows):
+        self.cursor_value = _FakeCursor(rows)
+        self.commits = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def cursor(self):
+        return self.cursor_value
+
+    def commit(self):
+        self.commits += 1
+
+
+class SpellCastPersistenceTests(unittest.TestCase):
+    def _character(self):
+        return {
+            "id": 7,
+            "character_level": 4,
+            "class_name": "Cleric",
+            "str_score": 10,
+            "str_temp_score": None,
+            "dex_score": 10,
+            "dex_temp_score": None,
+            "con_score": 10,
+            "con_temp_score": None,
+            "int_score": 10,
+            "int_temp_score": None,
+            "wis_score": 18,
+            "wis_temp_score": None,
+            "cha_score": 10,
+            "cha_temp_score": None,
+        }
+
+    def test_cast_prepared_spell_atomically_increments_usage(self):
+        connection = _FakeConnection(
+            [
+                self._character(),
+                {
+                    "id": 12,
+                    "spell_name": "Aid",
+                    "spell_level": 2,
+                    "slot_kind": "normal",
+                    "prepared_count": 2,
+                    "used_count": 0,
+                },
+            ]
+        )
+        with patch.object(data, "_ensure"), patch.object(
+            data, "get_connection", return_value=connection
+        ):
+            result = data.cast_prepared_spell(1, 7, 12)
+
+        self.assertEqual(result["used_count"], 1)
+        self.assertEqual(result["remaining"], 1)
+        self.assertFalse(result["reusable"])
+        self.assertEqual(connection.commits, 1)
+        statements = "\n".join(sql for sql, _ in connection.cursor_value.executed)
+        self.assertIn("FOR UPDATE", statements)
+        self.assertIn("UPDATE rpg_character_prepared_spells", statements)
+
+    def test_cast_orison_does_not_consume_usage(self):
+        connection = _FakeConnection(
+            [
+                self._character(),
+                {
+                    "id": 13,
+                    "spell_name": "Guidance",
+                    "spell_level": 0,
+                    "slot_kind": "normal",
+                    "prepared_count": 1,
+                    "used_count": 0,
+                },
+            ]
+        )
+        with patch.object(data, "_ensure"), patch.object(
+            data, "get_connection", return_value=connection
+        ):
+            result = data.cast_prepared_spell(1, 7, 13)
+
+        self.assertTrue(result["reusable"])
+        self.assertEqual(result["used_count"], 0)
+        statements = "\n".join(sql for sql, _ in connection.cursor_value.executed)
+        self.assertNotIn("UPDATE rpg_character_prepared_spells", statements)
+
+
 if __name__ == "__main__":
     unittest.main()

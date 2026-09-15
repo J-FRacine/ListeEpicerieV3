@@ -33,6 +33,7 @@ class SpellArchitectureTests(unittest.TestCase):
             "list_prepared_spells",
             "save_prepared_spell",
             "set_prepared_spell_used_count",
+            "cast_prepared_spell",
             "reset_spell_usage",
         ):
             self.assertIn(name, source)
@@ -59,6 +60,8 @@ class SpellArchitectureTests(unittest.TestCase):
             "Restant {remaining}",
             "Normaux : {normal_remaining} restant(s)",
             "Domaine : {domain_remaining} restant",
+            '"Lancer"',
+            "open_spell_cast_dialog",
         ):
             self.assertIn(expected, source)
 
@@ -68,6 +71,8 @@ class SpellArchitectureTests(unittest.TestCase):
         self.assertTrue((ROOT / "rpg_character_spell_catalog.py").exists())
         self.assertTrue((ROOT / "rpg_character_spell_rules.py").exists())
         self.assertTrue((ROOT / "rpg_character_spell_data.py").exists())
+        self.assertTrue((ROOT / "rpg_character_spell_casting.py").exists())
+        self.assertTrue((ROOT / "rpg_character_spell_cast_dialog.py").exists())
 
 
 if __name__ == "__main__":

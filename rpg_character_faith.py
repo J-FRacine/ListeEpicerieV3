@@ -236,11 +236,11 @@ def build_faith_panel(
             value=False,
         ).props("dense expand-separator").classes("w-full mt-3"):
             ui.label(
-                "Cette phase structure la divinité, les deux domaines et "
-                "leurs sous-domaines. Elle ne modifie pas automatiquement "
-                "les sorts, pouvoirs de domaine, DD, canalisation ou "
-                "caractéristiques du personnage. Ces règles seront reliées "
-                "aux futurs modules spécialisés."
+                "La divinité, les deux domaines et leurs sous-domaines sont "
+                "structurés ici. La Phase 15A relie maintenant les domaines "
+                "à la préparation des sorts et aux créneaux de domaine. Les "
+                "pouvoirs de domaine et la canalisation restent à automatiser "
+                "dans des modules spécialisés ultérieurs."
             ).classes("text-sm")
 
         def save_faith():

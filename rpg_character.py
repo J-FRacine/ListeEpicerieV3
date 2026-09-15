@@ -53,6 +53,26 @@ from rpg_character_faith_data import (
     get_rpg_faith,
     update_rpg_faith,
 )
+from rpg_character_spell_catalog import (
+    catalog_by_key as spell_catalog_by_key,
+    domain_spell_rows,
+)
+from rpg_character_spell_data import (
+    delete_prepared_spell,
+    get_spellcasting_profile,
+    list_prepared_spells,
+    reset_spell_usage,
+    save_prepared_spell,
+    save_spellcasting_profile,
+    set_prepared_spell_used_count,
+)
+from rpg_character_spell_rules import (
+    ability_modifier_from_score,
+    cleric_slot_table,
+    effective_ability_score,
+    prepared_usage_summary,
+)
+from rpg_character_spells import build_spells_panel
 from rpg_character_identity import build_identity_panel
 from rpg_character_portrait import build_portrait_block
 from rpg_character_portrait_data import (
@@ -590,6 +610,32 @@ def _faith_panel(user_id, character):
     )
 
 
+def _spells_panel(user_id, character):
+    return build_spells_panel(
+        ui=_impl.ui,
+        user_id=user_id,
+        character=character,
+        get_rpg_faith=get_rpg_faith,
+        get_spellcasting_profile=get_spellcasting_profile,
+        save_spellcasting_profile=save_spellcasting_profile,
+        list_prepared_spells=list_prepared_spells,
+        save_prepared_spell=save_prepared_spell,
+        delete_prepared_spell=delete_prepared_spell,
+        set_prepared_spell_used_count=set_prepared_spell_used_count,
+        reset_spell_usage=reset_spell_usage,
+        catalog_by_key=spell_catalog_by_key,
+        domain_spell_rows=domain_spell_rows,
+        cleric_slot_table=cleric_slot_table,
+        effective_ability_score=effective_ability_score,
+        ability_modifier_from_score=ability_modifier_from_score,
+        prepared_usage_summary=prepared_usage_summary,
+        ability_labels=_rules.ABILITY_LABELS,
+        ability_long_labels=_rules.ABILITY_LONG_LABELS,
+        format_modifier=_rules.format_modifier,
+        notify_error=_impl._safe_notify_error,
+    )
+
+
 def _progression_panel(user_id, character):
     return build_progression_panel(
         ui=_impl.ui,
@@ -757,6 +803,7 @@ _impl._calculation_rules_dialog = _calculation_rules_dialog
 _impl._portrait_block = _portrait_block
 _impl._identity_panel = _identity_panel
 _impl._faith_panel = _faith_panel
+_impl._spells_panel = _spells_panel
 _impl._progression_panel = _progression_panel
 _impl._feats_panel = _feats_panel
 _impl._combat_panel = _combat_panel

@@ -976,7 +976,7 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
     {
         "title": "Personnages JDR — V1.8.0",
         "icon": "casino",
-        "caption": "Objets magiques, armes liées, portrait, dons, foi et feuille Pathfinder / Ravenloft",
+        "caption": "Sorts préparés, objets magiques, armes liées, dons, foi et feuille Pathfinder / Ravenloft",
         "keywords": (
             "jdr personnage ravenloft pathfinder feuille force "
             "dextérité constitution intelligence sagesse charisme "
@@ -989,16 +989,37 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
             "foi divinité iomedae guerre war soleil sun sous-domaine "
             "combat casting selective channeling portrait photo image "
             "jpeg jpg png webp armes arme liée équipement attaques maître magique munitions iomedae "
-            "objets magiques cloak resistance wand cure light wounds handy haversack sac contenu conteneur"
+            "objets magiques cloak resistance wand cure light wounds handy haversack sac contenu conteneur "
+            "sorts spells clerc cleric préparation emplacements slots oraisons domaine DD sagesse prière"
         ),
         "content": """
+### Phase 15A en validation — sorts préparés et emplacements
+
+Un nouvel onglet **Sorts** est disponible pour le **Clerc Pathfinder 1e**. Pendant cette phase de validation, l’application reste officiellement en **JDR V1.8.0**; la finalisation en V1.9.0 viendra après le test réel dans le navigateur.
+
+La section **Configurer** sépare le **niveau de Clerc**, qui détermine les emplacements quotidiens, du **niveau de lanceur**, conservé comme référence pour les effets. La caractéristique de lancement est configurable et utilise **Sagesse** par défaut. Le DD de référence est calculé automatiquement avec la formule Pathfinder **10 + niveau du sort + modificateur de caractéristique**.
+
+Les emplacements du Clerc sont proposés du niveau 1 au niveau 20. Les sorts bonus provenant d’une caractéristique élevée sont ajoutés automatiquement. Les **oraisons (niveau 0)** sont préparées mais restent réutilisables après utilisation. À partir du niveau 1 de sort, un **créneau de domaine** distinct est suivi pour chaque niveau accessible.
+
+Les domaines déjà inscrits dans **Foi** sont utilisés comme référence. Pour **War / Guerre** et **Sun / Soleil**, l’application propose les sorts de domaine correspondants. Un seul sort de l’un de vos deux domaines peut être préparé dans le créneau de domaine d’un niveau donné. Les choix de campagne restent modifiables et un sort personnalisé peut toujours être saisi.
+
+Le catalogue initial contient des sorts de Clerc courants du **Core Rulebook** pour les niveaux 0 à 4 ainsi que les listes complètes des domaines War et Sun. Cette première livraison vise la préparation quotidienne; elle n’essaie pas encore d’automatiser tous les effets de sorts du jeu.
+
+Chaque ligne préparée indique le nombre **préparé**, **utilisé** et **disponible**. Les boutons d’utilisation servent seulement à suivre les emplacements dépensés; ils n’appliquent pas encore de dégâts, de soins ou d’effets à une cible. Le bouton **Nouvelle prière / repos** remet toutes les utilisations à zéro.
+
+Les tables `rpg_character_spellcasting_profiles` et `rpg_character_prepared_spells` sont créées automatiquement de façon non destructive; aucun SQL manuel n’est requis.
+
+Validation locale avant livraison : **28 tests ciblés Phase 15A**, **196 tests JDR** et **500 tests JF Apps**, tous réussis, avec compilation Python complète.
+
+La **Phase 15B** prévue après validation ajoutera le lancement guidé des sorts et leur intégration progressive à Combat rapide.
+
 ### V1.8.0 — objets magiques et Handy Haversack
 
 L’onglet **Équipement** prend maintenant en charge les objets magiques sans créer un inventaire séparé. Trois modèles de référence sont disponibles : **Cloak of Resistance**, **Wand of Cure Light Wounds** et **Handy Haversack**.
 
 Le **Cloak of Resistance** peut fournir un bonus de résistance configurable. Lorsque l’objet doit être porté, le meilleur bonus actif est appliqué à **Vigueur, Réflexes et Volonté**. Les bonus de résistance ne s’additionnent pas entre eux et les valeurs permanentes **Magie / Divers / Temporaire** des sauvegardes ne sont pas réécrites.
 
-La **Wand of Cure Light Wounds** suit ses charges actuelles et maximales. Le bouton **Utiliser 1 charge** retire une charge de façon persistante. La V1.8.0 n’applique volontairement pas automatiquement les soins à une cible; cette intégration pourra être faite avec la future section **Sorts** et Combat rapide.
+La **Wand of Cure Light Wounds** suit ses charges actuelles et maximales. Le bouton **Utiliser 1 charge** retire une charge de façon persistante. La V1.8.0 n’applique volontairement pas automatiquement les soins à une cible; l’onglet **Sorts** de la Phase 15A prépare maintenant la future intégration avec Combat rapide.
 
 Pour un **Handy Haversack**, ouvrez l’action **Objet magique / rangement** sur le sac. La section **Contenu du conteneur** affiche les équipements du personnage : cochez ceux qui doivent être rangés dans le sac et décochez ceux qui doivent en sortir. Les objets déjà dans le sac sont présélectionnés. Un objet déjà rangé dans un autre conteneur est déplacé vers le Haversack s’il est sélectionné.
 

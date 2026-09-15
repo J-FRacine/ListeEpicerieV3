@@ -112,7 +112,22 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation locale finale : **47 tests ciblés**, **174 tests JDR** et **472 tests JF Apps**, tous réussis.
 - Validation fonctionnelle réelle dans Canner / navigateur effectuée avec succès par l’utilisateur, y compris l’ouverture du dialogue Objet magique et la gestion directe du contenu du Handy Haversack.
 - PostgreSQL de production n’a pas été testé indépendamment par ChatGPT; la validation fonctionnelle provient du test réel de l’utilisateur.
-- Prochaine grande fonction JDR prévue : **Sorts**.
+- Phase 15A **Sorts préparés et emplacements** en cours de validation; la version officielle reste **JDR V1.8.0** jusqu’au test navigateur.
+
+## JDR — Phase 15A Sorts préparés — en validation — 2026-09-15
+
+- Nouvel onglet **Sorts** relié à la fiche existante, sans modifier Combat rapide ni les valeurs permanentes du personnage.
+- Première classe prise en charge : **Clerc Pathfinder 1e**. Le niveau de Clerc détermine les emplacements; un niveau de lanceur distinct peut être conservé pour les effets.
+- Progression d’emplacements intégrée du niveau de Clerc 1 à 20, avec sorts bonus selon la caractéristique de lancement et **DD = 10 + niveau du sort + modificateur de caractéristique**.
+- Les **oraisons** sont préparées mais ne sont pas dépensées à l’utilisation.
+- Un créneau de **sort de domaine** est suivi séparément pour chaque niveau de sort accessible à partir du niveau 1.
+- Les domaines **War / Guerre** et **Sun / Soleil** déjà saisis dans Foi proposent leurs listes de sorts de domaine; le choix reste manuel.
+- Catalogue initial de sorts de Clerc courants du Core Rulebook, niveaux 0 à 4, complété par la liste complète des sorts de domaine War et Sun; un sort personnalisé peut toujours être ajouté.
+- Chaque préparation suit le nombre préparé et le nombre utilisé. L’action **Nouvelle prière / repos** remet les utilisations à zéro.
+- Les tables `rpg_character_spellcasting_profiles` et `rpg_character_prepared_spells` sont créées automatiquement de façon non destructive; aucun SQL manuel.
+- La version officielle reste **JDR V1.8.0** pendant la validation fonctionnelle. Après validation réelle, finaliser en **JDR V1.9.0**.
+- Validation locale avant livraison : **28 tests ciblés Phase 15A**, **196 tests JDR** et **500 tests JF Apps**, tous réussis; compilation Python complète réussie.
+- Phase 15B prévue après cette validation : lancement d’un sort, consommation guidée, effets de référence et intégration progressive à Combat rapide.
 
 ## Finances — état actuel
 
@@ -127,7 +142,8 @@ Version actuelle de travail : **V1.13.6**
 - Export/restauration Finances conserve le nouveau champ.
 - Migration PostgreSQL automatique et idempotente avec `first_installment_fee`; aucun SQL manuel.
 - Validation locale : **39 tests Financement**, **304 tests Finances** et **478 tests JF Apps**, tous réussis; compilation Python complète réussie.
-- Validation navigateur/Canner à effectuer après publication. PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.
+- Validation navigateur/Canner effectuée avec succès par l’utilisateur, y compris le scénario **0 % / 18 versements / frais initial au premier versement**. PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.
+- À conserver pour une prochaine version Finances : dans **Tableau**, les KPI des mois futurs doivent afficher les versements de financement selon leur catégorie/étiquette même lorsqu’ils sont déjà inclus dans un groupe du Budget, **sans les compter deux fois** dans la capacité budgétaire.
 
 ### V1.13.5 — section des transactions prévues repliable — 2026-09-09
 

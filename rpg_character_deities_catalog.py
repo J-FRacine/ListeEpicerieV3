@@ -54,9 +54,8 @@ DEITY_PROFILES = {
             "Holy Sword — niveau 8",
         ),
         "future_equipment_reference": (
-            "L’arme favorite d’Iomedae est l’épée longue. "
-            "La future phase Armes pourra proposer de relier automatiquement "
-            "cette référence à l’Équipement et aux Attaques."
+            "L’arme favorite d’Iomedae est l’épée longue. La gestion actuelle "
+            "des armes peut déjà relier l’épée longue de l’Équipement aux Attaques."
         ),
     },
 }

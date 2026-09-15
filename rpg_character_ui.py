@@ -171,8 +171,8 @@ def rpg_character_panel(
             )
             ui.label(
                 "La feuille comprend la création guidée, l’identité, "
-                "la foi, la progression, les dons, le combat, l’équipement, les "
-                "sauvegardes, les compétences et les attaques."
+                "la foi, les sorts, la progression, les dons, le combat, "
+                "l’équipement, les sauvegardes, les compétences et les attaques."
             ).classes("text-sm jf-muted max-w-xl")
             ui.button(
                 "Créer un personnage",
@@ -345,6 +345,7 @@ def rpg_character_panel(
         )
         identity_tab = ui.tab("Identité", icon="badge")
         faith_tab = ui.tab("Foi", icon="church")
+        spells_tab = ui.tab("Sorts", icon="auto_stories")
         progression_tab = ui.tab(
             "Progression",
             icon="trending_up",
@@ -371,6 +372,10 @@ def rpg_character_panel(
         "faith": faith_tab,
         "domaines": faith_tab,
         "domains": faith_tab,
+        "sorts": spells_tab,
+        "spell": spells_tab,
+        "spells": spells_tab,
+        "magie": spells_tab,
         "progression": progression_tab,
         "niveau": progression_tab,
         "level": progression_tab,
@@ -435,6 +440,9 @@ def rpg_character_panel(
         with ui.tab_panel(faith_tab).classes("px-0"):
             _faith_panel(user_id, character)
 
+        with ui.tab_panel(spells_tab).classes("px-0"):
+            _spells_panel(user_id, character)
+
         with ui.tab_panel(progression_tab).classes("px-0"):
             _progression_panel(user_id, character)
 
@@ -457,10 +465,11 @@ def rpg_character_panel(
             _attacks_panel(user_id, character)
 
     with ui.element("div").classes("jf-rpg-help"):
-        ui.label("Dons et foi structurés").classes("font-bold")
+        ui.label("Foi, sorts et dons structurés").classes("font-bold")
         ui.label(
             "Les dons possèdent leur propre onglet et peuvent alimenter "
             "Combat rapide. La section Foi conserve maintenant la divinité, "
-            "les deux domaines et leurs sous-domaines sans imposer les choix "
-            "de la campagne."
+            "les deux domaines et leurs sous-domaines. L’onglet Sorts suit "
+            "maintenant la préparation du Clerc et ses emplacements, sans "
+            "modifier automatiquement les effets de combat."
         ).classes("text-sm")

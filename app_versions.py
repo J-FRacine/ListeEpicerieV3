@@ -16,11 +16,32 @@ APP_VERSIONS = {
     "grocery": "1.2.0",
     "blood_pressure": "1.2.1",
     "finances": "1.13.5",
-    "rpg": "1.7.0",
+    "rpg": "1.8.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "rpg",
+        "version": "1.8.0",
+        "date": "2026-09-15",
+        "title": "Personnages JDR — V1.8.0",
+        "summary": (
+            "Objets magiques intégrés à Équipement, avec Cloak of Resistance, "
+            "Wand of Cure Light Wounds et gestion directe du contenu du Handy Haversack."
+        ),
+        "changes": [
+            "Les objets magiques utilisent l’inventaire Équipement existant, sans créer un second inventaire.",
+            "Cloak of Resistance applique le meilleur bonus de résistance actif à Vigueur, Réflexes et Volonté lorsque l’objet doit être porté, sans réécrire les valeurs permanentes des sauvegardes.",
+            "Wand of Cure Light Wounds suit ses charges actuelles et maximales; Utiliser 1 charge décrémente le compteur sans appliquer automatiquement des soins à une cible.",
+            "Handy Haversack conserve son poids propre de 5 lb et une capacité suivie de 120 lb; son contenu n’ajoute pas son poids normal à l’encombrement du personnage.",
+            "Le contenu du Handy Haversack se gère directement depuis la fiche du sac par sélection multiple; les objets déjà contenus sont présélectionnés et peuvent être retirés par décochage.",
+            "Le remplacement du contenu est transactionnel : dépassement de capacité ou imbrication d’un conteneur magique est refusé sans déplacement partiel.",
+            "Le champ individuel Rangé dans reste disponible sur chaque équipement pour déplacer un objet isolé.",
+            "Les tables rpg_character_magic_item_details et rpg_character_equipment_containment sont créées automatiquement de façon non destructive; aucun SQL manuel.",
+            "Validation locale réussie : 47 tests ciblés, 174 tests JDR et 472 tests JF Apps. Validation fonctionnelle réussie dans Canner / navigateur par l’utilisateur.",
+        ],
+    },
     {
         "app_key": "rpg",
         "version": "1.7.0",

@@ -12,7 +12,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Liste d'épicerie | 1.2.0 |
 | Journal de pression | 1.2.1 |
 | Finances | 1.13.5 |
-| Personnages JDR | 1.7.0 |
+| Personnages JDR | 1.8.0 |
 | Commentaires et suggestions | 1.0.0 |
 
 Important : ces versions sont celles présentes dans GitHub `main`. Leur validation réelle sur Canner/Render ou PostgreSQL de production doit être confirmée séparément après déploiement.
@@ -95,24 +95,26 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Stabilisation locale réussie : **20 tests ciblés**, **152 tests JDR** et **450 tests JF Apps**.
 - Validation fonctionnelle réelle dans Canner / navigateur effectuée avec succès par l’utilisateur.
 - PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.
-- Phase 14 en validation : **Objets magiques**; ensuite **Sorts**.
+- Phase 14 **Objets magiques** a ensuite été validée et finalisée en **JDR V1.8.0**; prochaine grande fonction : **Sorts**.
 
-## JDR — Phase 14 Objets magiques — validation locale
+## JDR — finalisation V1.8.0 — 2026-09-15
 
-- Version officielle conservée à **JDR V1.7.0** pendant la validation.
-- Nouvelle couche générique d’objets magiques dans **Équipement**, sans second inventaire.
-- Modèles de référence : **Cloak of Resistance**, **Wand of Cure Light Wounds** et **Handy Haversack**.
+- JDR passe officiellement à **V1.8.0**; Finances reste **V1.13.5**.
+- Phase 14 terminée : nouvelle couche générique d’**objets magiques** dans Équipement, sans second inventaire.
+- Modèles de référence validés : **Cloak of Resistance**, **Wand of Cure Light Wounds** et **Handy Haversack**.
 - Le Cloak applique le meilleur bonus de résistance actif à **Vigueur, Réflexes et Volonté** sans modifier les valeurs permanentes de la feuille.
 - Les objets à charges suivent leurs charges actuelles / maximums; **Utiliser 1 charge** décrémente le compteur sans appliquer automatiquement un soin à une cible.
-- Le Handy Haversack suit une capacité de **120 lb** et son propre poids de **5 lb**; les objets rangés dedans n’ajoutent plus leur poids normal à l’encombrement.
-- Le Handy Haversack peut maintenant gérer son contenu directement depuis sa fiche : sélection multiple des équipements, présélection du contenu existant, retrait par décochage et déplacement depuis un autre conteneur.
-- Le remplacement du contenu est transactionnel : dépassement de capacité ou conteneur magique imbriqué refusé avant toute modification partielle.
-- Validation du correctif **Contenu du conteneur** : **47 tests ciblés**, **174 tests JDR** et **472 tests JF Apps**, tous réussis localement.
-- Migration PostgreSQL automatique et non destructive; aucun SQL manuel.
-- Validation locale : **40 tests ciblés**, **167 tests JDR**, **465 tests JF Apps**, tous réussis.
-- Validation fonctionnelle **Canner / navigateur en cours** : ouverture du dialogue Objet magique corrigée et confirmée; sélection directe du contenu du Handy Haversack reste à valider après ce correctif avant finalisation officielle en **JDR V1.8.0**.
-- Après V1.8.0, prochaine grande fonction prévue : **Sorts**.
+- Le Handy Haversack suit une capacité de **120 lb** et son propre poids de **5 lb**; son contenu n’ajoute plus son poids normal à l’encombrement.
+- Le contenu du Handy Haversack se gère directement depuis sa fiche : sélection multiple, présélection du contenu existant, retrait par décochage et déplacement depuis un autre conteneur.
+- Le remplacement du contenu est transactionnel : dépassement de capacité ou conteneur magique imbriqué est refusé avant toute modification partielle.
+- Le champ individuel **Rangé dans** reste disponible pour déplacer un seul équipement.
+- Les tables `rpg_character_magic_item_details` et `rpg_character_equipment_containment` sont créées automatiquement de façon non destructive; aucun SQL manuel.
+- Validation locale finale : **47 tests ciblés**, **174 tests JDR** et **472 tests JF Apps**, tous réussis.
+- Validation fonctionnelle réelle dans Canner / navigateur effectuée avec succès par l’utilisateur, y compris l’ouverture du dialogue Objet magique et la gestion directe du contenu du Handy Haversack.
+- PostgreSQL de production n’a pas été testé indépendamment par ChatGPT; la validation fonctionnelle provient du test réel de l’utilisateur.
+- Prochaine grande fonction JDR prévue : **Sorts**.
 
+## Finances — état actuel
 ## Finances — état actuel
 
 Version actuelle de travail : **V1.13.5**

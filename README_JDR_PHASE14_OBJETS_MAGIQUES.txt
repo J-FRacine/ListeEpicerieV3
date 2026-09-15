@@ -11,9 +11,11 @@ JDR V1.7.0 finalisée et validée localement :
 
 Version
 -------
-La version officielle reste JDR V1.7.0 pendant la validation de cette phase.
-Après validation fonctionnelle Canner/navigateur, finalisation prévue en V1.8.0.
+Phase 14 finalisée officiellement en JDR V1.8.0 après validation locale et
+validation fonctionnelle Canner/navigateur par l’utilisateur.
 
+Objectif
+--------
 Objectif
 --------
 Ajouter des objets magiques à l'Équipement existant sans créer un second
@@ -80,39 +82,22 @@ Sources de règles vérifiées
   donc 120 lb au total; le sac reste à 5 lb; récupérer un objet précis est une
   action de mouvement qui ne provoque pas normalement d'attaque d'opportunité.
 
-Validation navigateur/Canner recommandée
------------------------------------------
-A. Cloak of Resistance
-1. Ouvrir Équipement > Objet magique.
-2. Choisir le modèle Cloak of Resistance.
-3. Enregistrer avec +1 et Équipé/porté activé.
-4. Ouvrir Sauvegardes : Vigueur, Réflexes et Volonté doivent gagner +1.
-5. Peur, Horreur et Folie ne doivent pas recevoir ce bonus automatique.
-6. Déséquiper le cloak : le +1 doit disparaître après rafraîchissement.
-7. Rééquiper : le +1 doit revenir.
-8. Vérifier que les champs Magie/Divers/Temporaire existants n'ont pas été
-   réécrits automatiquement.
-
-B. Wand of Cure Light Wounds
-1. Ajouter le modèle Wand of Cure Light Wounds.
-2. Régler temporairement les charges à 3 / 50 pour faciliter le test.
-3. Vérifier l'affichage du sort et des charges.
-4. Cliquer Utiliser 1 charge : le compteur doit passer à 2.
-5. Vérifier qu'aucun PV n'est modifié automatiquement.
-
-C. Handy Haversack
-1. Ajouter le modèle Handy Haversack.
-2. Vérifier 5 lb et capacité 120 lb.
-3. Ajouter ou choisir quelques équipements existants de poids connu.
-4. Ouvrir l'icône magique/rangement du Handy Haversack.
-5. Dans « Contenu du conteneur », cocher les équipements qui doivent être dans le sac puis enregistrer.
-6. Réouvrir le sac : les objets choisis doivent être déjà cochés.
-7. Vérifier que chaque objet indique son rangement dans le sac et que l'encombrement total compte le sac à 5 lb mais pas le poids de son contenu.
-8. Décocher un objet et enregistrer : son poids doit revenir dans l'encombrement.
-9. Le champ individuel « Rangé dans » doit continuer à permettre de déplacer un seul objet.
-10. Essayer de dépasser 120 lb : aucun déplacement partiel ne doit être enregistré et l'opération doit être refusée.
+Validation navigateur/Canner réalisée
+--------------------------------------
+La validation fonctionnelle a été effectuée avec succès par l’utilisateur pour le
+dialogue Objet magique et la gestion directe du contenu du Handy Haversack.
 
 Après validation
 ----------------
-Finalisation officielle JDR V1.8.0 : version, notes de version, manuel et
-PROJECT_STATUS.md finalisés, puis prochaine grande fonction : Sorts.
+Validation finale V1.8.0
+------------------------
+- tests ciblés Phase 14 + non-régression : 47/47 OK;
+- tous les tests JDR : 174/174 OK;
+- suite complète JF Apps : 472/472 OK;
+- validation fonctionnelle Canner / navigateur : réussie par l’utilisateur;
+- dialogue Objet magique : validé;
+- contenu direct du Handy Haversack : validé;
+- PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.
+
+Phase 14 finalisée officiellement en JDR V1.8.0.
+Prochaine grande fonction JDR : Sorts.

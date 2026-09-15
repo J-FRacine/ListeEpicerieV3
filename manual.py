@@ -964,9 +964,9 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
 """,
     },
     {
-        "title": "Personnages JDR — V1.7.0",
+        "title": "Personnages JDR — V1.8.0",
         "icon": "casino",
-        "caption": "Objets magiques en validation, armes liées, portrait, dons, foi et feuille Pathfinder / Ravenloft",
+        "caption": "Objets magiques, armes liées, portrait, dons, foi et feuille Pathfinder / Ravenloft",
         "keywords": (
             "jdr personnage ravenloft pathfinder feuille force "
             "dextérité constitution intelligence sagesse charisme "
@@ -982,16 +982,25 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
             "objets magiques cloak resistance wand cure light wounds handy haversack sac contenu conteneur"
         ),
         "content": """
-### Phase 14 en validation — objets magiques
+### V1.8.0 — objets magiques et Handy Haversack
 
-L’onglet **Équipement** prend maintenant en charge des objets magiques sans créer un inventaire séparé. Les trois modèles de référence sont **Cloak of Resistance**, **Wand of Cure Light Wounds** et **Handy Haversack**.
+L’onglet **Équipement** prend maintenant en charge les objets magiques sans créer un inventaire séparé. Trois modèles de référence sont disponibles : **Cloak of Resistance**, **Wand of Cure Light Wounds** et **Handy Haversack**.
 
-Pour un **Handy Haversack**, ouvrez l’action **Objet magique / rangement** sur le sac. La section **Contenu du conteneur** affiche les équipements du personnage : cochez ceux qui doivent être rangés dans le sac et décochez ceux qui doivent en sortir. Les objets déjà dans le sac sont présélectionnés. Un objet déjà rangé dans un autre conteneur est déplacé vers le Haversack si vous le sélectionnez.
+Le **Cloak of Resistance** peut fournir un bonus de résistance configurable. Lorsque l’objet doit être porté, le meilleur bonus actif est appliqué à **Vigueur, Réflexes et Volonté**. Les bonus de résistance ne s’additionnent pas entre eux et les valeurs permanentes **Magie / Divers / Temporaire** des sauvegardes ne sont pas réécrites.
 
-La capacité totale de référence est **120 lb** et le sac lui-même reste à **5 lb**. Les éléments contenus ne rajoutent pas leur poids normal à l’encombrement du personnage. L’enregistrement refuse un contenu qui dépasse la capacité et interdit de ranger un conteneur magique dans un autre. Le champ **Rangé dans** demeure disponible sur une fiche d’équipement individuelle pour déplacer un seul objet.
+La **Wand of Cure Light Wounds** suit ses charges actuelles et maximales. Le bouton **Utiliser 1 charge** retire une charge de façon persistante. La V1.8.0 n’applique volontairement pas automatiquement les soins à une cible; cette intégration pourra être faite avec la future section **Sorts** et Combat rapide.
 
-La version officielle reste **JDR V1.7.0** pendant cette validation. Après validation fonctionnelle dans le navigateur, la Phase 14 sera finalisée en **V1.8.0**.
+Pour un **Handy Haversack**, ouvrez l’action **Objet magique / rangement** sur le sac. La section **Contenu du conteneur** affiche les équipements du personnage : cochez ceux qui doivent être rangés dans le sac et décochez ceux qui doivent en sortir. Les objets déjà dans le sac sont présélectionnés. Un objet déjà rangé dans un autre conteneur est déplacé vers le Haversack s’il est sélectionné.
 
+La capacité totale de référence est **120 lb** et le sac lui-même reste à **5 lb**. Les éléments contenus ne rajoutent pas leur poids normal à l’encombrement du personnage. L’enregistrement refuse un contenu qui dépasse la capacité et interdit de ranger un conteneur magique dans un autre. Le remplacement du contenu est transactionnel : aucune partie de la sélection n’est déplacée si la validation échoue.
+
+Le champ **Rangé dans** demeure disponible sur une fiche d’équipement individuelle pour déplacer un seul objet.
+
+Les tables `rpg_character_magic_item_details` et `rpg_character_equipment_containment` sont créées automatiquement de façon non destructive; aucun SQL manuel n’est requis.
+
+La Phase 14 a été validée localement avec **47 tests ciblés**, **174 tests JDR** et **472 tests JF Apps**, puis validée fonctionnellement dans Canner / navigateur par l’utilisateur.
+
+### V1.7.0 — armes détaillées et lien Équipement ↔ Attaques
 ### V1.7.0 — armes détaillées et lien Équipement ↔ Attaques
 
 La V1.7.0 relie maintenant les **armes physiques de l’onglet Équipement** aux **Attaques** sans dupliquer l’objet.

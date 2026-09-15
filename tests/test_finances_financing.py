@@ -28,9 +28,11 @@ def plan(**values):
     row=dict(id=1,is_active=True,plan_type="merchant",provider_name="Marchand",description="Achat",
         original_amount=D("1200"),total_installments=12,completed_installments=2,
         completed_installments_estimated=False,remaining_balance=D("1000"),installment_amount=D("100"),
-        annual_interest_rate=D("0"),fees_total=D("0"),frequency_unit="month",frequency_interval=1,
+        annual_interest_rate=D("0"),fees_total=D("0"),first_installment_fee=D("0"),
+        frequency_unit="month",frequency_interval=1,
         next_due_date=date(2026,10,15),next_planned_date=None,confirmed_tracked_count=1,
-        confirmed_tracked_amount=D("100"),payment_includes_interest=True,base_installment_amount=D("100"),
+        confirmed_tracked_amount=D("100"),confirmed_tracked_principal_amount=D("100"),
+        payment_includes_interest=True,base_installment_amount=D("100"),
         calculated_installment_amount=None,payment_method_name="Visa",payment_method_type="credit_card",
         category_full_name="Maison • Achats",tag_ids=[2],tag_names=["Important"])
     row.update(values);return row
@@ -172,7 +174,8 @@ class FinancingSaveTests(unittest.TestCase):
         args=dict(user_id=7,plan_type="merchant",provider_name=" Magasin ",description=" Achat ",
                   original_amount="1200",total_installments=12,next_due_date="2026-10-15",payment_method_id=4,
                   completed_installments=2,remaining_balance="1000",installment_amount="100",
-                  annual_interest_rate="0",fees_total="0",frequency_unit="month",frequency_interval=1,
+                  annual_interest_rate="0",fees_total="0",first_installment_fee="0",
+                  frequency_unit="month",frequency_interval=1,
                   category_id=3,tag_ids=[5],budget_excluded=True,note=" note ",payment_includes_interest=True)
         args.update(values);return args
 
@@ -188,6 +191,7 @@ class FinancingSaveTests(unittest.TestCase):
         kwargs=save.call_args.kwargs
         self.assertEqual((kwargs["provider_name"],kwargs["description"],kwargs["category_id"],kwargs["tag_ids"]),(" Magasin "," Achat ",3,[5]))
         self.assertTrue(kwargs["budget_excluded"]);self.assertEqual(kwargs["installment_amount"],D("100.00"))
+        self.assertEqual(kwargs["first_installment_fee"],D("0.00"))
         sql,params=cur.execute.call_args.args;self.assertIn("payment_includes_interest=%s"," ".join(sql.split()))
         self.assertEqual(params,(True,D("100.00"),None,False,42,7));conn.return_value.__enter__.return_value.commit.assert_called_once_with()
 
@@ -208,6 +212,7 @@ class FinancingSaveTests(unittest.TestCase):
     def test_real_save_validation_paths(self):
         base=self.raw()
         for changes in [dict(plan_type="bad"),dict(total_installments=0),dict(annual_interest_rate=-1),dict(fees_total=-1),
+                        dict(first_installment_fee=-1),
                         dict(frequency_unit="bad"),dict(frequency_interval=366),dict(completed_installments=13),
                         dict(next_due_date=None,completed_installments=2)]:
             with self.subTest(changes=changes),self.assertRaises(ValueError):data._save_installment_plan_v111(**(base|changes))
@@ -237,6 +242,53 @@ class FinancingSaveTests(unittest.TestCase):
         self.assertTrue(any(sql.startswith("DELETE FROM finance_transactions") and "status='planned'" in sql for sql,_ in calls))
         inserts=[params for sql,params in calls if sql.startswith("INSERT INTO finance_transactions")]
         self.assertEqual([x[-1] for x in inserts],[2,3]);self.assertTrue(all(x[-3] is True for x in inserts))
+
+    def test_rebuild_adds_initial_fee_only_to_first_installment(self):
+        conn,cur=connection();cur.fetchone.side_effect=[
+            plan(id=42,total_installments=3,completed_installments=0,
+                 remaining_balance=D("300"),installment_amount=D("100"),
+                 first_installment_fee=D("40"),next_due_date=date(2026,10,1),
+                 category_id=3,payment_method_id=4,budget_excluded=False),
+            dict(id=101),dict(id=102),dict(id=103),
+        ];cur.fetchall.side_effect=[[],[]]
+        data._rebuild_installment_transactions(cur,7,42)
+        calls=[(" ".join(c.args[0].split()),c.args[1]) for c in cur.execute.call_args_list]
+        inserts=[params for sql,params in calls if sql.startswith("INSERT INTO finance_transactions")]
+        self.assertEqual([row[2] for row in inserts],[D("140.00"),D("100"),D("100.00")])
+        self.assertEqual([row[-1] for row in inserts],[1,2,3])
+
+    def test_confirmed_first_fee_does_not_reduce_principal_twice(self):
+        conn,cur=connection();cur.fetchone.side_effect=[
+            plan(id=42,total_installments=3,completed_installments=0,
+                 remaining_balance=D("300"),installment_amount=D("100"),
+                 first_installment_fee=D("40"),next_due_date=date(2026,10,1),
+                 category_id=3,payment_method_id=4,budget_excluded=False),
+            dict(id=102),dict(id=103),
+        ];cur.fetchall.side_effect=[[dict(installment_number=1,amount=D("140"))],[]]
+        data._rebuild_installment_transactions(cur,7,42)
+        calls=[(" ".join(c.args[0].split()),c.args[1]) for c in cur.execute.call_args_list]
+        inserts=[params for sql,params in calls if sql.startswith("INSERT INTO finance_transactions")]
+        self.assertEqual([row[2] for row in inserts],[D("100"),D("100.00")])
+        self.assertEqual([row[-1] for row in inserts],[2,3])
+
+    def test_month_projection_adds_initial_fee_only_when_installment_one_is_due(self):
+        first=plan(display_completed_installments=0,display_remaining_installments=3,
+                   next_due_date=date(2026,10,1),next_planned_date=None,
+                   remaining_balance=D("300"),installment_amount=D("100"),
+                   first_installment_fee=D("40"),confirmed_tracked_count=0,
+                   confirmed_tracked_amount=D("0"),confirmed_tracked_principal_amount=D("0"))
+        self.assertEqual(
+            data._project_installment_plan_payments_for_month(first,"2026-10"),
+            (D("140.00"),1),
+        )
+        later=plan(display_completed_installments=1,display_remaining_installments=2,
+                   next_due_date=date(2026,11,1),next_planned_date=None,
+                   remaining_balance=D("200"),installment_amount=D("100"),
+                   first_installment_fee=D("40"))
+        self.assertEqual(
+            data._project_installment_plan_payments_for_month(later,"2026-11"),
+            (D("100.00"),1),
+        )
 
     def test_progress_inconsistency_and_completed_case(self):
         result=analyze_installment_progress(original_amount="1200",remaining_balance="1000",installment_amount="100",

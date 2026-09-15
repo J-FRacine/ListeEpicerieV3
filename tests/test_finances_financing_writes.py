@@ -16,8 +16,8 @@ writes = data._financing_writes
 SIGNATURES = {
     '_plan_transaction_note': '(plan, installment_number)',
     '_rebuild_installment_transactions': '(cur, user_id, plan_id)',
-    '_save_installment_plan_v111': "(user_id, *, plan_type, provider_name, description, original_amount, total_installments, next_due_date, payment_method_id, category_id=None, tag_ids=None, purchase_date=None, completed_installments=0, remaining_balance=None, installment_amount=None, annual_interest_rate=0, fees_total=0, frequency_unit='month', frequency_interval=1, budget_excluded=False, note=None, plan_id=None)",
-    'save_installment_plan': "(user_id, *, plan_type, provider_name, description, original_amount, total_installments, next_due_date, payment_method_id, plan_id=None, purchase_date=None, completed_installments=0, remaining_balance=None, installment_amount=None, annual_interest_rate=0, fees_total=0, frequency_unit='month', frequency_interval=1, category_id=None, tag_ids=None, budget_excluded=False, note=None, payment_includes_interest=True)",
+    '_save_installment_plan_v111': "(user_id, *, plan_type, provider_name, description, original_amount, total_installments, next_due_date, payment_method_id, category_id=None, tag_ids=None, purchase_date=None, completed_installments=0, remaining_balance=None, installment_amount=None, annual_interest_rate=0, fees_total=0, first_installment_fee=0, frequency_unit='month', frequency_interval=1, budget_excluded=False, note=None, plan_id=None)",
+    'save_installment_plan': "(user_id, *, plan_type, provider_name, description, original_amount, total_installments, next_due_date, payment_method_id, plan_id=None, purchase_date=None, completed_installments=0, remaining_balance=None, installment_amount=None, annual_interest_rate=0, fees_total=0, first_installment_fee=0, frequency_unit='month', frequency_interval=1, category_id=None, tag_ids=None, budget_excluded=False, note=None, payment_includes_interest=True)",
     'toggle_installment_plan': '(user_id, plan_id, is_active)',
     'delete_installment_plan': '(user_id, plan_id)',
 }

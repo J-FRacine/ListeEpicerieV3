@@ -215,6 +215,9 @@ assert callable(build_financing_panel)
                                         installment_amount=Decimal('100'), total_installments=12, completed_installments=None)
         preview = ui.find('label', '')[3]
         self.assertIn('versement total calculé : 150', preview.set_text.call_args.args[0])
+        initial_fee = ui.find('number', 'Frais au premier versement')[3]
+        self.assertEqual(initial_fee.value, Decimal('0'))
+        initial_fee.value = Decimal('40')
         completed = ui.find('number', 'Versements déjà effectués — facultatif')[3]
         completed.value = 2
         ui.click(text='Enregistrer')
@@ -224,6 +227,10 @@ assert callable(build_financing_panel)
         deps['save_installment_plan'].assert_called_once()
         self.assertEqual(deps['save_installment_plan'].call_args.kwargs['completed_installments'], 2)
         self.assertFalse(deps['save_installment_plan'].call_args.kwargs['payment_includes_interest'])
+        self.assertEqual(
+            deps['save_installment_plan'].call_args.kwargs['first_installment_fee'],
+            Decimal('40'),
+        )
         deps['refresh_all'].assert_called_once_with()
         deps['save_installment_plan'].side_effect = ValueError('refus')
         deps['refresh_all'].reset_mock()

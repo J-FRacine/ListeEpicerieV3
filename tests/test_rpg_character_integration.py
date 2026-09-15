@@ -119,7 +119,7 @@ class CharacterIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(
             app_versions.APP_VERSIONS["finances"],
-            "1.13.5",
+            "1.13.6",
         )
         note = next(
             row

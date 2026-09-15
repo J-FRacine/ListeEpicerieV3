@@ -1003,9 +1003,9 @@ Les emplacements du Clerc sont proposés du niveau 1 au niveau 20. Les sorts bon
 
 Les domaines déjà inscrits dans **Foi** sont utilisés comme référence. Pour **War / Guerre** et **Sun / Soleil**, l’application propose les sorts de domaine correspondants. Un seul sort de l’un de vos deux domaines peut être préparé dans le créneau de domaine d’un niveau donné. Les choix de campagne restent modifiables et un sort personnalisé peut toujours être saisi.
 
-Le catalogue initial contient des sorts de Clerc courants du **Core Rulebook** pour les niveaux 0 à 4 ainsi que les listes complètes des domaines War et Sun. Cette première livraison vise la préparation quotidienne; elle n’essaie pas encore d’automatiser tous les effets de sorts du jeu.
+Le catalogue initial contient des sorts de Clerc courants du **Core Rulebook** pour les niveaux 0 à 4 ainsi que les listes complètes des domaines War et Sun. Le niveau 1 inclut notamment **Protection from Chaos, Protection from Evil, Protection from Good et Protection from Law**. Cette première livraison vise la préparation quotidienne; elle n’essaie pas encore d’automatiser tous les effets de sorts du jeu.
 
-Chaque ligne préparée indique le nombre **préparé**, **utilisé** et **disponible**. Les boutons d’utilisation servent seulement à suivre les emplacements dépensés; ils n’appliquent pas encore de dégâts, de soins ou d’effets à une cible. Le bouton **Nouvelle prière / repos** remet toutes les utilisations à zéro.
+Chaque ligne préparée affiche maintenant de façon plus visible des badges **Préparé**, **Utilisé** et surtout **Restant** sur la ligne du titre. Le nombre restant est vert lorsqu’un exemplaire est encore disponible et rouge lorsqu’il est à zéro. Un résumé **restant / utilisé** est également affiché pour chaque niveau de sort, avec le créneau de domaine séparé. Les boutons d’utilisation servent seulement à suivre les emplacements dépensés; ils n’appliquent pas encore de dégâts, de soins ou d’effets à une cible. Le bouton **Nouvelle prière / repos** remet toutes les utilisations à zéro.
 
 Les tables `rpg_character_spellcasting_profiles` et `rpg_character_prepared_spells` sont créées automatiquement de façon non destructive; aucun SQL manuel n’est requis.
 

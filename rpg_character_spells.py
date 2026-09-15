@@ -411,8 +411,13 @@ def build_spells_panel(
                         "Les sorts de domaine peuvent néanmoins être saisis manuellement."
                     ).classes("text-sm jf-muted")
 
+        usage_by_level = {int(item["spell_level"]): item for item in usage}
+
         with ui.card().classes("w-full p-5"):
             ui.label("Préparation actuelle").classes("text-xl font-bold")
+            ui.label(
+                "Le nombre restant est mis en évidence pour être lisible rapidement en jeu."
+            ).classes("text-sm jf-muted")
             if not prepared:
                 ui.label(
                     "Aucun sort préparé. Utilisez « Préparer un sort » pour remplir les emplacements du jour."
@@ -420,18 +425,72 @@ def build_spells_panel(
                 return
 
             for level in sorted({int(row.get("spell_level") or 0) for row in prepared}):
-                ui.label(level_label(level)).classes("text-lg font-bold mt-3")
+                level_usage = usage_by_level.get(level, {})
+                with ui.row().classes(
+                    "w-full items-center justify-between gap-2 flex-wrap mt-3"
+                ):
+                    ui.label(level_label(level)).classes("text-lg font-bold")
+                    with ui.row().classes("gap-2 items-center flex-wrap"):
+                        if level == 0:
+                            ui.badge(
+                                f"{int(level_usage.get('normal_prepared') or 0)} préparée(s) — réutilisables"
+                            ).props("color=primary").classes("text-sm font-bold px-2 py-1")
+                        else:
+                            normal_used = int(level_usage.get("normal_used") or 0)
+                            normal_remaining = int(level_usage.get("normal_available") or 0)
+                            ui.badge(
+                                f"Normaux : {normal_remaining} restant(s) • {normal_used} utilisé(s)"
+                            ).props(
+                                "color=positive" if normal_remaining > 0 else "color=negative"
+                            ).classes("text-sm font-bold px-2 py-1")
+                            if int(level_usage.get("domain_slots") or 0):
+                                domain_used = int(level_usage.get("domain_used") or 0)
+                                domain_remaining = int(level_usage.get("domain_available") or 0)
+                                ui.badge(
+                                    f"Domaine : {domain_remaining} restant • {domain_used} utilisé"
+                                ).props(
+                                    "color=positive" if domain_remaining > 0 else "color=negative"
+                                ).classes("text-sm font-bold px-2 py-1")
+
                 for row in [item for item in prepared if int(item.get("spell_level") or 0) == level]:
                     prepared_count = int(row.get("prepared_count") or 1)
                     used_count = 0 if level == 0 else int(row.get("used_count") or 0)
                     remaining = prepared_count if level == 0 else max(0, prepared_count - used_count)
                     with ui.card().classes("w-full p-3"):
                         with ui.row().classes("w-full items-start justify-between gap-3 flex-wrap"):
-                            with ui.column().classes("gap-0 grow min-w-0"):
+                            with ui.column().classes("gap-1 grow min-w-0"):
                                 title = str(row.get("spell_name") or "Sort")
                                 if row.get("slot_kind") == "domain":
                                     title += " — Domaine"
-                                ui.label(title).classes("font-bold")
+                                with ui.row().classes(
+                                    "w-full items-center justify-between gap-2 flex-wrap"
+                                ):
+                                    ui.label(title).classes("text-lg font-bold")
+                                    with ui.row().classes("gap-1 items-center flex-wrap"):
+                                        ui.badge(
+                                            f"Préparé {prepared_count}"
+                                        ).props("color=grey-7").classes(
+                                            "text-sm font-bold px-2 py-1"
+                                        )
+                                        if level == 0:
+                                            ui.badge(
+                                                "Réutilisable"
+                                            ).props("color=primary").classes(
+                                                "text-sm font-bold px-2 py-1"
+                                            )
+                                        else:
+                                            ui.badge(
+                                                f"Utilisé {used_count}"
+                                            ).props(
+                                                "color=orange-8" if used_count > 0 else "color=grey-6"
+                                            ).classes("text-sm font-bold px-2 py-1")
+                                            ui.badge(
+                                                f"Restant {remaining}"
+                                            ).props(
+                                                "color=positive" if remaining > 0 else "color=negative"
+                                            ).classes(
+                                                "text-base font-bold px-3 py-1"
+                                            )
                                 meta = []
                                 if row.get("school"):
                                     meta.append(str(row["school"]))
@@ -443,12 +502,6 @@ def build_spells_panel(
                                     ui.label(" • ".join(meta)).classes("text-xs jf-muted")
                                 if row.get("summary"):
                                     ui.label(str(row["summary"])).classes("text-sm mt-1")
-                                if level == 0:
-                                    ui.label(f"Préparé {prepared_count} fois — oraison réutilisable").classes("text-xs text-primary")
-                                else:
-                                    ui.label(
-                                        f"Préparé : {prepared_count} — utilisé : {used_count} — disponible : {remaining}"
-                                    ).classes("text-xs text-primary")
                             with ui.row().classes("gap-1"):
                                 if level > 0:
                                     def mark_used(_event=None, selected=dict(row)):

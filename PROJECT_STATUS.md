@@ -123,7 +123,9 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Un créneau de **sort de domaine** est suivi séparément pour chaque niveau de sort accessible à partir du niveau 1.
 - Les domaines **War / Guerre** et **Sun / Soleil** déjà saisis dans Foi proposent leurs listes de sorts de domaine; le choix reste manuel.
 - Catalogue initial de sorts de Clerc courants du Core Rulebook, niveaux 0 à 4, complété par la liste complète des sorts de domaine War et Sun; un sort personnalisé peut toujours être ajouté.
-- Chaque préparation suit le nombre préparé et le nombre utilisé. L’action **Nouvelle prière / repos** remet les utilisations à zéro.
+- Correctif catalogue : ajout au niveau 1 de **Protection from Chaos**, **Protection from Evil**, **Protection from Good** et **Protection from Law**.
+- Correctif lisibilité : chaque sort affiche sur sa ligne de titre des badges **Préparé / Utilisé / Restant**; le nombre restant est mis en évidence en vert ou rouge, et chaque niveau affiche aussi son résumé restant/utilisé pour les emplacements normaux et de domaine.
+- L’action **Nouvelle prière / repos** remet les utilisations à zéro.
 - Les tables `rpg_character_spellcasting_profiles` et `rpg_character_prepared_spells` sont créées automatiquement de façon non destructive; aucun SQL manuel.
 - La version officielle reste **JDR V1.8.0** pendant la validation fonctionnelle. Après validation réelle, finaliser en **JDR V1.9.0**.
 - Validation locale avant livraison : **28 tests ciblés Phase 15A**, **196 tests JDR** et **500 tests JF Apps**, tous réussis; compilation Python complète réussie.

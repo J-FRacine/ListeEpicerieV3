@@ -20,8 +20,10 @@ Fonctions
 - un créneau de domaine par niveau de sort accessible à partir du niveau 1;
 - domaines War/Guerre et Sun/Soleil reliés à la section Foi;
 - catalogue initial de Clerc niveaux 0 à 4 + listes War/Sun 1 à 9;
+- niveau 1 complété avec Protection from Chaos / Evil / Good / Law;
 - ajout possible de sorts personnalisés;
-- nombre préparé, utilisé et disponible;
+- badges visibles Préparé / Utilisé / Restant sur chaque sort;
+- résumé utilisé/restant par niveau de sort, incluant le créneau de domaine;
 - Nouvelle prière / repos remet les utilisations à zéro;
 - conversion spontanée Cure / Inflict conservée comme configuration de référence.
 
@@ -52,6 +54,13 @@ Limites volontaires de la Phase 15A
 - catalogue général initial limité aux sorts courants du Core niveau 0 à 4;
 - autres classes de lanceurs à ajouter plus tard;
 - pouvoirs de domaine et canalisation non automatisés ici.
+
+Correctif lisibilité / catalogue
+--------------------------------
+- ajout des quatre variantes Protection from... de niveau 1;
+- statut Préparé / Utilisé / Restant déplacé sur la ligne de titre avec badges;
+- Restant est mis en évidence (vert si disponible, rouge à zéro);
+- résumé utilisé/restant affiché au niveau de chaque groupe de sorts.
 
 Validation navigateur recommandée
 ---------------------------------

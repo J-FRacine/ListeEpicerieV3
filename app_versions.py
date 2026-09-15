@@ -16,11 +16,32 @@ APP_VERSIONS = {
     "grocery": "1.2.0",
     "blood_pressure": "1.2.1",
     "finances": "1.13.6",
-    "rpg": "1.8.0",
+    "rpg": "1.9.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "rpg",
+        "version": "1.9.0",
+        "date": "2026-09-15",
+        "title": "Personnages JDR — V1.9.0 — sorts préparés",
+        "summary": (
+            "Nouvel onglet Sorts pour préparer et suivre les emplacements quotidiens "
+            "du Clerc Pathfinder 1e, avec domaines et suivi des utilisations."
+        ),
+        "changes": [
+            "Nouvel onglet Sorts avec profil de lancement : niveau de Clerc, niveau de lanceur et caractéristique de lancement configurable.",
+            "Progression des emplacements du Clerc niveaux 1 à 20, sorts bonus de caractéristique et DD automatique selon 10 + niveau du sort + modificateur de caractéristique.",
+            "Les oraisons sont préparées mais restent réutilisables; les sorts de niveau 1+ suivent séparément le nombre préparé, utilisé et restant.",
+            "Un créneau de domaine distinct est suivi pour chaque niveau accessible; War/Guerre et Sun/Soleil réutilisent les domaines déjà inscrits dans Foi.",
+            "Le catalogue initial couvre les sorts courants de Clerc niveaux 0 à 4 et inclut Protection from Chaos, Evil, Good et Law au niveau 1; des sorts personnalisés restent possibles.",
+            "L’interface met en évidence Préparé / Utilisé / Restant par sort et fournit un résumé restant/utilisé par niveau.",
+            "Nouvelle prière / repos remet les utilisations à zéro sans effacer la préparation quotidienne.",
+            "Les tables rpg_character_spellcasting_profiles et rpg_character_prepared_spells sont créées automatiquement de façon non destructive; aucun SQL manuel.",
+            "Validation locale réussie : 29 tests ciblés Phase 15A, 197 tests JDR et 501 tests JF Apps. Validation fonctionnelle réussie dans le navigateur par l’utilisateur.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.13.6",

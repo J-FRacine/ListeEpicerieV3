@@ -974,7 +974,7 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
 """,
     },
     {
-        "title": "Personnages JDR — V1.8.0",
+        "title": "Personnages JDR — V1.9.0",
         "icon": "casino",
         "caption": "Sorts préparés, objets magiques, armes liées, dons, foi et feuille Pathfinder / Ravenloft",
         "keywords": (
@@ -993,9 +993,9 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
             "sorts spells clerc cleric préparation emplacements slots oraisons domaine DD sagesse prière"
         ),
         "content": """
-### Phase 15A en validation — sorts préparés et emplacements
+### V1.9.0 — sorts préparés et emplacements
 
-Un nouvel onglet **Sorts** est disponible pour le **Clerc Pathfinder 1e**. Pendant cette phase de validation, l’application reste officiellement en **JDR V1.8.0**; la finalisation en V1.9.0 viendra après le test réel dans le navigateur.
+L’onglet **Sorts** est maintenant officiellement intégré à **JDR V1.9.0** pour le **Clerc Pathfinder 1e**. La préparation quotidienne et le suivi des emplacements ont été validés dans le navigateur.
 
 La section **Configurer** sépare le **niveau de Clerc**, qui détermine les emplacements quotidiens, du **niveau de lanceur**, conservé comme référence pour les effets. La caractéristique de lancement est configurable et utilise **Sagesse** par défaut. Le DD de référence est calculé automatiquement avec la formule Pathfinder **10 + niveau du sort + modificateur de caractéristique**.
 
@@ -1009,9 +1009,9 @@ Chaque ligne préparée affiche maintenant de façon plus visible des badges **P
 
 Les tables `rpg_character_spellcasting_profiles` et `rpg_character_prepared_spells` sont créées automatiquement de façon non destructive; aucun SQL manuel n’est requis.
 
-Validation locale avant livraison : **28 tests ciblés Phase 15A**, **196 tests JDR** et **500 tests JF Apps**, tous réussis, avec compilation Python complète.
+Validation locale finale : **29 tests ciblés Phase 15A**, **197 tests JDR** et **501 tests JF Apps**, tous réussis, avec compilation Python complète. La validation fonctionnelle dans le navigateur a également été réussie par l’utilisateur.
 
-La **Phase 15B** prévue après validation ajoutera le lancement guidé des sorts et leur intégration progressive à Combat rapide.
+La **Phase 15B** est la prochaine étape prévue : lancement guidé des sorts et intégration progressive à Combat rapide.
 
 ### V1.8.0 — objets magiques et Handy Haversack
 

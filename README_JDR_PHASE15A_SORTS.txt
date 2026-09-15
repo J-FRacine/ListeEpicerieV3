@@ -1,8 +1,8 @@
 JDR — PHASE 15A — SORTS PRÉPARÉS ET EMPLACEMENTS
 =================================================
 
-Version officielle pendant validation : JDR V1.8.0
-Finalisation prévue après validation navigateur : JDR V1.9.0
+Version officielle : JDR V1.9.0
+Phase 15A validée dans le navigateur le 2026-09-15
 
 Objectif
 --------
@@ -62,23 +62,17 @@ Correctif lisibilité / catalogue
 - Restant est mis en évidence (vert si disponible, rouge à zéro);
 - résumé utilisé/restant affiché au niveau de chaque groupe de sorts.
 
-Validation navigateur recommandée
----------------------------------
-1. Ouvrir un personnage Clerc puis l'onglet Sorts.
-2. Vérifier le niveau de Clerc et le niveau de lanceur dans Configurer.
-3. Vérifier les emplacements et le DD avec la Sagesse actuelle.
-4. Préparer une oraison et confirmer qu'elle est indiquée réutilisable.
-5. Préparer un sort normal puis le marquer utilisé et le rendre disponible.
-6. Avec War / Sun dans Foi, préparer un sort de domaine.
-7. Vérifier qu'un deuxième sort de domaine au même niveau est refusé.
-8. Utiliser Nouvelle prière / repos et vérifier que les utilisations reviennent à zéro.
-9. Recharger la page et confirmer que la préparation est persistante.
+Validation navigateur réalisée
+------------------------------
+Validation fonctionnelle réussie par l'utilisateur : onglet Sorts, emplacements,
+préparation, suivi utilisé/restant, domaines, repos, persistance, variantes
+Protection from... et nouveaux indicateurs visuels.
 
 Validation locale avant livraison
 --------------------------------
-- 28 tests ciblés Phase 15A : OK
-- 196 tests JDR : OK
-- 500 tests JF Apps : OK
+- 29 tests ciblés Phase 15A : OK
+- 197 tests JDR : OK
+- 501 tests JF Apps : OK
 - compilation Python complète : OK
 
-Après validation réelle, finaliser officiellement JDR V1.9.0.
+Phase 15A finalisée officiellement en JDR V1.9.0. Prochaine étape : Phase 15B.

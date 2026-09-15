@@ -12,7 +12,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Liste d'épicerie | 1.2.0 |
 | Journal de pression | 1.2.1 |
 | Finances | 1.13.6 |
-| Personnages JDR | 1.8.0 |
+| Personnages JDR | 1.9.0 |
 | Commentaires et suggestions | 1.0.0 |
 
 Important : ces versions sont celles présentes dans GitHub `main`. Leur validation réelle sur Canner/Render ou PostgreSQL de production doit être confirmée séparément après déploiement.
@@ -112,9 +112,9 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation locale finale : **47 tests ciblés**, **174 tests JDR** et **472 tests JF Apps**, tous réussis.
 - Validation fonctionnelle réelle dans Canner / navigateur effectuée avec succès par l’utilisateur, y compris l’ouverture du dialogue Objet magique et la gestion directe du contenu du Handy Haversack.
 - PostgreSQL de production n’a pas été testé indépendamment par ChatGPT; la validation fonctionnelle provient du test réel de l’utilisateur.
-- Phase 15A **Sorts préparés et emplacements** en cours de validation; la version officielle reste **JDR V1.8.0** jusqu’au test navigateur.
+- Phase 15A **Sorts préparés et emplacements** a ensuite été validée dans le navigateur et finalisée officiellement en **JDR V1.9.0**.
 
-## JDR — Phase 15A Sorts préparés — en validation — 2026-09-15
+## JDR — finalisation V1.9.0 / Phase 15A Sorts préparés — 2026-09-15
 
 - Nouvel onglet **Sorts** relié à la fiche existante, sans modifier Combat rapide ni les valeurs permanentes du personnage.
 - Première classe prise en charge : **Clerc Pathfinder 1e**. Le niveau de Clerc détermine les emplacements; un niveau de lanceur distinct peut être conservé pour les effets.
@@ -127,9 +127,10 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Correctif lisibilité : chaque sort affiche sur sa ligne de titre des badges **Préparé / Utilisé / Restant**; le nombre restant est mis en évidence en vert ou rouge, et chaque niveau affiche aussi son résumé restant/utilisé pour les emplacements normaux et de domaine.
 - L’action **Nouvelle prière / repos** remet les utilisations à zéro.
 - Les tables `rpg_character_spellcasting_profiles` et `rpg_character_prepared_spells` sont créées automatiquement de façon non destructive; aucun SQL manuel.
-- La version officielle reste **JDR V1.8.0** pendant la validation fonctionnelle. Après validation réelle, finaliser en **JDR V1.9.0**.
-- Validation locale avant livraison : **28 tests ciblés Phase 15A**, **196 tests JDR** et **500 tests JF Apps**, tous réussis; compilation Python complète réussie.
-- Phase 15B prévue après cette validation : lancement d’un sort, consommation guidée, effets de référence et intégration progressive à Combat rapide.
+- JDR passe officiellement à **V1.9.0** après validation fonctionnelle réussie de la Phase 15A.
+- Validation locale finale : **29 tests ciblés Phase 15A**, **197 tests JDR** et **501 tests JF Apps**, tous réussis; compilation Python complète réussie.
+- Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur, incluant préparation, utilisation/restauration, repos, domaines, persistance, les quatre Protection from... et les indicateurs visuels. PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.
+- Prochaine étape : **Phase 15B** — lancement d’un sort, consommation guidée, effets de référence et intégration progressive à Combat rapide.
 
 ## Finances — état actuel
 

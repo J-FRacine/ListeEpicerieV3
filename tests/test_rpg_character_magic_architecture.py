@@ -51,6 +51,20 @@ class MagicArchitectureTests(unittest.TestCase):
         self.assertIn("magic_item_bonus", source)
         self.assertIn("Objet magique (résistance)", source)
 
+    def test_container_contents_are_wired_from_dialog_to_data_layer(self):
+        facade = (ROOT / "rpg_character.py").read_text(encoding="utf-8")
+        dialog = (
+            ROOT / "rpg_character_magic_dialog.py"
+        ).read_text(encoding="utf-8")
+        data = (
+            ROOT / "rpg_character_magic_data.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("set_magic_container_contents", facade)
+        self.assertIn("Contenu du conteneur", dialog)
+        self.assertIn("multiple=True", dialog)
+        self.assertIn("def set_magic_container_contents", data)
+        self.assertIn("conn.commit()", data)
+
 
 if __name__ == "__main__":
     unittest.main()

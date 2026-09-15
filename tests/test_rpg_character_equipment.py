@@ -52,6 +52,33 @@ def effects():
     }
 
 
+def common_panel_kwargs(*, ui, rows, update=None, equipment_dialog=None, delete_dialog=None):
+    return dict(
+        ui=ui,
+        user_id=7,
+        character={"id": 42},
+        list_rpg_equipment=Mock(return_value=rows),
+        apply_equipment_effects=Mock(return_value=effects()),
+        equipment_type_labels={"armor": "Armures", "gear": "Possessions"},
+        armor_category_labels={},
+        weapon_handedness_labels={
+            "light": "Légère",
+            "one_handed": "Une main",
+            "two_handed": "Deux mains",
+            "ranged": "Distance",
+            "other": "Autre",
+        },
+        format_number=str,
+        format_modifier=lambda value: f"{int(value):+d}",
+        update_rpg_equipment_state=update or Mock(),
+        create_attack_from_weapon=Mock(),
+        notify_error=Mock(),
+        character_url=Mock(return_value="/jdr"),
+        equipment_dialog=equipment_dialog or Mock(),
+        delete_equipment_dialog=delete_dialog or Mock(),
+    )
+
+
 class EquipmentPanelTests(unittest.TestCase):
     def make_ui(self):
         ui = MagicMock()
@@ -66,28 +93,12 @@ class EquipmentPanelTests(unittest.TestCase):
 
     def test_empty_equipment_shows_empty_state(self):
         ui = self.make_ui()
-        list_equipment = Mock(return_value=[])
-        apply_effects = Mock(return_value=effects())
+        kwargs = common_panel_kwargs(ui=ui, rows=[])
 
-        build_equipment_panel(
-            ui=ui,
-            user_id=7,
-            character={"id": 42},
-            list_rpg_equipment=list_equipment,
-            apply_equipment_effects=apply_effects,
-            equipment_type_labels={"armor": "Armures"},
-            armor_category_labels={},
-            format_number=str,
-            format_modifier=lambda value: f"{int(value):+d}",
-            update_rpg_equipment_state=Mock(),
-            notify_error=Mock(),
-            character_url=Mock(return_value="/jdr"),
-            equipment_dialog=Mock(),
-            delete_equipment_dialog=Mock(),
-        )
+        build_equipment_panel(**kwargs)
 
-        list_equipment.assert_called_once_with(7, 42)
-        apply_effects.assert_called_once_with({"id": 42}, [])
+        kwargs["list_rpg_equipment"].assert_called_once_with(7, 42)
+        kwargs["apply_equipment_effects"].assert_called_once_with({"id": 42}, [])
         self.assertTrue(
             any(
                 call.args and call.args[0] == "Aucun équipement"
@@ -111,23 +122,10 @@ class EquipmentPanelTests(unittest.TestCase):
         url = Mock(
             return_value="/?tab=jdr&character=42&section=equipement"
         )
+        kwargs = common_panel_kwargs(ui=ui, rows=[row], update=update)
+        kwargs["character_url"] = url
 
-        build_equipment_panel(
-            ui=ui,
-            user_id=7,
-            character={"id": 42},
-            list_rpg_equipment=Mock(return_value=[row]),
-            apply_equipment_effects=Mock(return_value=effects()),
-            equipment_type_labels={"gear": "Possessions"},
-            armor_category_labels={},
-            format_number=str,
-            format_modifier=lambda value: f"{int(value):+d}",
-            update_rpg_equipment_state=update,
-            notify_error=Mock(),
-            character_url=url,
-            equipment_dialog=Mock(),
-            delete_equipment_dialog=Mock(),
-        )
+        build_equipment_panel(**kwargs)
 
         self.assertEqual(ui.switch.call_count, 2)
         for call in ui.switch.call_args_list:
@@ -147,23 +145,14 @@ class EquipmentPanelTests(unittest.TestCase):
         }
         edit_dialog = Mock()
         delete_dialog = Mock()
-
-        build_equipment_panel(
+        kwargs = common_panel_kwargs(
             ui=ui,
-            user_id=7,
-            character={"id": 42},
-            list_rpg_equipment=Mock(return_value=[row]),
-            apply_equipment_effects=Mock(return_value=effects()),
-            equipment_type_labels={"gear": "Possessions"},
-            armor_category_labels={},
-            format_number=str,
-            format_modifier=lambda value: f"{int(value):+d}",
-            update_rpg_equipment_state=Mock(),
-            notify_error=Mock(),
-            character_url=Mock(return_value="/jdr"),
+            rows=[row],
             equipment_dialog=edit_dialog,
-            delete_equipment_dialog=delete_dialog,
+            delete_dialog=delete_dialog,
         )
+
+        build_equipment_panel(**kwargs)
 
         edit_call = next(
             call for call in ui.button.call_args_list

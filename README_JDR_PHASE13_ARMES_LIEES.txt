@@ -6,7 +6,8 @@ Base réellement utilisée
 Dépôt : J-FRacine/ListeEpicerieV3
 Branche : main
 Commit observé : 3208b25228bce2b9603daf0e0261d5cbe83f9e6c
-Version JDR officielle : 1.6.0
+Version JDR officielle au début de la phase : 1.6.0
+Version JDR officielle après validation : 1.7.0
 
 Objectif
 --------
@@ -130,8 +131,8 @@ Ne pas remplacer :
 
 Version
 -------
-JDR reste V1.6.0 pendant la validation navigateur/Canner.
-Après validation, finalisation prévue en V1.7.0.
+La validation navigateur/Canner est terminée avec succès.
+La phase est finalisée officiellement en JDR V1.7.0.
 
 Validation locale
 -----------------
@@ -161,4 +162,13 @@ Test manuel recommandé
 
 Après validation
 ----------------
-Finalisation JDR V1.7.0, puis prochaine grande fonction : Sorts.
+Finalisation JDR V1.7.0 terminée.
+Prochaine grande fonction : Sorts.
+
+Validation finale V1.7.0
+------------------------
+- tests ciblés Phase 13 et panneaux : 20/20 OK;
+- tous les tests JDR : 152/152 OK;
+- suite complète JF Apps : 450/450 OK;
+- validation fonctionnelle Canner / navigateur : réussie par l’utilisateur;
+- PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.

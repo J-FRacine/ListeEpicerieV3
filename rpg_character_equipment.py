@@ -22,6 +22,8 @@ def build_equipment_panel(
     character_url,
     equipment_dialog,
     delete_equipment_dialog,
+    magic_item_dialog=None,
+    use_magic_item_charge=None,
 ):
     equipment = list_rpg_equipment(user_id, character["id"])
     effective = apply_equipment_effects(character, equipment)
@@ -43,7 +45,8 @@ def build_equipment_panel(
                 )
                 ui.label(
                     "Les protections alimentent les statistiques. "
-                    "Les armes physiques peuvent maintenant être liées aux Attaques."
+                    "Les armes peuvent être liées aux Attaques et les objets "
+                    "magiques appliquent leurs effets sans dupliquer les valeurs."
                 ).classes("text-sm jf-muted")
 
             with ui.row().classes("gap-2 flex-wrap"):
@@ -61,6 +64,16 @@ def build_equipment_panel(
                             preset_key="iomedae_longsword",
                         ),
                     ).props("outline color=primary")
+
+                if magic_item_dialog is not None:
+                    ui.button(
+                        "Objet magique",
+                        icon="auto_awesome",
+                        on_click=lambda: magic_item_dialog(
+                            user_id,
+                            character,
+                        ),
+                    ).props("outline color=purple")
 
                 ui.button(
                     "Ajouter",
@@ -241,6 +254,13 @@ def build_equipment_panel(
                                         f"+{row['weapon_enhancement_bonus']} magique",
                                         color="purple",
                                     )
+                                if row.get("is_magic_item"):
+                                    ui.badge("Objet magique", color="purple")
+                                if row.get("container_equipment_name"):
+                                    ui.badge(
+                                        "Dans " + str(row["container_equipment_name"]),
+                                        color="grey",
+                                    )
 
                             ui.label(
                                 f"Quantité {row['quantity']} — "
@@ -369,6 +389,50 @@ def build_equipment_panel(
                                         "text-xs text-primary font-bold"
                                     )
 
+                            if row.get("is_magic_item"):
+                                magic_bits = []
+                                if row.get("magic_resistance_bonus"):
+                                    magic_bits.append(
+                                        "résistance "
+                                        + format_modifier(row["magic_resistance_bonus"])
+                                        + " aux sauvegardes"
+                                    )
+                                if (
+                                    row.get("magic_charges_current") is not None
+                                    or row.get("magic_charges_max") is not None
+                                ):
+                                    magic_bits.append(
+                                        "charges "
+                                        + str(row.get("magic_charges_current") or 0)
+                                        + " / "
+                                        + str(row.get("magic_charges_max") or 0)
+                                    )
+                                if row.get("magic_contained_spell_name"):
+                                    magic_bits.append(
+                                        "sort : " + str(row["magic_contained_spell_name"])
+                                    )
+                                if row.get("magic_kind") == "container":
+                                    magic_bits.append(
+                                        "contenu "
+                                        + format_number(row.get("magic_container_load") or 0)
+                                        + " / "
+                                        + format_number(row.get("magic_capacity_weight") or 0)
+                                        + " lb"
+                                    )
+                                if magic_bits:
+                                    ui.label("Magie : " + " — ".join(magic_bits)).classes(
+                                        "text-xs text-purple-700 font-bold"
+                                    )
+                                if row.get("magic_activation_text"):
+                                    ui.label(row["magic_activation_text"]).classes(
+                                        "text-xs jf-muted"
+                                    )
+
+                            if row.get("container_equipment_name"):
+                                ui.label(
+                                    "Rangé dans : " + str(row["container_equipment_name"])
+                                ).classes("text-xs jf-muted")
+
                             if row.get("notes"):
                                 ui.label(row["notes"]).classes(
                                     "text-xs jf-muted"
@@ -474,6 +538,54 @@ def build_equipment_panel(
                                 ).props(
                                     "flat round color=primary"
                                 ).tooltip("Voir les attaques liées")
+
+                            if magic_item_dialog is not None:
+                                ui.button(
+                                    icon="auto_awesome",
+                                    on_click=lambda current=row: magic_item_dialog(
+                                        user_id,
+                                        character,
+                                        current,
+                                    ),
+                                ).props("flat round color=purple").tooltip(
+                                    "Objet magique / rangement"
+                                )
+
+                            if (
+                                use_magic_item_charge is not None
+                                and row.get("magic_kind") == "charges"
+                            ):
+                                def use_one_charge(current=row):
+                                    try:
+                                        remaining = use_magic_item_charge(
+                                            user_id,
+                                            character["id"],
+                                            current["id"],
+                                        )
+                                    except Exception as error:
+                                        notify_error(
+                                            error,
+                                            "La charge n’a pas pu être utilisée.",
+                                        )
+                                        return
+                                    ui.notify(
+                                        "Charge utilisée — "
+                                        + str(remaining)
+                                        + " restante(s).",
+                                        type="positive",
+                                    )
+                                    ui.navigate.to(
+                                        character_url(character["id"], "equipement")
+                                    )
+
+                                charge_button = ui.button(
+                                    icon="bolt",
+                                    on_click=use_one_charge,
+                                ).props("flat round color=purple").tooltip(
+                                    "Utiliser 1 charge"
+                                )
+                                if int(row.get("magic_charges_current") or 0) <= 0:
+                                    charge_button.props("disable")
 
                             ui.button(
                                 icon="edit",

@@ -16,11 +16,34 @@ APP_VERSIONS = {
     "grocery": "1.2.0",
     "blood_pressure": "1.2.1",
     "finances": "1.13.5",
-    "rpg": "1.6.0",
+    "rpg": "1.7.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "rpg",
+        "version": "1.7.0",
+        "date": "2026-09-15",
+        "title": "Personnages JDR — V1.7.0",
+        "summary": (
+            "Armes détaillées dans Équipement et lien direct avec Attaques et Combat rapide, "
+            "sans duplication de l’arme physique."
+        ),
+        "changes": [
+            "Les armes de l’onglet Équipement peuvent conserver leurs dégâts de base, critique, type de dégâts, portée, catégorie de prise, maîtrise requise, état maître, bonus magique et munitions.",
+            "Une attaque peut être liée à une arme physique existante; l’arme reste la source de ses caractéristiques physiques et de son bonus propre.",
+            "Une arme de maître donne +1 à l’attaque; un bonus magique supérieur remplace ce +1 au lieu de s’y additionner.",
+            "Dégâts, critique, portée et type peuvent être hérités de l’arme lorsque les champs propres à l’attaque sont laissés vides.",
+            "Une même arme peut alimenter plusieurs configurations d’attaque et chaque attaque peut préciser son mode de prise.",
+            "Équipement peut créer directement une attaque liée pour une arme qui n’en possède pas encore.",
+            "Le préréglage Épée longue d’Iomedae est disponible dans Équipement pour les personnages concernés.",
+            "Combat rapide utilise les attaques enrichies et reprend le même bonus provenant de l’arme liée.",
+            "La suppression d’une arme retire ses détails et ses liens sans supprimer les attaques elles-mêmes.",
+            "Les tables rpg_character_weapon_details et rpg_character_attack_weapon_links sont créées automatiquement de façon non destructive; aucun SQL manuel.",
+            "Validation locale réussie : 20 tests ciblés, 152 tests JDR et 450 tests JF Apps. Validation fonctionnelle réussie dans Canner / navigateur par l’utilisateur.",
+        ],
+    },
     {
         "app_key": "rpg",
         "version": "1.6.0",

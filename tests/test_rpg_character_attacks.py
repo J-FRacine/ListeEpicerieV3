@@ -24,6 +24,19 @@ def common_kwargs(ui, *, attacks, create=None, update=None, delete=None):
         attack_total=Mock(return_value=6),
         format_modifier=lambda value: f"{int(value):+d}",
         list_rpg_attacks=Mock(return_value=attacks),
+        list_rpg_equipment=Mock(return_value=[]),
+        weapon_handedness_labels={
+            "light": "Légère",
+            "one_handed": "Une main",
+            "two_handed": "Deux mains",
+            "ranged": "Distance",
+            "other": "Autre",
+        },
+        attack_grip_labels={
+            "default": "Selon l’arme",
+            "one_handed": "Une main",
+            "two_handed": "Deux mains",
+        },
         create_rpg_attack=create or Mock(),
         update_rpg_attack=update or Mock(),
         delete_rpg_attack=delete or Mock(),
@@ -39,6 +52,7 @@ class AttacksPanelTests(unittest.TestCase):
 
         build_attacks_panel(**kwargs)
 
+        kwargs["list_rpg_equipment"].assert_called_once_with(7, 42)
         kwargs["list_rpg_attacks"].assert_called_once_with(7, 42)
         self.assertTrue(
             any(
@@ -58,7 +72,11 @@ class AttacksPanelTests(unittest.TestCase):
             widget("corps à corps"),
             widget("tranchant"),
         ]
-        ui.select.return_value = widget("str")
+        ui.select.side_effect = [
+            widget(None),
+            widget("default"),
+            widget("str"),
+        ]
         ui.number.side_effect = [
             widget(1),
             widget(2),
@@ -97,6 +115,8 @@ class AttacksPanelTests(unittest.TestCase):
                 "notes": "arme principale",
                 "ammunition_current": None,
                 "ammunition_max": None,
+                "linked_equipment_id": None,
+                "grip_mode": "default",
             },
         )
         ui.notify.assert_called_with("Attaque ajoutée.", type="positive")

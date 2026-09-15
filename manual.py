@@ -964,9 +964,9 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
 """,
     },
     {
-        "title": "Personnages JDR — V1.6.0",
+        "title": "Personnages JDR — V1.7.0",
         "icon": "casino",
-        "caption": "Portrait, dons, foi, progression et feuille Pathfinder / Ravenloft",
+        "caption": "Armes liées, portrait, dons, foi, progression et feuille Pathfinder / Ravenloft",
         "keywords": (
             "jdr personnage ravenloft pathfinder feuille force "
             "dextérité constitution intelligence sagesse charisme "
@@ -978,9 +978,35 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
             "fighter guerrier cleric clerc humain elfe magie canalisation domaines sorts divins "
             "foi divinité iomedae guerre war soleil sun sous-domaine "
             "combat casting selective channeling portrait photo image "
-            "jpeg jpg png webp"
+            "jpeg jpg png webp armes arme liée équipement attaques maître magique munitions iomedae"
         ),
         "content": """
+### V1.7.0 — armes détaillées et lien Équipement ↔ Attaques
+
+La V1.7.0 relie maintenant les **armes physiques de l’onglet Équipement** aux **Attaques** sans dupliquer l’objet.
+
+Dans **Équipement**, une arme peut conserver ses dégâts de base, son critique, son type de dégâts, sa portée, sa catégorie de prise, son état **Maître**, son bonus magique, ses munitions, la maîtrise requise et un modèle d’arme facultatif.
+
+Une attaque peut ensuite choisir cette arme comme **arme physique liée**. Lorsqu’elle est liée :
+
+- le bonus propre à l’arme alimente automatiquement le bonus d’attaque;
+- une arme **Maître** apporte +1 à l’attaque;
+- un bonus magique supérieur remplace le +1 de Maître au lieu de s’y additionner;
+- dégâts, critique, portée et type peuvent être hérités de l’arme si les champs propres à l’attaque sont laissés vides;
+- les munitions de l’arme physique deviennent la référence;
+- la même arme peut être utilisée par plusieurs attaques;
+- l’attaque peut préciser une utilisation à une main ou à deux mains.
+
+Les dégâts propres à l’attaque restent volontairement du texte afin de permettre d’y intégrer la Force, les dons et les effets temporaires sans que l’application invente une formule Pathfinder.
+
+Une arme sans attaque liée propose une action pour **créer directement une attaque liée**. Pour un personnage lié à **Iomedae**, Équipement propose aussi un préréglage **Épée longue d’Iomedae**.
+
+**Combat rapide** utilise les attaques enrichies et reprend donc le même bonus provenant de l’arme liée.
+
+La suppression d’une arme enlève ses détails et ses liens, mais **ne supprime pas l’attaque** : celle-ci redevient indépendante.
+
+Les tables `rpg_character_weapon_details` et `rpg_character_attack_weapon_links` sont créées automatiquement de façon non destructive; aucun SQL manuel n’est requis.
+
 ### V1.6.0 — portrait / photo du personnage
 
 La V1.6.0 ajoute un **portrait persistant** directement dans la bannière de la fiche, à gauche du nom du personnage.

@@ -56,6 +56,10 @@ def build_saves_panel(
                     ]
                 )
 
+                magic_item_bonus = as_number(
+                    save_row.get("magic_item_bonus")
+                )
+
                 card_classes = (
                     "jf-rpg-save-card "
                     "jf-rpg-ravenloft"
@@ -171,6 +175,13 @@ def build_saves_panel(
                     ).classes(
                         "text-xs jf-muted"
                     )
+                    if magic_item_bonus:
+                        ui.label(
+                            "Objet magique (résistance) : "
+                            + format_modifier(magic_item_bonus)
+                        ).classes(
+                            "text-xs text-purple-700 font-bold"
+                        )
 
                     def update_total(
                         event=None,
@@ -181,6 +192,7 @@ def build_saves_panel(
                         temp_control=temp_input,
                         ability=ability_key,
                         label_control=total_label,
+                        item_bonus=magic_item_bonus,
                     ):
                         total = (
                             as_number(
@@ -199,6 +211,7 @@ def build_saves_panel(
                                 character,
                                 ability,
                             )
+                            + item_bonus
                         )
                         label_control.set_text(
                             format_modifier(total)

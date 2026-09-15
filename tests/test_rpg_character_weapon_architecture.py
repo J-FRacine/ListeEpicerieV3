@@ -87,9 +87,19 @@ class WeaponArchitectureTests(unittest.TestCase):
             source,
         )
 
-    def test_phase_does_not_replace_large_data_module(self):
-        self.assertFalse(
-            (ROOT / "rpg_character_data.py").exists()
+    def test_phase_keeps_large_data_module_as_existing_dependency(self):
+        data_path = ROOT / "rpg_character_data.py"
+        weapon_data_path = ROOT / "rpg_character_weapon_data.py"
+        self.assertTrue(data_path.exists())
+        self.assertTrue(weapon_data_path.exists())
+
+        source = (
+            ROOT / "rpg_character.py"
+        ).read_text(encoding="utf-8")
+        text = ast.unparse(ast.parse(source))
+        self.assertIn(
+            "import rpg_character_data as _data",
+            text,
         )
 
 

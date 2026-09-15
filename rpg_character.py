@@ -14,6 +14,27 @@ from rpg_character_equipment_dialogs import (
     open_equipment_dialog,
 )
 from rpg_character_equipment_schema import ensure_equipment_schema
+from rpg_character_magic_catalog import (
+    MAGIC_ITEM_TEMPLATES,
+    MAGIC_KIND_LABELS,
+    magic_template_values as magic_item_template_values,
+)
+from rpg_character_magic_data import (
+    clear_magic_details,
+    containment_by_equipment,
+    magic_details_by_equipment,
+    save_magic_details,
+    set_equipment_container,
+    use_magic_item_charge,
+)
+from rpg_character_magic_dialog import open_magic_item_dialog
+from rpg_character_magic_rules import (
+    add_magic_save_bonuses,
+    merge_equipment_with_magic_details,
+    prepare_equipment_for_encumbrance,
+    validate_container_preview,
+)
+from rpg_character_magic_schema import ensure_magic_item_schema
 from rpg_character_feats import build_feats_panel
 from rpg_character_feats_catalog import (
     FEAT_KIND_LABELS,
@@ -96,22 +117,54 @@ def _ensure_weapon_schema():
     )
 
 
-def _list_rpg_equipment(user_id, character_id):
+def _ensure_magic_schema():
     _ensure_weapon_schema()
-    return merge_equipment_with_weapon_details(
-        _data.list_rpg_equipment(
-            user_id,
-            character_id,
-        ),
-        weapon_details_by_equipment(
-            user_id,
-            character_id,
-        ),
-        linked_attacks_by_equipment(
-            user_id,
-            character_id,
-        ),
+    ensure_magic_item_schema(
+        get_connection=_data.get_connection
     )
+
+
+def _list_rpg_equipment(user_id, character_id):
+    _ensure_magic_schema()
+    equipment = merge_equipment_with_weapon_details(
+        _data.list_rpg_equipment(user_id, character_id),
+        weapon_details_by_equipment(user_id, character_id),
+        linked_attacks_by_equipment(user_id, character_id),
+    )
+    return merge_equipment_with_magic_details(
+        equipment,
+        magic_details_by_equipment(user_id, character_id),
+        containment_by_equipment(user_id, character_id),
+    )
+
+
+def _apply_equipment_effects(character, equipment_rows):
+    return _rules.apply_equipment_effects(
+        character,
+        prepare_equipment_for_encumbrance(equipment_rows),
+    )
+
+
+def _list_rpg_saves(user_id, character_id):
+    return add_magic_save_bonuses(
+        _data.list_rpg_saves(user_id, character_id),
+        _list_rpg_equipment(user_id, character_id),
+    )
+
+
+def _save_total_with_magic(character, save_row):
+    return (
+        _rules.save_total(character, save_row)
+        + _as_number(save_row.get("magic_item_bonus"))
+    )
+
+
+def _save_breakdown_with_magic(character, save_row):
+    breakdown = dict(_rules.save_breakdown(character, save_row))
+    bonus = _as_number(save_row.get("magic_item_bonus"))
+    breakdown["magic_item_bonus"] = bonus
+    breakdown["total"] = _as_number(breakdown.get("total")) + bonus
+    return breakdown
 
 
 def _list_rpg_attacks(user_id, character_id):
@@ -134,17 +187,22 @@ def _save_rpg_equipment(
     values,
     equipment_id=None,
 ):
-    _ensure_weapon_schema()
+    _ensure_magic_schema()
     payload = dict(values or {})
-    item_type = str(
-        payload.get("item_type") or "gear"
-    ).strip()
-    wanted_equipped = bool(
-        payload.get("equipped")
-    )
+    magic_supplied = "magic_enabled" in payload
+    container_supplied = "container_equipment_id" in payload
+    container_equipment_id = payload.pop("container_equipment_id", None)
 
-    # Évite le vieux cas NULL non typé lors de la création
-    # d'une nouvelle armure ou d'un nouveau bouclier déjà équipé.
+    if container_supplied:
+        validate_container_preview(
+            _list_rpg_equipment(user_id, character_id),
+            values,
+            equipment_id=equipment_id,
+            container_equipment_id=container_equipment_id,
+        )
+
+    item_type = str(payload.get("item_type") or "gear").strip()
+    wanted_equipped = bool(payload.get("equipped"))
     deferred_equip = (
         equipment_id is None
         and wanted_equipped
@@ -165,24 +223,29 @@ def _save_rpg_equipment(
             user_id,
             character_id,
             saved_id,
-            carried=bool(
-                values.get("carried", True)
-            ),
+            carried=bool(values.get("carried", True)),
             equipped=True,
         )
 
     if item_type == "weapon":
-        save_weapon_details(
-            user_id,
-            character_id,
-            saved_id,
-            values,
-        )
+        save_weapon_details(user_id, character_id, saved_id, values)
     else:
-        clear_weapon_details(
+        clear_weapon_details(user_id, character_id, saved_id)
+
+    # Le dialogue Equipement historique ne fournit pas magic_enabled.
+    # Les proprietes magiques sont donc preservees lors d'une edition normale.
+    if magic_supplied:
+        if bool(values.get("magic_enabled")):
+            save_magic_details(user_id, character_id, saved_id, values)
+        else:
+            clear_magic_details(user_id, character_id, saved_id)
+
+    if container_supplied:
+        set_equipment_container(
             user_id,
             character_id,
             saved_id,
+            container_equipment_id,
         )
 
     return saved_id
@@ -365,6 +428,38 @@ def _equipment_dialog(
     )
 
 
+def _magic_item_dialog(user_id, character, row=None):
+    _ensure_magic_schema()
+    equipment = _list_rpg_equipment(user_id, character["id"])
+    current_id = None
+    if row and row.get("id") not in (None, ""):
+        try:
+            current_id = int(row["id"])
+        except (TypeError, ValueError):
+            current_id = None
+
+    container_options = {
+        int(item["id"]): str(item["item_name"])
+        for item in equipment
+        if item.get("magic_kind") == "container"
+        and int(item["id"]) != current_id
+    }
+
+    return open_magic_item_dialog(
+        ui=_impl.ui,
+        user_id=user_id,
+        character=character,
+        row=row,
+        magic_kind_labels=MAGIC_KIND_LABELS,
+        magic_item_templates=MAGIC_ITEM_TEMPLATES,
+        magic_template_values=magic_item_template_values,
+        container_options=container_options,
+        save_rpg_equipment=_save_rpg_equipment,
+        notify_error=_impl._safe_notify_error,
+        character_url=_impl._character_url,
+    )
+
+
 def _delete_equipment_dialog(
     user_id,
     character,
@@ -386,20 +481,22 @@ def _calculation_rules_dialog(user_id, character):
         ui=_impl.ui,
         user_id=user_id,
         character=character,
-        list_rpg_saves=_data.list_rpg_saves,
+        list_rpg_saves=_list_rpg_saves,
         list_rpg_skills=_data.list_rpg_skills,
         list_rpg_attacks=_list_rpg_attacks,
         armor_class_breakdown=_rules.armor_class_breakdown,
         initiative_breakdown=_rules.initiative_breakdown,
         cmb_breakdown=_rules.cmb_breakdown,
         cmd_breakdown=_rules.cmd_breakdown,
-        equipment_effects=_rules.equipment_effects,
+        equipment_effects=lambda current, rows: _rules.equipment_effects(
+            current, prepare_equipment_for_encumbrance(rows)
+        ),
         format_number=_rules.format_number,
         format_modifier=_rules.format_modifier,
         ability_labels=_rules.ABILITY_LABELS,
         ability_modifier_for_character=
             _rules.ability_modifier_for_character,
-        save_breakdown=_rules.save_breakdown,
+        save_breakdown=_save_breakdown_with_magic,
         save_definitions=_rules.SAVE_DEFINITIONS,
         pathfinder_reference_checks=
             _rules.pathfinder_reference_checks,
@@ -501,7 +598,7 @@ def _combat_panel(user_id, character):
         ability_long_labels=_rules.ABILITY_LONG_LABELS,
         ability_modifier=_rules.ability_modifier,
         format_modifier=_rules.format_modifier,
-        apply_equipment_effects=_rules.apply_equipment_effects,
+        apply_equipment_effects=_apply_equipment_effects,
         armor_class_total=_rules.armor_class_total,
         touch_armor_class=_rules.touch_armor_class,
         flat_footed_armor_class=_rules.flat_footed_armor_class,
@@ -524,7 +621,7 @@ def _equipment_panel(user_id, character):
         user_id=user_id,
         character=character,
         list_rpg_equipment=_list_rpg_equipment,
-        apply_equipment_effects=_rules.apply_equipment_effects,
+        apply_equipment_effects=_apply_equipment_effects,
         equipment_type_labels=_catalog.EQUIPMENT_TYPE_LABELS,
         armor_category_labels=_catalog.ARMOR_CATEGORY_LABELS,
         weapon_handedness_labels=WEAPON_HANDEDNESS_LABELS,
@@ -536,6 +633,8 @@ def _equipment_panel(user_id, character):
         character_url=_impl._character_url,
         equipment_dialog=_equipment_dialog,
         delete_equipment_dialog=_delete_equipment_dialog,
+        magic_item_dialog=_magic_item_dialog,
+        use_magic_item_charge=use_magic_item_charge,
     )
 
 
@@ -544,12 +643,12 @@ def _saves_panel(user_id, character):
         ui=_impl.ui,
         user_id=user_id,
         character=character,
-        list_rpg_saves=_data.list_rpg_saves,
+        list_rpg_saves=_list_rpg_saves,
         save_definitions=_rules.SAVE_DEFINITIONS,
         ability_labels=_rules.ABILITY_LABELS,
         ability_modifier_for_character=
             _rules.ability_modifier_for_character,
-        save_total=_rules.save_total,
+        save_total=_save_total_with_magic,
         format_modifier=_rules.format_modifier,
         as_number=_as_number,
         update_rpg_saves=_data.update_rpg_saves,
@@ -605,6 +704,10 @@ def _attacks_panel(user_id, character):
 _impl.get_rpg_character = _get_rpg_character
 # Combat rapide utilise ce nom global de rpg_character_ui à l'ouverture.
 _impl.list_rpg_attacks = _list_rpg_attacks
+_impl.list_rpg_equipment = _list_rpg_equipment
+_impl.list_rpg_saves = _list_rpg_saves
+_impl.save_total = _save_total_with_magic
+_impl.apply_equipment_effects = _apply_equipment_effects
 _impl._skill_display_name = _skill_display_name
 _impl._skill_breakdown_text = _skill_breakdown_text
 _impl._skill_dialog = _skill_dialog

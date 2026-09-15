@@ -1,6 +1,6 @@
 # JF Apps — État du projet
 
-Dernière mise à jour : 2026-09-14
+Dernière mise à jour : 2026-09-15
 
 Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversations. Le dépôt GitHub `J-FRacine/ListeEpicerieV3` sur `main` est la référence technique.
 
@@ -12,7 +12,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Liste d'épicerie | 1.2.0 |
 | Journal de pression | 1.2.1 |
 | Finances | 1.13.5 |
-| Personnages JDR | 1.6.0 |
+| Personnages JDR | 1.7.0 |
 | Commentaires et suggestions | 1.0.0 |
 
 Important : ces versions sont celles présentes dans GitHub `main`. Leur validation réelle sur Canner/Render ou PostgreSQL de production doit être confirmée séparément après déploiement.
@@ -66,7 +66,49 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - La dépendance **Pillow** est utilisée pour le traitement des images.
 - L’utilisateur a validé en déploiement l’ajout, l’affichage et le fonctionnement du portrait.
 - PostgreSQL de production et Canner n’ont pas été testés indépendamment par ChatGPT; la validation fonctionnelle provient du test réel de l’utilisateur.
-- Prochaine fonction JDR prévue : **armes détaillées et lien Équipement ↔ Attaques**.
+- La Phase 13 **armes détaillées et lien Équipement ↔ Attaques** est maintenant intégrée dans `main` et reste en validation sous **V1.6.0** avant finalisation officielle en V1.7.0.
+
+## JDR — Phase 13 armes détaillées / liens — validation en cours — 2026-09-14
+
+- Base GitHub observée avant stabilisation : `a4d0aab9ef924067c7754580a79f08eb1cc21e32` (`main`).
+- Les armes détaillées et le lien Équipement ↔ Attaques sont présents : dégâts, critique, type, portée, prise, maître, bonus magique, munitions, maîtrise et modèle facultatif.
+- Une attaque peut utiliser une arme physique existante sans dupliquer ses caractéristiques; Combat rapide reçoit les attaques enrichies.
+- Les tables `rpg_character_weapon_details` et `rpg_character_attack_weapon_links` sont créées automatiquement de façon non destructive; aucun SQL manuel.
+- Le test d’architecture livré avec la Phase 13 a été corrigé : dans le dépôt complet, `rpg_character_data.py` doit exister et rester la dépendance historique de la façade; les nouvelles données d’armes demeurent isolées dans `rpg_character_weapon_data.py`.
+- Aucun fichier de production JDR n’est modifié par cette stabilisation; JDR reste **V1.6.0** pendant la validation navigateur/Canner.
+- **Phase 13 — stabilisation des tests historiques réussie** : 20 tests ciblés, 152 tests JDR, 450 tests au total réussis. Les anciens tests Attaques et Équipement ont été alignés sur les dépendances injectées par la Phase 13, sans modification des fichiers de production. JDR reste **V1.6.0** jusqu’à la validation fonctionnelle réelle dans Canner/navigateur.
+
+- Après validation réelle : finaliser **JDR V1.7.0**, mettre à jour version, notes et manuel, puis commencer la prochaine grande fonction : **Sorts**.
+
+
+## JDR — finalisation V1.7.0 — 2026-09-15
+
+- JDR passe officiellement à **V1.7.0**; Finances reste **V1.13.5**.
+- Phase 13 terminée : les armes physiques détaillées sont conservées dans **Équipement** et peuvent être liées aux **Attaques** sans dupliquer leurs caractéristiques.
+- Les armes gèrent notamment dégâts de base, critique, type, portée, catégorie de prise, Maître, bonus magique, munitions, maîtrise requise et modèle facultatif.
+- Une arme de maître donne +1 à l’attaque; un bonus magique supérieur remplace ce +1 au lieu de s’y additionner.
+- Les attaques liées peuvent hériter des dégâts, critique, portée et type lorsque leurs champs propres sont vides. Une même arme peut alimenter plusieurs attaques.
+- **Combat rapide** utilise les attaques enrichies et reprend le même bonus provenant de l’arme liée.
+- Équipement peut créer directement une attaque liée. Le préréglage **Épée longue d’Iomedae** est disponible lorsque pertinent.
+- Les tables `rpg_character_weapon_details` et `rpg_character_attack_weapon_links` sont créées automatiquement de façon non destructive; aucun SQL manuel.
+- La suppression d’une arme supprime ses détails et ses liens, mais conserve les attaques qui deviennent indépendantes.
+- Stabilisation locale réussie : **20 tests ciblés**, **152 tests JDR** et **450 tests JF Apps**.
+- Validation fonctionnelle réelle dans Canner / navigateur effectuée avec succès par l’utilisateur.
+- PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.
+- Phase 14 en validation : **Objets magiques**; ensuite **Sorts**.
+
+## JDR — Phase 14 Objets magiques — validation locale
+
+- Version officielle conservée à **JDR V1.7.0** pendant la validation.
+- Nouvelle couche générique d’objets magiques dans **Équipement**, sans second inventaire.
+- Modèles de référence : **Cloak of Resistance**, **Wand of Cure Light Wounds** et **Handy Haversack**.
+- Le Cloak applique le meilleur bonus de résistance actif à **Vigueur, Réflexes et Volonté** sans modifier les valeurs permanentes de la feuille.
+- Les objets à charges suivent leurs charges actuelles / maximums; **Utiliser 1 charge** décrémente le compteur sans appliquer automatiquement un soin à une cible.
+- Le Handy Haversack suit une capacité de **120 lb** et son propre poids de **5 lb**; les objets rangés dedans n’ajoutent plus leur poids normal à l’encombrement.
+- Migration PostgreSQL automatique et non destructive; aucun SQL manuel.
+- Validation locale : **40 tests ciblés**, **167 tests JDR**, **465 tests JF Apps**, tous réussis.
+- Validation fonctionnelle **Canner / navigateur encore à faire** avant finalisation officielle en **JDR V1.8.0**.
+- Après V1.8.0, prochaine grande fonction prévue : **Sorts**.
 
 ## Finances — état actuel
 

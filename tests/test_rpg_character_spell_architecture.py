@@ -53,7 +53,12 @@ class SpellArchitectureTests(unittest.TestCase):
             "Sorts de domaine disponibles",
             "Nouvelle prière / repos",
             "Marquer 1 emplacement utilisé",
-            "oraison réutilisable",
+            "Réutilisable",
+            "Préparé {prepared_count}",
+            "Utilisé {used_count}",
+            "Restant {remaining}",
+            "Normaux : {normal_remaining} restant(s)",
+            "Domaine : {domain_remaining} restant",
         ):
             self.assertIn(expected, source)
 

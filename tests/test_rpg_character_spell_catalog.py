@@ -15,11 +15,38 @@ class SpellCatalogTests(unittest.TestCase):
         for key in (
             "guidance",
             "cure_light_wounds",
+            "protection_from_chaos",
+            "protection_from_evil",
+            "protection_from_good",
+            "protection_from_law",
             "spiritual_weapon",
             "searing_light",
             "divine_power",
         ):
             self.assertIn(key, CLERIC_SPELLS)
+
+
+    def test_level_one_contains_all_four_protection_from_variants(self):
+        expected = {
+            "Protection from Chaos",
+            "Protection from Evil",
+            "Protection from Good",
+            "Protection from Law",
+        }
+        names = {
+            row["name"]
+            for row in CLERIC_SPELLS.values()
+            if int(row["spell_level"]) == 1
+        }
+        self.assertTrue(expected.issubset(names))
+        for key in (
+            "protection_from_chaos",
+            "protection_from_evil",
+            "protection_from_good",
+            "protection_from_law",
+        ):
+            self.assertEqual(CLERIC_SPELLS[key]["school"], "Abjuration")
+            self.assertEqual(CLERIC_SPELLS[key]["range_text"], "Touch")
 
     def test_war_and_sun_domain_lists_are_available(self):
         rows = domain_spell_rows(["War", "Sun"], 4)

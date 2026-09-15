@@ -11,7 +11,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.0 |
 | Journal de pression | 1.2.1 |
-| Finances | 1.13.5 |
+| Finances | 1.13.6 |
 | Personnages JDR | 1.8.0 |
 | Commentaires et suggestions | 1.0.0 |
 
@@ -116,7 +116,18 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 
 ## Finances — état actuel
 
-Version actuelle de travail : **V1.13.5**
+Version actuelle de travail : **V1.13.6**
+
+### V1.13.6 — frais au premier versement — 2026-09-15
+
+- Ajout d’un champ **Frais au premier versement** distinct des frais totaux répartis dans un financement.
+- Le frais ponctuel s’ajoute uniquement au versement no 1 et ne modifie ni le capital financé ni le montant régulier des versements suivants.
+- Lorsqu’un premier versement est confirmé, seule sa portion de principal réduit le solde restant; le frais initial n’est pas soustrait du capital.
+- Les projections mensuelles, l’échéancier matérialisé et les groupes de financement du Budget reprennent automatiquement le montant réel du premier versement.
+- Export/restauration Finances conserve le nouveau champ.
+- Migration PostgreSQL automatique et idempotente avec `first_installment_fee`; aucun SQL manuel.
+- Validation locale : **39 tests Financement**, **304 tests Finances** et **478 tests JF Apps**, tous réussis; compilation Python complète réussie.
+- Validation navigateur/Canner à effectuer après publication. PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.
 
 ### V1.13.5 — section des transactions prévues repliable — 2026-09-09
 

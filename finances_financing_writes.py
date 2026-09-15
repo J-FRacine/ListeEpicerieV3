@@ -51,6 +51,20 @@ def _rebuild_installment_transactions(cur, user_id, plan_id, *, _next_date, _pla
         (Decimal(row["amount"]) for row in confirmed_rows),
         Decimal("0.00"),
     )
+    standard_amount = Decimal(plan["installment_amount"])
+    first_installment_fee = Decimal(plan.get("first_installment_fee") or 0)
+    confirmed_principal_amount = sum(
+        (
+            (
+                min(Decimal(row["amount"]), standard_amount)
+                if first_installment_fee > 0
+                and int(row.get("installment_number") or 0) == 1
+                else Decimal(row["amount"])
+            )
+            for row in confirmed_rows
+        ),
+        Decimal("0.00"),
+    )
 
     cur.execute(
         """
@@ -91,14 +105,13 @@ def _rebuild_installment_transactions(cur, user_id, plan_id, *, _next_date, _pla
         return
 
     base_due = plan["next_due_date"]
-    standard_amount = Decimal(plan["installment_amount"])
     zero_cost = (
         Decimal(plan["annual_interest_rate"]) == 0
         and Decimal(plan["fees_total"]) == 0
     )
     balance_after_confirmed = max(
         Decimal("0.00"),
-        Decimal(plan["remaining_balance"]) - confirmed_amount,
+        Decimal(plan["remaining_balance"]) - confirmed_principal_amount,
     )
 
     for position, installment_number in enumerate(remaining_numbers):
@@ -120,6 +133,9 @@ def _rebuild_installment_transactions(cur, user_id, plan_id, *, _next_date, _pla
             )
             if adjusted > 0:
                 amount = adjusted.quantize(Decimal("0.01"))
+
+        if installment_number == 1 and first_installment_fee > 0:
+            amount = (amount + first_installment_fee).quantize(Decimal("0.01"))
 
         cur.execute(
             """
@@ -193,6 +209,7 @@ def _save_installment_plan_v111(
     installment_amount=None,
     annual_interest_rate=0,
     fees_total=0,
+    first_installment_fee=0,
     frequency_unit="month",
     frequency_interval=1,
     budget_excluded=False,
@@ -248,6 +265,13 @@ def _save_installment_plan_v111(
     ) or Decimal("0.00")
     if fees < 0:
         raise ValueError("Les frais ne peuvent pas être négatifs.")
+    initial_fee = _decimal_value(
+        first_installment_fee,
+        "Le frais au premier versement",
+        allow_blank=True,
+    ) or Decimal("0.00")
+    if initial_fee < 0:
+        raise ValueError("Le frais au premier versement ne peut pas être négatif.")
 
     if frequency_unit not in FREQUENCY_UNITS:
         raise ValueError("Fréquence invalide.")
@@ -369,6 +393,7 @@ def _save_installment_plan_v111(
                         installment_amount=%s,
                         annual_interest_rate=%s,
                         fees_total=%s,
+                        first_installment_fee=%s,
                         frequency_unit=%s,
                         frequency_interval=%s,
                         next_due_date=%s,
@@ -393,6 +418,7 @@ def _save_installment_plan_v111(
                         payment,
                         interest_rate,
                         fees,
+                        initial_fee,
                         frequency_unit,
                         interval,
                         next_due,
@@ -425,6 +451,7 @@ def _save_installment_plan_v111(
                         installment_amount,
                         annual_interest_rate,
                         fees_total,
+                        first_installment_fee,
                         frequency_unit,
                         frequency_interval,
                         next_due_date,
@@ -436,7 +463,7 @@ def _save_installment_plan_v111(
                     )
                     VALUES (
                         %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                        %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                        %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
                     )
                     RETURNING id;
                     """,
@@ -454,6 +481,7 @@ def _save_installment_plan_v111(
                         payment,
                         interest_rate,
                         fees,
+                        initial_fee,
                         frequency_unit,
                         interval,
                         next_due,
@@ -577,6 +605,7 @@ def save_installment_plan(
     installment_amount=None,
     annual_interest_rate=0,
     fees_total=0,
+    first_installment_fee=0,
     frequency_unit="month",
     frequency_interval=1,
     category_id=None,
@@ -594,6 +623,13 @@ def save_installment_plan(
     """Enregistre un financement; calcule le versement total si intérêts exclus."""
 
     rate = _decimal_value(annual_interest_rate, "Le taux d’intérêt", allow_blank=True) or Decimal("0.00")
+    initial_fee = _decimal_value(
+        first_installment_fee,
+        "Le frais au premier versement",
+        allow_blank=True,
+    ) or Decimal("0.00")
+    if initial_fee < 0:
+        raise ValueError("Le frais au premier versement ne peut pas être négatif.")
     base_payment = (
         _money(installment_amount)
         if installment_amount not in (None, "")
@@ -661,6 +697,7 @@ def save_installment_plan(
         installment_amount=actual_payment,
         annual_interest_rate=annual_interest_rate,
         fees_total=fees_total,
+        first_installment_fee=initial_fee,
         frequency_unit=frequency_unit,
         frequency_interval=frequency_interval,
         category_id=category_id,

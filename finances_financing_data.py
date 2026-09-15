@@ -51,8 +51,23 @@ def _list_installment_plans_v111(
                         FROM finance_transactions AS tx
                         WHERE tx.installment_plan_id=plan.id
                           AND tx.status='confirmed'
-                    ), 0) AS confirmed_tracked_amount
-,
+                    ), 0) AS confirmed_tracked_amount,
+                    COALESCE((
+                        SELECT SUM(
+                            CASE
+                                WHEN tx.installment_number=1
+                                     AND COALESCE(plan.first_installment_fee, 0) > 0
+                                THEN LEAST(
+                                    tx.amount,
+                                    COALESCE(plan.installment_amount, tx.amount)
+                                )
+                                ELSE tx.amount
+                            END
+                        )
+                        FROM finance_transactions AS tx
+                        WHERE tx.installment_plan_id=plan.id
+                          AND tx.status='confirmed'
+                    ), 0) AS confirmed_tracked_principal_amount,
                     (
                         SELECT MIN(tx.transaction_date)
                         FROM finance_transactions AS tx
@@ -105,13 +120,17 @@ def _list_installment_plans_v111(
                 confirmed_amount = Decimal(
                     row.get("confirmed_tracked_amount") or 0
                 )
+                principal_value = row.get("confirmed_tracked_principal_amount")
+                confirmed_principal_amount = Decimal(
+                    confirmed_amount if principal_value is None else principal_value
+                )
                 if (
                     Decimal(row["annual_interest_rate"]) == 0
                     and Decimal(row["fees_total"]) == 0
                 ):
                     row["estimated_remaining_balance"] = max(
                         Decimal("0.00"),
-                        Decimal(row["remaining_balance"]) - confirmed_amount,
+                        Decimal(row["remaining_balance"]) - confirmed_principal_amount,
                     )
                 else:
                     # Avec intérêts/frais, le capital restant réel dépend du
@@ -164,6 +183,9 @@ def list_installment_plans(
     for row in rows:
         rate = Decimal(row.get("annual_interest_rate") or 0)
         row["payment_includes_interest"] = bool(row.get("payment_includes_interest", True))
+        row["first_installment_fee"] = Decimal(
+            row.get("first_installment_fee") or 0
+        )
         row["base_installment_amount"] = Decimal(
             row.get("base_installment_amount") or row.get("installment_amount") or 0
         )
@@ -210,6 +232,8 @@ def _project_installment_plan_payments_for_month(plan, month_value):
         return Decimal("0.00"), 0
 
     amount = Decimal(plan.get("installment_amount") or 0)
+    first_installment_fee = Decimal(plan.get("first_installment_fee") or 0)
+    completed = int(plan.get("display_completed_installments") or 0)
     balance = Decimal(
         plan.get("estimated_remaining_balance", plan.get("remaining_balance", 0))
         or 0
@@ -222,6 +246,7 @@ def _project_installment_plan_payments_for_month(plan, month_value):
     count = 0
 
     for position in range(remaining):
+        installment_number = completed + position + 1
         if due > month_end:
             break
         if due >= month:
@@ -231,6 +256,8 @@ def _project_installment_plan_payments_for_month(plan, month_value):
                 final_amount = balance - previous
                 if final_amount > 0:
                     payment = final_amount.quantize(Decimal("0.01"))
+            if installment_number == 1 and first_installment_fee > 0:
+                payment = (payment + first_installment_fee).quantize(Decimal("0.01"))
             total += payment
             count += 1
         due = next_date(

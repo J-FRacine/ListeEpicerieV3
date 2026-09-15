@@ -88,7 +88,12 @@ def build_financing_panel(
                             label="Taux d’intérêt annuel %", value=current.get("annual_interest_rate", 0), min=0, step=.01
                         ).props("dense outlined").classes("jf-finance-field")
                         fees_total = ui.number(
-                            label="Frais totaux", value=current.get("fees_total", 0), min=0, step=.01
+                            label="Frais totaux — répartis dans le financement",
+                            value=current.get("fees_total", 0), min=0, step=.01
+                        ).props("dense outlined").classes("jf-finance-field")
+                        first_installment_fee = ui.number(
+                            label="Frais au premier versement",
+                            value=current.get("first_installment_fee", 0), min=0, step=.01
                         ).props("dense outlined").classes("jf-finance-field")
                         payment_includes_interest = ui.select(
                             {True: "Oui — le versement est déjà le total", False: "Non — calculer le total avec intérêts"},
@@ -115,6 +120,10 @@ def build_financing_panel(
                             value=current.get("category_id"),
                             label="Catégorie de dépense",
                         ).props("dense outlined clearable options-dense").classes("jf-finance-field")
+                    ui.label(
+                        "Le frais au premier versement s’ajoute uniquement au versement no 1; "
+                        "il n’augmente pas le capital financé ni les versements suivants."
+                    ).classes("text-xs jf-muted")
                     tags_plan = ui.select(
                         _tag_options(user_id),
                         value=current.get("tag_ids") or [],
@@ -211,6 +220,7 @@ def build_financing_panel(
                                 installment_amount=installment_amount.value,
                                 annual_interest_rate=annual_interest_rate.value or 0,
                                 fees_total=fees_total.value or 0,
+                                first_installment_fee=first_installment_fee.value or 0,
                                 payment_includes_interest=payment_includes_interest.value,
                                 frequency_unit=frequency_unit.value,
                                 frequency_interval=int(frequency_interval.value or 1),
@@ -396,7 +406,8 @@ def build_financing_panel(
                             ).classes("text-xs text-primary")
                         if Decimal(plan.get("annual_interest_rate", 0)) or Decimal(plan.get("fees_total", 0)):
                             ui.label(
-                                f"Intérêt : {plan.get('annual_interest_rate', 0)} % — Frais : {_money(plan.get('fees_total', 0))}"
+                                f"Intérêt : {plan.get('annual_interest_rate', 0)} % — "
+                                f"Frais répartis : {_money(plan.get('fees_total', 0))}"
                             ).classes("text-xs jf-muted")
                             if Decimal(plan.get("annual_interest_rate", 0)) > 0:
                                 if plan.get("payment_includes_interest", True):
@@ -406,6 +417,11 @@ def build_financing_panel(
                                         "Base hors intérêts : " + _money(plan.get("base_installment_amount", 0))
                                         + " · total utilisé : " + _money(plan.get("installment_amount", 0))
                                     ).classes("text-xs text-primary")
+                        if Decimal(plan.get("first_installment_fee", 0) or 0) > 0:
+                            ui.label(
+                                "Frais au premier versement : "
+                                + _money(plan.get("first_installment_fee", 0))
+                            ).classes("text-xs text-primary")
         render_financing()
 
     return FinancingPanelHandle(on_refresh=lambda: render_financing.refresh())

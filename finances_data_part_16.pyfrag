@@ -200,6 +200,7 @@ def restore_finance_supplement(user_id, payload):
                 ),
                 annual_interest_rate=raw.get("annual_interest_rate") or 0,
                 fees_total=raw.get("fees_total") or 0,
+                first_installment_fee=raw.get("first_installment_fee") or 0,
                 payment_includes_interest=raw.get("payment_includes_interest", True),
                 frequency_unit=raw.get("frequency_unit") or "month",
                 frequency_interval=raw.get("frequency_interval") or 1,

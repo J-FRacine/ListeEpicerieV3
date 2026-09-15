@@ -15,12 +15,31 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.0",
     "blood_pressure": "1.2.1",
-    "finances": "1.13.5",
+    "finances": "1.13.6",
     "rpg": "1.8.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.13.6",
+        "date": "2026-09-15",
+        "title": "Finances — frais au premier versement",
+        "summary": (
+            "Les financements peuvent maintenant ajouter un frais ponctuel au "
+            "premier versement sans augmenter le capital financé."
+        ),
+        "changes": [
+            "Nouveau champ Frais au premier versement, distinct des frais totaux déjà répartis dans le financement.",
+            "Le frais est ajouté uniquement au versement no 1; les versements suivants conservent leur montant régulier.",
+            "Le frais initial ne réduit pas le capital restant lorsqu’un premier versement confirmé est comptabilisé.",
+            "Les projections mensuelles et les transactions planifiées incluent correctement ce frais lorsqu’il est encore à payer.",
+            "La sauvegarde/restauration Finances conserve le frais initial.",
+            "Migration PostgreSQL automatique et non destructive; aucun SQL manuel.",
+            "Validation locale réussie : 39 tests Financement ciblés, 304 tests Finances et 478 tests JF Apps.",
+        ],
+    },
     {
         "app_key": "rpg",
         "version": "1.8.0",

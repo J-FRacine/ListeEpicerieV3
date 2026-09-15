@@ -275,7 +275,7 @@ def _export_finances_v1110(user_id):
 
 
 def init_finances_schema():
-    """Mise à niveau V1.12.0, idempotente et sans SQL manuel."""
+    """Mise à niveau courante, idempotente et sans SQL manuel."""
 
     _init_finances_schema_v1110()
     with get_connection() as conn:
@@ -325,6 +325,13 @@ def init_finances_schema():
                 """
                 ALTER TABLE finance_installment_plans
                 ADD COLUMN IF NOT EXISTS calculated_installment_amount NUMERIC(14,2);
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE finance_installment_plans
+                ADD COLUMN IF NOT EXISTS first_installment_fee NUMERIC(14,2)
+                NOT NULL DEFAULT 0 CHECK (first_installment_fee >= 0);
                 """
             )
 

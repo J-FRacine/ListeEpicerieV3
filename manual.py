@@ -176,7 +176,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.13.5",
+        "title": "Finances — V1.13.6",
         "icon": "account_balance_wallet",
         "caption": "Prévisions, Budget, financements, conciliation et prêts partagés",
         "keywords": (
@@ -185,6 +185,16 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "compte solde départ solde actuel plus bas prévu fin mois"
         ),
         "content": """
+### V1.13.6 — frais au premier versement d’un financement
+
+Dans **Financements**, utilisez **Frais au premier versement** lorsqu’un programme ajoute un coût ponctuel seulement à la première échéance, par exemple un financement à **0 % sur 18 mois** avec **40 $ de frais au premier versement**.
+
+Saisissez le **Montant initial** comme le capital réellement financé, le **Taux d’intérêt** à 0 %, le nombre de versements prévu et **40 $** dans **Frais au premier versement**. Le versement régulier est calculé sur le capital seulement; le premier versement reçoit ensuite le frais ponctuel. Les versements suivants restent inchangés.
+
+Le champ historique **Frais totaux — répartis dans le financement** reste distinct : il sert aux frais qui doivent faire partie du calcul global du financement. Le nouveau frais initial ne gonfle pas le solde financé et, après confirmation du premier paiement, il n’est pas retranché une seconde fois du capital restant.
+
+La colonne PostgreSQL nécessaire est ajoutée automatiquement au démarrage de Finances. Aucun SQL manuel n’est requis.
+
 ### V1.13.5 — section des transactions prévues repliable
 
 Dans **Conciliation**, le titre indique le nombre de lignes, par exemple **Transactions prévues à confirmer (93)**. Cliquez sur la flèche pour ouvrir ou fermer la section. Elle est ouverte par défaut avec **10 transactions ou moins** (y compris zéro), et fermée au-delà.

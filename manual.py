@@ -1001,7 +1001,6 @@ Les tables `rpg_character_magic_item_details` et `rpg_character_equipment_contai
 La Phase 14 a été validée localement avec **47 tests ciblés**, **174 tests JDR** et **472 tests JF Apps**, puis validée fonctionnellement dans Canner / navigateur par l’utilisateur.
 
 ### V1.7.0 — armes détaillées et lien Équipement ↔ Attaques
-### V1.7.0 — armes détaillées et lien Équipement ↔ Attaques
 
 La V1.7.0 relie maintenant les **armes physiques de l’onglet Équipement** aux **Attaques** sans dupliquer l’objet.
 

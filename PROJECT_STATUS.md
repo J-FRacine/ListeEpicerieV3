@@ -115,7 +115,6 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Prochaine grande fonction JDR prévue : **Sorts**.
 
 ## Finances — état actuel
-## Finances — état actuel
 
 Version actuelle de travail : **V1.13.5**
 

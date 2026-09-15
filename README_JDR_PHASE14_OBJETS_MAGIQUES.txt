@@ -16,8 +16,6 @@ validation fonctionnelle Canner/navigateur par l’utilisateur.
 
 Objectif
 --------
-Objectif
---------
 Ajouter des objets magiques à l'Équipement existant sans créer un second
 inventaire et sans réécrire les valeurs permanentes de la fiche.
 
@@ -87,8 +85,6 @@ Validation navigateur/Canner réalisée
 La validation fonctionnelle a été effectuée avec succès par l’utilisateur pour le
 dialogue Objet magique et la gestion directe du contenu du Handy Haversack.
 
-Après validation
-----------------
 Validation finale V1.8.0
 ------------------------
 - tests ciblés Phase 14 + non-régression : 47/47 OK;

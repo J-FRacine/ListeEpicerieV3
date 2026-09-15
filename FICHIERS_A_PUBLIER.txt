@@ -1,0 +1,17 @@
+FICHIERS A PUBLIER SUR GITHUB APRES VALIDATION
+
+A la racine du depot :
+- rpg_character.py
+- rpg_character_magic_data.py
+- rpg_character_magic_dialog.py
+- manual.py
+- PROJECT_STATUS.md
+- README_JDR_PHASE14_OBJETS_MAGIQUES.txt
+
+Dans le dossier tests :
+- tests/test_rpg_character_magic_architecture.py
+- tests/test_rpg_character_magic_dialog.py
+- tests/test_rpg_character_magic_data.py
+
+Version officielle conservee : JDR V1.7.0.
+Apres publication et redeploiement, tester le Handy Haversack dans le navigateur avant finalisation V1.8.0.

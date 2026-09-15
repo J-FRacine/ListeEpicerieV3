@@ -25,6 +25,7 @@ from rpg_character_magic_data import (
     magic_details_by_equipment,
     save_magic_details,
     set_equipment_container,
+    set_magic_container_contents,
     use_magic_item_charge,
 )
 from rpg_character_magic_dialog import open_magic_item_dialog
@@ -445,6 +446,42 @@ def _magic_item_dialog(user_id, character, row=None):
         and int(item["id"]) != current_id
     }
 
+    equipment_options = {}
+    container_content_ids = []
+    for item in equipment:
+        item_id = int(item["id"])
+        if item_id == current_id:
+            continue
+        if item.get("magic_kind") == "container":
+            continue
+
+        quantity = max(0, _as_number(item.get("quantity"), 1))
+        weight = (
+            _rules.as_decimal(item.get("weight_each"))
+            * quantity
+        )
+        label = str(item.get("item_name") or f"Équipement {item_id}")
+        if quantity != 1:
+            label += f" ×{quantity}"
+        if weight:
+            label += f" — {_rules.format_number(weight)} lb"
+
+        stored_in = item.get("container_equipment_id")
+        if stored_in not in (None, ""):
+            try:
+                stored_in_id = int(stored_in)
+            except (TypeError, ValueError):
+                stored_in_id = None
+            if current_id is not None and stored_in_id == current_id:
+                container_content_ids.append(item_id)
+            elif item.get("container_equipment_name"):
+                label += (
+                    " — actuellement dans "
+                    + str(item["container_equipment_name"])
+                )
+
+        equipment_options[item_id] = label
+
     return open_magic_item_dialog(
         ui=_impl.ui,
         user_id=user_id,
@@ -454,7 +491,10 @@ def _magic_item_dialog(user_id, character, row=None):
         magic_item_templates=MAGIC_ITEM_TEMPLATES,
         magic_template_values=magic_item_template_values,
         container_options=container_options,
+        equipment_options=equipment_options,
+        container_content_ids=container_content_ids,
         save_rpg_equipment=_save_rpg_equipment,
+        set_magic_container_contents=set_magic_container_contents,
         notify_error=_impl._safe_notify_error,
         character_url=_impl._character_url,
     )

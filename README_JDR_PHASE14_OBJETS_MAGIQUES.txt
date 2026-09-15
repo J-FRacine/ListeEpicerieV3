@@ -58,7 +58,10 @@ Modèles de référence
 3. Handy Haversack
    - poids propre : 5 lb;
    - capacité totale suivie : 120 lb;
-   - un objet peut être configuré comme « Rangé dans » le haversack;
+   - depuis la fiche du sac, « Contenu du conteneur » permet de cocher directement les équipements rangés dedans;
+   - les objets déjà contenus sont présélectionnés et décocher un objet le retire du sac;
+   - un objet déjà rangé dans un autre conteneur est déplacé vers le haversack lorsqu’il est sélectionné;
+   - le champ individuel « Rangé dans » reste disponible sur chaque équipement;
    - le contenu ne rajoute pas son poids normal à l'encombrement du personnage;
    - le poids du sac reste 5 lb;
    - la capacité est contrôlée avant le rangement;
@@ -100,15 +103,14 @@ B. Wand of Cure Light Wounds
 C. Handy Haversack
 1. Ajouter le modèle Handy Haversack.
 2. Vérifier 5 lb et capacité 120 lb.
-3. Ajouter ou choisir un objet existant de poids connu, par exemple 10 lb.
-4. Utiliser l'icône magique/rangement sur cet objet et choisir Handy Haversack
-   dans Rangé dans, sans devoir cocher Objet magique.
-5. Vérifier que l'objet indique son rangement dans le sac.
-6. Vérifier que l'encombrement total compte le sac à 5 lb mais pas les 10 lb du
-   contenu.
-7. Retirer l'objet du champ Rangé dans : ses 10 lb doivent revenir dans
-   l'encombrement.
-8. Essayer de dépasser 120 lb : l'enregistrement doit être refusé.
+3. Ajouter ou choisir quelques équipements existants de poids connu.
+4. Ouvrir l'icône magique/rangement du Handy Haversack.
+5. Dans « Contenu du conteneur », cocher les équipements qui doivent être dans le sac puis enregistrer.
+6. Réouvrir le sac : les objets choisis doivent être déjà cochés.
+7. Vérifier que chaque objet indique son rangement dans le sac et que l'encombrement total compte le sac à 5 lb mais pas le poids de son contenu.
+8. Décocher un objet et enregistrer : son poids doit revenir dans l'encombrement.
+9. Le champ individuel « Rangé dans » doit continuer à permettre de déplacer un seul objet.
+10. Essayer de dépasser 120 lb : aucun déplacement partiel ne doit être enregistré et l'opération doit être refusée.
 
 Après validation
 ----------------

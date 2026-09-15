@@ -105,9 +105,12 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Le Cloak applique le meilleur bonus de résistance actif à **Vigueur, Réflexes et Volonté** sans modifier les valeurs permanentes de la feuille.
 - Les objets à charges suivent leurs charges actuelles / maximums; **Utiliser 1 charge** décrémente le compteur sans appliquer automatiquement un soin à une cible.
 - Le Handy Haversack suit une capacité de **120 lb** et son propre poids de **5 lb**; les objets rangés dedans n’ajoutent plus leur poids normal à l’encombrement.
+- Le Handy Haversack peut maintenant gérer son contenu directement depuis sa fiche : sélection multiple des équipements, présélection du contenu existant, retrait par décochage et déplacement depuis un autre conteneur.
+- Le remplacement du contenu est transactionnel : dépassement de capacité ou conteneur magique imbriqué refusé avant toute modification partielle.
+- Validation du correctif **Contenu du conteneur** : **47 tests ciblés**, **174 tests JDR** et **472 tests JF Apps**, tous réussis localement.
 - Migration PostgreSQL automatique et non destructive; aucun SQL manuel.
 - Validation locale : **40 tests ciblés**, **167 tests JDR**, **465 tests JF Apps**, tous réussis.
-- Validation fonctionnelle **Canner / navigateur encore à faire** avant finalisation officielle en **JDR V1.8.0**.
+- Validation fonctionnelle **Canner / navigateur en cours** : ouverture du dialogue Objet magique corrigée et confirmée; sélection directe du contenu du Handy Haversack reste à valider après ce correctif avant finalisation officielle en **JDR V1.8.0**.
 - Après V1.8.0, prochaine grande fonction prévue : **Sorts**.
 
 ## Finances — état actuel

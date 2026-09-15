@@ -12,8 +12,11 @@ def open_magic_item_dialog(
     magic_item_templates,
     magic_template_values,
     container_options,
-    save_rpg_equipment,
-    notify_error,
+    equipment_options=None,
+    container_content_ids=None,
+    save_rpg_equipment=None,
+    set_magic_container_contents=None,
+    notify_error=None,
     character_url,
 ):
     editing = row is not None
@@ -153,6 +156,29 @@ def open_magic_item_dialog(
                 "outlined autogrow maxlength=2000"
             ).classes("w-full mt-2")
 
+            contents_input = None
+            if (
+                editing
+                and original.get("magic_kind") == "container"
+                and set_magic_container_contents is not None
+            ):
+                ui.label(
+                    "Contenu du conteneur"
+                ).classes("text-lg font-bold mt-3")
+                ui.label(
+                    "Cochez les équipements rangés dans ce conteneur. "
+                    "Décocher un équipement le retire du sac. Un objet "
+                    "déjà rangé ailleurs sera déplacé ici."
+                ).classes("text-xs jf-muted")
+                contents_input = ui.select(
+                    equipment_options or {},
+                    label="Équipements rangés dans ce conteneur",
+                    value=list(container_content_ids or ()),
+                    multiple=True,
+                ).props(
+                    "options-dense use-chips"
+                ).classes("w-full")
+
             ui.label(
                 "Le bonus de résistance est ajouté sans modifier les valeurs "
                 "permanentes des Sauvegardes. Les bonus de résistance ne "
@@ -234,16 +260,26 @@ def open_magic_item_dialog(
                     "container_equipment_id": container_input.value,
                 })
                 try:
-                    save_rpg_equipment(
+                    saved_id = save_rpg_equipment(
                         user_id,
                         character["id"],
                         values,
                         equipment_id=original.get("id"),
                     )
+                    if (
+                        contents_input is not None
+                        and str(kind_input.value or "") == "container"
+                    ):
+                        set_magic_container_contents(
+                            user_id,
+                            character["id"],
+                            saved_id,
+                            contents_input.value or [],
+                        )
                 except Exception as error:
                     notify_error(
                         error,
-                        "L’objet magique n’a pas pu être enregistré.",
+                        "L’objet magique ou son contenu n’a pas pu être enregistré.",
                     )
                     return
 

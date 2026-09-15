@@ -203,6 +203,30 @@ def save_magic_details(user_id, character_id, equipment_id, values):
         with conn.cursor() as cur:
             _require_character(cur, user_id, character_id)
             _require_equipment(cur, character_id, equipment_id)
+
+            if kind == "container" and capacity is not None:
+                cur.execute(
+                    """
+                    SELECT COALESCE(
+                        SUM(e.weight_each * GREATEST(e.quantity, 0)),
+                        0
+                    ) AS total_weight
+                    FROM rpg_character_equipment_containment c
+                    JOIN rpg_character_equipment e
+                      ON e.id = c.equipment_id
+                    WHERE c.container_equipment_id = %s;
+                    """,
+                    (equipment_id,),
+                )
+                current_load = Decimal(
+                    str(cur.fetchone()["total_weight"] or 0)
+                )
+                if current_load > capacity:
+                    raise ValueError(
+                        "La capacité du conteneur ne peut pas être réduite "
+                        f"sous son contenu actuel ({current_load} lb)."
+                    )
+
             cur.execute(
                 """
                 INSERT INTO rpg_character_magic_item_details (
@@ -249,6 +273,15 @@ def save_magic_details(user_id, character_id, equipment_id, values):
                     capacity,
                 ),
             )
+            if kind != "container":
+                cur.execute(
+                    """
+                    DELETE FROM rpg_character_equipment_containment
+                    WHERE container_equipment_id = %s;
+                    """,
+                    (equipment_id,),
+                )
+
             conn.commit()
 
 
@@ -435,3 +468,149 @@ def use_magic_item_charge(
             )
             conn.commit()
             return new_value
+
+def set_magic_container_contents(
+    user_id,
+    character_id,
+    container_equipment_id,
+    selected_equipment_ids,
+):
+    """Remplace atomiquement le contenu d'un conteneur magique."""
+    _ensure()
+
+    try:
+        container_id = int(container_equipment_id)
+    except (TypeError, ValueError) as error:
+        raise ValueError(
+            "Le conteneur magique est invalide."
+        ) from error
+
+    selected_ids = []
+    seen = set()
+    for raw_id in selected_equipment_ids or ():
+        try:
+            equipment_id = int(raw_id)
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                "Un équipement sélectionné est invalide."
+            ) from error
+        if equipment_id == container_id:
+            raise ValueError(
+                "Un conteneur ne peut pas contenir lui-même."
+            )
+        if equipment_id not in seen:
+            seen.add(equipment_id)
+            selected_ids.append(equipment_id)
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            _require_character(cur, user_id, character_id)
+            _require_equipment(cur, character_id, container_id)
+
+            cur.execute(
+                """
+                SELECT magic_kind, capacity_weight
+                FROM rpg_character_magic_item_details
+                WHERE equipment_id = %s;
+                """,
+                (container_id,),
+            )
+            detail = cur.fetchone()
+            if not detail or detail["magic_kind"] != "container":
+                raise ValueError(
+                    "Cet équipement n’est pas un conteneur magique."
+                )
+
+            capacity = Decimal(str(detail["capacity_weight"] or 0))
+            if capacity <= 0:
+                raise ValueError(
+                    "Ce conteneur magique n’a aucune capacité configurée."
+                )
+
+            selected_rows = []
+            if selected_ids:
+                placeholders = ", ".join("%s" for _ in selected_ids)
+                cur.execute(
+                    f"""
+                    SELECT
+                        e.id,
+                        e.item_name,
+                        e.quantity,
+                        e.weight_each,
+                        d.magic_kind AS child_magic_kind
+                    FROM rpg_character_equipment e
+                    LEFT JOIN rpg_character_magic_item_details d
+                      ON d.equipment_id = e.id
+                    WHERE e.character_id = %s
+                      AND e.id IN ({placeholders});
+                    """,
+                    (character_id, *selected_ids),
+                )
+                selected_rows = [dict(row) for row in cur.fetchall()]
+                found_ids = {int(row["id"]) for row in selected_rows}
+                missing = set(selected_ids) - found_ids
+                if missing:
+                    raise ValueError(
+                        "Un équipement sélectionné n’existe plus."
+                    )
+
+                for row in selected_rows:
+                    if row.get("child_magic_kind") == "container":
+                        raise ValueError(
+                            "Un conteneur magique ne peut pas être rangé "
+                            "dans un autre conteneur magique."
+                        )
+
+                total_weight = sum(
+                    (
+                        Decimal(str(row.get("weight_each") or 0))
+                        * max(0, int(row.get("quantity") or 0))
+                        for row in selected_rows
+                    ),
+                    Decimal("0"),
+                )
+                if total_weight > capacity:
+                    raise ValueError(
+                        "La capacité du conteneur magique serait dépassée "
+                        f"({total_weight} lb sur {capacity} lb)."
+                    )
+
+            if selected_ids:
+                placeholders = ", ".join("%s" for _ in selected_ids)
+                cur.execute(
+                    f"""
+                    DELETE FROM rpg_character_equipment_containment
+                    WHERE container_equipment_id = %s
+                      AND equipment_id NOT IN ({placeholders});
+                    """,
+                    (container_id, *selected_ids),
+                )
+            else:
+                cur.execute(
+                    """
+                    DELETE FROM rpg_character_equipment_containment
+                    WHERE container_equipment_id = %s;
+                    """,
+                    (container_id,),
+                )
+
+            for equipment_id in selected_ids:
+                cur.execute(
+                    """
+                    INSERT INTO rpg_character_equipment_containment (
+                        equipment_id,
+                        container_equipment_id
+                    )
+                    VALUES (%s, %s)
+                    ON CONFLICT (equipment_id)
+                    DO UPDATE SET
+                        container_equipment_id =
+                            EXCLUDED.container_equipment_id,
+                        updated_at = NOW();
+                    """,
+                    (equipment_id, container_id),
+                )
+
+            conn.commit()
+            return len(selected_ids)
+

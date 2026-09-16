@@ -10,6 +10,7 @@ from rpg_combat_session import (
     CombatSessionHandle,
     adjusted_current_hp,
     adjusted_nonlethal,
+    combat_spell_reference,
     combat_summary,
     find_attack,
     hp_update_payload,
@@ -123,6 +124,56 @@ class CombatSessionPureTests(unittest.TestCase):
         self.assertEqual(payload["armor_bonus"], 4)
         self.assertEqual(payload["str_score"], 14)
 
+    def test_combat_spell_reference_uses_selected_spell_catalog_details(self):
+        prepared = {
+            "id": 11,
+            "catalog_key": "spiritual_weapon",
+            "spell_name": "Spiritual Weapon",
+            "spell_level": 2,
+            "slot_kind": "domain",
+            "domain_source": "War",
+            "prepared_count": 1,
+            "used_count": 0,
+            "summary": "",
+            "range_text": "",
+            "notes": "",
+        }
+
+        def catalog_by_key(**_kwargs):
+            return {
+                "spiritual_weapon": {
+                    "key": "spiritual_weapon",
+                    "name": "Spiritual Weapon",
+                    "spell_level": 2,
+                    "school": "Evocation",
+                    "summary": "Une arme de force attaque à distance selon le lanceur.",
+                    "range_text": "Medium",
+                    "target_text": "Arme de force",
+                    "duration_text": "1 round/niveau",
+                    "saving_throw_text": "Aucun",
+                    "roll_text": "Attaque selon les règles du sort",
+                }
+            }
+
+        character = self.character()
+        character["wis_score"] = 18
+        reference = combat_spell_reference(
+            character=character,
+            profile={
+                "caster_level": 4,
+                "ability_key": "wis",
+                "spontaneous_mode": "cure",
+            },
+            prepared_spell=prepared,
+            spell_catalog_by_key=catalog_by_key,
+        )
+        self.assertEqual(reference["name"], "Spiritual Weapon")
+        self.assertEqual(reference["school"], "Evocation")
+        self.assertEqual(reference["save_dc"], 16)
+        self.assertEqual(reference["range_text"], "Medium")
+        self.assertEqual(reference["target_text"], "Arme de force")
+        self.assertEqual(reference["remaining_before"], 1)
+
     def test_handle_is_lazy(self):
         callback = Mock()
         handle = CombatSessionHandle(callback)
@@ -132,6 +183,18 @@ class CombatSessionPureTests(unittest.TestCase):
 
 
 class CombatSessionArchitectureTests(unittest.TestCase):
+    def test_selected_spell_summary_is_rendered_before_launch(self):
+        source = (ROOT / "rpg_combat_session.py").read_text(encoding="utf-8")
+        for marker in (
+            "render_selected_spell_summary",
+            "spell_select.on_value_change",
+            "Aucun résumé enregistré pour ce sort.",
+            "Cible / zone",
+            "Jet / formule : ",
+            "le résumé se met à jour dès la sélection",
+        ):
+            self.assertIn(marker, source)
+
     def test_import_does_not_require_nicegui_or_database_modules(self):
         script = r"""
 import builtins

@@ -1003,11 +1003,13 @@ Si le profil du Clerc est configuré en **Conversion spontanée — soins (Cure)
 
 **Combat rapide** contient maintenant une section **Sorts préparés** avec le nombre d’emplacements préparés restants/utilisés, un sélecteur des sorts encore disponibles et **Lancer le sort**. Le lancement utilise exactement la même action de données que l’onglet Sorts; il n’existe donc pas deux compteurs indépendants.
 
+Dès qu’un sort est choisi dans **Sort à lancer**, une fiche courte apparaît directement sous la sélection, sans ouvrir la fenêtre de confirmation. Elle affiche le résumé du sort, son école, le niveau de lanceur, le DD, la portée, la cible ou zone, la durée et la formule/jet lorsqu’ils sont connus. Le bouton **Lancer le sort** reste nécessaire pour confirmer et consommer réellement l’emplacement.
+
 Cette phase reste volontairement prudente : elle **n’applique pas automatiquement** les dégâts, soins, états, bonus ou malus à une cible. Les informations du sort servent de guide et les champs **Pertes et soins rapides** demeurent disponibles dans Combat rapide pour enregistrer les conséquences réelles décidées à la table. Lorsqu’une durée, une cible ou une portée n’est pas intégrée au catalogue, l’interface indique **À vérifier** au lieu d’inventer une règle.
 
 Aucune nouvelle table ou colonne PostgreSQL n’est ajoutée : la Phase 15B réutilise les deux tables de sorts de la V1.9.0. La version officielle reste **JDR V1.9.0** jusqu’à la validation navigateur; après validation, cette phase est destinée à devenir **JDR V1.10.0**.
 
-Validation locale de la Phase 15B : **50 tests ciblés**, **210 tests JDR** et **514 tests JF Apps**, tous réussis, avec compilation Python complète. PostgreSQL de production et Canner/navigateur ne sont pas validés par ces tests locaux.
+Validation locale de la Phase 15B : **52 tests ciblés**, **212 tests JDR** et **516 tests JF Apps**, tous réussis, avec compilation Python complète. PostgreSQL de production et Canner/navigateur ne sont pas validés par ces tests locaux.
 
 ### V1.9.0 — sorts préparés et emplacements
 

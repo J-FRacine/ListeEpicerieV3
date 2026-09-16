@@ -27,6 +27,9 @@ Fonctions
   spontanée;
 - intégration à Combat rapide avec sélection d’un sort disponible et bouton
   Lancer le sort;
+- résumé dynamique directement sous le sélecteur de Combat rapide : école,
+  résumé, DD, niveau de lanceur, portée, cible/zone, durée et formule/jet lorsque
+  ces informations sont connues;
 - l’utilisation enregistrée depuis Combat rapide est la même que celle visible
   dans l’onglet Sorts;
 - certains sorts courants disposent de repères courts de durée/cible/formule;
@@ -76,8 +79,8 @@ Validation attendue
 
 Validation locale avant livraison
 --------------------------------
-- 50 tests ciblés Phase 15B : OK
-- 210 tests JDR : OK
-- 514 tests JF Apps : OK
+- 52 tests ciblés Phase 15B : OK
+- 212 tests JDR : OK
+- 516 tests JF Apps : OK
 - compilation Python complète : OK
 - PostgreSQL de production / Canner / navigateur : non testés localement

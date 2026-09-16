@@ -140,11 +140,12 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - La conversion spontanée **Cure / Inflict** utilise un emplacement normal préparé de niveau suffisant. Les oraisons et les créneaux de domaine sont exclus de cette conversion.
 - Le DD d’une conversion spontanée utilise le niveau réel du Cure/Inflict lancé.
 - **Combat rapide** contient une section Sorts préparés, le résumé restant/utilisé, un sélecteur des sorts disponibles et **Lancer le sort**. La consommation utilise la même action que l’onglet Sorts.
+- Correctif de lisibilité Phase 15B : dès qu’un sort est sélectionné dans Combat rapide, son résumé apparaît directement sous le sélecteur avant tout lancement, avec école, niveau de lanceur, DD, portée, cible/zone, durée et formule/jet lorsqu’ils sont connus.
 - Aucun effet n’est appliqué automatiquement à une cible dans cette phase : dégâts, soins, états, bonus et malus restent décidés/appliqués manuellement. Les détails inconnus affichent **À vérifier**.
 - Quelques sorts courants reçoivent des repères courts de durée/cible/formule; les sorts de domaine qui existent aussi dans le catalogue Clerc réutilisent leurs détails.
 - Aucune nouvelle table, colonne ou migration PostgreSQL; les tables de V1.9.0 sont réutilisées.
 - Nouveaux modules séparés : `rpg_character_spell_casting.py` (règles pures) et `rpg_character_spell_cast_dialog.py` (dialogue de lancement), afin de ne pas grossir la coquille principale.
-- Validation locale réussie : **50 tests ciblés Phase 15B**, **210 tests JDR** et **514 tests JF Apps**, tous réussis; compilation Python complète réussie. Validation navigateur/Canner non encore effectuée pour cette phase.
+- Validation locale réussie : **52 tests ciblés Phase 15B**, **212 tests JDR** et **516 tests JF Apps**, tous réussis; compilation Python complète réussie. Validation navigateur/Canner non encore effectuée pour cette phase.
 
 ## Finances — état actuel
 

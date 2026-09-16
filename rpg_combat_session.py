@@ -6,6 +6,7 @@ from typing import Any, Callable, Mapping, Sequence
 from rpg_character_spell_cast_dialog import open_spell_cast_dialog
 from rpg_character_spell_casting import (
     available_prepared_spells,
+    build_cast_reference,
     remaining_prepared_uses,
 )
 
@@ -96,6 +97,38 @@ def find_attack(
         except (TypeError, ValueError):
             continue
     return None
+
+
+def combat_spell_reference(
+    *,
+    character: Mapping[str, Any],
+    profile: Mapping[str, Any],
+    prepared_spell: Mapping[str, Any],
+    spell_catalog_by_key: Callable[..., Mapping[str, Mapping[str, Any]]],
+) -> dict[str, Any]:
+    """Construit la fiche courte du sort sélectionné dans Combat rapide."""
+    row = dict(prepared_spell or {})
+    domain = row.get("domain_source")
+    try:
+        catalog = spell_catalog_by_key(
+            max_spell_level=max(9, _as_int(row.get("spell_level"), 0)),
+            domains=[domain] if domain else [],
+        )
+    except Exception:
+        catalog = {}
+    catalog_entry = dict(
+        catalog.get(str(row.get("catalog_key") or "")) or {}
+    )
+    reference = build_cast_reference(
+        character=character,
+        profile=profile,
+        prepared_row=row,
+        catalog_entry=catalog_entry,
+    )
+    reference["school"] = str(
+        row.get("school") or catalog_entry.get("school") or ""
+    )
+    return reference
 
 
 def hp_update_payload(
@@ -534,6 +567,133 @@ def build_combat_session(
                             value=first_spell,
                         ).props("options-dense use-input").classes("w-full mt-2")
 
+                        @ui.refreshable
+                        def render_selected_spell_summary():
+                            try:
+                                selected_id = int(spell_select.value)
+                            except (TypeError, ValueError):
+                                ui.label(
+                                    "Choisissez un sort pour afficher son résumé."
+                                ).classes("text-sm jf-muted mt-2")
+                                return
+
+                            selected = rows_by_id.get(selected_id)
+                            if not selected:
+                                ui.label(
+                                    "Ce sort n’est plus disponible."
+                                ).classes("text-sm text-warning mt-2")
+                                return
+
+                            try:
+                                reference = combat_spell_reference(
+                                    character=character,
+                                    profile=spell_profile,
+                                    prepared_spell=selected,
+                                    spell_catalog_by_key=spell_catalog_by_key,
+                                )
+                            except Exception as error:
+                                ui.label(str(error)).classes(
+                                    "text-sm text-negative font-bold mt-2"
+                                )
+                                return
+
+                            with ui.card().classes(
+                                "w-full p-3 mt-2"
+                            ).props("flat bordered"):
+                                with ui.row().classes(
+                                    "w-full items-start justify-between gap-2 flex-wrap"
+                                ):
+                                    with ui.column().classes("gap-0 grow min-w-0"):
+                                        ui.label(reference["name"]).classes(
+                                            "text-lg font-bold"
+                                        )
+                                        if reference.get("school"):
+                                            ui.label(reference["school"]).classes(
+                                                "text-sm jf-muted"
+                                            )
+                                    if reference["reusable"]:
+                                        ui.badge(
+                                            "Oraison — réutilisable",
+                                            color="primary",
+                                        ).classes("font-bold")
+                                    elif selected.get("slot_kind") == "domain":
+                                        domain_name = str(
+                                            selected.get("domain_source")
+                                            or "Domaine"
+                                        )
+                                        ui.badge(
+                                            f"Domaine — {domain_name}",
+                                            color="secondary",
+                                        ).classes("font-bold")
+                                    else:
+                                        ui.badge(
+                                            f"Niv. {reference['spell_level']} — "
+                                            f"{reference['remaining_before']} restant(s)",
+                                            color="positive",
+                                        ).classes("font-bold")
+
+                                ui.label(
+                                    reference["summary"]
+                                    or "Aucun résumé enregistré pour ce sort."
+                                ).classes("text-sm mt-2 whitespace-pre-wrap")
+
+                                with ui.element("div").classes(
+                                    "jf-rpg-grid mt-3"
+                                ):
+                                    for label, value in (
+                                        (
+                                            "Niveau de lanceur",
+                                            reference["caster_level"],
+                                        ),
+                                        ("DD", reference["save_dc"]),
+                                        (
+                                            "Portée",
+                                            reference["range_text"]
+                                            or "À vérifier",
+                                        ),
+                                        (
+                                            "Cible / zone",
+                                            reference["target_text"]
+                                            or "À vérifier",
+                                        ),
+                                        (
+                                            "Durée",
+                                            reference["duration_text"]
+                                            or "À vérifier",
+                                        ),
+                                    ):
+                                        with ui.column().classes("gap-0"):
+                                            ui.label(label).classes(
+                                                "text-xs jf-muted"
+                                            )
+                                            ui.label(str(value)).classes(
+                                                "font-bold"
+                                            )
+
+                                if reference["saving_throw_text"]:
+                                    ui.label(
+                                        "Jet de sauvegarde : "
+                                        + reference["saving_throw_text"]
+                                    ).classes("text-sm mt-2")
+                                if reference["roll_text"]:
+                                    ui.label(
+                                        "Jet / formule : "
+                                        + reference["roll_text"]
+                                    ).classes(
+                                        "text-sm text-primary font-bold mt-1"
+                                    )
+                                if reference["notes"]:
+                                    ui.label(
+                                        "Notes : " + reference["notes"]
+                                    ).classes(
+                                        "text-xs jf-muted mt-2 whitespace-pre-wrap"
+                                    )
+
+                        spell_select.on_value_change(
+                            lambda _event=None: render_selected_spell_summary.refresh()
+                        )
+                        render_selected_spell_summary()
+
                         def launch_selected_spell():
                             try:
                                 selected_id = int(spell_select.value)
@@ -566,7 +726,8 @@ def build_combat_session(
 
                         ui.label(
                             "Les dégâts, soins et états restent à appliquer manuellement dans "
-                            "cette phase; le résumé du sort est affiché avant confirmation."
+                            "cette phase; le résumé se met à jour dès la sélection et est repris "
+                            "avant confirmation."
                         ).classes("text-xs jf-muted mt-2")
 
                 render_combat_spells()

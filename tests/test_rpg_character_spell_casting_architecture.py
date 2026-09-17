@@ -4,10 +4,15 @@ import ast
 from pathlib import Path
 import unittest
 
+import app_versions
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class SpellCastingArchitectureTests(unittest.TestCase):
+    def test_phase15b_is_official_v110(self):
+        self.assertEqual(app_versions.APP_VERSIONS["rpg"], "1.10.0")
+
     def test_atomic_cast_action_locks_and_updates_preparation(self):
         source = (ROOT / "rpg_character_spell_data.py").read_text(encoding="utf-8")
         parsed = ast.parse(source)

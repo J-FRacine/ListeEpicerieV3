@@ -10,8 +10,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class SpellArchitectureTests(unittest.TestCase):
-    def test_phase15a_is_official_v190(self):
-        self.assertEqual(app_versions.APP_VERSIONS["rpg"], "1.9.0")
+    def test_phase15a_remains_available_after_v190(self):
+        version = tuple(
+            int(part)
+            for part in app_versions.APP_VERSIONS["rpg"].split(".")
+        )
+        self.assertGreaterEqual(version, (1, 9, 0))
 
     def test_schema_is_automatic_and_non_destructive(self):
         source = (ROOT / "rpg_character_spell_schema.py").read_text(encoding="utf-8")

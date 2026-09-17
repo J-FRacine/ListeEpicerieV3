@@ -151,7 +151,12 @@ class CombatSessionPureTests(unittest.TestCase):
                     "target_text": "Arme de force",
                     "duration_text": "1 round/niveau",
                     "saving_throw_text": "Aucun",
-                    "roll_text": "Attaque selon les règles du sort",
+                    "roll_text": (
+                        "1d8 + 1/3 niveaux de lanceur (max +5) "
+                        "dégâts de force par attaque réussie"
+                    ),
+                    "attack_text": "BBA + modificateur de Sagesse",
+                    "spell_resistance_text": "Oui",
                 }
             }
 
@@ -170,7 +175,8 @@ class CombatSessionPureTests(unittest.TestCase):
         self.assertEqual(reference["name"], "Spiritual Weapon")
         self.assertEqual(reference["school"], "Evocation")
         self.assertEqual(reference["save_dc"], 16)
-        self.assertEqual(reference["range_text"], "Medium")
+        self.assertEqual(reference["save_dc_display"], "Aucun jet de sauvegarde")
+        self.assertEqual(reference["range_text"], "140 ft (moyenne : 100 ft + 10 ft/niveau)")
         self.assertEqual(reference["target_text"], "Arme de force")
         self.assertEqual(reference["remaining_before"], 1)
 
@@ -190,7 +196,10 @@ class CombatSessionArchitectureTests(unittest.TestCase):
             "spell_select.on_value_change",
             "Aucun résumé enregistré pour ce sort.",
             "Cible / zone",
-            "Jet / formule : ",
+            "Difficulté du jet",
+            "Dégâts / effet : ",
+            "Jet d’attaque : ",
+            "Résistance à la magie : ",
             "le résumé se met à jour dès la sélection",
         ):
             self.assertIn(marker, source)

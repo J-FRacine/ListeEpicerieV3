@@ -16,6 +16,7 @@ class SpellCastingRulesTests(unittest.TestCase):
         return {
             "wis_score": 18,
             "wis_temp_score": None,
+            "base_attack_bonus": 3,
         }
 
     def profile(self, mode="cure"):
@@ -115,6 +116,68 @@ class SpellCastingRulesTests(unittest.TestCase):
         self.assertEqual(reference["spell_level"], 1)
         self.assertEqual(reference["save_dc"], 15)  # 10 + niv. 1 + SAG +4
         self.assertIn("1d8", reference["roll_text"])
+
+    def test_spiritual_weapon_reference_is_calculated_and_has_no_save_dc(self):
+        reference = build_cast_reference(
+            character=self.character(),
+            profile=self.profile(),
+            prepared_row=self.prepared(
+                catalog_key="spiritual_weapon",
+                spell_name="Spiritual Weapon",
+                slot_kind="domain",
+                domain_source="War",
+                prepared_count=1,
+                used_count=0,
+                range_text="",
+            ),
+            catalog_entry={
+                "key": "spiritual_weapon",
+                "school": "Evocation",
+                "summary": "Une arme de force attaque à distance selon le lanceur.",
+                "range_text": "Medium",
+                "duration_text": "1 round/niveau",
+                "target_text": "Arme de force créée par le sort",
+                "saving_throw_text": "Aucun",
+                "roll_text": (
+                    "1d8 + 1/3 niveaux de lanceur (max +5) "
+                    "dégâts de force par attaque réussie"
+                ),
+                "attack_text": "BBA + modificateur de Sagesse",
+                "spell_resistance_text": "Oui",
+            },
+        )
+        self.assertEqual(reference["school"], "Evocation")
+        self.assertFalse(reference["save_dc_applicable"])
+        self.assertEqual(reference["save_dc_display"], "Aucun jet de sauvegarde")
+        self.assertEqual(
+            reference["range_text"],
+            "140 ft (moyenne : 100 ft + 10 ft/niveau)",
+        )
+        self.assertEqual(reference["duration_text"], "4 rounds (1 round/niveau)")
+        self.assertIn("1d8 + 1 dégâts de force", reference["damage_effect_text"])
+        self.assertEqual(reference["attack_text"], "+7 (BBA +3 + Sagesse +4)")
+        self.assertEqual(reference["spell_resistance_text"], "Oui")
+
+    def test_known_cure_formula_is_resolved_at_current_caster_level(self):
+        reference = build_cast_reference(
+            character=self.character(),
+            profile=self.profile(),
+            prepared_row=self.prepared(
+                catalog_key="cure_light_wounds",
+                spell_name="Cure Light Wounds",
+                spell_level=1,
+                summary="Soigne une créature.",
+                range_text="Touch",
+            ),
+            catalog_entry={
+                "roll_text": "1d8 + min(niveau de lanceur, 5)",
+                "duration_text": "Instantanée",
+            },
+        )
+        self.assertEqual(reference["range_text"], "Contact")
+        self.assertEqual(reference["roll_text"], "1d8 + 4")
+        self.assertEqual(reference["damage_effect_text"], "1d8 + 4")
+        self.assertEqual(reference["save_dc_display"], "15")
 
     def test_invalid_conversion_and_exhausted_spell_are_rejected(self):
         with self.assertRaises(SpellCastError):

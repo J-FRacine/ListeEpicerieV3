@@ -1,8 +1,8 @@
 JDR — PHASE 15B — LANCEMENT GUIDÉ DES SORTS
 =============================================
 
-Version officielle pendant validation : JDR V1.9.0
-Version visée après validation navigateur : JDR V1.10.0
+Version officielle : JDR V1.10.0
+Phase 15B validée dans le navigateur le 2026-09-17
 
 Objectif
 --------
@@ -79,16 +79,11 @@ La nouvelle action de lancement verrouille la préparation avant d’incrémente
 used_count afin d’éviter qu’un même emplacement soit consommé deux fois depuis
 deux écrans concurrents.
 
-Validation attendue
--------------------
-- lancement depuis Sorts;
-- lancement depuis Combat rapide;
-- compteur restant synchronisé dans les deux écrans;
-- oraison réutilisable;
-- sort normal épuisé non relançable;
-- conversion spontanée Cure/Inflict;
-- refus de conversion spontanée d’un sort de domaine;
-- Nouvelle prière / repos remet ensuite les utilisations à zéro.
+Validation navigateur réalisée
+------------------------------
+Validation fonctionnelle réussie par l’utilisateur : lancement depuis Sorts et Combat rapide,
+compteur partagé, oraisons réutilisables, résumé dynamique sous le sélecteur,
+Difficulté du jet / Dégâts explicites et valeurs calculées de Spiritual Weapon.
 
 Validation locale avant livraison
 --------------------------------
@@ -96,4 +91,7 @@ Validation locale avant livraison
 - 214 tests JDR : OK
 - 518 tests JF Apps : OK
 - compilation Python complète : OK
-- PostgreSQL de production / Canner / navigateur : non testés localement
+- validation navigateur/Canner : réussie par l’utilisateur
+- PostgreSQL de production : non testé indépendamment par ChatGPT
+
+Phase 15B finalisée officiellement en JDR V1.10.0.

@@ -16,11 +16,32 @@ APP_VERSIONS = {
     "grocery": "1.2.0",
     "blood_pressure": "1.2.1",
     "finances": "1.13.6",
-    "rpg": "1.9.0",
+    "rpg": "1.10.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "rpg",
+        "version": "1.10.0",
+        "date": "2026-09-17",
+        "title": "Personnages JDR — V1.10.0 — lancement guidé des sorts",
+        "summary": (
+            "Les sorts préparés peuvent maintenant être lancés depuis Sorts ou Combat rapide, "
+            "avec consommation synchronisée et résumé de combat avant confirmation."
+        ),
+        "changes": [
+            "Chaque sort préparé peut être lancé depuis l’onglet Sorts ou directement depuis Combat rapide en utilisant le même compteur quotidien.",
+            "La consommation d’un emplacement de niveau 1+ est atomique; les oraisons restent réutilisables et ne sont pas dépensées.",
+            "La conversion spontanée Cure / Inflict peut utiliser un sort normal préparé de niveau suffisant; les oraisons et sorts de domaine sont exclus.",
+            "Combat rapide affiche le résumé du sort dès sa sélection, avant toute consommation : école, niveau de lanceur, portée, cible/zone, durée et effet lorsque connus.",
+            "L’interface distingue clairement Difficulté du jet et Dégâts / effet; un sort sans sauvegarde affiche Aucun jet de sauvegarde.",
+            "Les formules simples dépendant du niveau de lanceur sont résolues lorsque la règle est intégrée; Spiritual Weapon affiche notamment portée, durée, dégâts de force, jet d’attaque et résistance à la magie.",
+            "Les dégâts, soins, états, bonus et malus restent appliqués manuellement à la table; aucun effet de cible n’est automatisé silencieusement.",
+            "Aucune nouvelle table ni colonne PostgreSQL : la Phase 15B réutilise les tables de sorts créées en V1.9.0.",
+            "Validation locale de la Phase 15B : 54 tests ciblés, 214 tests JDR et 518 tests JF Apps; validation fonctionnelle réussie dans le navigateur par l’utilisateur.",
+        ],
+    },
     {
         "app_key": "rpg",
         "version": "1.9.0",

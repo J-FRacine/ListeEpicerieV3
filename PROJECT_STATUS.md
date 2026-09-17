@@ -1,6 +1,6 @@
 # JF Apps — État du projet
 
-Dernière mise à jour : 2026-09-15
+Dernière mise à jour : 2026-09-17
 
 Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversations. Le dépôt GitHub `J-FRacine/ListeEpicerieV3` sur `main` est la référence technique.
 
@@ -12,7 +12,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Liste d'épicerie | 1.2.0 |
 | Journal de pression | 1.2.1 |
 | Finances | 1.13.6 |
-| Personnages JDR | 1.9.0 |
+| Personnages JDR | 1.10.0 |
 | Commentaires et suggestions | 1.0.0 |
 
 Important : ces versions sont celles présentes dans GitHub `main`. Leur validation réelle sur Canner/Render ou PostgreSQL de production doit être confirmée séparément après déploiement.
@@ -132,21 +132,29 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur, incluant préparation, utilisation/restauration, repos, domaines, persistance, les quatre Protection from... et les indicateurs visuels. PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.
 - La prochaine évolution est maintenant **Phase 15B**, installée en validation sous V1.9.0.
 
-## JDR — Phase 15B lancement guidé des sorts — validation en cours — 2026-09-15
+## JDR — finalisation V1.10.0 / Phase 15B lancement guidé des sorts — 2026-09-17
 
-- Base : `main` après finalisation officielle **JDR V1.9.0**. La version officielle reste **V1.9.0** pendant les tests navigateur; la version cible après validation est **V1.10.0**.
-- Chaque sort préparé possède une action **Lancer** ouvrant un résumé avant consommation : niveau du sort, niveau de lanceur, DD, portée, cible/zone, durée, formule de référence, résumé, source et notes lorsque disponibles.
-- Les sorts de niveau 1+ consomment leur utilisation avec une opération PostgreSQL atomique utilisant `FOR UPDATE`; les oraisons sont vérifiées mais restent réutilisables.
-- La conversion spontanée **Cure / Inflict** utilise un emplacement normal préparé de niveau suffisant. Les oraisons et les créneaux de domaine sont exclus de cette conversion.
-- Le DD d’une conversion spontanée utilise le niveau réel du Cure/Inflict lancé.
-- **Combat rapide** contient une section Sorts préparés, le résumé restant/utilisé, un sélecteur des sorts disponibles et **Lancer le sort**. La consommation utilise la même action que l’onglet Sorts.
-- Correctif de lisibilité Phase 15B : dès qu’un sort est sélectionné dans Combat rapide, son résumé apparaît directement sous le sélecteur avant tout lancement, avec école, niveau de lanceur, difficulté du jet, portée, cible/zone, durée et dégâts/effet lorsqu’ils sont connus.
-- Correctif clarté dégâts / sauvegarde : « DD » devient **Difficulté du jet**; un sort sans jet de sauvegarde affiche explicitement **Aucun jet de sauvegarde**; **Dégâts / effet** est visible avant lancement. Les formules simples connues sont résolues au niveau de lanceur actuel. **Spiritual Weapon** affiche notamment portée et durée calculées, dégâts de force, jet d’attaque BBA + Sagesse et résistance à la magie.
-- Aucun effet n’est appliqué automatiquement à une cible dans cette phase : dégâts, soins, états, bonus et malus restent décidés/appliqués manuellement. Les détails inconnus affichent **À vérifier**.
-- Quelques sorts courants reçoivent des repères courts de durée/cible/formule; les sorts de domaine qui existent aussi dans le catalogue Clerc réutilisent leurs détails.
-- Aucune nouvelle table, colonne ou migration PostgreSQL; les tables de V1.9.0 sont réutilisées.
-- Nouveaux modules séparés : `rpg_character_spell_casting.py` (règles pures) et `rpg_character_spell_cast_dialog.py` (dialogue de lancement), afin de ne pas grossir la coquille principale.
-- Validation locale réussie : **54 tests ciblés Phase 15B**, **214 tests JDR** et **518 tests JF Apps**, tous réussis; compilation Python complète réussie. Validation navigateur/Canner non encore effectuée pour cette phase.
+- Base GitHub validée avant finalisation : `a172d557768f8bf6f37ad50cfd7746edf690866c` (`main`).
+- JDR passe officiellement à **V1.10.0**; Finances reste **V1.13.6**.
+- Chaque sort préparé peut être lancé depuis **Sorts** ou **Combat rapide** avec le même compteur quotidien.
+- Les sorts de niveau 1+ consomment leur utilisation avec une opération PostgreSQL atomique utilisant `FOR UPDATE`; les **oraisons** restent réutilisables.
+- La conversion spontanée **Cure / Inflict** utilise un emplacement normal préparé de niveau suffisant; les oraisons et les créneaux de domaine sont exclus.
+- Combat rapide affiche immédiatement une fiche courte du sort sélectionné avant toute confirmation : école, niveau de lanceur, **Difficulté du jet**, portée, cible/zone, durée et **Dégâts / effet** lorsque connus.
+- Un sort sans jet de sauvegarde affiche **Aucun jet de sauvegarde** au lieu d’une difficulté trompeuse.
+- Les formules simples connues sont calculées selon le niveau de lanceur. **Spiritual Weapon** affiche notamment portée et durée calculées, dégâts de force, jet d’attaque BBA + Sagesse et résistance à la magie.
+- Les dégâts, soins, états, bonus et malus restent volontairement appliqués manuellement; les détails inconnus affichent **À vérifier** au lieu d’inventer une règle.
+- Aucune nouvelle table, colonne ou migration PostgreSQL; les tables de sorts de V1.9.0 sont réutilisées.
+- Modules spécialisés conservés : `rpg_character_spell_casting.py` pour les règles pures et `rpg_character_spell_cast_dialog.py` pour le dialogue de lancement.
+- Validation locale avant finalisation : **54 tests ciblés Phase 15B**, **214 tests JDR** et **518 tests JF Apps**, tous réussis; compilation Python complète réussie.
+- Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur, incluant le lancement depuis Combat rapide, le résumé dynamique, la clarté Difficulté du jet / Dégâts et les valeurs calculées de Spiritual Weapon.
+- PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.
+
+## Journal de pression — prochaine maintenance V1.2.2 (à développer)
+
+- Le Portail peut encore afficher **« Il reste 2 prise(s) »** et **0 sur 2 complétée(s)** alors que les deux mesures du jour ont déjà été saisies.
+- Vérifier le calcul des mesures du jour, le fuseau horaire et le rafraîchissement du Portail après une saisie ou un retour depuis le Journal de pression.
+- **Saisir maintenant** doit proposer l’heure locale réelle au moment du clic / de l’ouverture du formulaire, et non une heure calculée au chargement de la page ou conservée d’une saisie précédente.
+- Prévoir des tests pour 0, 1 et 2 prises complétées, retour au Portail, changement de journée et heure locale.
 
 ## Finances — état actuel
 

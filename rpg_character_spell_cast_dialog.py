@@ -97,7 +97,7 @@ def open_spell_cast_dialog(
                         for label, value in (
                             ("Niveau du sort", reference["spell_level"]),
                             ("Niveau de lanceur", reference["caster_level"]),
-                            ("DD de référence", reference["save_dc"]),
+                            ("Difficulté du jet", reference["save_dc_display"]),
                             ("Portée", reference["range_text"] or "À vérifier"),
                             ("Cible / zone", reference["target_text"] or "À vérifier"),
                             ("Durée", reference["duration_text"] or "À vérifier"),
@@ -106,14 +106,23 @@ def open_spell_cast_dialog(
                                 ui.label(label).classes("text-xs jf-muted")
                                 ui.label(str(value)).classes("font-bold")
 
+                    if reference.get("attack_text"):
+                        ui.label(
+                            "Jet d’attaque : " + reference["attack_text"]
+                        ).classes("text-sm text-primary font-bold mt-2")
+                    if reference.get("damage_effect_text"):
+                        ui.label(
+                            "Dégâts / effet : " + reference["damage_effect_text"]
+                        ).classes("text-sm text-primary font-bold mt-2")
                     if reference["saving_throw_text"]:
                         ui.label(
                             "Jet de sauvegarde : " + reference["saving_throw_text"]
                         ).classes("text-sm mt-2")
-                    if reference["roll_text"]:
+                    if reference.get("spell_resistance_text"):
                         ui.label(
-                            "Jet / formule : " + reference["roll_text"]
-                        ).classes("text-sm text-primary font-bold mt-2")
+                            "Résistance à la magie : "
+                            + reference["spell_resistance_text"]
+                        ).classes("text-sm mt-1")
                     if reference["summary"]:
                         ui.label(reference["summary"]).classes("text-sm mt-2 whitespace-pre-wrap")
                     if reference["notes"]:

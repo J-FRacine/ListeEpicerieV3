@@ -126,7 +126,10 @@ def combat_spell_reference(
         catalog_entry=catalog_entry,
     )
     reference["school"] = str(
-        row.get("school") or catalog_entry.get("school") or ""
+        reference.get("school")
+        or row.get("school")
+        or catalog_entry.get("school")
+        or ""
     )
     return reference
 
@@ -645,7 +648,7 @@ def build_combat_session(
                                             "Niveau de lanceur",
                                             reference["caster_level"],
                                         ),
-                                        ("DD", reference["save_dc"]),
+                                        ("Difficulté du jet", reference["save_dc_display"]),
                                         (
                                             "Portée",
                                             reference["range_text"]
@@ -670,18 +673,30 @@ def build_combat_session(
                                                 "font-bold"
                                             )
 
+                                if reference.get("attack_text"):
+                                    ui.label(
+                                        "Jet d’attaque : "
+                                        + reference["attack_text"]
+                                    ).classes(
+                                        "text-sm text-primary font-bold mt-2"
+                                    )
+                                if reference.get("damage_effect_text"):
+                                    ui.label(
+                                        "Dégâts / effet : "
+                                        + reference["damage_effect_text"]
+                                    ).classes(
+                                        "text-sm text-primary font-bold mt-1"
+                                    )
                                 if reference["saving_throw_text"]:
                                     ui.label(
                                         "Jet de sauvegarde : "
                                         + reference["saving_throw_text"]
-                                    ).classes("text-sm mt-2")
-                                if reference["roll_text"]:
+                                    ).classes("text-sm mt-1")
+                                if reference.get("spell_resistance_text"):
                                     ui.label(
-                                        "Jet / formule : "
-                                        + reference["roll_text"]
-                                    ).classes(
-                                        "text-sm text-primary font-bold mt-1"
-                                    )
+                                        "Résistance à la magie : "
+                                        + reference["spell_resistance_text"]
+                                    ).classes("text-sm mt-1")
                                 if reference["notes"]:
                                     ui.label(
                                         "Notes : " + reference["notes"]

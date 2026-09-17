@@ -13,7 +13,7 @@ utiles avant confirmation.
 Fonctions
 ---------
 - bouton Lancer sur chaque sort préparé;
-- dialogue de confirmation avec niveau du sort, niveau de lanceur, DD, portée,
+- dialogue de confirmation avec niveau du sort, niveau de lanceur, difficulté du jet, portée,
   cible/zone, durée, formule de référence, résumé, source et notes lorsqu’ils
   sont disponibles;
 - consommation atomique d’un emplacement de niveau 1+ dans PostgreSQL;
@@ -28,7 +28,7 @@ Fonctions
 - intégration à Combat rapide avec sélection d’un sort disponible et bouton
   Lancer le sort;
 - résumé dynamique directement sous le sélecteur de Combat rapide : école,
-  résumé, DD, niveau de lanceur, portée, cible/zone, durée et formule/jet lorsque
+  résumé, difficulté du jet, niveau de lanceur, portée, cible/zone, durée et dégâts/effet lorsque
   ces informations sont connues;
 - l’utilisation enregistrée depuis Combat rapide est la même que celle visible
   dans l’onglet Sorts;
@@ -53,8 +53,21 @@ Règles Clerc utilisées
   spontanément;
 - un Clerc configuré Cure/Inflict peut sacrifier un sort normal préparé de
   niveau suffisant pour lancer un sort Cure/Inflict approprié;
-- le DD de référence reste 10 + niveau réel du sort + modificateur de la
+- la difficulté du jet reste 10 + niveau réel du sort + modificateur de la
   caractéristique de lancement.
+
+Correctif clarté combat / dégâts
+--------------------------------
+- « DD » est remplacé par « Difficulté du jet » dans les résumés de lancement;
+- lorsqu’un sort n’accorde aucun jet de sauvegarde, l’interface l’indique au lieu
+  d’afficher une difficulté trompeuse;
+- une ligne « Dégâts / effet » rend la formule ou l’effet principal visible avant
+  de lancer le sort;
+- les formules simples déjà connues sont résolues avec le niveau de lanceur actuel
+  (portée standard, durée par niveau et bonus de soins/dégâts);
+- Spiritual Weapon affiche sa portée calculée, sa durée calculée, ses dégâts de
+  force, son jet d’attaque BBA + Sagesse, l’absence de jet de sauvegarde et la
+  résistance à la magie.
 
 Base de données
 ---------------
@@ -79,8 +92,8 @@ Validation attendue
 
 Validation locale avant livraison
 --------------------------------
-- 52 tests ciblés Phase 15B : OK
-- 212 tests JDR : OK
-- 516 tests JF Apps : OK
+- 54 tests ciblés Phase 15B : OK
+- 214 tests JDR : OK
+- 518 tests JF Apps : OK
 - compilation Python complète : OK
 - PostgreSQL de production / Canner / navigateur : non testés localement

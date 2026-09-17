@@ -193,8 +193,16 @@ CASTING_DETAILS = {
         "target_text": "Créature touchée",
     },
     "spiritual_weapon": {
+        "range_text": "Medium",
         "duration_text": "1 round/niveau",
         "target_text": "Arme de force créée par le sort",
+        "saving_throw_text": "Aucun",
+        "roll_text": (
+            "1d8 + 1/3 niveaux de lanceur (max +5) "
+            "dégâts de force par attaque réussie"
+        ),
+        "attack_text": "BBA + modificateur de Sagesse",
+        "spell_resistance_text": "Oui",
     },
     "magic_weapon": {
         "range_text": "Touch",

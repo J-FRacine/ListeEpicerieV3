@@ -6,6 +6,8 @@ automatiquement de dégâts, soins ou états à une cible.
 """
 from __future__ import annotations
 
+import re
+
 from rpg_character_spell_rules import (
     ability_modifier_from_score,
     effective_ability_score,
@@ -162,6 +164,84 @@ def _int(value, default=0):
         return int(default)
 
 
+def _signed(value):
+    number = _int(value, 0)
+    return f"+{number}" if number >= 0 else str(number)
+
+
+def _resolve_range_text(value, caster_level):
+    """Transforme les portées standard connues en distance utile au niveau actuel."""
+    text = str(value or "").strip()
+    normalized = text.casefold()
+    level = max(1, _int(caster_level, 1))
+    if normalized in {"touch", "contact"}:
+        return "Contact"
+    if normalized in {"personal", "personnelle"}:
+        return "Personnelle"
+    if normalized in {"medium", "moyenne"}:
+        distance = 100 + 10 * level
+        return f"{distance} ft (moyenne : 100 ft + 10 ft/niveau)"
+    if normalized in {"close", "courte"}:
+        distance = 25 + 5 * (level // 2)
+        return f"{distance} ft (courte : 25 ft + 5 ft/2 niveaux)"
+    if normalized in {"long", "longue"}:
+        distance = 400 + 40 * level
+        return f"{distance} ft (longue : 400 ft + 40 ft/niveau)"
+    return text
+
+
+def _resolve_duration_text(value, caster_level):
+    """Affiche la durée calculée quand la formule du catalogue est simple."""
+    text = str(value or "").strip()
+    normalized = text.casefold()
+    level = max(1, _int(caster_level, 1))
+    if normalized == "1 round/niveau":
+        unit = "round" if level == 1 else "rounds"
+        return f"{level} {unit} (1 round/niveau)"
+    if normalized in {"1 min./niveau", "1 minute/niveau"}:
+        return f"{level} min (1 min./niveau)"
+    if normalized in {"10 min./niveau", "10 minutes/niveau"}:
+        return f"{10 * level} min (10 min./niveau)"
+    if normalized in {"1 heure/niveau", "1 hour/level"}:
+        unit = "heure" if level == 1 else "heures"
+        return f"{level} {unit} (1 heure/niveau)"
+    return text
+
+
+def _resolve_roll_text(value, caster_level, *, spell_key=""):
+    """Résout les formules simples déjà connues sans lancer de dés."""
+    text = str(value or "").strip()
+    level = max(1, _int(caster_level, 1))
+    if str(spell_key or "") == "spiritual_weapon":
+        bonus = min(5, level // 3)
+        return (
+            f"1d8 + {bonus} dégâts de force par attaque réussie "
+            "(+1 par 3 niveaux de lanceur, max +5)"
+        )
+
+    match = re.fullmatch(
+        r"(\d+d8) \+ min\(niveau de lanceur, (\d+)\)(.*)",
+        text,
+    )
+    if match:
+        dice, cap, suffix = match.groups()
+        return f"{dice} + {min(level, int(cap))}{suffix}"
+
+    match = re.fullmatch(
+        r"(\d+d8) \+ niveau de lanceur \(max \+(\d+)\)(.*)",
+        text,
+    )
+    if match:
+        dice, cap, suffix = match.groups()
+        return f"{dice} + {min(level, int(cap))}{suffix}"
+    return text
+
+
+def _is_no_saving_throw(value):
+    text = str(value or "").strip().casefold()
+    return text.startswith("aucun") or text in {"none", "no"}
+
+
 def remaining_prepared_uses(row):
     """Nombre d'utilisations encore disponibles pour une préparation."""
     prepared = max(0, _int((row or {}).get("prepared_count"), 0))
@@ -236,12 +316,15 @@ def build_cast_reference(
             "key": row.get("catalog_key") or catalog.get("key"),
             "name": row.get("spell_name") or catalog.get("name") or "Sort",
             "spell_level": source_level,
+            "school": row.get("school") or catalog.get("school") or "",
             "summary": row.get("summary") or catalog.get("summary") or "",
             "range_text": row.get("range_text") or catalog.get("range_text") or "",
             "duration_text": catalog.get("duration_text") or "",
             "target_text": catalog.get("target_text") or "",
             "saving_throw_text": catalog.get("saving_throw_text") or "",
             "roll_text": catalog.get("roll_text") or "",
+            "attack_text": catalog.get("attack_text") or "",
+            "spell_resistance_text": catalog.get("spell_resistance_text") or "",
             "source_text": row.get("source_text") or catalog.get("source_text") or "",
         }
         is_spontaneous = False
@@ -252,6 +335,30 @@ def build_cast_reference(
     modifier = ability_modifier_from_score(score)
     caster_level = max(1, _int((profile or {}).get("caster_level"), 1))
     save_dc = 10 + spell_level + modifier
+    spell_key = str(spell.get("key") or row.get("catalog_key") or "")
+    saving_throw_text = str(spell.get("saving_throw_text") or "")
+    no_saving_throw = _is_no_saving_throw(saving_throw_text)
+    range_text = _resolve_range_text(spell.get("range_text"), caster_level)
+    duration_text = _resolve_duration_text(
+        spell.get("duration_text"), caster_level
+    )
+    roll_text = _resolve_roll_text(
+        spell.get("roll_text"),
+        caster_level,
+        spell_key=spell_key,
+    )
+    attack_text = str(spell.get("attack_text") or "")
+    if spell_key == "spiritual_weapon":
+        base_attack = _int((character or {}).get("base_attack_bonus"), 0)
+        wisdom_score = effective_ability_score(character or {}, "wis")
+        wisdom_modifier = ability_modifier_from_score(wisdom_score)
+        attack_total = base_attack + wisdom_modifier
+        attack_text = (
+            f"{_signed(attack_total)} "
+            f"(BBA {_signed(base_attack)} + Sagesse {_signed(wisdom_modifier)})"
+        )
+    summary = str(spell.get("summary") or "")
+    damage_effect_text = roll_text or summary
 
     return {
         "name": str(spell.get("name") or "Sort"),
@@ -265,12 +372,22 @@ def build_cast_reference(
         "ability_score": score,
         "ability_modifier": modifier,
         "save_dc": save_dc,
-        "summary": str(spell.get("summary") or ""),
-        "range_text": str(spell.get("range_text") or ""),
-        "duration_text": str(spell.get("duration_text") or ""),
+        "save_dc_applicable": not no_saving_throw,
+        "save_dc_display": (
+            str(save_dc) if not no_saving_throw else "Aucun jet de sauvegarde"
+        ),
+        "school": str(spell.get("school") or catalog.get("school") or ""),
+        "summary": summary,
+        "damage_effect_text": damage_effect_text,
+        "range_text": range_text,
+        "duration_text": duration_text,
         "target_text": str(spell.get("target_text") or ""),
-        "saving_throw_text": str(spell.get("saving_throw_text") or ""),
-        "roll_text": str(spell.get("roll_text") or ""),
+        "saving_throw_text": saving_throw_text,
+        "roll_text": roll_text,
+        "attack_text": attack_text,
+        "spell_resistance_text": str(
+            spell.get("spell_resistance_text") or ""
+        ),
         "source_text": str(spell.get("source_text") or row.get("source_text") or ""),
         "notes": str(row.get("notes") or ""),
         "reusable": reusable,

@@ -995,21 +995,23 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
         "content": """
 ### Phase 15B — lancement guidé des sorts — en validation
 
-La **Phase 15B** est installée au-dessus de JDR V1.9.0 pendant sa validation. Dans l’onglet **Sorts**, chaque sort préparé possède maintenant un bouton **Lancer**. Avant de consommer l’emplacement, une fenêtre affiche le nom du sort, son niveau, le niveau de lanceur, le **DD de référence**, la portée, la cible ou zone, la durée, une formule de jet lorsqu’elle est intégrée, le résumé et les notes disponibles.
+La **Phase 15B** est installée au-dessus de JDR V1.9.0 pendant sa validation. Dans l’onglet **Sorts**, chaque sort préparé possède maintenant un bouton **Lancer**. Avant de consommer l’emplacement, une fenêtre affiche le nom du sort, son niveau, le niveau de lanceur, la **Difficulté du jet**, la portée, la cible ou zone, la durée, une formule de jet lorsqu’elle est intégrée, le résumé et les notes disponibles.
 
 Pour un sort de niveau 1 ou plus, **Confirmer le lancement** augmente atomiquement son nombre utilisé : le compteur **Restant** est donc le même dans Sorts et dans Combat rapide. Une **oraison** peut aussi être lancée avec cette fenêtre, mais elle demeure réutilisable et son utilisation n’est pas consommée. Les anciens boutons de correction manuelle restent présents pour rectifier le suivi au besoin.
 
-Si le profil du Clerc est configuré en **Conversion spontanée — soins (Cure)** ou **blessures (Inflict)**, la fenêtre Lancer permet de sacrifier un sort normal préparé pour lancer un Cure/Inflict d’un niveau permis. Les **oraisons** et les **sorts de domaine** ne sont pas proposés pour cette conversion. Le DD affiché utilise le niveau réel du sort converti, pas simplement le niveau de l’emplacement sacrifié.
+Si le profil du Clerc est configuré en **Conversion spontanée — soins (Cure)** ou **blessures (Inflict)**, la fenêtre Lancer permet de sacrifier un sort normal préparé pour lancer un Cure/Inflict d’un niveau permis. Les **oraisons** et les **sorts de domaine** ne sont pas proposés pour cette conversion. La difficulté affichée utilise le niveau réel du sort converti, pas simplement le niveau de l’emplacement sacrifié.
 
 **Combat rapide** contient maintenant une section **Sorts préparés** avec le nombre d’emplacements préparés restants/utilisés, un sélecteur des sorts encore disponibles et **Lancer le sort**. Le lancement utilise exactement la même action de données que l’onglet Sorts; il n’existe donc pas deux compteurs indépendants.
 
-Dès qu’un sort est choisi dans **Sort à lancer**, une fiche courte apparaît directement sous la sélection, sans ouvrir la fenêtre de confirmation. Elle affiche le résumé du sort, son école, le niveau de lanceur, le DD, la portée, la cible ou zone, la durée et la formule/jet lorsqu’ils sont connus. Le bouton **Lancer le sort** reste nécessaire pour confirmer et consommer réellement l’emplacement.
+Dès qu’un sort est choisi dans **Sort à lancer**, une fiche courte apparaît directement sous la sélection, sans ouvrir la fenêtre de confirmation. Elle affiche le résumé du sort, son école, le niveau de lanceur, la Difficulté du jet, la portée, la cible ou zone, la durée et les Dégâts / effet lorsqu’ils sont connus. Le bouton **Lancer le sort** reste nécessaire pour confirmer et consommer réellement l’emplacement.
+
+Le résumé distingue maintenant clairement la **Difficulté du jet** des dégâts. Lorsqu’un sort n’accorde aucun jet de sauvegarde, il affiche **Aucun jet de sauvegarde** au lieu d’un nombre trompeur. La ligne **Dégâts / effet** montre la formule utile lorsqu’elle est connue. Pour **Spiritual Weapon**, la fiche calcule aussi la portée et la durée selon le niveau de lanceur, affiche les dégâts de force, le jet d’attaque **BBA + modificateur de Sagesse** et la résistance à la magie.
 
 Cette phase reste volontairement prudente : elle **n’applique pas automatiquement** les dégâts, soins, états, bonus ou malus à une cible. Les informations du sort servent de guide et les champs **Pertes et soins rapides** demeurent disponibles dans Combat rapide pour enregistrer les conséquences réelles décidées à la table. Lorsqu’une durée, une cible ou une portée n’est pas intégrée au catalogue, l’interface indique **À vérifier** au lieu d’inventer une règle.
 
 Aucune nouvelle table ou colonne PostgreSQL n’est ajoutée : la Phase 15B réutilise les deux tables de sorts de la V1.9.0. La version officielle reste **JDR V1.9.0** jusqu’à la validation navigateur; après validation, cette phase est destinée à devenir **JDR V1.10.0**.
 
-Validation locale de la Phase 15B : **52 tests ciblés**, **212 tests JDR** et **516 tests JF Apps**, tous réussis, avec compilation Python complète. PostgreSQL de production et Canner/navigateur ne sont pas validés par ces tests locaux.
+Validation locale de la Phase 15B : **54 tests ciblés**, **214 tests JDR** et **518 tests JF Apps**, tous réussis, avec compilation Python complète. PostgreSQL de production et Canner/navigateur ne sont pas validés par ces tests locaux.
 
 ### V1.9.0 — sorts préparés et emplacements
 

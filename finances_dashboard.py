@@ -103,8 +103,6 @@ def build_dashboard_panel(
                         return False
                     if bool(row.get("budget_excluded")):
                         return False
-                    if transaction_type == "expense" and bool(row.get("fixed_budget")):
-                        return False
 
                     if dimension == "category":
                         row_category_id = row.get("category_id")
@@ -1009,6 +1007,13 @@ def build_dashboard_panel(
                     ui.label(heading).classes(
                         "text-lg font-bold mt-1"
                     )
+                    if transaction_type == "expense":
+                        ui.label(
+                            "Inclut les dépenses fixes et variables du mois; "
+                            "les montants hors budget sont exclus."
+                        ).classes(
+                            "text-xs jf-muted"
+                        )
                     with ui.element("div").classes(
                         "jf-finance-kpi-grid"
                     ):

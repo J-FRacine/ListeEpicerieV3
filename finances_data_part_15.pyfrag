@@ -65,7 +65,7 @@ def dashboard_month_projection(
     today_value=None,
     kpi_limit=12,
 ):
-    """Tableau : exclut des variables les récurrences ET financements fixes du Budget."""
+    """Tableau : totaux variables; KPI de toutes les dépenses hors budget."""
 
     projection = _dashboard_month_projection_v190(
         user_id,
@@ -139,6 +139,12 @@ def dashboard_month_projection(
         for row in list_tags(user_id, include_inactive=True)
         if bool(row.get("dashboard_visible", True))
     }
+    kpi_rows = [
+        row
+        for row in all_rows
+        if row["transaction_type"] == "expense"
+        and not bool(row.get("budget_excluded"))
+    ]
     variable_upcoming = sorted(
         (row for row in variable_rows if row.get("projection_bucket") == "upcoming"),
         key=lambda row: (row["transaction_date"], str(row["description"]).casefold()),
@@ -153,7 +159,7 @@ def dashboard_month_projection(
     projection["upcoming"]["count"] = len(variable_upcoming)
     projection["total"]["expenses"] = total_expenses
     projection["kpis"]["expense"] = _projection_kpis(
-        variable_rows,
+        kpi_rows,
         "expense",
         limit=kpi_limit,
         visible_category_ids=visible_category_ids,

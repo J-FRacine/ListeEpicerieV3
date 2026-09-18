@@ -185,6 +185,13 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "compte solde départ solde actuel plus bas prévu fin mois"
         ),
         "content": """
+### Correctif V1.13.7 — KPI des financements dans Tableau
+
+Le correctif en validation sépare maintenant les **totaux variables** des **KPI par catégorie et par étiquette**. Un versement de financement peut donc apparaître dans son KPI du mois même lorsque ce financement est déjà inclus dans un groupe du Budget.
+
+Les cartes **Dépenses variables du mois** et **Reste disponible** continuent d’exclure les dépenses fixes déjà absorbées par le Budget : le financement n’est pas compté deux fois dans la capacité mensuelle. Les KPI, eux, présentent les dépenses fixes et variables du mois afin de conserver la lecture par catégorie/étiquette. Les montants **Hors budget** restent exclus.
+
+Cliquer une catégorie ou une étiquette ouvre le détail cohérent avec le KPI, y compris le versement de financement déjà inclus au Budget. Aucune migration PostgreSQL n’est nécessaire.
 ### V1.13.6 — frais au premier versement d’un financement
 
 Dans **Financements**, utilisez **Frais au premier versement** lorsqu’un programme ajoute un coût ponctuel seulement à la première échéance, par exemple un financement à **0 % sur 18 mois** avec **40 $ de frais au premier versement**.

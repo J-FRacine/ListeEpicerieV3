@@ -14,13 +14,33 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.0",
-    "blood_pressure": "1.2.1",
+    "blood_pressure": "1.2.2",
     "finances": "1.13.6",
     "rpg": "1.10.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "blood_pressure",
+        "version": "1.2.2",
+        "date": "2026-09-18",
+        "title": "Journal de pression — V1.2.2 — rappel du Portail et heure locale",
+        "summary": (
+            "Le rappel du Portail et la saisie rapide utilisent maintenant la date "
+            "et l’heure locales réelles de l’appareil au moment de l’ouverture."
+        ),
+        "changes": [
+            "Le Portail relit la date et l’heure dans le contexte du navigateur avant de calculer les prises du jour.",
+            "Saisir maintenant réactualise la date et l’heure locales à l’ouverture du formulaire de saisie rapide.",
+            "L’aperçu de l’onglet Rappel utilise la même lecture locale fiable.",
+            "Les mesures de la date locale complètent correctement 0, 1 ou 2 prises prévues; les mesures hors plage continuent de compter normalement.",
+            "Le changement de journée utilise la date locale du navigateur lorsque JavaScript est disponible au lieu de dépendre de l’heure du serveur.",
+            "Aucune nouvelle table ni colonne PostgreSQL; aucune donnée existante n’est modifiée.",
+            "Validation locale réussie : 9 tests ciblés Journal et 528 tests JF Apps, avec compilation Python complète.",
+            "Validation fonctionnelle réussie dans le navigateur par l’utilisateur : rappel du Portail et heure locale de Saisir maintenant corrigés.",
+        ],
+    },
     {
         "app_key": "rpg",
         "version": "1.10.0",

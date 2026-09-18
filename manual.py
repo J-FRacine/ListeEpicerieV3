@@ -799,7 +799,7 @@ La version de l’application apparaît près de son nom. Le Portail contient au
 """,
     },
     {
-        "title": "Journal de pression — V1.2.1",
+        "title": "Journal de pression — V1.2.2",
         "icon": "monitor_heart",
         "caption": "Saisie, moyennes, rappels et notifications privées",
         "keywords": (
@@ -810,11 +810,13 @@ La version de l’application apparaît près de son nom. Le Portail contient au
             "notification push appareil heure limite rappel matin soir rapport"
         ),
         "content": """
-### Correctif V1.2.2 — rappel du Portail et heure locale
+### V1.2.2 — rappel du Portail et heure locale
 
-Le correctif en validation fait lire la date et l’heure de l’appareil dans le contexte réel du navigateur au chargement du **Portail**, de la **Saisie** et de l’aperçu **Rappel**. Le bouton **Saisir maintenant** propose ainsi l’heure locale actuelle à l’ouverture du formulaire, et le Portail recompte les mesures de la bonne date locale.
+Le **Journal de pression V1.2.2** corrige le calcul du rappel quotidien lorsque la date ou l’heure du navigateur diffère de celle du serveur. Le Portail, la **Saisie** et l’aperçu **Rappel** relisent maintenant la date et l’heure de l’appareil dans le contexte réel du navigateur au moment où l’écran s’ouvre.
 
-Les règles métier ne changent pas : chaque mesure de la journée compte, même hors des plages suggérées, et l’avis disparaît lorsque toutes les prises prévues sont complétées. Aucune migration PostgreSQL n’est nécessaire.
+Le bouton **Saisir maintenant** propose donc une heure locale fraîche à l’ouverture du formulaire. Le Portail recompte aussi les mesures selon la bonne date locale : 0, 1 ou 2 mesures enregistrées complètent correctement 0, 1 ou 2 prises prévues. Une mesure faite hors de la plage Matin/Soir continue de compter comme une prise de la journée, et les mesures supplémentaires ne dépassent pas la cible quotidienne.
+
+Aucune migration PostgreSQL n’est nécessaire. La validation locale a réussi avec **9 tests ciblés Journal** et **528 tests JF Apps**, ainsi qu’une compilation Python complète. La validation fonctionnelle réelle dans le navigateur a également été réussie par l’utilisateur.
 
 ### Données privées
 

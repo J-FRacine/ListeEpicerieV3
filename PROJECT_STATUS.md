@@ -10,7 +10,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 |---|---:|
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.0 |
-| Journal de pression | 1.2.1 |
+| Journal de pression | 1.2.2 |
 | Finances | 1.13.6 |
 | Personnages JDR | 1.10.0 |
 | Commentaires et suggestions | 1.0.0 |
@@ -149,15 +149,18 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur, incluant le lancement depuis Combat rapide, le résumé dynamique, la clarté Difficulté du jet / Dégâts et les valeurs calculées de Spiritual Weapon.
 - PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.
 
-## Journal de pression — maintenance V1.2.2 — validation en cours — 2026-09-18
+## Journal de pression — finalisation V1.2.2 — 2026-09-18
 
-- Correctif du rappel du Portail et de **Saisir maintenant** préparé sur la base officielle Journal **V1.2.1**; la version reste V1.2.1 jusqu’à validation navigateur.
-- Cause identifiée dans le code : les trois lectures initiales de date/heure de l’appareil étaient lancées par des tâches `asyncio` détachées. Si le contexte client NiceGUI n’était plus disponible, `device_date_time()` pouvait retomber sur l’heure du serveur.
-- Les initialisations du **Portail**, de la **Saisie** et de l’aperçu **Rappel** utilisent maintenant `ui.timer(..., once=True)`, lié au client navigateur. La date et l’heure locales sont donc relues au moment où l’écran s’ouvre.
-- La logique de comptage PostgreSQL est conservée : 0, 1 ou 2 mesures de la date locale complètent 0, 1 ou 2 prises prévues; les mesures hors plage comptent toujours et les mesures supplémentaires ne dépassent pas la cible quotidienne.
-- Tests ajoutés pour 0/1/2 prises, mesure supplémentaire, mesures hors plage, changement de journée, date transmise à la requête et raccord des minuteries NiceGUI.
+- Base GitHub vérifiée avant finalisation : `23a9d30893fe59e5cb208270be79292bcd05cc7c` (`main`).
+- Journal de pression passe officiellement à **V1.2.2**; JDR reste **V1.10.0** et Finances **V1.13.6**.
+- Le rappel du Portail relit la date et l’heure dans le contexte réel du navigateur avant de déterminer les prises complétées pour la journée locale.
+- **Saisir maintenant** réactualise la date et l’heure de l’appareil à l’ouverture du formulaire; l’aperçu **Rappel** utilise la même lecture locale.
+- Les initialisations concernées utilisent `ui.timer(..., once=True)` afin de conserver le contexte client NiceGUI, au lieu de tâches `asyncio` détachées qui pouvaient retomber sur l’heure du serveur.
+- Les règles métier de comptage ne changent pas : 0, 1 ou 2 mesures de la date locale complètent 0, 1 ou 2 prises; une mesure hors plage compte toujours et les mesures supplémentaires ne dépassent pas la cible quotidienne.
 - Aucune nouvelle table, colonne ou migration PostgreSQL; aucune donnée existante n’est modifiée.
-- Validation navigateur à effectuer : deux mesures du jour font disparaître l’avis, retour au Portail après saisie, heure locale fraîche via **Saisir maintenant**, et passage de journée.
+- Validation locale réussie : **9 tests ciblés Journal**, **528 tests JF Apps** et compilation Python complète.
+- Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
+- PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
 
 ## Finances — état actuel
 

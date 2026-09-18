@@ -149,12 +149,15 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur, incluant le lancement depuis Combat rapide, le résumé dynamique, la clarté Difficulté du jet / Dégâts et les valeurs calculées de Spiritual Weapon.
 - PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.
 
-## Journal de pression — prochaine maintenance V1.2.2 (à développer)
+## Journal de pression — maintenance V1.2.2 — validation en cours — 2026-09-18
 
-- Le Portail peut encore afficher **« Il reste 2 prise(s) »** et **0 sur 2 complétée(s)** alors que les deux mesures du jour ont déjà été saisies.
-- Vérifier le calcul des mesures du jour, le fuseau horaire et le rafraîchissement du Portail après une saisie ou un retour depuis le Journal de pression.
-- **Saisir maintenant** doit proposer l’heure locale réelle au moment du clic / de l’ouverture du formulaire, et non une heure calculée au chargement de la page ou conservée d’une saisie précédente.
-- Prévoir des tests pour 0, 1 et 2 prises complétées, retour au Portail, changement de journée et heure locale.
+- Correctif du rappel du Portail et de **Saisir maintenant** préparé sur la base officielle Journal **V1.2.1**; la version reste V1.2.1 jusqu’à validation navigateur.
+- Cause identifiée dans le code : les trois lectures initiales de date/heure de l’appareil étaient lancées par des tâches `asyncio` détachées. Si le contexte client NiceGUI n’était plus disponible, `device_date_time()` pouvait retomber sur l’heure du serveur.
+- Les initialisations du **Portail**, de la **Saisie** et de l’aperçu **Rappel** utilisent maintenant `ui.timer(..., once=True)`, lié au client navigateur. La date et l’heure locales sont donc relues au moment où l’écran s’ouvre.
+- La logique de comptage PostgreSQL est conservée : 0, 1 ou 2 mesures de la date locale complètent 0, 1 ou 2 prises prévues; les mesures hors plage comptent toujours et les mesures supplémentaires ne dépassent pas la cible quotidienne.
+- Tests ajoutés pour 0/1/2 prises, mesure supplémentaire, mesures hors plage, changement de journée, date transmise à la requête et raccord des minuteries NiceGUI.
+- Aucune nouvelle table, colonne ou migration PostgreSQL; aucune donnée existante n’est modifiée.
+- Validation navigateur à effectuer : deux mesures du jour font disparaître l’avis, retour au Portail après saisie, heure locale fraîche via **Saisir maintenant**, et passage de journée.
 
 ## Finances — état actuel
 

@@ -810,6 +810,12 @@ La version de l’application apparaît près de son nom. Le Portail contient au
             "notification push appareil heure limite rappel matin soir rapport"
         ),
         "content": """
+### Correctif V1.2.2 — rappel du Portail et heure locale
+
+Le correctif en validation fait lire la date et l’heure de l’appareil dans le contexte réel du navigateur au chargement du **Portail**, de la **Saisie** et de l’aperçu **Rappel**. Le bouton **Saisir maintenant** propose ainsi l’heure locale actuelle à l’ouverture du formulaire, et le Portail recompte les mesures de la bonne date locale.
+
+Les règles métier ne changent pas : chaque mesure de la journée compte, même hors des plages suggérées, et l’avis disparaît lorsque toutes les prises prévues sont complétées. Aucune migration PostgreSQL n’est nécessaire.
+
 ### Données privées
 
 Le **Journal de pression** appartient uniquement à l’utilisateur connecté. Les mesures ne sont jamais partagées avec une famille ni avec un autre compte.

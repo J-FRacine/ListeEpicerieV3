@@ -816,19 +816,16 @@ def blood_pressure_portal_reminder(
                         "outline color=warning"
                     )
 
-    status_guard = ui.element("span").classes("hidden")
-
     async def load_status_after_mount():
-        await asyncio.sleep(0.15)
-        if status_guard.is_deleted:
-            return
         try:
             await load_status()
         except RuntimeError:
             return
 
-    _start_background_task(
-        load_status_after_mount()
+    ui.timer(
+        0.15,
+        load_status_after_mount,
+        once=True,
     )
 
 
@@ -1270,19 +1267,16 @@ def blood_pressure_panel(
                         "outline color=primary"
                     )
 
-                entry_guard = ui.element("span").classes("hidden")
-
                 async def use_device_after_mount():
-                    await asyncio.sleep(0.15)
-                    if entry_guard.is_deleted:
-                        return
                     try:
                         await use_device_now()
                     except RuntimeError:
                         return
 
-                _start_background_task(
-                    use_device_after_mount()
+                ui.timer(
+                    0.15,
+                    use_device_after_mount,
+                    once=True,
                 )
 
         # -------------------------------------------------
@@ -3084,19 +3078,16 @@ def blood_pressure_panel(
                             "flat color=secondary"
                         )
 
-                reminder_guard = ui.element("span").classes("hidden")
-
                 async def refresh_reminder_after_mount():
-                    await asyncio.sleep(0.15)
-                    if reminder_guard.is_deleted:
-                        return
                     try:
                         await refresh_reminder_preview()
                     except RuntimeError:
                         return
 
-                _start_background_task(
-                    refresh_reminder_after_mount()
+                ui.timer(
+                    0.15,
+                    refresh_reminder_after_mount,
+                    once=True,
                 )
 
 

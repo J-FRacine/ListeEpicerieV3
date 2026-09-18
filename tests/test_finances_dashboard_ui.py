@@ -156,6 +156,28 @@ class DashboardPanelTests(unittest.TestCase):
         self.assertIn('À confirmer — Hors budget — Programmé — Versement 2', labels(ui))
         self.assertIn('Récurrence projetée', labels(ui))
 
+    def test_expense_kpi_explains_fixed_and_variable_scope(self):
+        projection = dict(
+            realized={"expenses": D("12")},
+            upcoming={"expenses": D("8"), "count": 0},
+            total={"expenses": D("20")},
+            remaining_available=D("80"),
+            capacity=dict(available_month=D("100"), remaining_per_pay=D("50"), pay_count=2),
+            kpis={
+                "expense": {
+                    "categories": [dict(id=3, name="Achats", realized=D("12"), upcoming=D("8"), total=D("20"))],
+                    "tags": [],
+                }
+            },
+            transactions=[],
+            upcoming_transactions=[],
+        )
+        _, ui, _ = build(projection=projection)
+        self.assertIn(
+            "Inclut les dépenses fixes et variables du mois; les montants hors budget sont exclus.",
+            labels(ui),
+        )
+
     def test_goals_keep_values_and_carry(self):
         _, ui, _ = build(goal_progress=[dict(percentage=120, target_name='Épargne', spent=D('12'),
                                            available=D('10'), remaining=D('-2'), carry_in=D('3'))])
@@ -168,7 +190,7 @@ class DashboardPanelTests(unittest.TestCase):
                 handle, ui, deps = build()
                 projection = deps['dashboard_month_projection'].return_value
                 projection['kpis']['expense'][key] = [dict(id=identifier, name=name, realized=D('12'), upcoming=D('24'), total=D('36'))]
-                projection['transactions'] = [transaction(), transaction(2, fixed_budget=True),
+                projection['transactions'] = [transaction(), transaction(2, fixed_budget=True, fixed_budget_financing=True),
                     transaction(3, budget_excluded=True), transaction(4, transaction_type='income'),
                     transaction(5, category_id=99, tag_ids=[99]),
                     transaction(6, projected=True, projection_bucket='upcoming'),
@@ -176,12 +198,12 @@ class DashboardPanelTests(unittest.TestCase):
                 handle.refresh()
                 ui.click(name)
                 text = labels(ui)
-                for identifier in (1, 6, 7):
+                for identifier in (1, 2, 6, 7):
                     self.assertIn(f'Transaction {identifier}', text)
-                for identifier in (2, 3, 4, 5):
+                for identifier in (3, 4, 5):
                     self.assertNotIn(f'Transaction {identifier}', text)
                 edits = [w for w in ui.widgets if w[0] == 'button' and w[2].get('icon') == 'edit']
-                self.assertEqual(len(edits), 2)
+                self.assertEqual(len(edits), 3)
                 selected = transaction(7)
                 deps['get_transaction'].return_value = selected
                 edits[-1][2]['on_click']()

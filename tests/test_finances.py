@@ -7,6 +7,7 @@ from decimal import Decimal as D
 from types import ModuleType
 from unittest.mock import Mock, patch
 
+import app_versions
 from finances_calculations import automatic_installment_amount, analyze_installment_progress
 
 
@@ -111,7 +112,66 @@ class FinancesTests(unittest.TestCase):
         self.assertEqual(result["total"]["expenses"], D("75"))
         self.assertEqual(result["remaining_available"], D("525"))
         self.assertEqual(len(result["upcoming_transactions"]), 1)
-        self.assertEqual(result["kpis"]["expense"]["categories"][0]["total"], D("75"))
+        self.assertEqual(result["kpis"]["expense"]["categories"][0]["total"], D("575"))
+
+    def test_kpis_include_fixed_budget_financing_and_exclude_hors_budget(self):
+        rows = [
+            transaction(
+                "100",
+                installment_plan_id=20,
+                projection_bucket="upcoming",
+                category_id=3,
+                category_full_name="Maison",
+                tag_ids=[5],
+                tag_names=["Rénovation"],
+            ),
+            transaction(
+                "50",
+                projection_bucket="upcoming",
+                category_id=3,
+                category_full_name="Maison",
+                tag_ids=[5],
+                tag_names=["Rénovation"],
+            ),
+            transaction(
+                "999",
+                projection_bucket="upcoming",
+                category_id=3,
+                category_full_name="Maison",
+                tag_ids=[5],
+                tag_names=["Rénovation"],
+                budget_excluded=True,
+            ),
+        ]
+        projection = dict(transactions=rows, realized={}, upcoming={}, total={}, kpis={})
+        budget_rows = [
+            dict(
+                item_type="expense",
+                budget_financing_group=True,
+                financing_plan_ids=[20],
+            )
+        ]
+        with patch.object(data, "_dashboard_month_projection_v190", return_value=projection), \
+             patch.object(data, "list_budget_items", return_value=budget_rows), \
+             patch.object(data, "list_categories", return_value=[dict(id=3, dashboard_visible=True)]), \
+             patch.object(data, "list_tags", return_value=[dict(id=5, dashboard_visible=True)]), \
+             patch.object(data, "budget_capacity_summary", return_value={"available_month": D("500")}):
+            result = data.dashboard_month_projection(1, "2026-01")
+
+        self.assertEqual(result["total"]["expenses"], D("50"))
+        self.assertEqual(result["fixed_budget"]["total"], D("100"))
+        self.assertEqual(result["remaining_available"], D("450"))
+        self.assertEqual(
+            result["kpis"]["expense"]["categories"][0]["total"],
+            D("150"),
+        )
+        self.assertEqual(
+            result["kpis"]["expense"]["tags"][0]["total"],
+            D("150"),
+        )
+
+    def test_official_finances_version_stays_1136_until_browser_validation(self):
+        self.assertEqual(app_versions.APP_VERSIONS["finances"], "1.13.6")
 
 
 if __name__ == "__main__":

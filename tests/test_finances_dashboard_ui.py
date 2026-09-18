@@ -202,6 +202,13 @@ class DashboardPanelTests(unittest.TestCase):
                     self.assertIn(f'Transaction {identifier}', text)
                 for identifier in (3, 4, 5):
                     self.assertNotIn(f'Transaction {identifier}', text)
+                scope_badges = [
+                    args[0]
+                    for kind, args, _, _ in ui.widgets
+                    if kind == 'badge' and args and args[0] in {'Variable', 'Budget'}
+                ]
+                self.assertEqual(scope_badges.count('Budget'), 1)
+                self.assertEqual(scope_badges.count('Variable'), 3)
                 edits = [w for w in ui.widgets if w[0] == 'button' and w[2].get('icon') == 'edit']
                 self.assertEqual(len(edits), 3)
                 selected = transaction(7)

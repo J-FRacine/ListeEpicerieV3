@@ -191,7 +191,7 @@ Le correctif en validation sépare maintenant les **totaux variables** des **KPI
 
 Les cartes **Dépenses variables du mois** et **Reste disponible** continuent d’exclure les dépenses fixes déjà absorbées par le Budget : le financement n’est pas compté deux fois dans la capacité mensuelle. Les KPI, eux, présentent les dépenses fixes et variables du mois afin de conserver la lecture par catégorie/étiquette. Les montants **Hors budget** restent exclus.
 
-Cliquer une catégorie ou une étiquette ouvre le détail cohérent avec le KPI, y compris le versement de financement déjà inclus au Budget. Aucune migration PostgreSQL n’est nécessaire.
+Cliquer une catégorie ou une étiquette ouvre le détail cohérent avec le KPI, y compris le versement de financement déjà inclus au Budget. Chaque dépense du détail porte maintenant un badge **Variable** ou **Budget** : **Variable** signifie qu’elle entre dans les dépenses variables du Tableau; **Budget** signifie qu’elle est déjà absorbée dans le Budget et qu’elle n’est pas recomptée dans ces totaux. Aucune migration PostgreSQL n’est nécessaire.
 ### V1.13.6 — frais au premier versement d’un financement
 
 Dans **Financements**, utilisez **Frais au premier versement** lorsqu’un programme ajoute un coût ponctuel seulement à la première échéance, par exemple un financement à **0 % sur 18 mois** avec **40 $ de frais au premier versement**.

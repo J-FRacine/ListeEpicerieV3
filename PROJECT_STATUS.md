@@ -169,6 +169,7 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Dans **Tableau**, les cartes **Dépenses variables du mois**, les dépenses à venir et **Reste disponible** conservent la logique variable existante : les récurrences et financements déjà inclus au Budget restent exclus de ces totaux.
 - Les **KPI des dépenses** par catégorie et par étiquette utilisent maintenant toutes les dépenses du mois qui ne sont pas **Hors budget**, y compris les versements de financement déjà inclus dans un groupe du Budget.
 - Le détail ouvert depuis un KPI suit la même règle et affiche donc le financement concerné; les montants Hors budget restent exclus.
+- Clarté du détail KPI : chaque dépense affiche un badge **Variable** ou **Budget**. **Variable** entre dans les dépenses variables du Tableau; **Budget** est déjà absorbée dans le Budget et n’est pas recomptée dans ces totaux.
 - Cette séparation évite le double comptage budgétaire tout en conservant une lecture complète des dépenses par catégorie/étiquette.
 - Aucune table, colonne ou migration PostgreSQL; aucun changement aux calculs des échéances de financement.
 - Validation locale réussie : **27 tests ciblés Tableau/KPI**, **307 tests Finances** et **531 tests JF Apps**, avec compilation Python complète.

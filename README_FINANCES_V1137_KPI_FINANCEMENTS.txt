@@ -13,6 +13,9 @@ Fonctionnement
 - Les KPI par catégorie et par étiquette incluent maintenant toutes les dépenses du
   mois qui ne sont pas Hors budget, y compris ces versements de financement.
 - Le détail d'un KPI suit la même règle et affiche le versement concerné.
+- Chaque dépense du détail affiche maintenant un badge Variable ou Budget :
+  Variable entre dans les dépenses variables du Tableau; Budget indique qu'elle
+  est déjà absorbée dans le Budget et n'est pas recomptée dans ces totaux.
 - Les montants Hors budget restent exclus.
 
 Base de données

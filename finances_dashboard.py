@@ -330,12 +330,35 @@ def build_dashboard_panel(
                                                 meta_parts.append(
                                                     "À confirmer"
                                                 )
-                                            ui.label(
-                                                " • ".join(meta_parts)
-                                                or "Transaction"
-                                            ).classes(
-                                                "jf-finance-kpi-detail-meta"
-                                            )
+                                            with ui.row().classes(
+                                                "items-center gap-1 flex-wrap"
+                                            ):
+                                                if transaction_type == "expense":
+                                                    if bool(row.get("fixed_budget")):
+                                                        ui.badge(
+                                                            "Budget"
+                                                        ).props(
+                                                            "outline color=secondary"
+                                                        ).tooltip(
+                                                            "Déjà incluse dans le Budget; "
+                                                            "elle n’est pas recomptée dans "
+                                                            "les dépenses variables."
+                                                        )
+                                                    else:
+                                                        ui.badge(
+                                                            "Variable"
+                                                        ).props(
+                                                            "outline color=primary"
+                                                        ).tooltip(
+                                                            "Comptée dans les dépenses "
+                                                            "variables du Tableau."
+                                                        )
+                                                ui.label(
+                                                    " • ".join(meta_parts)
+                                                    or "Transaction"
+                                                ).classes(
+                                                    "jf-finance-kpi-detail-meta"
+                                                )
 
                                         ui.label(
                                             _money(row["amount"])

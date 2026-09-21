@@ -1,9 +1,8 @@
-LISTE D'ÉPICERIE — V1.2.1 EN VALIDATION — SOUVENT AJOUTÉS
+LISTE D'ÉPICERIE — V1.2.1 — SOUVENT AJOUTÉS
 ==========================================================
 
-Version officielle pendant validation : Liste d'épicerie V1.2.0
-Version cible après validation navigateur : V1.2.1
-Base GitHub de départ : 766c390684ec973bf901561b1d5e45a3c8ca50c4
+Version officielle : Liste d'épicerie V1.2.1
+Base GitHub validée avant finalisation : 0603ded25ca79b4a8eff0f10fa83c2ecad30ac07
 
 Fonctionnement
 --------------
@@ -13,8 +12,8 @@ Fonctionnement
   Présent dans les besoins et Dans « Souvent ajoutés ».
 - La seconde case contrôle explicitement l'appartenance à la section Souvent ajoutés.
 - Maximum : 10 items sélectionnés par famille.
-- Un item sélectionné qui est déjà dans les besoins n'est pas répété dans les
-  raccourcis; il réapparaît lorsqu'il quitte les besoins.
+- Un item sélectionné reste visible même lorsqu'il est déjà dans les besoins;
+  un crochet vert indique alors qu'il est déjà présent.
 - Les raccourcis sélectionnés restent ordonnés selon leur historique d'utilisation.
 
 Migration
@@ -30,13 +29,12 @@ Le choix Souvent ajoutés est exporté et restauré avec les données de la fami
 Les anciennes sauvegardes sans ce champ restent compatibles et ne suppriment pas
 une sélection existante lors d'une fusion.
 
-Validation navigateur à faire
------------------------------
-1. Ouvrir Modifier l'item et vérifier les deux cases côte à côte sur grand écran.
-2. Cocher Dans « Souvent ajoutés », enregistrer et vérifier le raccourci.
-3. Décocher puis enregistrer : le raccourci doit disparaître.
-4. Vérifier qu'un item sélectionné déjà dans les besoins n'est pas dupliqué.
-5. Vérifier la limite : le 11e item doit être refusé avec un message clair.
-6. Vérifier l'affichage sur téléphone : les cases peuvent se replier proprement.
+Validation
+----------
+- Validation locale initiale : 10 tests ciblés Épicerie et 541 tests JF Apps réussis.
+- Validation navigateur réussie : sélection et désélection fonctionnent.
+- La correction de visibilité a été validée : un item sélectionné reste visible
+  lorsqu'il est déjà dans les besoins et affiche un crochet vert.
+- La limite de 10 est protégée par les tests automatisés.
 
 PostgreSQL de production / Canner ne sont pas testés indépendamment par ce script.

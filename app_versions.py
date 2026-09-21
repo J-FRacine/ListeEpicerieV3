@@ -13,14 +13,33 @@ APP_LABELS = {
 
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
-    "grocery": "1.2.0",
+    "grocery": "1.2.1",
     "blood_pressure": "1.2.2",
-    "finances": "1.13.6",
+    "finances": "1.13.7",
     "rpg": "1.10.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.13.7",
+        "date": "2026-09-21",
+        "title": "Finances — V1.13.7 — KPI des financements plus clairs",
+        "summary": (
+            "Les KPI du Tableau affichent les financements dans leur catégorie "
+            "ou étiquette sans les recompter dans les dépenses variables."
+        ),
+        "changes": [
+            "Les KPI de dépenses par catégorie et par étiquette incluent les versements de financement du mois même lorsqu’ils sont déjà absorbés dans un groupe du Budget.",
+            "Dépenses variables du mois, les dépenses à venir et Reste disponible continuent d’exclure les montants déjà absorbés par le Budget afin d’éviter le double comptage.",
+            "Le détail d’un KPI affiche les mêmes dépenses que le KPI, y compris les financements concernés.",
+            "Chaque ligne du détail affiche Variable ou Budget pour indiquer clairement si elle entre dans les dépenses variables ou est déjà absorbée par le Budget.",
+            "Les montants Hors budget restent exclus des KPI.",
+            "Aucune table, colonne ou migration PostgreSQL et aucun changement au calcul des échéances de financement.",
+            "Validation locale réussie : 27 tests ciblés Tableau/KPI, 307 tests Finances et 531 tests JF Apps; validation fonctionnelle réussie dans le navigateur par l’utilisateur.",
+        ],
+    },
     {
         "app_key": "blood_pressure",
         "version": "1.2.2",

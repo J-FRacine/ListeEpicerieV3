@@ -176,7 +176,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.13.6",
+        "title": "Finances — V1.13.7",
         "icon": "account_balance_wallet",
         "caption": "Prévisions, Budget, financements, conciliation et prêts partagés",
         "keywords": (
@@ -185,13 +185,15 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "compte solde départ solde actuel plus bas prévu fin mois"
         ),
         "content": """
-### Correctif V1.13.7 — KPI des financements dans Tableau
+### V1.13.7 — KPI des financements dans Tableau
 
-Le correctif en validation sépare maintenant les **totaux variables** des **KPI par catégorie et par étiquette**. Un versement de financement peut donc apparaître dans son KPI du mois même lorsque ce financement est déjà inclus dans un groupe du Budget.
+La V1.13.7 sépare les **totaux variables** des **KPI par catégorie et par étiquette**. Un versement de financement peut donc apparaître dans son KPI du mois même lorsque ce financement est déjà inclus dans un groupe du Budget.
 
 Les cartes **Dépenses variables du mois** et **Reste disponible** continuent d’exclure les dépenses fixes déjà absorbées par le Budget : le financement n’est pas compté deux fois dans la capacité mensuelle. Les KPI, eux, présentent les dépenses fixes et variables du mois afin de conserver la lecture par catégorie/étiquette. Les montants **Hors budget** restent exclus.
 
 Cliquer une catégorie ou une étiquette ouvre le détail cohérent avec le KPI, y compris le versement de financement déjà inclus au Budget. Chaque dépense du détail porte maintenant un badge **Variable** ou **Budget** : **Variable** signifie qu’elle entre dans les dépenses variables du Tableau; **Budget** signifie qu’elle est déjà absorbée dans le Budget et qu’elle n’est pas recomptée dans ces totaux. Aucune migration PostgreSQL n’est nécessaire.
+
+La V1.13.7 a été validée dans le navigateur sur un mois futur : le financement apparaît dans le KPI et son détail, les badges **Variable / Budget** sont corrects et les totaux variables ne sont pas doublés.
 ### V1.13.6 — frais au premier versement d’un financement
 
 Dans **Financements**, utilisez **Frais au premier versement** lorsqu’un programme ajoute un coût ponctuel seulement à la première échéance, par exemple un financement à **0 % sur 18 mois** avec **40 $ de frais au premier versement**.
@@ -1586,11 +1588,13 @@ Les items supprimés peuvent être restaurés depuis **Activité et corbeille** 
 
 ### Items fréquents
 
-La future V1.2.1 permet de choisir directement les raccourcis **Souvent ajoutés**. Dans **Modifier l’item**, cochez **Dans « Souvent ajoutés »** à droite de **Présent dans les besoins**. Décochez-la pour retirer l’item de cette section.
+La V1.2.1 permet de choisir directement les raccourcis **Souvent ajoutés**. Dans **Modifier l’item**, cochez **Dans « Souvent ajoutés »** à droite de **Présent dans les besoins**. Décochez-la pour retirer l’item de cette section.
 
 La section est limitée à **10 items maximum** afin de garder la page lisible. Un item sélectionné reste visible même lorsqu’il est déjà présent dans les besoins; un crochet vert l’indique clairement. Lors de la migration initiale, jusqu’à 10 des items déjà les plus souvent utilisés sont conservés automatiquement comme sélection de départ.
 
 Un toucher sur un raccourci le replace dans les besoins sans créer de doublon. Le choix **Souvent ajoutés** est aussi conservé dans les sauvegardes de famille.
+
+La V1.2.1 a été validée dans le navigateur : ajout et retrait de la sélection fonctionnent, et un item sélectionné reste visible avec un crochet vert lorsqu’il est déjà dans les besoins.
 
 
 ### Tri alphabétique

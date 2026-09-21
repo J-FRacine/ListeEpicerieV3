@@ -1,6 +1,6 @@
 # JF Apps — État du projet
 
-Dernière mise à jour : 2026-09-18
+Dernière mise à jour : 2026-09-21
 
 Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversations. Le dépôt GitHub `J-FRacine/ListeEpicerieV3` sur `main` est la référence technique.
 
@@ -9,24 +9,24 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Application | Version |
 |---|---:|
 | Portail JF Apps | 1.4.0 |
-| Liste d'épicerie | 1.2.0 |
+| Liste d'épicerie | 1.2.1 |
 | Journal de pression | 1.2.2 |
-| Finances | 1.13.6 |
+| Finances | 1.13.7 |
 | Personnages JDR | 1.10.0 |
 | Commentaires et suggestions | 1.0.0 |
 
 Important : ces versions sont celles présentes dans GitHub `main`. Leur validation réelle sur Canner/Render ou PostgreSQL de production doit être confirmée séparément après déploiement.
 
-## Liste d’épicerie — V1.2.1 Souvent ajoutés — validation en cours — 2026-09-21
+## Liste d’épicerie — finalisation V1.2.1 / Souvent ajoutés — 2026-09-21
 
-- Base GitHub de départ vérifiée : `766c390684ec973bf901561b1d5e45a3c8ca50c4` (`main`); version officielle **V1.2.0** pendant la validation.
+- Base GitHub validée avant finalisation : `0603ded25ca79b4a8eff0f10fa83c2ecad30ac07` (`main`). Liste d’épicerie passe officiellement à **V1.2.1**.
 - Dans **Modifier l’item**, une case **Dans « Souvent ajoutés »** est ajoutée à droite de **Présent dans les besoins**.
 - **Souvent ajoutés** devient une sélection explicite, limitée à **10 items maximum par famille**. Les items sélectionnés restent visibles même lorsqu’ils sont déjà dans les besoins; un crochet vert indique cet état.
 - À la première migration, jusqu’à 10 items actuellement les plus fréquents sont sélectionnés automatiquement afin de préserver l’usage existant; ensuite la sélection est gérée manuellement.
 - Nouvelle colonne `frequent_selected` ajoutée automatiquement et de façon idempotente; aucun SQL manuel.
 - Export/restauration des familles conserve la sélection; les anciennes sauvegardes sans ce champ restent compatibles.
 - Les compteurs historiques `times_needed` et `last_needed_at` sont conservés; ils servent encore à l’ordre des raccourcis sélectionnés.
-- Version cible après validation navigateur : **Liste d’épicerie V1.2.1**.
+- Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : ajout et retrait de la sélection fonctionnent, et un item sélectionné reste visible avec un crochet vert lorsqu’il est déjà dans les besoins.
 
 ## JDR — intégration V1.4.0 — 2026-09-10
 
@@ -173,10 +173,10 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
 
-## Finances — V1.13.7 KPI des financements — validation en cours — 2026-09-18
+## Finances — finalisation V1.13.7 / KPI des financements — 2026-09-21
 
-- Base GitHub vérifiée : `52fd3b89ec67ee1421806f31c61c10b50bb41c64` (`main`), avec Journal **V1.2.2**, JDR **V1.10.0** et Finances **V1.13.6**.
-- La version officielle reste **V1.13.6** pendant la validation navigateur; la cible après validation est **V1.13.7**.
+- Base GitHub validée avant finalisation : `0603ded25ca79b4a8eff0f10fa83c2ecad30ac07` (`main`).
+- Finances passe officiellement à **V1.13.7**; Journal reste **V1.2.2** et JDR **V1.10.0**.
 - Dans **Tableau**, les cartes **Dépenses variables du mois**, les dépenses à venir et **Reste disponible** conservent la logique variable existante : les récurrences et financements déjà inclus au Budget restent exclus de ces totaux.
 - Les **KPI des dépenses** par catégorie et par étiquette utilisent maintenant toutes les dépenses du mois qui ne sont pas **Hors budget**, y compris les versements de financement déjà inclus dans un groupe du Budget.
 - Le détail ouvert depuis un KPI suit la même règle et affiche donc le financement concerné; les montants Hors budget restent exclus.
@@ -184,11 +184,11 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Cette séparation évite le double comptage budgétaire tout en conservant une lecture complète des dépenses par catégorie/étiquette.
 - Aucune table, colonne ou migration PostgreSQL; aucun changement aux calculs des échéances de financement.
 - Validation locale réussie : **27 tests ciblés Tableau/KPI**, **307 tests Finances** et **531 tests JF Apps**, avec compilation Python complète.
-- Validation navigateur à effectuer sur un mois futur : catégorie/étiquette du financement visible dans le KPI et son détail, sans hausse du total variable ni du Reste disponible.
+- Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur sur un mois futur : financement visible dans le KPI et son détail, badges **Variable / Budget** corrects et absence de double comptage dans les totaux variables.
 
 ## Finances — état actuel
 
-Version actuelle de travail : **V1.13.6**
+Version actuelle de travail : **V1.13.7**
 
 ### V1.13.6 — frais au premier versement — 2026-09-15
 
@@ -200,7 +200,6 @@ Version actuelle de travail : **V1.13.6**
 - Migration PostgreSQL automatique et idempotente avec `first_installment_fee`; aucun SQL manuel.
 - Validation locale : **39 tests Financement**, **304 tests Finances** et **478 tests JF Apps**, tous réussis; compilation Python complète réussie.
 - Validation navigateur/Canner effectuée avec succès par l’utilisateur, y compris le scénario **0 % / 18 versements / frais initial au premier versement**. PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.
-- À conserver pour une prochaine version Finances : dans **Tableau**, les KPI des mois futurs doivent afficher les versements de financement selon leur catégorie/étiquette même lorsqu’ils sont déjà inclus dans un groupe du Budget, **sans les compter deux fois** dans la capacité budgétaire.
 
 ### V1.13.5 — section des transactions prévues repliable — 2026-09-09
 

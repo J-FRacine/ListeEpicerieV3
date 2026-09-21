@@ -221,8 +221,8 @@ class FrequentSelectionTests(unittest.TestCase):
         self.assertIn("10 items maximum", source)
         self.assertIn("sauvegardes de famille", source)
 
-    def test_official_version_stays_120_until_browser_validation(self):
-        self.assertEqual(app_versions.APP_VERSIONS["grocery"], "1.2.0")
+    def test_official_version_is_121_after_browser_validation(self):
+        self.assertEqual(app_versions.APP_VERSIONS["grocery"], "1.2.1")
 
 
 if __name__ == "__main__":

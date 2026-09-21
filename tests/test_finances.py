@@ -170,8 +170,8 @@ class FinancesTests(unittest.TestCase):
             D("150"),
         )
 
-    def test_official_finances_version_stays_1136_until_browser_validation(self):
-        self.assertEqual(app_versions.APP_VERSIONS["finances"], "1.13.6")
+    def test_official_finances_version_is_1137_after_browser_validation(self):
+        self.assertEqual(app_versions.APP_VERSIONS["finances"], "1.13.7")
 
 
 if __name__ == "__main__":

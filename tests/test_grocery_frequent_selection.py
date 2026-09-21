@@ -224,6 +224,17 @@ class FrequentSelectionTests(unittest.TestCase):
     def test_official_version_is_121_after_browser_validation(self):
         self.assertEqual(app_versions.APP_VERSIONS["grocery"], "1.2.1")
 
+    def test_official_release_note_is_121(self):
+        note = next(
+            row
+            for row in app_versions.RELEASE_NOTES
+            if (
+                row["app_key"] == "grocery"
+                and row["version"] == "1.2.1"
+            )
+        )
+        self.assertIn("Souvent ajoutés", note["title"])
+
 
 if __name__ == "__main__":
     unittest.main()

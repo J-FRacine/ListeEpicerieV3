@@ -117,7 +117,7 @@ class FrequentSelectionTests(unittest.TestCase):
             items_data._db._require_family_access = original_access
 
         self.assertIn("item.frequent_selected = TRUE", cursor.sql)
-        self.assertIn("item.needed = 0", cursor.sql)
+        self.assertNotIn("item.needed = 0", cursor.sql)
         self.assertIn("LIMIT 10", cursor.sql)
         self.assertEqual(cursor.params, (9,))
 
@@ -162,6 +162,29 @@ class FrequentSelectionTests(unittest.TestCase):
         source = GROCERY_ITEMS_PATH.read_text(encoding="utf-8")
         self.assertIn("frequent_selected = %s", source)
         self.assertIn("item.frequent_selected,", source)
+
+    def test_selected_item_stays_visible_while_already_needed(self):
+        cursor = QueryCursor()
+        connection = QueryConnection(cursor)
+        original_get_connection = items_data._db.get_connection
+        original_access = items_data._db._require_family_access
+        try:
+            items_data._db.get_connection = lambda: connection
+            items_data._db._require_family_access = lambda *args: None
+            items_data.get_frequent_items(7, 9, limit=10)
+        finally:
+            items_data._db.get_connection = original_get_connection
+            items_data._db._require_family_access = original_access
+
+        self.assertIn("item.frequent_selected = TRUE", cursor.sql)
+        self.assertNotIn("item.needed = 0", cursor.sql)
+
+    def test_frequent_ui_marks_items_already_in_needs(self):
+        source = ITEMS_UI_PATH.read_text(encoding="utf-8")
+        self.assertIn('"check_circle"', source)
+        self.assertIn('"Déjà présent dans les besoins"', source)
+        self.assertIn('color=positive', source)
+        self.assertIn('est déjà dans les besoins', source)
 
     def test_edit_dialog_has_second_checkbox_and_section_uses_ten(self):
         source = ITEMS_UI_PATH.read_text(encoding="utf-8")

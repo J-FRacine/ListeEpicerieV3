@@ -62,7 +62,6 @@ def get_frequent_items(user_id, family_id, limit=MAX_FREQUENT_ITEMS):
             cur.execute(
                 _item_select_sql(
                     extra_where=(
-                        "AND item.needed = 0 "
                         "AND item.frequent_selected = TRUE"
                     ),
                     order_by=(

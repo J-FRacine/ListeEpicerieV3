@@ -7,6 +7,8 @@ Base GitHub de départ : 766c390684ec973bf901561b1d5e45a3c8ca50c4
 
 Fonctionnement
 --------------
+- Les items sélectionnés restent visibles même lorsqu'ils sont déjà dans les besoins.
+  Un crochet vert indique alors qu'ils sont déjà présents; ils ne disparaissent plus de la section.
 - La fenêtre Modifier l'item affiche maintenant deux cases sur la même ligne :
   Présent dans les besoins et Dans « Souvent ajoutés ».
 - La seconde case contrôle explicitement l'appartenance à la section Souvent ajoutés.

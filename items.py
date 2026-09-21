@@ -230,8 +230,8 @@ def items_panel():
             "text-lg font-bold mt-1"
         )
         ui.label(
-            "Jusqu’à 10 items choisis. Touchez un item pour le remettre "
-            "immédiatement dans les besoins."
+            "Jusqu’à 10 items choisis. Le crochet indique un item déjà "
+            "présent dans les besoins."
         ).classes("text-sm text-gray-500")
 
         with ui.row().classes(
@@ -240,6 +240,13 @@ def items_panel():
             for frequent in frequent_items:
 
                 def add_frequent(item=frequent):
+                    if item["needed"] == 1:
+                        ui.notify(
+                            f"« {item['name']} » est déjà dans les besoins.",
+                            type="info",
+                        )
+                        return
+
                     try:
                         set_item_needed(
                             user_id,
@@ -262,16 +269,31 @@ def items_panel():
                     )
                     ui.navigate.to("/?tab=items")
 
+                already_needed = frequent["needed"] == 1
                 ui.button(
                     frequent["name"],
-                    icon="add_shopping_cart",
+                    icon=(
+                        "check_circle"
+                        if already_needed
+                        else "add_shopping_cart"
+                    ),
                     on_click=add_frequent,
                 ).props(
-                    "outline color=primary no-caps"
+                    (
+                        "outline color=positive no-caps"
+                        if already_needed
+                        else "outline color=primary no-caps"
+                    )
                 ).tooltip(
-                    "Ajouté "
-                    f"{frequent['times_needed']} fois "
-                    "aux besoins"
+                    (
+                        "Déjà présent dans les besoins"
+                        if already_needed
+                        else (
+                            "Ajouté "
+                            f"{frequent['times_needed']} fois "
+                            "aux besoins"
+                        )
+                    )
                 )
 
     # ---------------------------------------------------------

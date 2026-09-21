@@ -22,6 +22,25 @@ APP_VERSIONS = {
 
 RELEASE_NOTES = [
     {
+        "app_key": "grocery",
+        "version": "1.2.1",
+        "date": "2026-09-21",
+        "title": "Liste d’épicerie — V1.2.1 — Souvent ajoutés personnalisables",
+        "summary": (
+            "La section Souvent ajoutés devient une sélection explicite de "
+            "10 raccourcis maximum par famille."
+        ),
+        "changes": [
+            "Dans Modifier l’item, la case Dans « Souvent ajoutés » permet d’ajouter ou retirer directement un raccourci.",
+            "La section est limitée à 10 items maximum par famille afin de garder la page lisible.",
+            "Un item sélectionné reste visible même lorsqu’il est déjà dans les besoins; un crochet vert indique alors cet état.",
+            "Un item déjà présent dans les besoins n’est pas ajouté une seconde fois lorsqu’on touche son raccourci.",
+            "La migration automatique frequent_selected conserve jusqu’à 10 items historiquement fréquents comme sélection initiale; aucun SQL manuel.",
+            "Les sauvegardes/restaurations de famille conservent la sélection et restent compatibles avec les anciennes sauvegardes.",
+            "Validation locale finale réussie : 12 tests ciblés Épicerie et 543 tests JF Apps; validation fonctionnelle réussie dans le navigateur par l’utilisateur.",
+        ],
+    },
+    {
         "app_key": "finances",
         "version": "1.13.7",
         "date": "2026-09-21",

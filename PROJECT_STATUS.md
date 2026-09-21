@@ -17,6 +17,17 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 
 Important : ces versions sont celles présentes dans GitHub `main`. Leur validation réelle sur Canner/Render ou PostgreSQL de production doit être confirmée séparément après déploiement.
 
+## Liste d’épicerie — V1.2.1 Souvent ajoutés — validation en cours — 2026-09-21
+
+- Base GitHub de départ vérifiée : `766c390684ec973bf901561b1d5e45a3c8ca50c4` (`main`); version officielle **V1.2.0** pendant la validation.
+- Dans **Modifier l’item**, une case **Dans « Souvent ajoutés »** est ajoutée à droite de **Présent dans les besoins**.
+- **Souvent ajoutés** devient une sélection explicite, limitée à **10 items maximum par famille**. Les items déjà dans les besoins ne sont pas répétés dans les raccourcis.
+- À la première migration, jusqu’à 10 items actuellement les plus fréquents sont sélectionnés automatiquement afin de préserver l’usage existant; ensuite la sélection est gérée manuellement.
+- Nouvelle colonne `frequent_selected` ajoutée automatiquement et de façon idempotente; aucun SQL manuel.
+- Export/restauration des familles conserve la sélection; les anciennes sauvegardes sans ce champ restent compatibles.
+- Les compteurs historiques `times_needed` et `last_needed_at` sont conservés; ils servent encore à l’ordre des raccourcis sélectionnés.
+- Version cible après validation navigateur : **Liste d’épicerie V1.2.1**.
+
 ## JDR — intégration V1.4.0 — 2026-09-10
 
 - Base GitHub vérifiée : `629b91ce85e11f3a6f4467459c23588825cc96e7`, état propre et 345 tests réussis. Livraison sur `review/jdr-v1.4-integration`; la table ci-dessus décrit le main de départ. JDR passe à **V1.4.0** dans cette branche.

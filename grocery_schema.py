@@ -122,6 +122,47 @@ def migrate_grocery_schema(get_connection):
                 BEGIN
                     IF NOT EXISTS (
                         SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_schema = current_schema()
+                          AND table_name = 'items'
+                          AND column_name = 'frequent_selected'
+                    ) THEN
+                        ALTER TABLE items
+                        ADD COLUMN frequent_selected BOOLEAN NOT NULL DEFAULT FALSE;
+
+                        WITH ranked AS (
+                            SELECT
+                                id,
+                                ROW_NUMBER() OVER (
+                                    PARTITION BY family_id
+                                    ORDER BY
+                                        times_needed DESC,
+                                        last_needed_at DESC NULLS LAST,
+                                        LOWER(name),
+                                        id
+                                ) AS position
+                            FROM items
+                            WHERE deleted_at IS NULL
+                              AND needed = 0
+                              AND times_needed > 0
+                        )
+                        UPDATE items AS item
+                        SET frequent_selected = TRUE
+                        FROM ranked
+                        WHERE item.id = ranked.id
+                          AND ranked.position <= 10;
+                    END IF;
+                END
+                $$;
+                """
+            )
+
+            cur.execute(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
                         FROM pg_constraint
                         WHERE conname = 'items_store_id_fkey'
                           AND conrelid = 'items'::regclass

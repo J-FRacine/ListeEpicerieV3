@@ -1586,7 +1586,11 @@ Les items supprimés peuvent être restaurés depuis **Activité et corbeille** 
 
 ### Items fréquents
 
-Les produits souvent ajoutés peuvent être proposés comme raccourcis. Un toucher les replace dans les besoins sans créer de doublon.
+La future V1.2.1 permet de choisir directement les raccourcis **Souvent ajoutés**. Dans **Modifier l’item**, cochez **Dans « Souvent ajoutés »** à droite de **Présent dans les besoins**. Décochez-la pour retirer l’item de cette section.
+
+La section est limitée à **10 items maximum** afin de garder la page lisible. Un item déjà présent dans les besoins n’est pas répété dans les raccourcis, mais il reste sélectionné et réapparaît lorsqu’il quitte les besoins. Lors de la migration initiale, jusqu’à 10 des items déjà les plus souvent utilisés sont conservés automatiquement comme sélection de départ.
+
+Un toucher sur un raccourci le replace dans les besoins sans créer de doublon. Le choix **Souvent ajoutés** est aussi conservé dans les sauvegardes de famille.
 
 
 ### Tri alphabétique

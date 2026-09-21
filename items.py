@@ -222,7 +222,7 @@ def items_panel():
     frequent_items = get_frequent_items(
         user_id,
         family_id,
-        limit=8,
+        limit=10,
     )
 
     if frequent_items:
@@ -230,7 +230,8 @@ def items_panel():
             "text-lg font-bold mt-1"
         )
         ui.label(
-            "Touchez un item pour le remettre immédiatement dans les besoins."
+            "Jusqu’à 10 items choisis. Touchez un item pour le remettre "
+            "immédiatement dans les besoins."
         ).classes("text-sm text-gray-500")
 
         with ui.row().classes(
@@ -377,10 +378,21 @@ def items_panel():
                     label="Magasin",
                 ).classes("w-full")
 
-                edit_needed = ui.checkbox(
-                    "Présent dans les besoins",
-                    value=item["needed"] == 1,
-                )
+                with ui.row().classes(
+                    "w-full items-center gap-6 flex-wrap"
+                ):
+                    edit_needed = ui.checkbox(
+                        "Présent dans les besoins",
+                        value=item["needed"] == 1,
+                    )
+                    edit_frequent = ui.checkbox(
+                        "Dans « Souvent ajoutés »",
+                        value=bool(
+                            item.get("frequent_selected")
+                        ),
+                    ).tooltip(
+                        "Maximum 10 items dans cette section"
+                    )
 
                 def save_item():
                     try:
@@ -415,6 +427,9 @@ def items_panel():
                             store_id=store_by_name[
                                 edit_store.value
                             ],
+                            frequent_selected=bool(
+                                edit_frequent.value
+                            ),
                         )
                     except (
                         ValueError,

@@ -3,6 +3,9 @@ import db as _db
 from grocery_common import log_activity
 
 
+MAX_FREQUENT_ITEMS = 10
+
+
 def _item_select_sql(extra_where="", order_by="item.id"):
     return f"""
         SELECT
@@ -15,6 +18,7 @@ def _item_select_sql(extra_where="", order_by="item.id"):
             item.needed,
             item.times_needed,
             item.last_needed_at,
+            item.frequent_selected,
             category.name AS category,
             category.sort_order AS category_order,
             COALESCE(store.name, 'Sans magasin') AS store,
@@ -43,8 +47,14 @@ def get_items(user_id, family_id):
             return cur.fetchall()
 
 
-def get_frequent_items(user_id, family_id, limit=8):
-    safe_limit = max(1, min(int(limit or 8), 20))
+def get_frequent_items(user_id, family_id, limit=MAX_FREQUENT_ITEMS):
+    safe_limit = max(
+        1,
+        min(
+            int(limit or MAX_FREQUENT_ITEMS),
+            MAX_FREQUENT_ITEMS,
+        ),
+    )
 
     with _db.get_connection() as conn:
         with conn.cursor() as cur:
@@ -53,7 +63,7 @@ def get_frequent_items(user_id, family_id, limit=8):
                 _item_select_sql(
                     extra_where=(
                         "AND item.needed = 0 "
-                        "AND item.times_needed > 0"
+                        "AND item.frequent_selected = TRUE"
                     ),
                     order_by=(
                         "item.times_needed DESC, "
@@ -194,6 +204,35 @@ def add_item(
             return item_id
 
 
+def _ensure_frequent_selection_capacity(
+    cur,
+    family_id,
+    item_id,
+    selected,
+    current_selected,
+):
+    if not selected or current_selected:
+        return
+
+    cur.execute(
+        """
+        SELECT COUNT(*) AS total
+        FROM items
+        WHERE family_id = %s
+          AND deleted_at IS NULL
+          AND frequent_selected = TRUE
+          AND id <> %s;
+        """,
+        (family_id, item_id),
+    )
+    total = int(cur.fetchone()["total"])
+    if total >= MAX_FREQUENT_ITEMS:
+        raise ValueError(
+            "Souvent ajoutés est limité à 10 items. "
+            "Retirez-en un avant d’en ajouter un autre."
+        )
+
+
 def update_item(
     user_id,
     item_id,
@@ -203,6 +242,7 @@ def update_item(
     needed,
     note="",
     store_id=None,
+    frequent_selected=None,
 ):
     item_name = str(name or "").strip()
     item_note = str(note or "").strip()
@@ -218,7 +258,7 @@ def update_item(
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT family_id, name, needed
+                SELECT family_id, name, needed, frequent_selected
                 FROM items
                 WHERE id = %s
                   AND deleted_at IS NULL;
@@ -239,6 +279,19 @@ def update_item(
             if not _store_belongs(cur, family_id, store_id):
                 raise ValueError("Le magasin choisi est invalide.")
 
+            item_frequent_selected = (
+                bool(current["frequent_selected"])
+                if frequent_selected is None
+                else bool(frequent_selected)
+            )
+            _ensure_frequent_selection_capacity(
+                cur,
+                family_id,
+                item_id,
+                item_frequent_selected,
+                bool(current["frequent_selected"]),
+            )
+
             added_to_needs = current["needed"] == 0 and item_needed == 1
             cur.execute(
                 """
@@ -250,6 +303,7 @@ def update_item(
                     note = %s,
                     quantity = %s,
                     needed = %s,
+                    frequent_selected = %s,
                     times_needed = times_needed + %s,
                     last_needed_at = CASE
                         WHEN %s = 1 THEN NOW()
@@ -264,6 +318,7 @@ def update_item(
                     item_note,
                     item_quantity,
                     item_needed,
+                    item_frequent_selected,
                     1 if added_to_needs else 0,
                     1 if added_to_needs else 0,
                     item_id,
@@ -277,7 +332,10 @@ def update_item(
                 "item",
                 item_id,
                 item_name,
-                {"old_name": current["name"]},
+                {
+                    "old_name": current["name"],
+                    "frequent_selected": item_frequent_selected,
+                },
             )
 
             if current["needed"] != item_needed:

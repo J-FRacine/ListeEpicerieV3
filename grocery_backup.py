@@ -48,6 +48,7 @@ def export_family_backup(user_id, family_id):
                     item.needed,
                     item.times_needed,
                     item.last_needed_at,
+                    item.frequent_selected,
                     category.name AS category,
                     COALESCE(store.name, 'Épicerie') AS store
                 FROM items AS item
@@ -74,6 +75,9 @@ def export_family_backup(user_id, family_id):
                         "note": row["note"],
                         "quantity": row["quantity"],
                         "needed": bool(row["needed"]),
+                        "frequent_selected": bool(
+                            row["frequent_selected"]
+                        ),
                         "times_needed": row["times_needed"],
                         "last_needed_at": (
                             row["last_needed_at"].isoformat()
@@ -239,6 +243,21 @@ def _item_values(item):
     else:
         needed = bool(raw_needed)
 
+    if "frequent_selected" in item:
+        raw_frequent = item.get("frequent_selected", False)
+        if isinstance(raw_frequent, str):
+            frequent_selected = raw_frequent.strip().lower() in {
+                "1",
+                "true",
+                "vrai",
+                "yes",
+                "oui",
+            }
+        else:
+            frequent_selected = bool(raw_frequent)
+    else:
+        frequent_selected = None
+
     try:
         times_needed = max(
             0,
@@ -264,6 +283,7 @@ def _item_values(item):
         "store": store or "Épicerie",
         "quantity": quantity,
         "needed": needed,
+        "frequent_selected": frequent_selected,
         "times_needed": times_needed,
         "last_needed_at": last_needed_at,
     }
@@ -566,6 +586,10 @@ def import_family_backup(
                         SET note = %s,
                             quantity = %s,
                             needed = %s,
+                            frequent_selected = COALESCE(
+                                %s,
+                                frequent_selected
+                            ),
                             times_needed = GREATEST(times_needed, %s),
                             last_needed_at = COALESCE(
                                 %s::timestamptz,
@@ -577,6 +601,7 @@ def import_family_backup(
                             item["note"],
                             item["quantity"],
                             needed,
+                            item["frequent_selected"],
                             item["times_needed"],
                             item["last_needed_at"],
                             existing[key],
@@ -594,12 +619,13 @@ def import_family_backup(
                             note,
                             quantity,
                             needed,
+                            frequent_selected,
                             times_needed,
                             last_needed_at
                         )
                         VALUES (
                             %s, %s, %s, %s, %s,
-                            %s, %s, %s, %s::timestamptz
+                            %s, %s, %s, %s, %s::timestamptz
                         )
                         RETURNING id;
                         """,
@@ -611,6 +637,7 @@ def import_family_backup(
                             item["note"],
                             item["quantity"],
                             needed,
+                            bool(item["frequent_selected"]),
                             item["times_needed"],
                             item["last_needed_at"],
                         ),

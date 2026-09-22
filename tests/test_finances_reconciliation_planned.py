@@ -179,9 +179,9 @@ class PlannedReconciliationTests(unittest.TestCase):
     def test_version_manual_and_release_notes_are_updated(self):
         versions = (ROOT / "app_versions.py").read_text(encoding="utf-8")
         manual = (ROOT / "manual.py").read_text(encoding="utf-8")
-        self.assertIn('"finances": "1.13.7"', versions)
+        self.assertIn('"finances": "1.14.0"', versions)
         self.assertIn('"version": "1.13.6"', versions)
-        self.assertIn('"title": "Finances — V1.13.7"', manual)
+        self.assertIn('"title": "Finances — V1.14.0"', manual)
         self.assertIn("Transactions prévues à confirmer", manual)
 
 

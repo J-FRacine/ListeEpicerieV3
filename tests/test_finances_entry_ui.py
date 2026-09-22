@@ -41,7 +41,7 @@ def build():
         ('tags', 'select', 'Étiquettes'), ('status', 'select', 'Statut de transaction'),
         ('budget_excluded', 'checkbox', 'Hors budget — transfert, paiement de carte ou déplacement d’épargne'),
         ('bank_programmed', 'checkbox', 'Programmée dans le compte bancaire'),
-        ('reminder_enabled', 'checkbox', 'Me rappeler cette transaction le jour prévu'),
+        ('reminder_enabled', 'checkbox', 'Avis Portail dès 3 jours avant + rappel le jour prévu'),
         ('reminder_time', 'input', 'Heure du rappel'), ('reconciled', 'checkbox', 'Transaction conciliée'),
         ('reconciliation_date', 'input', 'Date de conciliation (facultative)'), ('note', 'textarea', 'Note facultative')]:
         fields[name] = ui.find(widget, label)[3]

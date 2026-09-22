@@ -15,12 +15,29 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
     "blood_pressure": "1.2.2",
-    "finances": "1.14.0",
+    "finances": "1.14.1",
     "rpg": "1.10.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.14.1",
+        "date": "2026-09-22",
+        "title": "Finances — V1.14.1 — avis Portail pour transactions futures confirmées",
+        "summary": (
+            "Les transactions futures cochées pour avis apparaissent maintenant "
+            "dans le Portail même lorsqu'elles sont déjà au statut Confirmée."
+        ),
+        "changes": [
+            "Correction du filtre V1.14.0 qui limitait les avis du Portail aux transactions au statut À confirmer.",
+            "Une transaction future marquée pour avis apparaît maintenant dans les 3 jours avant son échéance, qu'elle soit À confirmer ou Confirmée.",
+            "Une transaction passée n'est conservée comme avis En retard que si elle demeure au statut À confirmer.",
+            "Les paiements de carte et les récurrences conservent le comportement V1.14.0.",
+            "Aucune nouvelle table, colonne ou migration PostgreSQL.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.14.0",

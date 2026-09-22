@@ -54,9 +54,13 @@ def collect_finance_portal_reminders(
     """Retourne les échéances Finances explicitement marquées pour rappel.
 
     Les rappels existants de Finances servent de sélection explicite :
-    - transaction prévue avec reminder_enabled;
-    - paiement de carte planifié avec reminder_enabled;
+    - transaction future marquée avec reminder_enabled, qu'elle soit prévue
+      ou déjà confirmée;
+    - paiement de carte futur marqué avec reminder_enabled;
     - prochaine occurrence d'une récurrence avec reminder_enabled.
+
+    Une transaction passée n'est conservée comme retard que si elle demeure au
+    statut ``planned``.
 
     Les transactions matérialisées d'une récurrence ont priorité sur la ligne de
     récurrence afin d'éviter un doublon dans le Portail.
@@ -79,13 +83,25 @@ def collect_finance_portal_reminders(
     lookahead_days = max(0, int(lookahead_days))
     horizon = today_value + timedelta(days=lookahead_days)
 
-    transaction_rows = list_transactions_fn(
+    # Les transactions futures cochées pour avis doivent être visibles même si
+    # elles sont déjà au statut « Confirmée ». Les transactions passées ne sont
+    # relues que lorsqu'elles sont encore « À confirmer », afin de conserver
+    # l'avis « En retard » sans ressusciter des opérations déjà confirmées.
+    future_rows = list_transactions_fn(
         user_id,
-        status="planned",
+        start_date=today_value,
         end_date=horizon,
         include_linked_transfer_destinations=False,
         limit=500,
     )
+    overdue_rows = list_transactions_fn(
+        user_id,
+        status="planned",
+        end_date=today_value - timedelta(days=1),
+        include_linked_transfer_destinations=False,
+        limit=500,
+    )
+    transaction_rows = list(overdue_rows or []) + list(future_rows or [])
 
     reminders = []
     materialized_recurrences = set()
@@ -96,6 +112,8 @@ def collect_finance_portal_reminders(
 
         due_date = _as_date(row.get("transaction_date"))
         if due_date is None or due_date > horizon:
+            continue
+        if due_date < today_value and row.get("status") != "planned":
             continue
 
         recurrence_id = row.get("recurrence_id")

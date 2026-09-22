@@ -176,7 +176,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.14.0",
+        "title": "Finances — V1.14.1",
         "icon": "account_balance_wallet",
         "caption": "Prévisions, Budget, financements, conciliation et prêts partagés",
         "keywords": (
@@ -185,6 +185,14 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "compte solde départ solde actuel plus bas prévu fin mois"
         ),
         "content": """
+### V1.14.1 — correction des avis Portail
+
+Une transaction future cochée avec l’option **Avis Portail dès 3 jours avant + rappel le jour prévu** apparaît maintenant dans le **Portail** même si son statut est déjà **Confirmée**. Cela correspond au fonctionnement attendu de la case d’avis : le statut de confirmation ne doit pas empêcher l’avertissement d’une échéance future.
+
+Les transactions au statut **À confirmer** continuent de fonctionner comme avant. Si leur date est dépassée, elles restent visibles avec la mention **En retard**. Une transaction passée déjà **Confirmée** n’est pas réaffichée comme retard.
+
+Les paiements de carte et les récurrences conservent leur comportement V1.14.0. Aucune nouvelle donnée PostgreSQL n’est nécessaire.
+
 ### V1.14.0 — avis d’échéances dans le Portail
 
 Les transactions **Prévues** marquées avec l’option de rappel apparaissent maintenant aussi dans le **Portail** à partir de **3 jours avant leur échéance**. Le même principe s’applique aux paiements de carte planifiés et aux prochaines occurrences des récurrences.

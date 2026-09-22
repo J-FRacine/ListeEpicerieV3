@@ -11,7 +11,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
 | Journal de pression | 1.2.2 |
-| Finances | 1.14.0 |
+| Finances | 1.14.1 |
 | Personnages JDR | 1.10.0 |
 | Commentaires et suggestions | 1.0.0 |
 
@@ -173,6 +173,16 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
 
+## Finances — V1.14.1 / correction des avis Portail — 2026-09-22
+
+- Base GitHub vérifiée : `9924dc6b61fbb21de482fdbed3226faf212ce04e` (`main`), Finances V1.14.0.
+- Correction après validation navigateur réelle : une transaction future cochée pour avis n’apparaissait pas lorsqu’elle était déjà au statut `confirmed`, car V1.14.0 interrogeait uniquement les transactions `planned`.
+- Les transactions futures marquées pour avis sont maintenant lues indépendamment du statut entre aujourd’hui et J+3.
+- Les transactions passées restent affichées avec **En retard** uniquement si elles demeurent au statut `planned`; une transaction passée déjà confirmée reste exclue.
+- Les récurrences et paiements de carte conservent leur fonctionnement V1.14.0 et la déduplication des occurrences matérialisées est préservée.
+- Aucun changement de schéma, aucune migration PostgreSQL et aucun SQL manuel.
+- Validation locale par compilation et tests à effectuer via l’installateur; validation navigateur/Canner à refaire après publication.
+
 ## Finances — V1.14.0 / avis d’échéances dans le Portail — 2026-09-22
 
 - Base GitHub : `9fd8ce1a714b957015c99e45c0cf4c606dd04a70` (`main`).
@@ -201,7 +211,7 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 
 ## Finances — état actuel
 
-Version actuelle de travail : **V1.14.0**
+Version actuelle de travail : **V1.14.1**
 
 ### V1.13.6 — frais au premier versement — 2026-09-15
 

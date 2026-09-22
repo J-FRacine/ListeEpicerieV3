@@ -15,12 +15,32 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
     "blood_pressure": "1.2.2",
-    "finances": "1.13.7",
+    "finances": "1.14.0",
     "rpg": "1.10.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.14.0",
+        "date": "2026-09-22",
+        "title": "Finances — V1.14.0 — avis d’échéances dans le Portail",
+        "summary": (
+            "Les transactions, paiements de carte et récurrences marqués pour rappel "
+            "peuvent maintenant apparaître dans le Portail avant leur échéance."
+        ),
+        "changes": [
+            "Le mécanisme de rappel déjà présent dans Finances sert maintenant aussi à sélectionner les échéances importantes affichées dans le Portail.",
+            "Une échéance marquée apparaît dans le Portail jusqu’à 3 jours avant sa date prévue.",
+            "Les paiements de carte planifiés utilisent le même mécanisme et peuvent donc apparaître dans les avis du Portail.",
+            "Les récurrences marquées pour rappel apparaissent même lorsque leur prochaine occurrence n’a pas encore été matérialisée dans l’Historique.",
+            "Une transaction encore prévue après sa date reste visible avec la mention En retard jusqu’à sa confirmation ou sa correction.",
+            "Les occurrences matérialisées d’une récurrence ont priorité afin d’éviter les doublons dans le Portail.",
+            "Un bouton Ouvrir Finances mène directement à l’Historique.",
+            "Aucune nouvelle table, colonne ou migration PostgreSQL : les champs de rappel existants sont réutilisés.",
+        ],
+    },
     {
         "app_key": "grocery",
         "version": "1.2.1",

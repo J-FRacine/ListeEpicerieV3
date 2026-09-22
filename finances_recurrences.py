@@ -199,7 +199,7 @@ def build_recurrences_panel(
                         value=bool(row.get("bank_programmed")) if row else False,
                     )
                     reminder_enabled_rec = ui.checkbox(
-                        "Me rappeler chaque occurrence le jour prévu",
+                        "Avis Portail dès 3 jours avant + rappel chaque occurrence le jour prévu",
                         value=bool(row.get("reminder_enabled")) if row else False,
                     )
                     reminder_time_rec = ui.input(

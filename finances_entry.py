@@ -422,7 +422,7 @@ def build_entry_panel(
                     value=False,
                 )
                 reminder_enabled_quick = ui.checkbox(
-                    "Me rappeler cette transaction le jour prévu",
+                    "Avis Portail dès 3 jours avant + rappel le jour prévu",
                     value=False,
                 )
                 reminder_time_quick = ui.input(

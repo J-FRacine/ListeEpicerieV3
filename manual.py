@@ -176,7 +176,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.13.7",
+        "title": "Finances — V1.14.0",
         "icon": "account_balance_wallet",
         "caption": "Prévisions, Budget, financements, conciliation et prêts partagés",
         "keywords": (
@@ -185,6 +185,18 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "compte solde départ solde actuel plus bas prévu fin mois"
         ),
         "content": """
+### V1.14.0 — avis d’échéances dans le Portail
+
+Les transactions **Prévues** marquées avec l’option de rappel apparaissent maintenant aussi dans le **Portail** à partir de **3 jours avant leur échéance**. Le même principe s’applique aux paiements de carte planifiés et aux prochaines occurrences des récurrences.
+
+L’avis affiche la description, le montant, le mode de paiement lorsqu’il est disponible et un repère simple : **dans 3 jours**, **demain**, **aujourd’hui** ou **en retard**. Une transaction confirmée cesse automatiquement d’être affichée puisqu’elle n’est plus au statut Prévue.
+
+Dans les formulaires Finances, les anciennes cases de rappel sont conservées mais leur libellé précise maintenant qu’elles servent à la fois à l’**avis dans le Portail** et au **rappel Web Push le jour prévu**.
+
+Le bouton **Ouvrir Finances** dans l’avis mène directement à l’Historique. Les récurrences déjà matérialisées en transaction ne sont affichées qu’une seule fois.
+
+Aucune nouvelle donnée PostgreSQL n’est nécessaire : Finances réutilise les réglages de rappel existants.
+
 ### V1.13.7 — KPI des financements dans Tableau
 
 La V1.13.7 sépare les **totaux variables** des **KPI par catégorie et par étiquette**. Un versement de financement peut donc apparaître dans son KPI du mois même lorsque ce financement est déjà inclus dans un groupe du Budget.

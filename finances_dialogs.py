@@ -182,7 +182,7 @@ def build_finance_dialogs(
                     ),
                 )
                 reminder_enabled = ui.checkbox(
-                    "Me rappeler ce paiement le jour du débit",
+                    "Avis Portail dès 3 jours avant + rappel le jour du débit",
                     value=bool(transfer.get("reminder_enabled")) if transfer else False,
                 )
                 reminder_time = ui.input(
@@ -462,7 +462,7 @@ def build_finance_dialogs(
                     ).classes("text-xs jf-muted")
 
                     reminder_enabled = ui.checkbox(
-                        "Me rappeler cette transaction le jour prévu",
+                        "Avis Portail dès 3 jours avant + rappel le jour prévu",
                         value=bool(transaction.get("reminder_enabled")) if transaction else False,
                     )
                     reminder_time = ui.input(

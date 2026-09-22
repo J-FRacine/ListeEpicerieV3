@@ -1,6 +1,6 @@
 # JF Apps — État du projet
 
-Dernière mise à jour : 2026-09-21
+Dernière mise à jour : 2026-09-22
 
 Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversations. Le dépôt GitHub `J-FRacine/ListeEpicerieV3` sur `main` est la référence technique.
 
@@ -11,7 +11,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
 | Journal de pression | 1.2.2 |
-| Finances | 1.13.7 |
+| Finances | 1.14.0 |
 | Personnages JDR | 1.10.0 |
 | Commentaires et suggestions | 1.0.0 |
 
@@ -173,6 +173,19 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
 
+## Finances — V1.14.0 / avis d’échéances dans le Portail — 2026-09-22
+
+- Base GitHub : `9fd8ce1a714b957015c99e45c0cf4c606dd04a70` (`main`).
+- Les rappels Finances déjà configurables servent maintenant aussi de sélection explicite pour les **avis d’échéances dans le Portail**.
+- Une transaction planifiée marquée pour rappel apparaît à partir de **3 jours avant** sa date prévue; elle reste visible après l’échéance avec la mention **En retard** tant qu’elle demeure au statut `planned`.
+- Les paiements de carte planifiés utilisent les mêmes champs de rappel et sont donc couverts.
+- Les récurrences marquées pour rappel sont affichées à partir de leur `next_date`, même avant matérialisation d’une transaction.
+- Lorsqu’une transaction matérialisée existe pour la même récurrence et la même date, elle remplace la ligne de récurrence afin d’éviter un doublon.
+- Le Portail affiche description, montant, mode de paiement si disponible et repère relatif de date; **Ouvrir Finances** mène à l’Historique.
+- Les libellés des cases de rappel précisent maintenant : **Avis Portail dès 3 jours avant + rappel le jour prévu**.
+- Aucune nouvelle table, colonne ou migration PostgreSQL; les champs `reminder_enabled` / `reminder_time` existants sont réutilisés.
+- Travail à valider localement par compilation/tests puis dans le navigateur après déploiement. PostgreSQL de production / Canner ne sont pas testés par le script d’installation.
+
 ## Finances — finalisation V1.13.7 / KPI des financements — 2026-09-21
 
 - Base GitHub validée avant finalisation : `0603ded25ca79b4a8eff0f10fa83c2ecad30ac07` (`main`).
@@ -188,7 +201,7 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 
 ## Finances — état actuel
 
-Version actuelle de travail : **V1.13.7**
+Version actuelle de travail : **V1.14.0**
 
 ### V1.13.6 — frais au premier versement — 2026-09-15
 

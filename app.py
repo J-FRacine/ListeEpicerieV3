@@ -48,6 +48,7 @@ from feedback_data import (
     init_feedback_schema,
 )
 from finances import finances_panel
+from finances_portal import finances_portal_reminder
 from finances_data import init_finances_schema
 from global_backup import download_global_backup
 from global_restore import global_restore_panel
@@ -1490,6 +1491,11 @@ def show_portal(user):
                         in allowed_app_keys
                     ):
                         blood_pressure_portal_reminder(
+                            user["id"]
+                        )
+
+                    if "finances" in allowed_app_keys:
+                        finances_portal_reminder(
                             user["id"]
                         )
 

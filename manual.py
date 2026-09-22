@@ -176,7 +176,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.14.2",
+        "title": "Finances — V1.14.3",
         "icon": "account_balance_wallet",
         "caption": "Prévisions, Budget, financements, conciliation et prêts partagés",
         "keywords": (
@@ -185,6 +185,14 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "compte solde départ solde actuel plus bas prévu fin mois"
         ),
         "content": """
+### V1.14.3 — avis Portail raccordés et Historique au mois complet
+
+Le **Portail** lit maintenant les échéances directement dans les données Finances. Un mauvais raccordement interne faisait échouer silencieusement la lecture des transactions et récurrences, même lorsque la case **Avis Portail** était correctement enregistrée.
+
+Dans **Historique**, la période proposée à l’ouverture couvre maintenant le mois courant complet : **Du** reste au premier jour du mois et **Au** est initialisé au dernier jour du mois. Les deux dates restent modifiables normalement.
+
+Aucune migration PostgreSQL n’est requise.
+
 ### V1.14.2 — persistance des avis Portail
 
 La case **Avis Portail dès 3 jours avant + rappel le jour prévu** reste maintenant enregistrée même lorsqu’une transaction future est au statut **Confirmée**. La V1.14.1 savait afficher ces transactions dans le Portail, mais l’enregistrement de Finances annulait encore silencieusement la case au moment de sauvegarder.

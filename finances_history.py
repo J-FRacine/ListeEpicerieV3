@@ -59,7 +59,13 @@ def build_history_panel(
 
                 end = ui.input(
                     label="Au",
-                    value=today_value.isoformat(),
+                    value=(
+                        (
+                            month_value.replace(day=28)
+                            + timedelta(days=4)
+                        ).replace(day=1)
+                        - timedelta(days=1)
+                    ).isoformat(),
                 ).props(
                     "type=date dense outlined"
                 ).classes("jf-finance-field")

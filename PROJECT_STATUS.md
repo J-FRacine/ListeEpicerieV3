@@ -11,7 +11,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
 | Journal de pression | 1.2.2 |
-| Finances | 1.14.2 |
+| Finances | 1.14.3 |
 | Personnages JDR | 1.10.0 |
 | Commentaires et suggestions | 1.0.0 |
 
@@ -173,6 +173,16 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
 
+## Finances — V1.14.3 / raccord des avis Portail et Historique au mois complet — 2026-09-22
+
+- Base GitHub vérifiée : `100d0ad6497e0ccda1bf0df437be0bfd7bbc399e` (`main`), Finances V1.14.2.
+- Correction après validation navigateur réelle : la case **Avis Portail** était maintenant bien persistée, mais `finances_portal.py` tentait de charger `list_transactions` et `list_recurrences` depuis `db.py`, où ces fonctions n’existent pas. L’exception était interceptée et l’avis disparaissait silencieusement du Portail.
+- Le Portail charge maintenant ces lecteurs depuis `finances_data.py`, qui expose les données Finances réelles.
+- Un test de régression vérifie que le chemin par défaut utilise `finances_data` et échouerait si `db` était de nouveau utilisé.
+- Demande utilisateur intégrée au même correctif : dans **Historique**, la date **Au** est par défaut le dernier jour du mois courant; **Du** reste le premier jour du mois. Les filtres restent modifiables.
+- Aucune nouvelle table, colonne ou migration PostgreSQL et aucun SQL manuel.
+- Validation locale par compilation/tests à effectuer via l’installateur; validation navigateur/Canner à refaire après publication.
+
 ## Finances — V1.14.2 / persistance des avis Portail — 2026-09-22
 
 - Base GitHub vérifiée : `086a17d2230909df941bc5cc294410c142a8ada3` (`main`), Finances V1.14.1.
@@ -222,7 +232,7 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 
 ## Finances — état actuel
 
-Version actuelle de travail : **V1.14.2**
+Version actuelle de travail : **V1.14.3**
 
 ### V1.13.6 — frais au premier versement — 2026-09-15
 

@@ -69,7 +69,7 @@ def collect_finance_portal_reminders(
     # Les tests unitaires injectent leurs propres fonctions de lecture et peuvent
     # ainsi tester cette logique sans pilote psycopg ni connexion à la base.
     if list_transactions_fn is None or list_recurrences_fn is None:
-        from db import (
+        from finances_data import (
             list_recurrences as db_list_recurrences,
             list_transactions as db_list_transactions,
         )

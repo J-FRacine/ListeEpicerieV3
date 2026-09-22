@@ -15,12 +15,29 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
     "blood_pressure": "1.2.2",
-    "finances": "1.14.2",
+    "finances": "1.14.3",
     "rpg": "1.10.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.14.3",
+        "date": "2026-09-22",
+        "title": "Finances — V1.14.3 — avis Portail raccordés et Historique au mois complet",
+        "summary": (
+            "Le Portail lit maintenant les vraies données Finances pour afficher les échéances, "
+            "et l’Historique couvre par défaut tout le mois courant."
+        ),
+        "changes": [
+            "Correction du raccord du Portail : les transactions et récurrences sont lues depuis finances_data plutôt que db.",
+            "Une transaction future cochée Avis Portail peut maintenant réellement être affichée de J à J+3.",
+            "La date Au de l’Historique est initialisée au dernier jour du mois courant au lieu de la date du jour.",
+            "Les dates des filtres Historique restent entièrement modifiables par l’utilisateur.",
+            "Aucune nouvelle table, colonne ou migration PostgreSQL.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.14.2",

@@ -171,7 +171,7 @@ class FinancesTests(unittest.TestCase):
         )
 
     def test_official_finances_version_is_1137_after_browser_validation(self):
-        self.assertEqual(app_versions.APP_VERSIONS["finances"], "1.14.0")
+        self.assertEqual(app_versions.APP_VERSIONS["finances"], "1.14.1")
 
 
 if __name__ == "__main__":

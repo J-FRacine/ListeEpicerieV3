@@ -129,6 +129,7 @@ Les sauvegardes globales créées à partir du Portail V1.4.0 utilisent le forma
 La grille **Applications** du Portail contient :
 
 - Liste d’épicerie;
+- Recettes;
 - Journal de pression;
 - Finances;
 - Personnages JDR.
@@ -173,6 +174,56 @@ Le monogramme du logo JF Apps est utilisé comme :
 - repère visuel dans l’en-tête commun.
 
 Après une mise à jour, un rechargement complet du navigateur ou une réouverture de la PWA peut être nécessaire pour voir la nouvelle icône.
+""",
+    },
+    {
+        "title": "Recettes — V1.0.0",
+        "icon": "restaurant_menu",
+        "caption": "Créer, consulter, cuisiner et envoyer les ingrédients à l’épicerie",
+        "keywords": (
+            "recettes cuisine ingrédients préparation portions recherche "
+            "bibliothèque partage épicerie besoins mode cuisine"
+        ),
+        "content": """
+### Une application Recettes distincte
+
+**Recettes** possède maintenant sa propre carte dans le Portail. Elle réutilise les recettes déjà créées dans les familles de la Liste d’épicerie : aucune recette existante n’est déplacée ou copiée.
+
+L’accès à Recettes suit pour cette première version l’accès à la **Liste d’épicerie**, puisque les ingrédients sont reliés aux items de la famille. Les sauvegardes de recettes restent donc incluses dans la sauvegarde de la famille.
+
+### Créer et organiser une recette
+
+Choisissez la famille, puis utilisez **Nouvelle recette**. Une recette contient actuellement :
+
+- un nom;
+- un nombre de portions;
+- une description facultative;
+- une préparation;
+- des ingrédients reliés aux items existants de la famille.
+
+Les ingrédients peuvent être ajoutés, modifiés, retirés et réordonnés. Pour faciliter le **Mode cuisine**, inscrivez de préférence une étape de préparation par ligne.
+
+### Rechercher
+
+Le champ **Rechercher une recette** cherche dans le nom, la description, la préparation, les ingrédients, leurs catégories et leurs précisions.
+
+### Consulter et Mode cuisine
+
+**Consulter** ouvre une fiche plus lisible sur téléphone et tablette avec les ingrédients et la préparation côte à côte lorsque l’écran le permet.
+
+**Mode cuisine** agrandit la lecture et affiche les étapes de préparation une par une. Lorsque le navigateur et l’appareil le permettent, JF Apps demande aussi de garder l’écran éveillé pendant ce mode. Si cette fonction n’est pas prise en charge, la recette reste utilisable normalement.
+
+### Ajouter à la liste d’épicerie
+
+**Ajouter à l’épicerie** ou **Ajouter à la liste d’épicerie** reprend le mécanisme existant : les ingrédients liés aux items de la famille sont ajoutés aux besoins et les quantités sont ajustées selon les règles actuelles.
+
+### Partage
+
+La publication dans la **Bibliothèque partagée** reste disponible. Une recette publiée peut être mise à jour lorsque sa version privée a changé.
+
+### Prochaines évolutions prévues
+
+L’architecture de cette première version autonome prépare les prochaines étapes : catégories et étiquettes propres aux recettes, étapes structurées et réordonnables, photos, et enrichissement de l’éditeur bureau. Ces fonctions ne sont pas encore ajoutées en V1.0.0.
 """,
     },
     {

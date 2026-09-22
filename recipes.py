@@ -17,32 +17,22 @@ from db import (
     update_recipe,
     update_recipe_ingredient,
 )
-from state import (
-    get_current_family_id,
-    set_current_family_id,
-)
+from recipes_reader import build_recipe_reader, recipe_matches
+from state import get_current_family_id, set_current_family_id
 from utils import ensure_family_selected
 
 
 def _item_options(items):
     return {
-        item["id"]: (
-            f"{item['name']} — {item['store']} / {item['category']}"
-        )
+        item["id"]: f"{item['name']} — {item['store']} / {item['category']}"
         for item in items
     }
 
 
 def _recipe_caption(servings, ingredient_count):
-    serving_text = (
-        "1 portion"
-        if servings == 1
-        else f"{servings} portions"
-    )
+    serving_text = "1 portion" if servings == 1 else f"{servings} portions"
     ingredient_text = (
-        "1 ingrédient"
-        if ingredient_count == 1
-        else f"{ingredient_count} ingrédients"
+        "1 ingrédient" if ingredient_count == 1 else f"{ingredient_count} ingrédients"
     )
     return f"{serving_text} · {ingredient_text}"
 
@@ -76,39 +66,26 @@ def _summary_message(result):
 def recipes_panel():
     user_id = get_current_user_id()
     family_id = get_current_family_id()
-    open_storage_key = (
-        f"open_grocery_recipes_{family_id}"
-    )
+    open_storage_key = f"open_grocery_recipes_{family_id}"
+    search_state = {"text": ""}
 
     def get_open_recipe_ids():
-        stored_ids = app.storage.user.get(
-            open_storage_key,
-            [],
-        )
+        stored_ids = app.storage.user.get(open_storage_key, [])
         result = set()
-
         for stored_id in stored_ids:
             try:
                 result.add(int(stored_id))
             except (TypeError, ValueError):
                 continue
-
         return result
 
-    def save_recipe_open_state(
-        recipe_id,
-        is_open,
-    ):
+    def save_recipe_open_state(recipe_id, is_open):
         open_ids = get_open_recipe_ids()
-
         if is_open:
             open_ids.add(int(recipe_id))
         else:
             open_ids.discard(int(recipe_id))
-
-        app.storage.user[open_storage_key] = sorted(
-            open_ids
-        )
+        app.storage.user[open_storage_key] = sorted(open_ids)
 
     if user_id is None or not ensure_family_selected(family_id):
         return
@@ -118,10 +95,7 @@ def recipes_panel():
         ui.label("Aucune famille accessible.").classes("text-orange-700")
         return
 
-    family_by_name = {
-        family["name"]: family["id"]
-        for family in families
-    }
+    family_by_name = {family["name"]: family["id"] for family in families}
     current_name = next(
         (
             name
@@ -131,32 +105,38 @@ def recipes_panel():
         list(family_by_name)[0],
     )
 
-    ui.select(
-        list(family_by_name),
-        value=current_name,
-        label="Famille",
-        on_change=lambda event: (
-            set_current_family_id(family_by_name[event.value]),
-            ui.navigate.to("/?tab=recettes"),
-        ),
-    ).classes("w-full")
+    with ui.row().classes("w-full items-end gap-3 flex-wrap"):
+        ui.select(
+            list(family_by_name),
+            value=current_name,
+            label="Famille",
+            on_change=lambda event: (
+                set_current_family_id(family_by_name[event.value]),
+                ui.navigate.to("/?tab=recettes"),
+            ),
+        ).classes("grow min-w-[220px]")
 
-    with ui.row().classes(
-        "w-full items-start justify-between gap-3 flex-wrap"
-    ):
+        ui.button(
+            "Nouvelle recette",
+            icon="add",
+            on_click=lambda: recipe_form("Nouvelle recette"),
+        ).props("color=primary")
+
+    with ui.row().classes("w-full items-start justify-between gap-3 flex-wrap mt-2"):
         with ui.column().classes("gap-0"):
-            ui.label("Recettes").classes("text-2xl font-bold")
+            ui.label("Mes recettes").classes("text-2xl font-bold")
             ui.label(
-                "Associez vos recettes aux items existants, puis ajoutez "
-                "leurs ingrédients aux besoins."
+                "Créez, consultez et partagez vos recettes, puis envoyez leurs ingrédients dans la liste d’épicerie."
             ).classes("text-sm text-gray-500")
-
         ui.icon("restaurant_menu").classes("text-4xl text-primary")
 
     def recipe_form(title, recipe=None):
         with ui.dialog() as dialog:
-            with ui.card().classes("w-full max-w-2xl p-5"):
+            with ui.card().classes("w-full max-w-3xl p-5"):
                 ui.label(title).classes("text-xl font-bold")
+                ui.label(
+                    "Sur ordinateur, utilisez cet écran pour préparer le contenu. Sur téléphone ou tablette, le bouton Consulter offre une lecture plus simple."
+                ).classes("text-xs text-gray-500")
 
                 name_input = ui.input(
                     label="Nom",
@@ -178,10 +158,10 @@ def recipes_panel():
                 ).props("autogrow").classes("w-full")
 
                 instructions_input = ui.textarea(
-                    label="Préparation facultative",
+                    label="Préparation — une étape par ligne de préférence",
                     value=recipe["instructions"] if recipe else "",
                     placeholder=(
-                        "Ex. Cuire la viande, ajouter le maïs, couvrir de purée..."
+                        "Ex.\nCuire la viande.\nAjouter le maïs.\nCouvrir de purée et cuire au four."
                     ),
                 ).props("autogrow").classes("w-full")
 
@@ -226,32 +206,37 @@ def recipes_panel():
 
         dialog.open()
 
-    with ui.row().classes("w-full gap-2 flex-wrap"):
-        ui.button(
-            "Nouvelle recette",
-            icon="add",
-            on_click=lambda: recipe_form("Nouvelle recette"),
-        ).props("color=primary")
-
+    with ui.row().classes("w-full gap-2 flex-wrap mt-2"):
         ui.button(
             "Listes modèles",
             icon="checklist",
             on_click=lambda: ui.navigate.to("/?tab=modeles"),
         ).props("flat color=primary")
-
         ui.button(
             "Bibliothèque partagée",
             icon="public",
             on_click=lambda: ui.navigate.to("/?tab=bibliotheque"),
         ).props("flat color=primary")
 
+    search_input = ui.input(
+        label="Rechercher une recette",
+        placeholder="Nom, description, préparation ou ingrédient",
+    ).props("clearable debounce=180 autocomplete=off").classes("w-full mt-2")
+    with search_input.add_slot("prepend"):
+        ui.icon("search")
+
+    def search_changed(event):
+        search_state["text"] = str(event.value or "")
+        render_recipes.refresh()
+
+    search_input.on_value_change(search_changed)
+
     def confirm_delete(recipe):
         with ui.dialog() as dialog:
             with ui.card().classes("w-full max-w-md p-5"):
                 ui.label("Supprimer la recette?").classes("text-xl font-bold")
                 ui.label(
-                    f"« {recipe['name']} » sera supprimée. "
-                    "Les items eux-mêmes resteront dans l’application."
+                    f"« {recipe['name']} » sera supprimée. Les items eux-mêmes resteront dans l’application."
                 ).classes("text-gray-600")
 
                 def perform_delete():
@@ -260,7 +245,6 @@ def recipes_panel():
                     except (ValueError, PermissionError) as error:
                         ui.notify(str(error), type="warning")
                         return
-
                     dialog.close()
                     render_recipes.refresh()
                     ui.notify("Recette supprimée.", type="positive")
@@ -268,9 +252,7 @@ def recipes_panel():
                 with ui.row().classes("w-full justify-end gap-2 mt-3"):
                     ui.button("Annuler", on_click=dialog.close).props("flat")
                     ui.button(
-                        "Supprimer",
-                        icon="delete",
-                        on_click=perform_delete,
+                        "Supprimer", icon="delete", on_click=perform_delete
                     ).props("color=negative")
 
         dialog.open()
@@ -279,14 +261,12 @@ def recipes_panel():
         with ui.dialog() as dialog:
             with ui.card().classes("w-full max-w-md p-5"):
                 ui.label(ingredient["name"]).classes("text-xl font-bold")
-
                 quantity_input = ui.number(
                     label="Quantité",
                     value=ingredient["quantity"],
                     min=1,
                     step=1,
                 ).classes("w-full")
-
                 note_input = ui.input(
                     label="Précision facultative",
                     value=ingredient["note"],
@@ -304,17 +284,14 @@ def recipes_panel():
                     except (ValueError, PermissionError) as error:
                         ui.notify(str(error), type="warning")
                         return
-
                     dialog.close()
                     render_recipes.refresh()
 
                 with ui.row().classes("w-full justify-end gap-2 mt-3"):
                     ui.button("Annuler", on_click=dialog.close).props("flat")
-                    ui.button(
-                        "Enregistrer",
-                        icon="save",
-                        on_click=save,
-                    ).props("color=primary")
+                    ui.button("Enregistrer", icon="save", on_click=save).props(
+                        "color=primary"
+                    )
 
         dialog.open()
 
@@ -328,58 +305,58 @@ def recipes_panel():
 
     @ui.refreshable
     def render_recipes():
-        recipes = get_recipes(user_id, family_id)
+        recipe_rows = get_recipes(user_id, family_id)
         items = get_items(user_id, family_id)
         options = _item_options(items)
 
-        valid_recipe_ids = {
-            int(recipe["id"])
-            for recipe in recipes
-        }
-        open_recipe_ids = (
-            get_open_recipe_ids()
-            & valid_recipe_ids
-        )
+        details = []
+        for recipe in recipe_rows:
+            ingredients = get_recipe_ingredients(user_id, recipe["id"])
+            if recipe_matches(recipe, ingredients, search_state["text"]):
+                details.append((recipe, ingredients))
 
-        app.storage.user[open_storage_key] = sorted(
-            open_recipe_ids
-        )
+        valid_recipe_ids = {int(recipe["id"]) for recipe in recipe_rows}
+        open_recipe_ids = get_open_recipe_ids() & valid_recipe_ids
+        app.storage.user[open_storage_key] = sorted(open_recipe_ids)
 
-        if not recipes:
+        if not recipe_rows:
             with ui.card().classes("w-full p-7 items-center text-center mt-3"):
                 ui.icon("menu_book").classes("text-5xl text-primary")
                 ui.label("Aucune recette").classes("text-xl font-bold")
                 ui.label(
-                    "Créez une recette, puis choisissez ses ingrédients "
-                    "parmi les items de la famille."
+                    "Créez votre première recette, puis associez ses ingrédients aux items de la famille."
                 ).classes("text-gray-500")
             return
 
-        for recipe in recipes:
+        ui.label(
+            f"{len(details)} recette" if len(details) == 1 else f"{len(details)} recettes"
+        ).classes("text-sm text-gray-500 mt-1")
+
+        if not details:
+            with ui.card().classes("w-full p-6 items-center text-center mt-2"):
+                ui.icon("search_off").classes("text-4xl text-gray-400")
+                ui.label("Aucune recette trouvée").classes("text-lg font-bold")
+                ui.label("Modifiez ou effacez la recherche pour voir d’autres recettes.").classes(
+                    "text-sm text-gray-500"
+                )
+            return
+
+        for recipe, ingredients in details:
             recipe_id = recipe["id"]
-            ingredients = get_recipe_ingredients(user_id, recipe_id)
             ingredient_count = len(ingredients)
 
             with ui.expansion(
                 text=recipe["name"],
-                caption=_recipe_caption(
-                    recipe["servings"],
-                    ingredient_count,
-                ),
+                caption=_recipe_caption(recipe["servings"], ingredient_count),
                 icon="restaurant",
                 value=recipe_id in open_recipe_ids,
                 on_value_change=(
-                    lambda event,
-                    selected_recipe_id=recipe_id: (
-                        save_recipe_open_state(
-                            selected_recipe_id,
-                            bool(event.value),
-                        )
+                    lambda event, selected_recipe_id=recipe_id: save_recipe_open_state(
+                        selected_recipe_id, bool(event.value)
                     )
                 ),
             ).props("expand-separator").classes(
-                "w-full bg-white rounded-xl shadow-sm "
-                "border border-gray-200 overflow-hidden mt-3"
+                "w-full bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-3"
             ):
                 with ui.column().classes("w-full gap-3 px-2 pb-3"):
                     if recipe["description"]:
@@ -387,17 +364,57 @@ def recipes_panel():
                             "text-sm text-gray-600 whitespace-normal"
                         ).style("overflow-wrap:anywhere;")
 
-                    with ui.card().classes(
-                        "w-full p-3 shadow-none bg-blue-50"
-                    ):
-                        def change_public_state(
-                            event,
-                            selected_recipe=recipe,
-                        ):
-                            save_recipe_open_state(
-                                selected_recipe["id"],
-                                True,
+                    with ui.row().classes("w-full items-center gap-2 flex-wrap"):
+                        def apply_selected(selected=recipe):
+                            return apply_recipe_to_needs(user_id, selected["id"])
+
+                        ui.button(
+                            "Consulter",
+                            icon="menu_book",
+                            on_click=lambda selected_recipe=recipe, selected_ingredients=ingredients: (
+                                build_recipe_reader(
+                                    ui=ui,
+                                    recipe=selected_recipe,
+                                    ingredients=selected_ingredients,
+                                    on_add_to_needs=lambda selected_id=selected_recipe["id"]: apply_recipe_to_needs(
+                                        user_id, selected_id
+                                    ),
+                                    summary_message=_summary_message,
+                                )
+                            ),
+                        ).props("color=primary")
+
+                        def add_selected_to_needs(selected=recipe):
+                            try:
+                                result = apply_recipe_to_needs(user_id, selected["id"])
+                            except (ValueError, PermissionError) as error:
+                                ui.notify(str(error), type="warning")
+                                return
+                            ui.notify(
+                                _summary_message(result), type="positive", timeout=5000
                             )
+
+                        ui.button(
+                            "Ajouter à l’épicerie",
+                            icon="playlist_add",
+                            on_click=add_selected_to_needs,
+                        ).props("outline color=positive")
+
+                        ui.button(
+                            icon="edit",
+                            on_click=lambda selected=recipe: recipe_form(
+                                "Modifier la recette", selected
+                            ),
+                        ).props("flat round color=primary").tooltip("Modifier la recette")
+
+                        ui.button(
+                            icon="delete",
+                            on_click=lambda selected=recipe: confirm_delete(selected),
+                        ).props("flat round color=negative").tooltip("Supprimer la recette")
+
+                    with ui.card().classes("w-full p-3 shadow-none bg-blue-50"):
+                        def change_public_state(event, selected_recipe=recipe):
+                            save_recipe_open_state(selected_recipe["id"], True)
                             try:
                                 set_recipe_public(
                                     user_id,
@@ -423,33 +440,24 @@ def recipes_panel():
                             on_change=change_public_state,
                         )
                         ui.label(
-                            "La publication contient seulement le nom, la "
-                            "description, les portions, la préparation et les "
-                            "ingrédients génériques autorisés."
+                            "La publication contient seulement le nom, la description, les portions, la préparation et les ingrédients génériques autorisés."
                         ).classes("text-xs text-gray-600")
 
                         if recipe["is_public"]:
                             if recipe["public_update_available"]:
-                                ui.badge(
-                                    "Modifications privées à publier"
-                                ).props("color=orange")
+                                ui.badge("Modifications privées à publier").props(
+                                    "color=orange"
+                                )
 
                             def refresh_public(selected_recipe=recipe):
-                                save_recipe_open_state(
-                                    selected_recipe["id"],
-                                    True,
-                                )
+                                save_recipe_open_state(selected_recipe["id"], True)
                                 try:
-                                    refresh_public_recipe(
-                                        user_id,
-                                        selected_recipe["id"],
-                                    )
+                                    refresh_public_recipe(user_id, selected_recipe["id"])
                                 except (ValueError, PermissionError) as error:
                                     ui.notify(str(error), type="warning")
                                     return
                                 ui.notify(
-                                    "Version publiée mise à jour.",
-                                    type="positive",
+                                    "Version publiée mise à jour.", type="positive"
                                 )
                                 render_recipes.refresh()
 
@@ -459,50 +467,6 @@ def recipes_panel():
                                 on_click=refresh_public,
                             ).props("flat color=primary")
 
-                    with ui.row().classes(
-                        "w-full items-center gap-1 flex-wrap"
-                    ):
-                        def apply_selected(selected=recipe):
-                            try:
-                                result = apply_recipe_to_needs(
-                                    user_id,
-                                    selected["id"],
-                                )
-                            except (ValueError, PermissionError) as error:
-                                ui.notify(str(error), type="warning")
-                                return
-
-                            ui.notify(
-                                _summary_message(result),
-                                type="positive",
-                                timeout=5000,
-                            )
-
-                        ui.button(
-                            "Ajouter les ingrédients",
-                            icon="playlist_add",
-                            on_click=apply_selected,
-                        ).props("color=positive")
-
-                        ui.button(
-                            icon="edit",
-                            on_click=lambda selected=recipe: recipe_form(
-                                "Modifier la recette",
-                                selected,
-                            ),
-                        ).props("flat round color=primary").tooltip(
-                            "Modifier la recette"
-                        )
-
-                        ui.button(
-                            icon="delete",
-                            on_click=lambda selected=recipe: (
-                                confirm_delete(selected)
-                            ),
-                        ).props("flat round color=negative").tooltip(
-                            "Supprimer la recette"
-                        )
-
                     ui.label("Ingrédients").classes("text-lg font-bold")
 
                     if ingredients:
@@ -511,94 +475,68 @@ def recipes_panel():
                                 with ui.row().classes(
                                     "w-full items-center gap-2 flex-nowrap"
                                 ):
-                                    with ui.column().classes(
-                                        "gap-0 grow min-w-0"
-                                    ):
+                                    with ui.column().classes("gap-0 grow min-w-0"):
                                         ui.label(
                                             (
-                                                f"{ingredient['name']} "
-                                                f"({ingredient['quantity']})"
+                                                f"{ingredient['name']} ({ingredient['quantity']})"
                                                 if ingredient["quantity"] != 1
                                                 else ingredient["name"]
                                             )
-                                        ).classes(
-                                            "font-bold whitespace-normal"
-                                        ).style("overflow-wrap:anywhere;")
-
+                                        ).classes("font-bold whitespace-normal").style(
+                                            "overflow-wrap:anywhere;"
+                                        )
                                         ui.label(
-                                            f"{ingredient['store']} · "
-                                            f"{ingredient['category']}"
+                                            f"{ingredient['store']} · {ingredient['category']}"
                                         ).classes("text-xs text-gray-500")
-
                                         if ingredient["note"]:
                                             ui.label(ingredient["note"]).classes(
-                                                "text-xs text-gray-600 "
-                                                "whitespace-normal"
+                                                "text-xs text-gray-600 whitespace-normal"
                                             ).style("overflow-wrap:anywhere;")
 
-                                    with ui.row().classes(
-                                        "items-center gap-0 shrink-0"
-                                    ):
+                                    with ui.row().classes("items-center gap-0 shrink-0"):
                                         ui.button(
                                             icon="arrow_upward",
                                             on_click=lambda ingredient_id=ingredient[
                                                 "id"
-                                            ]: move_ingredient(
-                                                ingredient_id,
-                                                -1,
-                                            ),
-                                        ).props(
-                                            "flat round dense"
-                                        ).set_enabled(index > 0)
-
+                                            ]: move_ingredient(ingredient_id, -1),
+                                        ).props("flat round dense").set_enabled(index > 0)
                                         ui.button(
                                             icon="arrow_downward",
                                             on_click=lambda ingredient_id=ingredient[
                                                 "id"
-                                            ]: move_ingredient(
-                                                ingredient_id,
-                                                1,
-                                            ),
-                                        ).props(
-                                            "flat round dense"
-                                        ).set_enabled(
+                                            ]: move_ingredient(ingredient_id, 1),
+                                        ).props("flat round dense").set_enabled(
                                             index < ingredient_count - 1
                                         )
-
                                         ui.button(
                                             icon="edit",
-                                            on_click=lambda selected=ingredient: (
-                                                edit_ingredient(selected)
+                                            on_click=lambda selected=ingredient: edit_ingredient(
+                                                selected
                                             ),
-                                        ).props(
-                                            "flat round dense color=primary"
-                                        ).tooltip("Modifier l’ingrédient")
+                                        ).props("flat round dense color=primary").tooltip(
+                                            "Modifier l’ingrédient"
+                                        )
 
                                         def remove_selected(
                                             ingredient_id=ingredient["id"],
                                         ):
                                             try:
                                                 remove_recipe_ingredient(
-                                                    user_id,
-                                                    ingredient_id,
+                                                    user_id, ingredient_id
                                                 )
                                             except (
                                                 ValueError,
                                                 PermissionError,
                                             ) as error:
-                                                ui.notify(
-                                                    str(error),
-                                                    type="warning",
-                                                )
+                                                ui.notify(str(error), type="warning")
                                                 return
                                             render_recipes.refresh()
 
                                         ui.button(
-                                            icon="close",
-                                            on_click=remove_selected,
-                                        ).props(
-                                            "flat round dense color=negative"
-                                        ).tooltip("Retirer de la recette")
+                                            icon="close", on_click=remove_selected
+                                        ).props("flat round dense color=negative").tooltip(
+                                            "Retirer de la recette"
+                                        )
                     else:
                         ui.label(
                             "Cette recette ne contient encore aucun ingrédient."
@@ -606,27 +544,18 @@ def recipes_panel():
 
                     if options:
                         ui.separator()
-                        ui.label("Ajouter un ingrédient existant").classes(
-                            "font-bold"
-                        )
-                        with ui.row().classes(
-                            "w-full items-end gap-2 flex-wrap"
-                        ):
+                        ui.label("Ajouter un ingrédient existant").classes("font-bold")
+                        with ui.row().classes("w-full items-end gap-2 flex-wrap"):
                             item_input = ui.select(
                                 options=options,
                                 label="Item",
                                 with_input=True,
-                            ).props(
-                                "clearable use-input input-debounce=0"
-                            ).classes("grow min-w-[230px]")
-
+                            ).props("clearable use-input input-debounce=0").classes(
+                                "grow min-w-[230px]"
+                            )
                             quantity_input = ui.number(
-                                label="Quantité",
-                                value=1,
-                                min=1,
-                                step=1,
+                                label="Quantité", value=1, min=1, step=1
                             ).classes("w-28")
-
                             note_input = ui.input(
                                 label="Précision",
                                 placeholder="Ex. boîtes de 398 ml",
@@ -639,12 +568,8 @@ def recipes_panel():
                                 selected_note_input=note_input,
                             ):
                                 if selected_item_input.value is None:
-                                    ui.notify(
-                                        "Choisissez un item.",
-                                        type="warning",
-                                    )
+                                    ui.notify("Choisissez un item.", type="warning")
                                     return
-
                                 try:
                                     add_recipe_ingredient(
                                         user_id,
@@ -660,10 +585,7 @@ def recipes_panel():
                                     ui.notify(str(error), type="warning")
                                     return
 
-                                save_recipe_open_state(
-                                    selected_recipe_id,
-                                    True,
-                                )
+                                save_recipe_open_state(selected_recipe_id, True)
                                 selected_item_input.value = None
                                 selected_quantity_input.value = 1
                                 selected_note_input.value = ""
@@ -672,18 +594,15 @@ def recipes_panel():
                                 selected_note_input.update()
                                 render_recipes.refresh()
                                 ui.notify(
-                                    "Ingrédient ajouté à la recette.",
-                                    type="positive",
+                                    "Ingrédient ajouté à la recette.", type="positive"
                                 )
 
                             ui.button(
-                                "Ajouter",
-                                icon="add",
-                                on_click=add_selected,
+                                "Ajouter", icon="add", on_click=add_selected
                             ).props("color=primary")
                     else:
                         ui.label(
-                            "Créez d’abord des items dans la page Items."
+                            "Créez d’abord des items dans la Liste d’épicerie."
                         ).classes("text-sm text-orange-700")
 
                     if recipe["instructions"]:

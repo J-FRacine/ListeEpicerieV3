@@ -211,6 +211,11 @@ APP_SHELL_META = {
         "subtitle": "Items, besoins, magasins et planification",
         "icon": "shopping_cart",
     },
+    "recipes": {
+        "title": "Recettes",
+        "subtitle": "Création, consultation et cuisine",
+        "icon": "restaurant_menu",
+    },
     "blood_pressure": {
         "title": "Journal de pression",
         "subtitle": "Mesures privées et rapports",
@@ -1572,6 +1577,22 @@ def show_portal(user):
                     ),
                 )
 
+            if "grocery" in allowed_app_keys:
+                visible_app_count += 1
+                portal_action_card(
+                    title="Recettes",
+                    description=(
+                        "Créez vos recettes, consultez-les en cuisine "
+                        "et ajoutez leurs ingrédients à l’épicerie."
+                    ),
+                    icon="restaurant_menu",
+                    action_label="Ouvrir",
+                    badge=version_label("recipes"),
+                    on_click=lambda: ui.navigate.to(
+                        "/?tab=recettes"
+                    ),
+                )
+
             if "blood_pressure" in allowed_app_keys:
                 visible_app_count += 1
                 portal_action_card(
@@ -2405,6 +2426,33 @@ def index(
         with page_container():
             portal_header("Commencer ici")
             getting_started_panel()
+
+        return
+
+    if normalized_tab in RECIPE_TABS:
+        if not user_has_app_access(
+            user["id"],
+            "grocery",
+        ):
+            with page_container():
+                portal_header(
+                    "Accès non autorisé"
+                )
+                show_app_access_denied(
+                    "Recettes"
+                )
+            return
+
+        set_current_tab("recettes")
+
+        with page_container():
+            portal_header(
+                app_key="recipes",
+            )
+            if not ensure_valid_family(user["id"]):
+                show_no_family_message()
+            else:
+                recipes_panel()
 
         return
 

@@ -5,6 +5,7 @@ PORTAL_VERSION = "1.4.0"
 APP_LABELS = {
     "portal": "Portail JF Apps",
     "grocery": "Liste d’épicerie",
+    "recipes": "Recettes",
     "blood_pressure": "Journal de pression",
     "finances": "Finances",
     "rpg": "Personnages JDR",
@@ -14,6 +15,7 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
+    "recipes": "1.0.0",
     "blood_pressure": "1.2.2",
     "finances": "1.14.3",
     "rpg": "1.10.0",
@@ -21,6 +23,26 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "recipes",
+        "version": "1.0.0",
+        "date": "2026-09-22",
+        "title": "Recettes — V1.0.0 — application autonome",
+        "summary": (
+            "Les recettes deviennent une application du Portail avec recherche, "
+            "consultation adaptée à la cuisine et intégration à la liste d’épicerie."
+        ),
+        "changes": [
+            "Nouvelle carte Recettes dans le Portail pour les utilisateurs ayant accès à la Liste d’épicerie.",
+            "Les recettes existantes sont conservées : aucune duplication et aucune migration PostgreSQL.",
+            "Recherche par nom, description, préparation, ingrédient, catégorie ou précision.",
+            "Nouvelle vue Consulter adaptée au téléphone et à la tablette.",
+            "Mode cuisine maximisé avec texte agrandi et tentative de maintien de l’écran éveillé lorsque le navigateur le permet.",
+            "Ajout des ingrédients à la liste d’épicerie conservé depuis la fiche ou la vue de lecture.",
+            "Publication dans la bibliothèque partagée, modification, suppression et réorganisation des ingrédients conservées.",
+            "Les données Recettes restent liées à la famille et sont incluses dans la sauvegarde de la Liste d’épicerie.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.14.3",

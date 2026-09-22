@@ -10,6 +10,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 |---|---:|
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
+| Recettes | 1.0.0 |
 | Journal de pression | 1.2.2 |
 | Finances | 1.14.3 |
 | Personnages JDR | 1.10.0 |
@@ -172,6 +173,20 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation locale réussie : **9 tests ciblés Journal**, **528 tests JF Apps** et compilation Python complète.
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
+
+## Recettes — V1.0.0 / application autonome — 2026-09-22
+
+- Base GitHub vérifiée : `c336881cf5ac5c4b72c917becfcf2fe65481f374` (`main`), avec Finances V1.14.3, Épicerie V1.2.1, Journal V1.2.2 et JDR V1.10.0.
+- Le module Recettes déjà présent dans la Liste d’épicerie devient une application visible directement dans le Portail, tout en conservant les mêmes recettes et ingrédients familiaux.
+- Cette première version réutilise volontairement l’accès `grocery` : aucun changement de permissions PostgreSQL et aucune migration de données n’est nécessaire.
+- Recherche ajoutée sur nom, description, préparation, ingrédients, catégories et précisions.
+- Nouvelle lecture **Consulter** adaptée au téléphone et à la tablette.
+- Nouveau **Mode cuisine** maximisé avec texte plus grand et demande Wake Lock lorsque le navigateur la prend en charge.
+- Les fonctions existantes sont préservées : création/modification/suppression, portions, ingrédients liés aux items, réorganisation, ajout aux besoins et publication dans la bibliothèque partagée.
+- Les données restent incluses dans la sauvegarde/restauration de la famille de la Liste d’épicerie; aucune duplication dans une seconde structure.
+- Aucun SQL manuel, aucune nouvelle table/colonne et aucune nouvelle dépendance Python.
+- Prochaines évolutions prévues : catégories et étiquettes propres aux recettes, étapes structurées/réordonnables, photos et éditeur bureau enrichi.
+- Validation locale par compilation/tests à effectuer via l’installateur; validation navigateur/Canner à faire après publication.
 
 ## Finances — V1.14.3 / raccord des avis Portail et Historique au mois complet — 2026-09-22
 

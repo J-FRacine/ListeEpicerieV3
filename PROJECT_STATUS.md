@@ -11,7 +11,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
 | Journal de pression | 1.2.2 |
-| Finances | 1.14.1 |
+| Finances | 1.14.2 |
 | Personnages JDR | 1.10.0 |
 | Commentaires et suggestions | 1.0.0 |
 
@@ -173,6 +173,17 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
 
+## Finances — V1.14.2 / persistance des avis Portail — 2026-09-22
+
+- Base GitHub vérifiée : `086a17d2230909df941bc5cc294410c142a8ada3` (`main`), Finances V1.14.1.
+- Correction après validation navigateur réelle : cocher **Avis Portail** sur une transaction au statut `confirmed` semblait fonctionner dans le dialogue, mais l’écriture forçait `reminder_enabled = FALSE` lors de l’enregistrement.
+- `reminder_enabled` est maintenant conservé indépendamment du statut pour les transactions ordinaires et les paiements de carte; cela rend effectif le comportement V1.14.1 des avis J à J+3 pour les transactions futures confirmées.
+- `bank_programmed` reste volontairement limité au statut `planned`; aucune règle de conciliation ou de budget n’est modifiée.
+- Le côté destination d’un paiement de carte reste sans avis afin d’éviter un doublon; l’avis demeure porté par le débit bancaire source.
+- Aucune nouvelle table, colonne ou migration PostgreSQL et aucun SQL manuel.
+- Tests de régression ajoutés pour création/modification d’une transaction confirmée et paiement de carte confirmé.
+- Validation navigateur/Canner à refaire après publication; le script local ne teste pas PostgreSQL de production.
+
 ## Finances — V1.14.1 / correction des avis Portail — 2026-09-22
 
 - Base GitHub vérifiée : `9924dc6b61fbb21de482fdbed3226faf212ce04e` (`main`), Finances V1.14.0.
@@ -211,7 +222,7 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 
 ## Finances — état actuel
 
-Version actuelle de travail : **V1.14.1**
+Version actuelle de travail : **V1.14.2**
 
 ### V1.13.6 — frais au premier versement — 2026-09-15
 

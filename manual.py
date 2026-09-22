@@ -176,7 +176,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Finances — V1.14.1",
+        "title": "Finances — V1.14.2",
         "icon": "account_balance_wallet",
         "caption": "Prévisions, Budget, financements, conciliation et prêts partagés",
         "keywords": (
@@ -185,6 +185,14 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "compte solde départ solde actuel plus bas prévu fin mois"
         ),
         "content": """
+### V1.14.2 — persistance des avis Portail
+
+La case **Avis Portail dès 3 jours avant + rappel le jour prévu** reste maintenant enregistrée même lorsqu’une transaction future est au statut **Confirmée**. La V1.14.1 savait afficher ces transactions dans le Portail, mais l’enregistrement de Finances annulait encore silencieusement la case au moment de sauvegarder.
+
+Le même correctif s’applique aux **paiements de carte**. L’option **Programmée dans le compte bancaire** conserve sa règle actuelle et reste réservée aux opérations au statut **À confirmer**.
+
+Le rappel Web Push du jour prévu conserve son comportement actuel. Aucune migration PostgreSQL n’est requise.
+
 ### V1.14.1 — correction des avis Portail
 
 Une transaction future cochée avec l’option **Avis Portail dès 3 jours avant + rappel le jour prévu** apparaît maintenant dans le **Portail** même si son statut est déjà **Confirmée**. Cela correspond au fonctionnement attendu de la case d’avis : le statut de confirmation ne doit pas empêcher l’avertissement d’une échéance future.

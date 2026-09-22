@@ -15,12 +15,30 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
     "blood_pressure": "1.2.2",
-    "finances": "1.14.1",
+    "finances": "1.14.2",
     "rpg": "1.10.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.14.2",
+        "date": "2026-09-22",
+        "title": "Finances — V1.14.2 — persistance des avis Portail",
+        "summary": (
+            "La case Avis Portail reste maintenant enregistrée sur une transaction "
+            "ou un paiement de carte futur même lorsque son statut est Confirmée."
+        ),
+        "changes": [
+            "Correction de la sauvegarde qui décochait automatiquement l’avis dès que le statut était Confirmée.",
+            "Les transactions futures confirmées peuvent conserver Avis Portail et apparaître de J à J+3 conformément à V1.14.1.",
+            "Les paiements de carte confirmés conservent également l’avis sur leur côté bancaire.",
+            "Programmé dans le compte bancaire reste réservé aux opérations À confirmer.",
+            "Le rappel Web Push du jour prévu conserve son comportement existant.",
+            "Aucune nouvelle table, colonne ou migration PostgreSQL.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.14.1",

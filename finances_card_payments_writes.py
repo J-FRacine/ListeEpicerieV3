@@ -46,7 +46,10 @@ def save_card_payment_transfer(
     note = text(note, "La note", 1000)
     normalized_reminder_time = normalize_reminder_time(reminder_time)
     bank_programmed = bool(bank_programmed) if status == "planned" else False
-    reminder_enabled = bool(reminder_enabled) if status == "planned" else False
+    # L’avis Portail est indépendant du statut : une transaction future déjà
+    # confirmée peut rester explicitement marquée pour avis. Le Web Push, lui,
+    # conserve son propre filtre sur les opérations encore prévues.
+    reminder_enabled = bool(reminder_enabled)
 
     with get_connection() as conn:
         with conn.cursor() as cur:

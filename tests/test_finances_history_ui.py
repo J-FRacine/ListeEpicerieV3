@@ -10,7 +10,8 @@ import sys
 import unittest
 from unittest.mock import Mock
 
-from finances_history import HistoryActions, build_history_actions
+from finances_history import HistoryActions, build_history_actions, build_history_panel
+from test_finances_financing_ui import SimulatedUi
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -91,6 +92,29 @@ def actions_environment():
 
 
 class HistoryCleanupTests(unittest.TestCase):
+    def test_default_history_period_covers_the_whole_current_month(self):
+        ui = SimulatedUi()
+        panel = build_history_panel(
+            ui=ui,
+            user_id=7,
+            month_value=date(2026, 9, 1),
+            today_value=date(2026, 9, 22),
+            TRANSACTION_TYPES={"expense": "Dépense", "income": "Revenu"},
+            TRANSACTION_STATUSES={"planned": "À confirmer", "confirmed": "Confirmée"},
+            RECONCILIATION_STATUSES={
+                "unreconciled": "À concilier",
+                "reconciled": "Conciliée",
+            },
+            category_options=lambda: {},
+            tag_options=lambda: {},
+            payment_options=lambda: {},
+            on_apply=Mock(),
+            on_duplicate_search=Mock(),
+            on_monthly_unreconciled=Mock(),
+        )
+        self.assertEqual(panel.start.value, "2026-09-01")
+        self.assertEqual(panel.end.value, "2026-09-30")
+
     def test_module_imports_without_ui_database_or_legacy_modules(self):
         script = r'''
 import builtins

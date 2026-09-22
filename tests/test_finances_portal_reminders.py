@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import sys
 import unittest
 from datetime import date
+from types import ModuleType
+from unittest.mock import patch
 
 import finances_portal
 
@@ -29,6 +32,40 @@ def transaction_reader(*, future=None, overdue=None):
 
 
 class FinancePortalReminderTests(unittest.TestCase):
+    def test_default_readers_are_loaded_from_finances_data_not_db(self):
+        data_stub = ModuleType("finances_data")
+
+        def list_transactions(_user_id, **kwargs):
+            if kwargs.get("start_date") == TODAY:
+                return [
+                    {
+                        "id": 99,
+                        "transaction_date": HORIZON,
+                        "description": "Raccord réel",
+                        "status": "confirmed",
+                        "reminder_enabled": True,
+                    }
+                ]
+            if kwargs.get("status") == "planned":
+                return []
+            raise AssertionError(f"Lecture inattendue : {kwargs}")
+
+        data_stub.list_transactions = list_transactions
+        data_stub.list_recurrences = lambda _user_id: []
+        db_stub = ModuleType("db")
+
+        with patch.dict(
+            sys.modules,
+            {"finances_data": data_stub, "db": db_stub},
+        ):
+            rows = finances_portal.collect_finance_portal_reminders(
+                1,
+                today_value=TODAY,
+            )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["description"], "Raccord réel")
+
     def test_confirmed_transaction_appears_three_days_before_due_date(self):
         reader = transaction_reader(
             future=[

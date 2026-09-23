@@ -15,7 +15,7 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
-    "recipes": "1.1.1",
+    "recipes": "1.2.0",
     "blood_pressure": "1.2.2",
     "finances": "1.14.3",
     "rpg": "1.10.0",
@@ -23,6 +23,26 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "recipes",
+        "version": "1.2.0",
+        "date": "2026-09-23",
+        "title": "Recettes — V1.2.0 — catégories, import sécurisé et suppression multiple",
+        "summary": (
+            "Recettes ajoute ses propres catégories et sous-catégories, sécurise "
+            "l’import de Recettes de l’Ours et permet de supprimer plusieurs recettes."
+        ),
+        "changes": [
+            "Nouvelles catégories propres aux recettes, distinctes des catégories d’épicerie, avec une couche facultative de sous-catégories.",
+            "Une recette peut être classée, modifiée et filtrée par catégorie; les recettes existantes restent sans catégorie jusqu’à leur classement.",
+            "L’import Google Sites distingue les pages de navigation des vraies recettes et refuse les pages de catégories comme Les bases.",
+            "L’arborescence du site alimente automatiquement les catégories de recettes, par exemple Les bases › Pain.",
+            "L’aperçu d’import affiche séparément recettes reconnues, sections ignorées et pages à vérifier.",
+            "Nouvelle action Supprimer plusieurs avec sélection, Tout sélectionner / Tout désélectionner et confirmation.",
+            "Les catégories de recettes et leurs affectations sont incluses dans la sauvegarde/restauration familiale.",
+            "Migration PostgreSQL automatique et idempotente; aucun SQL manuel et aucune nouvelle dépendance Python.",
+        ],
+    },
     {
         "app_key": "recipes",
         "version": "1.1.1",

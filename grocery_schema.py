@@ -320,6 +320,67 @@ def migrate_grocery_schema(get_connection):
                 """
             )
 
+            # Recettes V1.2.0 : catégories propres aux recettes.
+            # Migration automatique, idempotente et non destructive.
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS grocery_recipe_categories (
+                    id SERIAL PRIMARY KEY,
+                    family_id INTEGER NOT NULL
+                        REFERENCES families(id)
+                        ON DELETE CASCADE,
+                    parent_id INTEGER
+                        REFERENCES grocery_recipe_categories(id)
+                        ON DELETE SET NULL,
+                    name TEXT NOT NULL,
+                    sort_order INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+
+                ALTER TABLE grocery_recipes
+                ADD COLUMN IF NOT EXISTS recipe_category_id INTEGER;
+
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname = 'grocery_recipes_recipe_category_id_fkey'
+                          AND conrelid = 'grocery_recipes'::regclass
+                    ) THEN
+                        ALTER TABLE grocery_recipes
+                        ADD CONSTRAINT grocery_recipes_recipe_category_id_fkey
+                        FOREIGN KEY (recipe_category_id)
+                        REFERENCES grocery_recipe_categories(id)
+                        ON DELETE SET NULL;
+                    END IF;
+                END
+                $$;
+
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                    grocery_recipe_categories_family_parent_name_unique
+                ON grocery_recipe_categories (
+                    family_id,
+                    COALESCE(parent_id, 0),
+                    LOWER(BTRIM(name))
+                );
+
+                CREATE INDEX IF NOT EXISTS
+                    grocery_recipe_categories_family_order_idx
+                ON grocery_recipe_categories (
+                    family_id,
+                    parent_id,
+                    sort_order,
+                    id
+                );
+
+                CREATE INDEX IF NOT EXISTS
+                    grocery_recipes_recipe_category_idx
+                ON grocery_recipes (recipe_category_id);
+                """
+            )
+
             cur.execute(
                 """
                 DROP INDEX IF EXISTS categories_family_name_unique;

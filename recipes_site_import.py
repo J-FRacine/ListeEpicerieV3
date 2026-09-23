@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 import re
 import unicodedata
@@ -35,12 +35,12 @@ _PREPARATION_HEADINGS = {
     "realisation", "réalisation", "methode", "méthode", "etapes", "étapes",
     "marche a suivre", "marche à suivre", "directions",
 }
-_FOOTER_PREFIXES = (
-    "page updated",
-    "report abuse",
-)
+_FOOTER_PREFIXES = ("page updated", "report abuse")
 
-_QUANTITY = r"(?:\d+(?:[.,]\d+)?|\d+\s*[\/⁄]\s*\d+|[¼½¾⅓⅔⅛⅜⅝⅞]|une?|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)"
+_QUANTITY = (
+    r"(?:\d+(?:[.,]\d+)?|\d+\s*[\/⁄]\s*\d+|"
+    r"[¼½¾⅓⅔⅛⅜⅝⅞]|une?|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)"
+)
 _UNIT = (
     r"(?:kg|g|mg|l|ml|cl|oz|lb|lbs|tasses?|cups?|t\.?|"
     r"cuill(?:ere|ère)s?\s+à\s+soupe|cuill(?:ere|ère)s?\s+a\s+soupe|"
@@ -50,6 +50,28 @@ _UNIT = (
     r"c\.\s*à\s*c\.?|c\.\s*a\s*c\.?|c\s+à\s+caf(?:e|é)|c\s+a\s+caf(?:e|é)|"
     r"bo[iî]tes?|gousses?|tranches?|pinc(?:e|é)es?|sachets?|paquets?|branches?)"
 )
+_INSTRUCTION_VERBS = (
+    r"\b(?:ajouter|arroser|battre|blanchir|bouillir|brasser|chauffer|"
+    r"couper|cuire|déposer|deposer|déguster|deguster|étendre|etendre|"
+    r"faire|fouetter|incorporer|laisser|mélanger|melanger|mettre|"
+    r"mijoter|préchauffer|prechauffer|remettre|répartir|repartir|"
+    r"réserver|reserver|servir|sortir|verser)\b"
+)
+
+_CATEGORY_ALIASES = {
+    "entrees": "Entrées",
+    "entree": "Entrées",
+    "plats principaux": "Plats principaux",
+    "desserts": "Desserts",
+    "les bases": "Les bases",
+    "autres": "Autres",
+    "momo": "Momo",
+    "airfryer": "AirFryer",
+    "air fryer": "AirFryer",
+    "boissons": "Boissons",
+    "listes": "Listes",
+    "sandwiches": "Sandwiches",
+}
 
 
 def _fold(value: str) -> str:
@@ -67,9 +89,7 @@ def normalize_name(value: str) -> str:
 
 
 def normalize_site_url(value: str) -> str:
-    raw = str(value or "").strip()
-    if not raw:
-        raw = DEFAULT_SITE_URL
+    raw = str(value or "").strip() or DEFAULT_SITE_URL
     parts = urlsplit(raw)
     if parts.scheme.lower() != "https" or parts.netloc.lower() != "sites.google.com":
         raise ValueError("L’adresse doit être une page HTTPS de votre Google Sites.")
@@ -77,8 +97,47 @@ def normalize_site_url(value: str) -> str:
     root_path = urlsplit(SITE_ROOT).path.rstrip("/")
     if path.rstrip("/") != root_path and not path.startswith(root_path + "/"):
         raise ValueError("Cette adresse ne fait pas partie du site Recettes de l’Ours.")
-    clean = urlunsplit(("https", "sites.google.com", path.rstrip("/") or root_path, "", ""))
-    return clean
+    return urlunsplit(
+        ("https", "sites.google.com", path.rstrip("/") or root_path, "", "")
+    )
+
+
+def _relative_segments(value: str) -> list[str]:
+    clean = normalize_site_url(value)
+    root_path = urlsplit(SITE_ROOT).path.rstrip("/")
+    path = urlsplit(clean).path.rstrip("/")
+    remainder = path[len(root_path):].strip("/")
+    if not remainder:
+        return []
+    segments = [unquote(part).strip() for part in remainder.split("/") if part.strip()]
+    if segments and _fold(segments[0]) in {"accueil", "home"}:
+        segments = segments[1:]
+    return segments
+
+
+def _pretty_segment(value: str) -> str:
+    text = unquote(str(value or "")).replace("-", " ").replace("_", " ")
+    text = re.sub(r"\s+", " ", text).strip()
+    folded = _fold(text)
+    if folded in _CATEGORY_ALIASES:
+        return _CATEGORY_ALIASES[folded]
+    if not text:
+        return ""
+    return text[0].upper() + text[1:]
+
+
+def source_recipe_category(source_url: str) -> tuple[str, str]:
+    """Déduit catégorie et sous-catégorie de l'arborescence Google Sites.
+
+    Le dernier segment est la page de recette. Le premier segment avant celle-ci
+    devient la catégorie; le deuxième devient la sous-catégorie lorsqu'il existe.
+    """
+    segments = _relative_segments(source_url)
+    if len(segments) < 2:
+        return "", ""
+    category = _pretty_segment(segments[0])
+    subcategory = _pretty_segment(segments[1]) if len(segments) >= 3 else ""
+    return category, subcategory
 
 
 class _GoogleSiteParser(HTMLParser):
@@ -214,14 +273,21 @@ def _title_from_parser(parser: _GoogleSiteParser, lines: list[str]) -> str:
             return heading.strip()
     title = parser.title
     if title:
-        for suffix in (" - Recettes de l'Ours", " – Recettes de l'Ours", " | Recettes de l'Ours"):
+        for suffix in (
+            " - Recettes de l'Ours",
+            " – Recettes de l'Ours",
+            " | Recettes de l'Ours",
+        ):
             if title.endswith(suffix):
                 title = title[: -len(suffix)].strip()
         if _fold(title) not in {"recettes de l'ours", "recettes de lours"}:
             return title
     for line in lines:
         folded = _fold(line)
-        if folded not in _CHROME_LINES and folded not in {"recettes de l'ours", "recettes de lours"}:
+        if folded not in _CHROME_LINES and folded not in {
+            "recettes de l'ours",
+            "recettes de lours",
+        }:
             return line
     return "Recette importée"
 
@@ -250,17 +316,11 @@ def _strip_bullet(value: str) -> str:
 def item_name_from_ingredient_line(value: str) -> str:
     text = _strip_bullet(value)
     text = re.sub(r"^\(?\d{1,2}\)?[.)]\s+", "", text)
-
-    # Retire une précision finale entre parenthèses avant d'isoler le nom.
     text = re.sub(r"\s*\([^)]*\)\s*$", "", text).strip()
-
-    # Cas classique : quantité + unité avant le nom (ex. « 1 tasse de crème »).
     text = re.sub(rf"^{_QUANTITY}\s+", "", text, flags=re.IGNORECASE)
     text = re.sub(rf"^{_UNIT}\b\s*(?:de\s+|d['’])?", "", text, flags=re.IGNORECASE)
     text = re.sub(r"^(?:de\s+|d['’])", "", text, flags=re.IGNORECASE)
 
-    # Certaines recettes de l'Ours placent la mesure après l'ingrédient,
-    # ex. « Huile olive 60% 1/3 tasse ». Conserve le nom situé avant la mesure.
     trailing_measure = re.search(
         rf"\s+{_QUANTITY}\s*{_UNIT}\b.*$",
         text,
@@ -269,10 +329,8 @@ def item_name_from_ingredient_line(value: str) -> str:
     if trailing_measure and trailing_measure.start() >= 2:
         text = text[: trailing_measure.start()].strip()
 
-    # « au goût » est une précision culinaire, pas une partie du nom de l'item.
     text = re.sub(r"\s+au\s+go[uû]t\b.*$", "", text, flags=re.IGNORECASE).strip()
     text = text.strip(" ,;:-")
-
     if "," in text:
         first = text.split(",", 1)[0].strip()
         if len(first) >= 2:
@@ -294,7 +352,6 @@ def _ingredient_lines_to_entries(lines: list[str]) -> list[dict]:
                 raw = tail
             else:
                 continue
-        # Évite les sous-titres du genre « Sauce : » ou « Garniture : ».
         if raw.endswith(":") and len(raw.split()) <= 5 and not re.search(r"\d", raw):
             continue
         name = item_name_from_ingredient_line(raw)
@@ -314,18 +371,34 @@ def _line_index(lines: list[str], value: str, start: int = 0) -> int | None:
     return None
 
 
+def _has_ingredient_signal(lines: list[str]) -> bool:
+    for line in lines:
+        text = str(line or "")
+        if re.search(rf"{_QUANTITY}", text, flags=re.IGNORECASE):
+            return True
+        if re.search(rf"\b{_UNIT}\b", text, flags=re.IGNORECASE):
+            return True
+        if re.search(
+            r"\b(?:au\s+go[uû]t|pinc(?:e|é)e|sel|poivre|huile|vinaigre|sucre)\b",
+            text,
+            flags=re.IGNORECASE,
+        ):
+            return True
+    return False
+
+
+def _has_instruction_signal(lines: list[str]) -> bool:
+    return any(
+        re.search(_INSTRUCTION_VERBS, str(line or ""), flags=re.IGNORECASE)
+        for line in lines
+    )
+
+
 def _headingless_sections(
     parser: _GoogleSiteParser,
     lines: list[str],
     title: str,
 ) -> tuple[list[str], list[str]] | None:
-    """Reconnaît le format historique de Recettes de l'Ours.
-
-    Plusieurs pages ne portent aucun titre « Ingrédients » / « Préparation » :
-    les ingrédients sont du texte simple sous le titre, puis la méthode commence
-    avec une liste à puces. Les paragraphes qui suivent cette liste appartiennent
-    aussi à la préparation.
-    """
     if not parser.list_items:
         return None
 
@@ -350,7 +423,6 @@ def _headingless_sections(
             continue
         if folded in heading_keys:
             continue
-        # Ignore des métadonnées éventuelles sans les transformer en ingrédients.
         if re.search(
             r"\b(?:preparation|préparation|cuisson|temps|rendement|portions?|personnes?)\s*[:\-]",
             line,
@@ -359,10 +431,8 @@ def _headingless_sections(
             continue
         ingredient_lines.append(line)
 
-    # Le format sans titres est accepté seulement si plusieurs ingrédients sont
-    # trouvés avant la première puce. Cela évite de prendre une page de menu pour
-    # une recette.
-    if len(_ingredient_lines_to_entries(ingredient_lines)) < 2:
+    ingredient_entries = _ingredient_lines_to_entries(ingredient_lines)
+    if len(ingredient_entries) < 2 or not _has_ingredient_signal(ingredient_lines):
         return None
 
     preparation_lines = []
@@ -374,120 +444,15 @@ def _headingless_sections(
             break
         if folded == _fold(title):
             continue
-        cleaned = _strip_bullet(re.sub(r"^\s*\d{1,2}[.)]\s*", "", line)).strip()
+        cleaned = _strip_bullet(
+            re.sub(r"^\s*\d{1,2}[.)]\s*", "", line)
+        ).strip()
         if cleaned:
             preparation_lines.append(cleaned)
 
-    if not preparation_lines:
+    if not preparation_lines or not _has_instruction_signal(preparation_lines):
         return None
     return ingredient_lines, preparation_lines
-
-
-def parse_recipe_html(html: str, source_url: str) -> dict | None:
-    parser = _GoogleSiteParser()
-    parser.feed(str(html or ""))
-    lines = _clean_page_lines(parser.lines())
-    if not lines:
-        return None
-
-    title = _title_from_parser(parser, lines)
-    ingredient_index = None
-    ingredient_tail = ""
-    preparation_index = None
-    preparation_tail = ""
-    for index, line in enumerate(lines):
-        kind, tail = _heading_kind(line)
-        if kind == "ingredients" and ingredient_index is None:
-            ingredient_index = index
-            ingredient_tail = tail
-            continue
-        if kind == "preparation" and ingredient_index is not None and index > ingredient_index:
-            preparation_index = index
-            preparation_tail = tail
-            break
-
-    description_anchor = None
-    if ingredient_index is not None and preparation_index is not None:
-        ingredient_lines = []
-        if ingredient_tail:
-            ingredient_lines.append(ingredient_tail)
-        ingredient_lines.extend(lines[ingredient_index + 1 : preparation_index])
-        preparation_lines = []
-        if preparation_tail:
-            preparation_lines.append(preparation_tail)
-        for line in lines[preparation_index + 1 :]:
-            folded = _fold(line)
-            if any(folded.startswith(prefix) for prefix in _FOOTER_PREFIXES):
-                break
-            kind, _ = _heading_kind(line)
-            if kind == "ingredients":
-                break
-            cleaned = _strip_bullet(re.sub(r"^\s*\d{1,2}[.)]\s*", "", line)).strip()
-            if cleaned:
-                preparation_lines.append(cleaned)
-        description_anchor = ingredient_index
-    else:
-        fallback = _headingless_sections(parser, lines, title)
-        if fallback is None:
-            return None
-        ingredient_lines, preparation_lines = fallback
-        title_index = _line_index(lines, title)
-        description_anchor = title_index if title_index is not None else 0
-
-    ingredients = _ingredient_lines_to_entries(ingredient_lines)
-    if not ingredients or not preparation_lines:
-        return None
-
-    description_lines = []
-    if ingredient_index is not None:
-        for line in lines[:description_anchor]:
-            if _fold(line) in {_fold(title), "recettes de l'ours", "recettes de lours"}:
-                continue
-            if re.search(
-                r"\b(?:preparation|préparation|cuisson|temps|portions?|personnes?)\s*[:\-]",
-                line,
-                flags=re.I,
-            ):
-                continue
-            if len(line) >= 12:
-                description_lines.append(line)
-            if len(description_lines) >= 2:
-                break
-
-    description = " ".join(description_lines)[:800]
-    return {
-        "name": title[:180],
-        "servings": _extract_servings(lines),
-        "description": description,
-        "instructions": "\n".join(preparation_lines)[:12000],
-        "ingredients": ingredients,
-        "source_url": normalize_site_url(source_url),
-    }
-
-
-def _fetch_html(url: str, timeout: int = 20) -> str:
-    clean = normalize_site_url(url)
-    request = Request(
-        clean,
-        headers={
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153 Safari/537.36"
-            ),
-            "Accept-Language": "fr-CA,fr;q=0.9,en;q=0.5",
-        },
-    )
-    with urlopen(request, timeout=timeout) as response:
-        final_parts = urlsplit(response.geturl())
-        if final_parts.netloc.lower() != "sites.google.com":
-            raise ValueError(
-                "Le site semble demander une connexion Google. Vérifiez que sa version publiée est publique."
-            )
-        content_type = str(response.headers.get("Content-Type") or "")
-        if "text/html" not in content_type.lower():
-            raise ValueError("La page Google Sites retournée n’est pas une page HTML.")
-        charset = response.headers.get_content_charset() or "utf-8"
-        return response.read(4_000_000).decode(charset, errors="replace")
 
 
 def _internal_links(html: str, page_url: str) -> list[str]:
@@ -514,7 +479,151 @@ def _internal_links(html: str, page_url: str) -> list[str]:
     return result
 
 
-def crawl_google_site(start_url: str = DEFAULT_SITE_URL, max_pages: int = MAX_PAGES_DEFAULT) -> dict:
+def is_navigation_page(html: str, source_url: str) -> bool:
+    """Détecte une page de catégorie/sous-catégorie plutôt qu'une recette."""
+    clean = normalize_site_url(source_url)
+    current_path = urlsplit(clean).path.rstrip("/")
+    children = []
+    for link in _internal_links(html, clean):
+        path = urlsplit(link).path.rstrip("/")
+        if path.startswith(current_path + "/"):
+            children.append(link)
+
+    depth = len(_relative_segments(clean))
+    if len(children) >= 2:
+        return True
+    if depth <= 1 and children:
+        return True
+    return False
+
+
+def parse_recipe_html(html: str, source_url: str) -> dict | None:
+    if is_navigation_page(html, source_url):
+        return None
+
+    parser = _GoogleSiteParser()
+    parser.feed(str(html or ""))
+    lines = _clean_page_lines(parser.lines())
+    if not lines:
+        return None
+
+    title = _title_from_parser(parser, lines)
+    ingredient_index = None
+    ingredient_tail = ""
+    preparation_index = None
+    preparation_tail = ""
+    for index, line in enumerate(lines):
+        kind, tail = _heading_kind(line)
+        if kind == "ingredients" and ingredient_index is None:
+            ingredient_index = index
+            ingredient_tail = tail
+            continue
+        if (
+            kind == "preparation"
+            and ingredient_index is not None
+            and index > ingredient_index
+        ):
+            preparation_index = index
+            preparation_tail = tail
+            break
+
+    description_anchor = None
+    if ingredient_index is not None and preparation_index is not None:
+        ingredient_lines = []
+        if ingredient_tail:
+            ingredient_lines.append(ingredient_tail)
+        ingredient_lines.extend(lines[ingredient_index + 1 : preparation_index])
+        preparation_lines = []
+        if preparation_tail:
+            preparation_lines.append(preparation_tail)
+        for line in lines[preparation_index + 1 :]:
+            folded = _fold(line)
+            if any(folded.startswith(prefix) for prefix in _FOOTER_PREFIXES):
+                break
+            kind, _ = _heading_kind(line)
+            if kind == "ingredients":
+                break
+            cleaned = _strip_bullet(
+                re.sub(r"^\s*\d{1,2}[.)]\s*", "", line)
+            ).strip()
+            if cleaned:
+                preparation_lines.append(cleaned)
+        description_anchor = ingredient_index
+    else:
+        fallback = _headingless_sections(parser, lines, title)
+        if fallback is None:
+            return None
+        ingredient_lines, preparation_lines = fallback
+        title_index = _line_index(lines, title)
+        description_anchor = title_index if title_index is not None else 0
+
+    ingredients = _ingredient_lines_to_entries(ingredient_lines)
+    if not ingredients or not preparation_lines:
+        return None
+
+    description_lines = []
+    if ingredient_index is not None:
+        for line in lines[:description_anchor]:
+            if _fold(line) in {
+                _fold(title),
+                "recettes de l'ours",
+                "recettes de lours",
+            }:
+                continue
+            if re.search(
+                r"\b(?:preparation|préparation|cuisson|temps|portions?|personnes?)\s*[:\-]",
+                line,
+                flags=re.I,
+            ):
+                continue
+            if len(line) >= 12:
+                description_lines.append(line)
+            if len(description_lines) >= 2:
+                break
+
+    category, subcategory = source_recipe_category(source_url)
+    return {
+        "name": title[:180],
+        "servings": _extract_servings(lines),
+        "description": " ".join(description_lines)[:800],
+        "instructions": "\n".join(preparation_lines)[:12000],
+        "ingredients": ingredients,
+        "source_url": normalize_site_url(source_url),
+        "source_category": category,
+        "source_subcategory": subcategory,
+    }
+
+
+def _fetch_html(url: str, timeout: int = 20) -> str:
+    clean = normalize_site_url(url)
+    request = Request(
+        clean,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153 Safari/537.36"
+            ),
+            "Accept-Language": "fr-CA,fr;q=0.9,en;q=0.5",
+        },
+    )
+    with urlopen(request, timeout=timeout) as response:
+        final_parts = urlsplit(response.geturl())
+        if final_parts.netloc.lower() != "sites.google.com":
+            raise ValueError(
+                "Le site semble demander une connexion Google. "
+                "Vérifiez que sa version publiée est publique."
+            )
+        content_type = str(response.headers.get("Content-Type") or "")
+        if "text/html" not in content_type.lower():
+            raise ValueError("La page Google Sites retournée n’est pas une page HTML.")
+        charset = response.headers.get_content_charset() or "utf-8"
+        return response.read(4_000_000).decode(charset, errors="replace")
+
+
+def crawl_google_site(
+    start_url: str = DEFAULT_SITE_URL,
+    max_pages: int = MAX_PAGES_DEFAULT,
+) -> dict:
     start = normalize_site_url(start_url)
     limit = max(1, min(int(max_pages or MAX_PAGES_DEFAULT), 250))
     queue = deque([start])
@@ -522,6 +631,8 @@ def crawl_google_site(start_url: str = DEFAULT_SITE_URL, max_pages: int = MAX_PA
     visited = set()
     candidates = []
     errors = []
+    sections_ignored = 0
+    pages_unrecognized = 0
 
     while queue and len(visited) < limit:
         url = queue.popleft()
@@ -534,12 +645,21 @@ def crawl_google_site(start_url: str = DEFAULT_SITE_URL, max_pages: int = MAX_PA
             errors.append({"url": url, "error": str(error)[:300]})
             continue
 
-        candidate = parse_recipe_html(html, url)
-        if candidate:
-            candidates.append(candidate)
+        if is_navigation_page(html, url):
+            sections_ignored += 1
+        else:
+            candidate = parse_recipe_html(html, url)
+            if candidate:
+                candidates.append(candidate)
+            else:
+                pages_unrecognized += 1
 
         for link in _internal_links(html, url):
-            if link not in visited and link not in queued and len(queued) < limit * 3:
+            if (
+                link not in visited
+                and link not in queued
+                and len(queued) < limit * 3
+            ):
                 queued.add(link)
                 queue.append(link)
 
@@ -556,6 +676,8 @@ def crawl_google_site(start_url: str = DEFAULT_SITE_URL, max_pages: int = MAX_PA
         "start_url": start,
         "pages_scanned": len(visited),
         "recipes": unique,
+        "sections_ignored": sections_ignored,
+        "pages_unrecognized": pages_unrecognized,
         "errors": errors,
         "truncated": bool(queue),
     }
@@ -582,6 +704,63 @@ def preview_recipe_matches(candidates, existing_items, existing_recipes) -> list
     return result
 
 
+def _ensure_recipe_category_in_cursor(cur, family_id, name, parent_id=None):
+    clean = str(name or "").strip()
+    if not clean:
+        return None
+    cur.execute(
+        """
+        SELECT id, name
+        FROM grocery_recipe_categories
+        WHERE family_id = %s
+          AND parent_id IS NOT DISTINCT FROM %s
+        ORDER BY id;
+        """,
+        (family_id, parent_id),
+    )
+    target = normalize_name(clean)
+    for row in cur.fetchall():
+        if normalize_name(row["name"]) == target:
+            return int(row["id"])
+
+    cur.execute(
+        """
+        SELECT COALESCE(MAX(sort_order), 0) + 10 AS next_order
+        FROM grocery_recipe_categories
+        WHERE family_id = %s
+          AND parent_id IS NOT DISTINCT FROM %s;
+        """,
+        (family_id, parent_id),
+    )
+    sort_order = int(cur.fetchone()["next_order"] or 10)
+    cur.execute(
+        """
+        INSERT INTO grocery_recipe_categories (
+            family_id, parent_id, name, sort_order
+        )
+        VALUES (%s, %s, %s, %s)
+        RETURNING id;
+        """,
+        (family_id, parent_id, clean, sort_order),
+    )
+    return int(cur.fetchone()["id"])
+
+
+def _source_recipe_category_id(cur, family_id, candidate):
+    primary = str(candidate.get("source_category") or "").strip()
+    secondary = str(candidate.get("source_subcategory") or "").strip()
+    if not primary:
+        return None
+    primary_id = _ensure_recipe_category_in_cursor(
+        cur, family_id, primary, None
+    )
+    if secondary:
+        return _ensure_recipe_category_in_cursor(
+            cur, family_id, secondary, primary_id
+        )
+    return primary_id
+
+
 def import_recipe_candidates(
     user_id,
     family_id,
@@ -590,11 +769,7 @@ def import_recipe_candidates(
     store_id=None,
     create_missing_items=True,
 ):
-    """Importe un lot analysé dans les tables Recettes existantes.
-
-    L'opération est transactionnelle : si une erreur survient, aucune recette ni
-    aucun item du lot n'est laissé partiellement importé.
-    """
+    """Importe un lot analysé dans les tables Recettes existantes."""
     from db import get_connection, _require_family_access
     from grocery_common import log_activity
 
@@ -614,7 +789,10 @@ def import_recipe_candidates(
                 """,
                 (family_id,),
             )
-            recipe_keys = {normalize_name(row["name"]): int(row["id"]) for row in cur.fetchall()}
+            recipe_keys = {
+                normalize_name(row["name"]): int(row["id"])
+                for row in cur.fetchall()
+            }
 
             cur.execute(
                 """
@@ -625,7 +803,10 @@ def import_recipe_candidates(
                 """,
                 (family_id,),
             )
-            item_map = {normalize_name(row["name"]): int(row["id"]) for row in cur.fetchall()}
+            item_map = {
+                normalize_name(row["name"]): int(row["id"])
+                for row in cur.fetchall()
+            }
 
             if create_missing_items:
                 cur.execute(
@@ -636,7 +817,9 @@ def import_recipe_candidates(
                     (category_id, family_id),
                 )
                 if cur.fetchone() is None:
-                    raise ValueError("Choisissez une catégorie valide pour les nouveaux items.")
+                    raise ValueError(
+                        "Choisissez une catégorie valide pour les nouveaux items."
+                    )
 
             if store_id is None:
                 cur.execute(
@@ -650,7 +833,7 @@ def import_recipe_candidates(
                 )
                 store_row = cur.fetchone()
                 store_id = int(store_row["id"]) if store_row else None
-            elif store_id is not None:
+            else:
                 cur.execute(
                     """
                     SELECT id FROM stores
@@ -659,13 +842,26 @@ def import_recipe_candidates(
                     (store_id, family_id),
                 )
                 if cur.fetchone() is None:
-                    raise ValueError("Choisissez un magasin valide pour les nouveaux items.")
+                    raise ValueError(
+                        "Choisissez un magasin valide pour les nouveaux items."
+                    )
 
             imported = 0
             skipped_duplicates = 0
             created_items = 0
             linked_ingredients = 0
             skipped_ingredients = 0
+            categories_created_before = None
+
+            cur.execute(
+                """
+                SELECT COUNT(*)::INTEGER AS total
+                FROM grocery_recipe_categories
+                WHERE family_id = %s;
+                """,
+                (family_id,),
+            )
+            categories_created_before = int(cur.fetchone()["total"] or 0)
 
             for candidate in selected:
                 name = str(candidate.get("name") or "").strip()[:180]
@@ -681,19 +877,34 @@ def import_recipe_candidates(
                 except (TypeError, ValueError):
                     servings = 4
                 servings = max(1, min(servings, 50))
-                description = str(candidate.get("description") or "").strip()[:800]
-                instructions = str(candidate.get("instructions") or "").strip()[:12000]
+                description = str(
+                    candidate.get("description") or ""
+                ).strip()[:800]
+                instructions = str(
+                    candidate.get("instructions") or ""
+                ).strip()[:12000]
+                recipe_category_id = _source_recipe_category_id(
+                    cur, family_id, candidate
+                )
 
                 cur.execute(
                     """
                     INSERT INTO grocery_recipes (
-                        family_id, name, description, instructions,
-                        servings, created_by_user_id
+                        family_id, recipe_category_id, name, description,
+                        instructions, servings, created_by_user_id
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     RETURNING id;
                     """,
-                    (family_id, name, description, instructions, servings, user_id),
+                    (
+                        family_id,
+                        recipe_category_id,
+                        name,
+                        description,
+                        instructions,
+                        servings,
+                        user_id,
+                    ),
                 )
                 recipe_id = int(cur.fetchone()["id"])
                 recipe_keys[recipe_key] = recipe_id
@@ -705,12 +916,18 @@ def import_recipe_candidates(
                     "recipe",
                     recipe_id,
                     name,
-                    {"source": "google_sites_import"},
+                    {
+                        "source": "google_sites_import",
+                        "source_category": candidate.get("source_category") or "",
+                        "source_subcategory": candidate.get("source_subcategory") or "",
+                    },
                 )
 
                 sort_order = 10
                 for ingredient in candidate.get("ingredients") or []:
-                    item_name = str(ingredient.get("item_name") or "").strip()[:160]
+                    item_name = str(
+                        ingredient.get("item_name") or ""
+                    ).strip()[:160]
                     item_key = normalize_name(item_name)
                     if not item_key:
                         continue
@@ -741,10 +958,15 @@ def import_recipe_candidates(
                             "item",
                             item_id,
                             item_name,
-                            {"needed": False, "source": "google_sites_import"},
+                            {
+                                "needed": False,
+                                "source": "google_sites_import",
+                            },
                         )
 
-                    note = str(ingredient.get("original") or "").strip()[:600]
+                    note = str(
+                        ingredient.get("original") or ""
+                    ).strip()[:600]
                     cur.execute(
                         """
                         INSERT INTO grocery_recipe_ingredients (
@@ -761,6 +983,18 @@ def import_recipe_candidates(
 
                 imported += 1
 
+            cur.execute(
+                """
+                SELECT COUNT(*)::INTEGER AS total
+                FROM grocery_recipe_categories
+                WHERE family_id = %s;
+                """,
+                (family_id,),
+            )
+            category_total_after = int(cur.fetchone()["total"] or 0)
+            recipe_categories_created = max(
+                0, category_total_after - categories_created_before
+            )
             conn.commit()
 
     return {
@@ -769,4 +1003,5 @@ def import_recipe_candidates(
         "items_created": created_items,
         "ingredients_linked": linked_ingredients,
         "ingredients_skipped": skipped_ingredients,
+        "recipe_categories_created": recipe_categories_created,
     }

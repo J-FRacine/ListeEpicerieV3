@@ -17,6 +17,18 @@ from db import (
     update_recipe,
     update_recipe_ingredient,
 )
+from recipes_categories import (
+    category_matches_filter,
+    get_recipe_category_assignment,
+    get_recipe_category_assignments,
+    list_recipe_categories,
+    recipe_category_options,
+    set_recipe_category,
+)
+from recipes_management import (
+    open_bulk_delete_dialog,
+    open_recipe_categories_dialog,
+)
 from recipes_reader import build_recipe_reader, recipe_matches
 from recipes_site_import_ui import open_recipe_site_import_dialog
 from state import get_current_family_id, set_current_family_id
@@ -30,12 +42,15 @@ def _item_options(items):
     }
 
 
-def _recipe_caption(servings, ingredient_count):
+def _recipe_caption(servings, ingredient_count, category_path=""):
     serving_text = "1 portion" if servings == 1 else f"{servings} portions"
     ingredient_text = (
         "1 ingrédient" if ingredient_count == 1 else f"{ingredient_count} ingrédients"
     )
-    return f"{serving_text} · {ingredient_text}"
+    caption = f"{serving_text} · {ingredient_text}"
+    if category_path:
+        caption += f" · {category_path}"
+    return caption
 
 
 def _summary_message(result):
@@ -68,7 +83,7 @@ def recipes_panel():
     user_id = get_current_user_id()
     family_id = get_current_family_id()
     open_storage_key = f"open_grocery_recipes_{family_id}"
-    search_state = {"text": ""}
+    search_state = {"text": "", "category_id": 0}
 
     def get_open_recipe_ids():
         stored_ids = app.storage.user.get(open_storage_key, [])
@@ -166,19 +181,41 @@ def recipes_panel():
                     ),
                 ).props("autogrow").classes("w-full")
 
+                category_rows = list_recipe_categories(user_id, family_id)
+                current_category = (
+                    get_recipe_category_assignment(user_id, recipe["id"])
+                    if recipe
+                    else None
+                )
+                category_input = ui.select(
+                    recipe_category_options(category_rows),
+                    value=(
+                        current_category.get("category_id")
+                        if current_category
+                        else None
+                    ),
+                    label="Catégorie de recette",
+                ).props("outlined clearable").classes("w-full")
+                if not category_rows:
+                    ui.label(
+                        "Aucune catégorie de recette. Utilisez le bouton Catégories "
+                        "dans l’écran principal pour en créer."
+                    ).classes("text-xs text-orange-700")
+
                 def save():
                     try:
                         if recipe:
+                            saved_recipe_id = recipe["id"]
                             update_recipe(
                                 user_id,
-                                recipe["id"],
+                                saved_recipe_id,
                                 name_input.value,
                                 description_input.value,
                                 instructions_input.value,
                                 servings_input.value,
                             )
                         else:
-                            create_recipe(
+                            saved_recipe_id = create_recipe(
                                 user_id,
                                 family_id,
                                 name_input.value,
@@ -186,6 +223,11 @@ def recipes_panel():
                                 instructions_input.value,
                                 servings_input.value,
                             )
+                        set_recipe_category(
+                            user_id,
+                            saved_recipe_id,
+                            category_input.value,
+                        )
                     except (ValueError, PermissionError) as error:
                         ui.notify(str(error), type="warning")
                         return
@@ -219,6 +261,26 @@ def recipes_panel():
         ).props("outline color=primary")
 
         ui.button(
+            "Catégories",
+            icon="category",
+            on_click=lambda: open_recipe_categories_dialog(
+                user_id=user_id,
+                family_id=family_id,
+                on_close_refresh=lambda: ui.navigate.to("/?tab=recettes"),
+            ),
+        ).props("flat color=primary")
+
+        ui.button(
+            "Supprimer plusieurs",
+            icon="delete_sweep",
+            on_click=lambda: open_bulk_delete_dialog(
+                user_id=user_id,
+                family_id=family_id,
+                on_deleted=render_recipes.refresh,
+            ),
+        ).props("flat color=negative")
+
+        ui.button(
             "Listes modèles",
             icon="checklist",
             on_click=lambda: ui.navigate.to("/?tab=modeles"),
@@ -229,18 +291,39 @@ def recipes_panel():
             on_click=lambda: ui.navigate.to("/?tab=bibliotheque"),
         ).props("flat color=primary")
 
-    search_input = ui.input(
-        label="Rechercher une recette",
-        placeholder="Nom, description, préparation ou ingrédient",
-    ).props("clearable debounce=180 autocomplete=off").classes("w-full mt-2")
-    with search_input.add_slot("prepend"):
-        ui.icon("search")
+    category_filter_rows = list_recipe_categories(user_id, family_id)
+    with ui.row().classes("w-full gap-2 items-end flex-wrap mt-2"):
+        search_input = ui.input(
+            label="Rechercher une recette",
+            placeholder="Nom, description, préparation, ingrédient ou catégorie",
+        ).props("clearable debounce=180 autocomplete=off").classes(
+            "grow min-w-[260px]"
+        )
+        with search_input.add_slot("prepend"):
+            ui.icon("search")
+
+        category_filter = ui.select(
+            recipe_category_options(
+                category_filter_rows,
+                include_all=True,
+            ),
+            value=0,
+            label="Catégorie",
+        ).props("outlined dense").classes("grow min-w-[220px]")
 
     def search_changed(event):
         search_state["text"] = str(event.value or "")
         render_recipes.refresh()
 
+    def category_changed(event):
+        try:
+            search_state["category_id"] = int(event.value or 0)
+        except (TypeError, ValueError):
+            search_state["category_id"] = 0
+        render_recipes.refresh()
+
     search_input.on_value_change(search_changed)
+    category_filter.on_value_change(category_changed)
 
     def confirm_delete(recipe):
         with ui.dialog() as dialog:
@@ -320,11 +403,36 @@ def recipes_panel():
         items = get_items(user_id, family_id)
         options = _item_options(items)
 
+        current_category_rows = list_recipe_categories(user_id, family_id)
+        category_assignments = get_recipe_category_assignments(
+            user_id,
+            family_id,
+        )
         details = []
+        query = str(search_state["text"] or "").strip().casefold()
         for recipe in recipe_rows:
             ingredients = get_recipe_ingredients(user_id, recipe["id"])
-            if recipe_matches(recipe, ingredients, search_state["text"]):
-                details.append((recipe, ingredients))
+            assignment = category_assignments.get(int(recipe["id"]), {})
+            assigned_category_id = assignment.get("category_id")
+            if not category_matches_filter(
+                assigned_category_id,
+                search_state["category_id"],
+                current_category_rows,
+            ):
+                continue
+            category_text = str(
+                assignment.get("category_path") or ""
+            )
+            text_matches = recipe_matches(
+                recipe,
+                ingredients,
+                search_state["text"],
+            ) or (
+                bool(query)
+                and query in category_text.casefold()
+            )
+            if text_matches:
+                details.append((recipe, ingredients, assignment))
 
         valid_recipe_ids = {int(recipe["id"]) for recipe in recipe_rows}
         open_recipe_ids = get_open_recipe_ids() & valid_recipe_ids
@@ -352,13 +460,20 @@ def recipes_panel():
                 )
             return
 
-        for recipe, ingredients in details:
+        for recipe, ingredients, category_assignment in details:
             recipe_id = recipe["id"]
             ingredient_count = len(ingredients)
+            category_text = str(
+                category_assignment.get("category_path") or ""
+            )
 
             with ui.expansion(
                 text=recipe["name"],
-                caption=_recipe_caption(recipe["servings"], ingredient_count),
+                caption=_recipe_caption(
+                    recipe["servings"],
+                    ingredient_count,
+                    category_text,
+                ),
                 icon="restaurant",
                 value=recipe_id in open_recipe_ids,
                 on_value_change=(

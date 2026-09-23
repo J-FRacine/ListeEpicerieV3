@@ -10,7 +10,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 |---|---:|
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
-| Recettes | 1.1.1 |
+| Recettes | 1.2.0 |
 | Journal de pression | 1.2.2 |
 | Finances | 1.14.3 |
 | Personnages JDR | 1.10.0 |
@@ -173,6 +173,21 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation locale réussie : **9 tests ciblés Journal**, **528 tests JF Apps** et compilation Python complète.
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
+
+## Recettes — V1.2.0 / catégories, import sécurisé et suppression multiple — 2026-09-23
+
+- Base GitHub vérifiée avant développement : `23ab5c173a85d373c016bf7166ee6dd754a23790` (`main`), Recettes V1.1.1.
+- Ajout de catégories propres aux recettes, indépendantes des catégories d’épicerie, avec une catégorie principale et une couche facultative de sous-catégories.
+- Nouvelle table `grocery_recipe_categories` et nouvelle colonne `grocery_recipes.recipe_category_id`, créées automatiquement et de façon idempotente. La suppression d’une catégorie ne supprime jamais une recette : son affectation devient simplement vide.
+- Création, renommage et suppression des catégories depuis Recettes; choix de catégorie dans la création/modification d’une recette et filtre de la liste par catégorie.
+- Nouvelle suppression multiple de recettes avec sélection explicite, Tout sélectionner / Tout désélectionner et confirmation. Les items d’épicerie ne sont pas supprimés.
+- Correctif important de l’import Google Sites : les pages d’index comme **Les bases**, **Entrées** ou une sous-section contenant des liens enfants sont classées comme navigation et ne peuvent plus être importées comme recettes.
+- Le format historique sans titres reste pris en charge, mais exige désormais des indices culinaires dans les ingrédients et au moins une action de préparation afin de réduire fortement les faux positifs.
+- L’arborescence de l’ancien site est convertie en catégorie/sous-catégorie lors de l’import, par exemple **Les bases › Pain**.
+- L’aperçu d’import distingue les recettes reconnues, les sections ignorées, les pages à vérifier et les pages non lues.
+- Sauvegarde/restauration familiale étendue aux catégories de recettes et à leur affectation, avec compatibilité des anciennes sauvegardes sans ces champs.
+- Aucun SQL manuel et aucune nouvelle dépendance Python.
+- Validation locale à effectuer par l’installateur : compilation Python, tests Recettes ciblés puis suite complète JF Apps. Validation navigateur/Canner/PostgreSQL de production à confirmer après publication.
 
 ## Recettes — V1.1.1 / correction import structure historique — 2026-09-22
 

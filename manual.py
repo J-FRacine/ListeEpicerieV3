@@ -177,15 +177,30 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Recettes — V1.1.1",
+        "title": "Recettes — V1.2.0",
         "icon": "restaurant_menu",
         "caption": "Créer, consulter, cuisiner et envoyer les ingrédients à l’épicerie",
         "keywords": (
             "recettes cuisine ingrédients préparation portions recherche "
             "bibliothèque partage épicerie besoins mode cuisine "
-            "import google sites ancien site recettes de l ours"
+            "import google sites ancien site recettes de l ours "
+            "catégories sous-catégories supprimer plusieurs sélection"
         ),
         "content": """
+### V1.2.0 — catégories, import sécurisé et suppression multiple
+
+Les **catégories de recettes** sont maintenant distinctes des catégories de la Liste d’épicerie. Utilisez **Catégories** dans Recettes pour créer une catégorie principale, par exemple **Entrées**, **Plats principaux**, **Desserts** ou **Les bases**, puis au besoin une sous-catégorie comme **Pain** ou **Pâtes**. Une seule couche de sous-catégories est utilisée afin de garder l’organisation simple.
+
+Dans **Nouvelle recette** ou **Modifier la recette**, choisissez sa catégorie. Le filtre **Catégorie** de l’écran principal affiche directement une catégorie ou l’ensemble de ses sous-catégories. Les recettes existantes ne sont pas déplacées automatiquement et restent **sans catégorie** jusqu’à leur classement.
+
+L’import de **Recettes de l’Ours** traite maintenant les pages de catégories et sous-catégories uniquement comme des chemins de navigation. Une page comme **Les bases** ne peut plus devenir une recette. Pour le format historique sans titres Ingrédients/Préparation, l’analyse exige maintenant de vrais indices culinaires dans les ingrédients et la préparation. L’aperçu distingue **recettes reconnues**, **sections ignorées** et **pages à vérifier**.
+
+Lorsque l’adresse d’une vraie recette contient l’arborescence du site, celle-ci est réutilisée automatiquement. Par exemple une recette sous **Les bases / Pain** reçoit la catégorie **Les bases › Pain** lors de l’import.
+
+**Supprimer plusieurs** ouvre une liste de recettes avec cases à cocher. Vous pouvez tout sélectionner ou tout désélectionner avant de confirmer. Cette suppression enlève seulement les recettes sélectionnées; elle ne supprime pas les items de la Liste d’épicerie.
+
+Les catégories de recettes et leurs affectations sont conservées dans les sauvegardes familiales. La migration PostgreSQL nécessaire est automatique; aucun SQL manuel n’est requis.
+
 ### V1.1.1 — correction pour la structure réelle de Recettes de l’Ours
 
 Certaines pages de l’ancien site, dont **Burrata et tomates sur plaque**, n’utilisent pas de titres **Ingrédients** et **Préparation**. Elles présentent directement les ingrédients sous le titre de la recette, puis une liste à puces pour les étapes.

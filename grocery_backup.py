@@ -133,14 +133,42 @@ def export_family_backup(user_id, family_id):
             cur.execute(
                 """
                 SELECT
-                    id,
-                    name,
-                    description,
-                    instructions,
-                    servings
-                FROM grocery_recipes
-                WHERE family_id = %s
-                ORDER BY LOWER(name), id;
+                    category.name,
+                    parent.name AS parent,
+                    category.sort_order
+                FROM grocery_recipe_categories AS category
+                LEFT JOIN grocery_recipe_categories AS parent
+                  ON parent.id = category.parent_id
+                WHERE category.family_id = %s
+                ORDER BY
+                    CASE WHEN category.parent_id IS NULL THEN 0 ELSE 1 END,
+                    COALESCE(parent.sort_order, category.sort_order),
+                    COALESCE(LOWER(parent.name), LOWER(category.name)),
+                    category.sort_order,
+                    LOWER(category.name),
+                    category.id;
+                """,
+                (family_id,),
+            )
+            recipe_categories = [dict(row) for row in cur.fetchall()]
+
+            cur.execute(
+                """
+                SELECT
+                    recipe.id,
+                    recipe.name,
+                    recipe.description,
+                    recipe.instructions,
+                    recipe.servings,
+                    category.name AS recipe_category,
+                    parent.name AS recipe_category_parent
+                FROM grocery_recipes AS recipe
+                LEFT JOIN grocery_recipe_categories AS category
+                  ON category.id = recipe.recipe_category_id
+                LEFT JOIN grocery_recipe_categories AS parent
+                  ON parent.id = category.parent_id
+                WHERE recipe.family_id = %s
+                ORDER BY LOWER(recipe.name), recipe.id;
                 """,
                 (family_id,),
             )
@@ -175,6 +203,10 @@ def export_family_backup(user_id, family_id):
                         "description": recipe["description"],
                         "instructions": recipe["instructions"],
                         "servings": recipe["servings"],
+                        "recipe_category": recipe["recipe_category"] or "",
+                        "recipe_category_parent": (
+                            recipe["recipe_category_parent"] or ""
+                        ),
                         "ingredients": ingredients,
                     }
                 )
@@ -185,6 +217,7 @@ def export_family_backup(user_id, family_id):
                 "stores": stores,
                 "items": items,
                 "templates": templates,
+                "recipe_categories": recipe_categories,
                 "recipes": recipes,
             }
 
@@ -370,10 +403,38 @@ def _recipe_values(recipe):
         "description": str(recipe.get("description") or "").strip(),
         "instructions": str(recipe.get("instructions") or "").strip(),
         "servings": servings,
+        "recipe_category": str(
+            recipe.get("recipe_category") or ""
+        ).strip(),
+        "recipe_category_parent": str(
+            recipe.get("recipe_category_parent") or ""
+        ).strip(),
         "ingredients": [
             _line_item_reference(entry, "ingrédient")
             for entry in raw_ingredients
         ],
+    }
+
+
+def _recipe_category_values(entry):
+    if not isinstance(entry, dict):
+        raise ValueError(
+            "Le fichier contient une catégorie de recette invalide."
+        )
+    name = str(entry.get("name") or "").strip()
+    parent = str(entry.get("parent") or "").strip()
+    if not name:
+        raise ValueError(
+            "Le fichier contient une catégorie de recette sans nom."
+        )
+    try:
+        sort_order = int(entry.get("sort_order", 0) or 0)
+    except (TypeError, ValueError):
+        sort_order = 0
+    return {
+        "name": name,
+        "parent": parent,
+        "sort_order": sort_order,
     }
 
 
@@ -401,6 +462,7 @@ def import_family_backup(
     stores_data = backup_data.get("stores", [])
     items_data = backup_data.get("items", [])
     templates_data = backup_data.get("templates", [])
+    recipe_categories_data = backup_data.get("recipe_categories", [])
     recipes_data = backup_data.get("recipes", [])
 
     if not isinstance(categories_data, list):
@@ -411,6 +473,8 @@ def import_family_backup(
         raise ValueError("La liste des items est invalide.")
     if not isinstance(templates_data, list):
         raise ValueError("La liste des listes modèles est invalide.")
+    if not isinstance(recipe_categories_data, list):
+        raise ValueError("La liste des catégories de recettes est invalide.")
     if not isinstance(recipes_data, list):
         raise ValueError("La liste des recettes est invalide.")
 
@@ -424,7 +488,35 @@ def import_family_backup(
     ]
     items = [_item_values(item) for item in items_data]
     templates = [_template_values(entry) for entry in templates_data]
+    recipe_categories = [
+        _recipe_category_values(entry)
+        for entry in recipe_categories_data
+    ]
     recipes = [_recipe_values(entry) for entry in recipes_data]
+
+    known_recipe_categories = {
+        (
+            entry["parent"].casefold(),
+            entry["name"].casefold(),
+        )
+        for entry in recipe_categories
+    }
+    for recipe in recipes:
+        category_name = recipe["recipe_category"]
+        if not category_name:
+            continue
+        entry = {
+            "name": category_name,
+            "parent": recipe["recipe_category_parent"],
+            "sort_order": 0,
+        }
+        key = (
+            entry["parent"].casefold(),
+            entry["name"].casefold(),
+        )
+        if key not in known_recipe_categories:
+            recipe_categories.append(entry)
+            known_recipe_categories.add(key)
 
     _ensure_unique_names(templates, "listes modèles")
     _ensure_unique_names(recipes, "recettes")
@@ -457,6 +549,10 @@ def import_family_backup(
                 )
                 cur.execute(
                     "DELETE FROM grocery_recipes WHERE family_id = %s;",
+                    (family_id,),
+                )
+                cur.execute(
+                    "DELETE FROM grocery_recipe_categories WHERE family_id = %s;",
                     (family_id,),
                 )
                 cur.execute(
@@ -545,6 +641,114 @@ def import_family_backup(
                 )
                 store_ids[key] = cur.fetchone()["id"]
                 stores_created += 1
+
+            # Restaure les catégories de recettes avant les recettes.
+            cur.execute(
+                """
+                SELECT id, parent_id, name
+                FROM grocery_recipe_categories
+                WHERE family_id = %s;
+                """,
+                (family_id,),
+            )
+            recipe_category_ids = {}
+            existing_recipe_category_rows = [dict(row) for row in cur.fetchall()]
+            for row in existing_recipe_category_rows:
+                if row["parent_id"] is None:
+                    recipe_category_ids[
+                        ("", row["name"].strip().casefold())
+                    ] = row["id"]
+
+            recipe_categories_created = 0
+            main_names = []
+            for entry in recipe_categories:
+                if not entry["parent"]:
+                    main_names.append((entry["name"], entry["sort_order"]))
+                else:
+                    main_names.append((entry["parent"], 0))
+
+            seen_main = set()
+            for position, (name, requested_order) in enumerate(
+                main_names,
+                start=1,
+            ):
+                key = ("", name.casefold())
+                if key in seen_main:
+                    continue
+                seen_main.add(key)
+                if key in recipe_category_ids:
+                    continue
+                cur.execute(
+                    """
+                    INSERT INTO grocery_recipe_categories (
+                        family_id, parent_id, name, sort_order
+                    )
+                    VALUES (%s, NULL, %s, %s)
+                    RETURNING id;
+                    """,
+                    (
+                        family_id,
+                        name,
+                        requested_order or position * 10,
+                    ),
+                )
+                recipe_category_ids[key] = cur.fetchone()["id"]
+                recipe_categories_created += 1
+
+            cur.execute(
+                """
+                SELECT
+                    child.id,
+                    child.name,
+                    parent.name AS parent_name
+                FROM grocery_recipe_categories AS child
+                JOIN grocery_recipe_categories AS parent
+                  ON parent.id = child.parent_id
+                WHERE child.family_id = %s;
+                """,
+                (family_id,),
+            )
+            for row in cur.fetchall():
+                recipe_category_ids[
+                    (
+                        row["parent_name"].strip().casefold(),
+                        row["name"].strip().casefold(),
+                    )
+                ] = row["id"]
+
+            for position, entry in enumerate(
+                recipe_categories,
+                start=1,
+            ):
+                if not entry["parent"]:
+                    continue
+                parent_key = ("", entry["parent"].casefold())
+                parent_id = recipe_category_ids.get(parent_key)
+                if parent_id is None:
+                    continue
+                key = (
+                    entry["parent"].casefold(),
+                    entry["name"].casefold(),
+                )
+                if key in recipe_category_ids:
+                    continue
+                cur.execute(
+                    """
+                    INSERT INTO grocery_recipe_categories (
+                        family_id, parent_id, name, sort_order
+                    )
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id;
+                    """,
+                    (
+                        family_id,
+                        parent_id,
+                        entry["name"],
+                        entry["sort_order"] or position * 10,
+                    ),
+                )
+                recipe_category_ids[key] = cur.fetchone()["id"]
+                recipe_categories_created += 1
 
             existing = {}
             if not replace_existing:
@@ -786,23 +990,34 @@ def import_family_backup(
             for recipe in recipes:
                 recipe_key = recipe["name"].casefold()
                 recipe_id = recipe_ids.get(recipe_key)
+                category_key = (
+                    recipe["recipe_category_parent"].casefold(),
+                    recipe["recipe_category"].casefold(),
+                )
+                recipe_category_id = (
+                    recipe_category_ids.get(category_key)
+                    if recipe["recipe_category"]
+                    else None
+                )
 
                 if recipe_id is None:
                     cur.execute(
                         """
                         INSERT INTO grocery_recipes (
                             family_id,
+                            recipe_category_id,
                             name,
                             description,
                             instructions,
                             servings,
                             created_by_user_id
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
                         RETURNING id;
                         """,
                         (
                             family_id,
+                            recipe_category_id,
                             recipe["name"],
                             recipe["description"],
                             recipe["instructions"],
@@ -817,13 +1032,15 @@ def import_family_backup(
                     cur.execute(
                         """
                         UPDATE grocery_recipes
-                        SET description = %s,
+                        SET recipe_category_id = %s,
+                            description = %s,
                             instructions = %s,
                             servings = %s,
                             updated_at = NOW()
                         WHERE id = %s;
                         """,
                         (
+                            recipe_category_id,
                             recipe["description"],
                             recipe["instructions"],
                             recipe["servings"],
@@ -886,6 +1103,7 @@ def import_family_backup(
                 "items_updated": items_updated,
                 "templates_created": templates_created,
                 "templates_updated": templates_updated,
+                "recipe_categories_created": recipe_categories_created,
                 "recipes_created": recipes_created,
                 "recipes_updated": recipes_updated,
                 "template_lines_skipped": template_lines_skipped,

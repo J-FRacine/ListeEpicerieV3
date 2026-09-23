@@ -10,7 +10,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 |---|---:|
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
-| Recettes | 1.0.0 |
+| Recettes | 1.1.0 |
 | Journal de pression | 1.2.2 |
 | Finances | 1.14.3 |
 | Personnages JDR | 1.10.0 |
@@ -174,6 +174,18 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
 
+## Recettes — V1.1.0 / import de l’ancien Google Sites — 2026-09-22
+
+- Base GitHub vérifiée : `929f59783beebf414dd57488d84394c0d6783222` (`main`), Recettes V1.0.0, Finances V1.14.3 et Épicerie V1.2.1.
+- Ajout de **Importer mon ancien site** pour le Google Sites public `sites.google.com/view/recettes-de-lours`.
+- L’analyse suit les liens internes du site jusqu’à une limite de sécurité et reconnaît les pages possédant des sections Ingrédients + Préparation/Instructions/Réalisation.
+- Un aperçu est obligatoire avant l’import : doublons de recettes, ingrédients reconnus et items manquants sont visibles.
+- Une recette du même nom n’est jamais écrasée. Les items manquants peuvent être créés dans une catégorie et un magasin choisis; ils restent hors des besoins jusqu’à une action explicite ultérieure.
+- La ligne culinaire originale de chaque ingrédient est conservée dans la précision de recette. Le rapprochement avec les items existants reste volontairement prudent afin d’éviter des associations silencieuses incorrectes.
+- L’écriture du lot est transactionnelle; aucune nouvelle table/colonne, aucun SQL manuel et aucune nouvelle dépendance Python.
+- Google Sites ne fournit pas de sitemap XML dans sa version actuelle; le module suit donc les liens internes à partir de la page de départ.
+- Validation locale du parseur et du raccord à effectuer via l’installateur; validation fonctionnelle sur Canner à faire avec le site réel après publication.
+
 ## Recettes — V1.0.0 / application autonome — 2026-09-22
 
 - Base GitHub vérifiée : `c336881cf5ac5c4b72c917becfcf2fe65481f374` (`main`), avec Finances V1.14.3, Épicerie V1.2.1, Journal V1.2.2 et JDR V1.10.0.
@@ -186,7 +198,7 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Les données restent incluses dans la sauvegarde/restauration de la famille de la Liste d’épicerie; aucune duplication dans une seconde structure.
 - Aucun SQL manuel, aucune nouvelle table/colonne et aucune nouvelle dépendance Python.
 - Prochaines évolutions prévues : catégories et étiquettes propres aux recettes, étapes structurées/réordonnables, photos et éditeur bureau enrichi.
-- Validation locale par compilation/tests à effectuer via l’installateur; validation navigateur/Canner à faire après publication.
+- Validation fonctionnelle réelle de V1.0.0 effectuée avec succès par l’utilisateur dans le navigateur/Canner avant le démarrage de V1.1.0.
 
 ## Finances — V1.14.3 / raccord des avis Portail et Historique au mois complet — 2026-09-22
 

@@ -15,7 +15,7 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
-    "recipes": "1.0.0",
+    "recipes": "1.1.0",
     "blood_pressure": "1.2.2",
     "finances": "1.14.3",
     "rpg": "1.10.0",
@@ -23,6 +23,26 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "recipes",
+        "version": "1.1.0",
+        "date": "2026-09-22",
+        "title": "Recettes — V1.1.0 — import de l’ancien Google Sites",
+        "summary": (
+            "Recettes peut analyser le site Recettes de l’Ours, prévisualiser les recettes "
+            "reconnues et les importer sans écraser les recettes existantes."
+        ),
+        "changes": [
+            "Nouvelle action Importer mon ancien site directement dans Recettes.",
+            "Analyse des pages publiques du Google Sites Recettes de l’Ours en suivant ses liens internes.",
+            "Aperçu avant import avec détection des recettes déjà présentes et des ingrédients déjà associés à des items.",
+            "Les recettes portant déjà le même nom sont ignorées plutôt qu’écrasées.",
+            "Les ingrédients manquants peuvent créer des items dans une catégorie et un magasin choisis par l’utilisateur.",
+            "La ligne originale de l’ingrédient est conservée comme précision de recette afin de garder les mesures culinaires.",
+            "L’import du lot est transactionnel : une erreur empêche de laisser un import partiel.",
+            "Aucune nouvelle table, colonne ou dépendance Python; les structures Recettes et Épicerie existantes sont réutilisées.",
+        ],
+    },
     {
         "app_key": "recipes",
         "version": "1.0.0",

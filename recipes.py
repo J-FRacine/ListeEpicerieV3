@@ -18,6 +18,7 @@ from db import (
     update_recipe_ingredient,
 )
 from recipes_reader import build_recipe_reader, recipe_matches
+from recipes_site_import_ui import open_recipe_site_import_dialog
 from state import get_current_family_id, set_current_family_id
 from utils import ensure_family_selected
 
@@ -207,6 +208,16 @@ def recipes_panel():
         dialog.open()
 
     with ui.row().classes("w-full gap-2 flex-wrap mt-2"):
+        ui.button(
+            "Importer mon ancien site",
+            icon="cloud_download",
+            on_click=lambda: open_recipe_site_import_dialog(
+                user_id=user_id,
+                family_id=family_id,
+                on_imported=render_recipes.refresh,
+            ),
+        ).props("outline color=primary")
+
         ui.button(
             "Listes modèles",
             icon="checklist",

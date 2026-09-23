@@ -177,14 +177,25 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Recettes — V1.0.0",
+        "title": "Recettes — V1.1.0",
         "icon": "restaurant_menu",
         "caption": "Créer, consulter, cuisiner et envoyer les ingrédients à l’épicerie",
         "keywords": (
             "recettes cuisine ingrédients préparation portions recherche "
-            "bibliothèque partage épicerie besoins mode cuisine"
+            "bibliothèque partage épicerie besoins mode cuisine "
+            "import google sites ancien site recettes de l ours"
         ),
         "content": """
+### V1.1.0 — importer l’ancien site Recettes de l’Ours
+
+Utilisez **Importer mon ancien site** dans Recettes. L’adresse de votre Google Sites est préremplie. **Analyser le site** parcourt les pages publiques reliées entre elles et cherche les pages contenant une section **Ingrédients** suivie d’une section **Préparation**, **Instructions**, **Réalisation** ou équivalent.
+
+Avant toute écriture, JF Apps affiche un **aperçu** : nom de la recette, portions détectées, nombre d’ingrédients, items déjà reconnus et ingrédients à créer ou vérifier. Une recette portant déjà le même nom dans la famille est marquée **Déjà dans JF Apps** et n’est pas écrasée.
+
+Si **Créer les items manquants** est activé, choisissez la catégorie et le magasin à utiliser. Les items sont créés sans les ajouter immédiatement aux besoins. La ligne originale de l’ingrédient, par exemple « 1 tasse de crème », est conservée comme précision de la recette. Cela évite de perdre les mesures culinaires même si le modèle actuel de l’épicerie utilise une quantité entière pour les items.
+
+L’import utilise les tables Recettes et Épicerie existantes et ne crée aucune nouvelle structure PostgreSQL. Si Google modifie la présentation de Google Sites et qu’une page n’est pas reconnue, vous pouvez aussi coller directement l’adresse de cette page dans le champ **Adresse de départ** pour tenter une analyse ciblée.
+
 ### Une application Recettes distincte
 
 **Recettes** possède maintenant sa propre carte dans le Portail. Elle réutilise les recettes déjà créées dans les familles de la Liste d’épicerie : aucune recette existante n’est déplacée ou copiée.

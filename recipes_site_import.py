@@ -40,6 +40,17 @@ _FOOTER_PREFIXES = (
     "report abuse",
 )
 
+_QUANTITY = r"(?:\d+(?:[.,]\d+)?|\d+\s*[\/⁄]\s*\d+|[¼½¾⅓⅔⅛⅜⅝⅞]|une?|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)"
+_UNIT = (
+    r"(?:kg|g|mg|l|ml|cl|oz|lb|lbs|tasses?|cups?|t\.?|"
+    r"cuill(?:ere|ère)s?\s+à\s+soupe|cuill(?:ere|ère)s?\s+a\s+soupe|"
+    r"cuill(?:ere|ère)s?\s+à\s+table|cuill(?:ere|ère)s?\s+a\s+table|"
+    r"cuill(?:ere|ère)s?\s+à\s+caf(?:e|é)|cuill(?:ere|ère)s?\s+a\s+caf(?:e|é)|"
+    r"c\.\s*à\s*s\.?|c\.\s*a\s*s\.?|c\s+à\s+soupe|c\s+a\s+soupe|"
+    r"c\.\s*à\s*c\.?|c\.\s*a\s*c\.?|c\s+à\s+caf(?:e|é)|c\s+a\s+caf(?:e|é)|"
+    r"bo[iî]tes?|gousses?|tranches?|pinc(?:e|é)es?|sachets?|paquets?|branches?)"
+)
+
 
 def _fold(value: str) -> str:
     text = unicodedata.normalize("NFKD", str(value or ""))
@@ -79,8 +90,11 @@ class _GoogleSiteParser(HTMLParser):
         self._text_parts = []
         self._title_parts = []
         self._in_title = False
+        self._li_depth = 0
+        self._li_parts = []
         self.links: list[str] = []
         self.headings: list[tuple[str, str]] = []
+        self.list_items: list[str] = []
 
     def handle_starttag(self, tag, attrs):
         tag = tag.lower()
@@ -97,6 +111,10 @@ class _GoogleSiteParser(HTMLParser):
         if tag in {"h1", "h2", "h3", "h4"}:
             self._current_heading = tag
             self._heading_parts = []
+        if tag == "li":
+            if self._li_depth == 0:
+                self._li_parts = []
+            self._li_depth += 1
         if tag in _BLOCK_TAGS:
             self._text_parts.append("\n")
 
@@ -116,6 +134,13 @@ class _GoogleSiteParser(HTMLParser):
                 self.headings.append((tag, text))
             self._current_heading = None
             self._heading_parts = []
+        if tag == "li" and self._li_depth:
+            self._li_depth -= 1
+            if self._li_depth == 0:
+                text = re.sub(r"\s+", " ", " ".join(self._li_parts)).strip()
+                if text:
+                    self.list_items.append(text)
+                self._li_parts = []
         if tag in _BLOCK_TAGS:
             self._text_parts.append("\n")
 
@@ -130,6 +155,8 @@ class _GoogleSiteParser(HTMLParser):
             self._title_parts.append(text)
         if self._current_heading:
             self._heading_parts.append(text)
+        if self._li_depth:
+            self._li_parts.append(text)
 
     @property
     def title(self) -> str:
@@ -200,7 +227,7 @@ def _title_from_parser(parser: _GoogleSiteParser, lines: list[str]) -> str:
 
 
 def _extract_servings(lines: list[str]) -> int:
-    text = " ".join(lines[:20])
+    text = " ".join(lines[:30])
     patterns = (
         r"\b(?:pour\s+)?(\d{1,2})\s*(?:portions?|personnes?|pers\.?)(?:\b|\))",
         r"\b(?:rendement|portions?)\s*[:\-]?\s*(\d{1,2})\b",
@@ -223,20 +250,29 @@ def _strip_bullet(value: str) -> str:
 def item_name_from_ingredient_line(value: str) -> str:
     text = _strip_bullet(value)
     text = re.sub(r"^\(?\d{1,2}\)?[.)]\s+", "", text)
-    text = re.sub(
-        r"^(?:\d+(?:[.,]\d+)?|\d+\s*[\/⁄]\s*\d+|[¼½¾⅓⅔⅛⅜⅝⅞]|une?|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)\s+",
-        "",
+
+    # Retire une précision finale entre parenthèses avant d'isoler le nom.
+    text = re.sub(r"\s*\([^)]*\)\s*$", "", text).strip()
+
+    # Cas classique : quantité + unité avant le nom (ex. « 1 tasse de crème »).
+    text = re.sub(rf"^{_QUANTITY}\s+", "", text, flags=re.IGNORECASE)
+    text = re.sub(rf"^{_UNIT}\b\s*(?:de\s+|d['’])?", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^(?:de\s+|d['’])", "", text, flags=re.IGNORECASE)
+
+    # Certaines recettes de l'Ours placent la mesure après l'ingrédient,
+    # ex. « Huile olive 60% 1/3 tasse ». Conserve le nom situé avant la mesure.
+    trailing_measure = re.search(
+        rf"\s+{_QUANTITY}\s*{_UNIT}\b.*$",
         text,
         flags=re.IGNORECASE,
     )
-    unit = (
-        r"(?:kg|g|mg|l|ml|cl|oz|lb|lbs|tasses?|cups?|cuill(?:ere|ère)s?\s+à\s+soupe|"
-        r"cuill(?:ere|ère)s?\s+à\s+caf(?:e|é)|c\.\s*à\s*s\.?|c\.\s*à\s*c\.?|"
-        r"bo[iî]tes?|gousses?|tranches?|pinc(?:e|é)es?|sachets?|paquets?|branches?)"
-    )
-    text = re.sub(rf"^{unit}\b\s*(?:de\s+|d['’])?", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"^(?:de\s+|d['’])", "", text, flags=re.IGNORECASE)
+    if trailing_measure and trailing_measure.start() >= 2:
+        text = text[: trailing_measure.start()].strip()
+
+    # « au goût » est une précision culinaire, pas une partie du nom de l'item.
+    text = re.sub(r"\s+au\s+go[uû]t\b.*$", "", text, flags=re.IGNORECASE).strip()
     text = text.strip(" ,;:-")
+
     if "," in text:
         first = text.split(",", 1)[0].strip()
         if len(first) >= 2:
@@ -268,6 +304,85 @@ def _ingredient_lines_to_entries(lines: list[str]) -> list[dict]:
     return entries
 
 
+def _line_index(lines: list[str], value: str, start: int = 0) -> int | None:
+    target = _fold(value)
+    if not target:
+        return None
+    for index in range(max(0, start), len(lines)):
+        if _fold(lines[index]) == target:
+            return index
+    return None
+
+
+def _headingless_sections(
+    parser: _GoogleSiteParser,
+    lines: list[str],
+    title: str,
+) -> tuple[list[str], list[str]] | None:
+    """Reconnaît le format historique de Recettes de l'Ours.
+
+    Plusieurs pages ne portent aucun titre « Ingrédients » / « Préparation » :
+    les ingrédients sont du texte simple sous le titre, puis la méthode commence
+    avec une liste à puces. Les paragraphes qui suivent cette liste appartiennent
+    aussi à la préparation.
+    """
+    if not parser.list_items:
+        return None
+
+    title_index = _line_index(lines, title)
+    if title_index is None:
+        title_index = 0
+
+    list_item_keys = {_fold(item) for item in parser.list_items if _fold(item)}
+    preparation_index = None
+    for index in range(title_index + 1, len(lines)):
+        if _fold(lines[index]) in list_item_keys:
+            preparation_index = index
+            break
+    if preparation_index is None:
+        return None
+
+    heading_keys = {_fold(value) for _, value in parser.headings}
+    ingredient_lines = []
+    for line in lines[title_index + 1 : preparation_index]:
+        folded = _fold(line)
+        if not folded or folded in _CHROME_LINES or folded == _fold(title):
+            continue
+        if folded in heading_keys:
+            continue
+        # Ignore des métadonnées éventuelles sans les transformer en ingrédients.
+        if re.search(
+            r"\b(?:preparation|préparation|cuisson|temps|rendement|portions?|personnes?)\s*[:\-]",
+            line,
+            flags=re.IGNORECASE,
+        ):
+            continue
+        ingredient_lines.append(line)
+
+    # Le format sans titres est accepté seulement si plusieurs ingrédients sont
+    # trouvés avant la première puce. Cela évite de prendre une page de menu pour
+    # une recette.
+    if len(_ingredient_lines_to_entries(ingredient_lines)) < 2:
+        return None
+
+    preparation_lines = []
+    for line in lines[preparation_index:]:
+        folded = _fold(line)
+        if not folded or folded in _CHROME_LINES:
+            continue
+        if any(folded.startswith(prefix) for prefix in _FOOTER_PREFIXES):
+            break
+        if folded == _fold(title):
+            continue
+        cleaned = _strip_bullet(re.sub(r"^\s*\d{1,2}[.)]\s*", "", line)).strip()
+        if cleaned:
+            preparation_lines.append(cleaned)
+
+    if not preparation_lines:
+        return None
+    return ingredient_lines, preparation_lines
+
+
 def parse_recipe_html(html: str, source_url: str) -> dict | None:
     parser = _GoogleSiteParser()
     parser.feed(str(html or ""))
@@ -275,6 +390,7 @@ def parse_recipe_html(html: str, source_url: str) -> dict | None:
     if not lines:
         return None
 
+    title = _title_from_parser(parser, lines)
     ingredient_index = None
     ingredient_tail = ""
     preparation_index = None
@@ -290,45 +406,53 @@ def parse_recipe_html(html: str, source_url: str) -> dict | None:
             preparation_tail = tail
             break
 
-    if ingredient_index is None or preparation_index is None:
-        return None
+    description_anchor = None
+    if ingredient_index is not None and preparation_index is not None:
+        ingredient_lines = []
+        if ingredient_tail:
+            ingredient_lines.append(ingredient_tail)
+        ingredient_lines.extend(lines[ingredient_index + 1 : preparation_index])
+        preparation_lines = []
+        if preparation_tail:
+            preparation_lines.append(preparation_tail)
+        for line in lines[preparation_index + 1 :]:
+            folded = _fold(line)
+            if any(folded.startswith(prefix) for prefix in _FOOTER_PREFIXES):
+                break
+            kind, _ = _heading_kind(line)
+            if kind == "ingredients":
+                break
+            cleaned = _strip_bullet(re.sub(r"^\s*\d{1,2}[.)]\s*", "", line)).strip()
+            if cleaned:
+                preparation_lines.append(cleaned)
+        description_anchor = ingredient_index
+    else:
+        fallback = _headingless_sections(parser, lines, title)
+        if fallback is None:
+            return None
+        ingredient_lines, preparation_lines = fallback
+        title_index = _line_index(lines, title)
+        description_anchor = title_index if title_index is not None else 0
 
-    ingredient_lines = []
-    if ingredient_tail:
-        ingredient_lines.append(ingredient_tail)
-    ingredient_lines.extend(lines[ingredient_index + 1 : preparation_index])
     ingredients = _ingredient_lines_to_entries(ingredient_lines)
-    if not ingredients:
+    if not ingredients or not preparation_lines:
         return None
 
-    preparation_lines = []
-    if preparation_tail:
-        preparation_lines.append(preparation_tail)
-    for line in lines[preparation_index + 1 :]:
-        folded = _fold(line)
-        if any(folded.startswith(prefix) for prefix in _FOOTER_PREFIXES):
-            break
-        kind, _ = _heading_kind(line)
-        if kind == "ingredients":
-            break
-        cleaned = re.sub(r"^\s*\d{1,2}[.)]\s*", "", line).strip()
-        if cleaned:
-            preparation_lines.append(cleaned)
-
-    if not preparation_lines:
-        return None
-
-    title = _title_from_parser(parser, lines)
     description_lines = []
-    for line in lines[:ingredient_index]:
-        if _fold(line) in {_fold(title), "recettes de l'ours", "recettes de lours"}:
-            continue
-        if re.search(r"\b(?:preparation|préparation|cuisson|temps|portions?|personnes?)\s*[:\-]", line, flags=re.I):
-            continue
-        if len(line) >= 12:
-            description_lines.append(line)
-        if len(description_lines) >= 2:
-            break
+    if ingredient_index is not None:
+        for line in lines[:description_anchor]:
+            if _fold(line) in {_fold(title), "recettes de l'ours", "recettes de lours"}:
+                continue
+            if re.search(
+                r"\b(?:preparation|préparation|cuisson|temps|portions?|personnes?)\s*[:\-]",
+                line,
+                flags=re.I,
+            ):
+                continue
+            if len(line) >= 12:
+                description_lines.append(line)
+            if len(description_lines) >= 2:
+                break
 
     description = " ".join(description_lines)[:800]
     return {
@@ -419,7 +543,6 @@ def crawl_google_site(start_url: str = DEFAULT_SITE_URL, max_pages: int = MAX_PA
                 queued.add(link)
                 queue.append(link)
 
-    # Déduplique les pages qui mènent au même nom de recette.
     unique = []
     seen_names = set()
     for candidate in candidates:

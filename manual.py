@@ -177,7 +177,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Recettes — V1.1.0",
+        "title": "Recettes — V1.1.1",
         "icon": "restaurant_menu",
         "caption": "Créer, consulter, cuisiner et envoyer les ingrédients à l’épicerie",
         "keywords": (
@@ -186,6 +186,14 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "import google sites ancien site recettes de l ours"
         ),
         "content": """
+### V1.1.1 — correction pour la structure réelle de Recettes de l’Ours
+
+Certaines pages de l’ancien site, dont **Burrata et tomates sur plaque**, n’utilisent pas de titres **Ingrédients** et **Préparation**. Elles présentent directement les ingrédients sous le titre de la recette, puis une liste à puces pour les étapes.
+
+L’analyse reconnaît maintenant aussi ce format. Les lignes avant la première étape à puces sont traitées comme ingrédients; la liste à puces et les paragraphes qui la suivent deviennent la préparation. Le format V1.1.0 avec titres explicites reste également pris en charge.
+
+Le nom proposé pour un nouvel item est aussi mieux nettoyé lorsque la mesure suit le nom de l’ingrédient, par exemple **Huile olive 60% 1/3 tasse**. La ligne culinaire complète demeure conservée comme précision afin de ne perdre aucune information.
+
 ### V1.1.0 — importer l’ancien site Recettes de l’Ours
 
 Utilisez **Importer mon ancien site** dans Recettes. L’adresse de votre Google Sites est préremplie. **Analyser le site** parcourt les pages publiques reliées entre elles et cherche les pages contenant une section **Ingrédients** suivie d’une section **Préparation**, **Instructions**, **Réalisation** ou équivalent.

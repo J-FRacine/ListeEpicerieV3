@@ -15,7 +15,7 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
-    "recipes": "1.1.0",
+    "recipes": "1.1.1",
     "blood_pressure": "1.2.2",
     "finances": "1.14.3",
     "rpg": "1.10.0",
@@ -23,6 +23,24 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "recipes",
+        "version": "1.1.1",
+        "date": "2026-09-22",
+        "title": "Recettes — V1.1.1 — correction de l’import Recettes de l’Ours",
+        "summary": (
+            "L’import reconnaît maintenant la structure réelle de l’ancien site, "
+            "où les ingrédients précèdent directement une liste à puces de préparation."
+        ),
+        "changes": [
+            "Correction du parseur V1.1.0 qui exigeait à tort des titres Ingrédients et Préparation.",
+            "Reconnaissance du format réel Recettes de l’Ours : titre, lignes d’ingrédients, puis étapes en liste à puces.",
+            "Les paragraphes placés après la liste à puces sont conservés comme fin de préparation.",
+            "Amélioration du nom des items pour les mesures placées après le nom, comme Huile olive 60% 1/3 tasse.",
+            "Les précisions au goût et les mesures culinaires originales restent conservées dans la note de l’ingrédient.",
+            "Aucune nouvelle table, colonne, migration PostgreSQL ou dépendance Python.",
+        ],
+    },
     {
         "app_key": "recipes",
         "version": "1.1.0",

@@ -10,7 +10,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 |---|---:|
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
-| Recettes | 1.1.0 |
+| Recettes | 1.1.1 |
 | Journal de pression | 1.2.2 |
 | Finances | 1.14.3 |
 | Personnages JDR | 1.10.0 |
@@ -173,6 +173,17 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation locale réussie : **9 tests ciblés Journal**, **528 tests JF Apps** et compilation Python complète.
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
+
+## Recettes — V1.1.1 / correction import structure historique — 2026-09-22
+
+- Base GitHub vérifiée : `f4ee2b7da186df71d8d731cfce9881e0b9c6425d` (`main`), Recettes V1.1.0.
+- Validation réelle de V1.1.0 : le site est accessible depuis Canner et 39 pages sont parcourues, mais aucune recette n’est reconnue parce que le parseur exigeait des titres explicites **Ingrédients** et **Préparation**.
+- Exemple fourni par l’utilisateur : **Burrata et tomates sur plaque** présente le titre, des lignes d’ingrédients sans en-tête, puis une liste à puces pour les étapes et quelques paragraphes finaux.
+- V1.1.1 reconnaît ce format historique en plus du format structuré déjà pris en charge.
+- Les lignes avant la première étape à puces deviennent les ingrédients; les puces et les paragraphes suivants deviennent la préparation.
+- Le nettoyage des noms d’items accepte aussi les mesures placées après le nom et retire les précisions **au goût** du nom sans perdre la ligne originale conservée dans la note.
+- Aucun changement de schéma PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance.
+- Validation navigateur/Canner à refaire avec une page réelle puis avec l’analyse du site complet.
 
 ## Recettes — V1.1.0 / import de l’ancien Google Sites — 2026-09-22
 

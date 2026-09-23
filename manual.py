@@ -177,7 +177,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Recettes — V1.2.0",
+        "title": "Recettes — V1.2.1",
         "icon": "restaurant_menu",
         "caption": "Créer, consulter, cuisiner et envoyer les ingrédients à l’épicerie",
         "keywords": (
@@ -187,6 +187,14 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "catégories sous-catégories supprimer plusieurs sélection"
         ),
         "content": """
+### V1.2.1 — correction des pages avec Ingrédients mais sans titre Préparation
+
+Certaines pages de **Recettes de l’Ours** utilisent un troisième format : elles affichent quelques paragraphes d’introduction, un titre **Ingrédients**, une liste à puces d’ingrédients, puis directement une liste numérotée d’étapes sans titre **Préparation**.
+
+Ce format est maintenant reconnu. Les paragraphes placés avant **Ingrédients** restent dans la description; une URL brute n’est pas importée comme description ni comme ingrédient. La liste à puces devient la liste d’ingrédients et la liste numérotée devient la préparation.
+
+Le nettoyage des noms d’items accepte aussi une virgule après la quantité dans une mesure placée après le nom, par exemple **Poudre oignon 1, c à soupe** devient l’item **Poudre oignon**, tout en conservant la ligne complète comme précision.
+
 ### V1.2.0 — catégories, import sécurisé et suppression multiple
 
 Les **catégories de recettes** sont maintenant distinctes des catégories de la Liste d’épicerie. Utilisez **Catégories** dans Recettes pour créer une catégorie principale, par exemple **Entrées**, **Plats principaux**, **Desserts** ou **Les bases**, puis au besoin une sous-catégorie comme **Pain** ou **Pâtes**. Une seule couche de sous-catégories est utilisée afin de garder l’organisation simple.

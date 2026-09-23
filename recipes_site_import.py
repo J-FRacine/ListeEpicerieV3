@@ -151,9 +151,11 @@ class _GoogleSiteParser(HTMLParser):
         self._in_title = False
         self._li_depth = 0
         self._li_parts = []
+        self._list_stack: list[str] = []
         self.links: list[str] = []
         self.headings: list[tuple[str, str]] = []
         self.list_items: list[str] = []
+        self.list_entries: list[tuple[str, str]] = []
 
     def handle_starttag(self, tag, attrs):
         tag = tag.lower()
@@ -170,6 +172,8 @@ class _GoogleSiteParser(HTMLParser):
         if tag in {"h1", "h2", "h3", "h4"}:
             self._current_heading = tag
             self._heading_parts = []
+        if tag in {"ul", "ol"}:
+            self._list_stack.append(tag)
         if tag == "li":
             if self._li_depth == 0:
                 self._li_parts = []
@@ -199,7 +203,15 @@ class _GoogleSiteParser(HTMLParser):
                 text = re.sub(r"\s+", " ", " ".join(self._li_parts)).strip()
                 if text:
                     self.list_items.append(text)
+                    self.list_entries.append(
+                        (
+                            self._list_stack[-1] if self._list_stack else "",
+                            text,
+                        )
+                    )
                 self._li_parts = []
+        if tag in {"ul", "ol"} and self._list_stack:
+            self._list_stack.pop()
         if tag in _BLOCK_TAGS:
             self._text_parts.append("\n")
 
@@ -322,7 +334,7 @@ def item_name_from_ingredient_line(value: str) -> str:
     text = re.sub(r"^(?:de\s+|d['’])", "", text, flags=re.IGNORECASE)
 
     trailing_measure = re.search(
-        rf"\s+{_QUANTITY}\s*{_UNIT}\b.*$",
+        rf"\s+{_QUANTITY}\s*[,;:]?\s*{_UNIT}\b.*$",
         text,
         flags=re.IGNORECASE,
     )
@@ -455,6 +467,90 @@ def _headingless_sections(
     return ingredient_lines, preparation_lines
 
 
+def _ingredients_heading_without_preparation(
+    parser: _GoogleSiteParser,
+    lines: list[str],
+    ingredient_index: int,
+    ingredient_tail: str = "",
+) -> tuple[list[str], list[str]] | None:
+    """Format historique : titre Ingrédients, puis UL, puis étapes OL sans titre.
+
+    Certaines pages de Recettes de l'Ours ont un en-tête « Ingrédients », une
+    liste à puces d'ingrédients, puis directement une liste numérotée de
+    préparation. Google Sites ne fournit alors aucun en-tête « Préparation ».
+    """
+    ordered_keys = {
+        _fold(text)
+        for list_type, text in parser.list_entries
+        if list_type == "ol" and _fold(text)
+    }
+
+    preparation_index = None
+    if ordered_keys:
+        for index in range(ingredient_index + 1, len(lines)):
+            if _fold(lines[index]) in ordered_keys:
+                preparation_index = index
+                break
+
+    # Repli pour les anciennes pages où Google Sites ne conserve pas OL/UL :
+    # la première vraie action culinaire marque le début de la préparation.
+    if preparation_index is None:
+        list_item_keys = {
+            _fold(item)
+            for item in parser.list_items
+            if _fold(item)
+        }
+        for index in range(ingredient_index + 1, len(lines)):
+            line = lines[index]
+            if (
+                _fold(line) in list_item_keys
+                and _has_instruction_signal([line])
+            ):
+                preparation_index = index
+                break
+
+    if preparation_index is None:
+        return None
+
+    ingredient_lines = []
+    if ingredient_tail:
+        ingredient_lines.append(ingredient_tail)
+    ingredient_lines.extend(
+        lines[ingredient_index + 1 : preparation_index]
+    )
+    ingredients = _ingredient_lines_to_entries(ingredient_lines)
+    if len(ingredients) < 2 or not _has_ingredient_signal(ingredient_lines):
+        return None
+
+    preparation_lines = []
+    for line in lines[preparation_index:]:
+        folded = _fold(line)
+        if not folded or folded in _CHROME_LINES:
+            continue
+        if any(
+            folded.startswith(prefix)
+            for prefix in _FOOTER_PREFIXES
+        ):
+            break
+        kind, _ = _heading_kind(line)
+        if kind == "ingredients":
+            break
+        cleaned = _strip_bullet(
+            re.sub(r"^\s*\d{1,2}[.)]\s*", "", line)
+        ).strip()
+        if cleaned:
+            preparation_lines.append(cleaned)
+
+    if not preparation_lines or not _has_instruction_signal(preparation_lines):
+        return None
+    return ingredient_lines, preparation_lines
+
+
+def _is_url_line(value: str) -> bool:
+    text = str(value or "").strip().lower()
+    return text.startswith(("http://", "https://", "www."))
+
+
 def _internal_links(html: str, page_url: str) -> list[str]:
     parser = _GoogleSiteParser()
     parser.feed(str(html or ""))
@@ -549,6 +645,17 @@ def parse_recipe_html(html: str, source_url: str) -> dict | None:
             if cleaned:
                 preparation_lines.append(cleaned)
         description_anchor = ingredient_index
+    elif ingredient_index is not None:
+        hybrid = _ingredients_heading_without_preparation(
+            parser,
+            lines,
+            ingredient_index,
+            ingredient_tail,
+        )
+        if hybrid is None:
+            return None
+        ingredient_lines, preparation_lines = hybrid
+        description_anchor = ingredient_index
     else:
         fallback = _headingless_sections(parser, lines, title)
         if fallback is None:
@@ -564,11 +671,19 @@ def parse_recipe_html(html: str, source_url: str) -> dict | None:
     description_lines = []
     if ingredient_index is not None:
         for line in lines[:description_anchor]:
-            if _fold(line) in {
+            folded_line = _fold(line)
+            if folded_line in {
                 _fold(title),
                 "recettes de l'ours",
                 "recettes de lours",
             }:
+                continue
+            if (
+                folded_line.startswith(_fold(title))
+                and "recettes de l'ours" in folded_line
+            ):
+                continue
+            if _is_url_line(line):
                 continue
             if re.search(
                 r"\b(?:preparation|préparation|cuisson|temps|portions?|personnes?)\s*[:\-]",

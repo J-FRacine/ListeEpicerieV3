@@ -15,7 +15,7 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
-    "recipes": "1.2.0",
+    "recipes": "1.2.1",
     "blood_pressure": "1.2.2",
     "finances": "1.14.3",
     "rpg": "1.10.0",
@@ -23,6 +23,24 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "recipes",
+        "version": "1.2.1",
+        "date": "2026-09-23",
+        "title": "Recettes — V1.2.1 — correction de l’import des pages hybrides",
+        "summary": (
+            "L’import reconnaît maintenant les pages ayant un titre Ingrédients "
+            "mais aucune section Préparation avant les étapes numérotées."
+        ),
+        "changes": [
+            "Correction du format de la page Porc effiloché à la mijoteuse : les paragraphes d’introduction ne deviennent plus des ingrédients.",
+            "Un en-tête Ingrédients suivi d’une liste à puces puis d’une liste numérotée est reconnu comme ingrédients puis préparation.",
+            "Les URL brutes présentes avant les ingrédients sont exclues de la description.",
+            "Amélioration du nettoyage des mesures placées après le nom, y compris Poudre oignon 1, c à soupe.",
+            "Les formats V1.2.0 déjà pris en charge restent compatibles : sections explicites complètes et format sans titres de type Burrata.",
+            "Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance Python.",
+        ],
+    },
     {
         "app_key": "recipes",
         "version": "1.2.0",

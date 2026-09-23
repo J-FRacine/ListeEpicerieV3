@@ -10,7 +10,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 |---|---:|
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
-| Recettes | 1.2.0 |
+| Recettes | 1.2.1 |
 | Journal de pression | 1.2.2 |
 | Finances | 1.14.3 |
 | Personnages JDR | 1.10.0 |
@@ -173,6 +173,19 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation locale réussie : **9 tests ciblés Journal**, **528 tests JF Apps** et compilation Python complète.
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
+
+## Recettes — V1.2.1 / correction import pages hybrides — 2026-09-23
+
+- Base GitHub vérifiée avant correction : `4b7eea4654e0dce4136cc10aeb4722da707e937b` (`main`), Recettes V1.2.0.
+- Validation navigateur de V1.2.0 : la page **Porc effiloché à la mijoteuse** était mal interprétée. Elle possède un titre **Ingrédients** et une liste à puces, mais aucune rubrique **Préparation** avant la liste numérotée.
+- Le parseur reconnaît maintenant ce format hybride : introduction → Ingrédients → liste à puces → étapes numérotées.
+- Les paragraphes d’introduction restent en description et les URL brutes sont exclues.
+- Les ingrédients ne sont plus déplacés dans la préparation; les étapes numérotées et les paragraphes qui les suivent deviennent la préparation.
+- Le nettoyage d’une mesure placée après le nom accepte aussi une ponctuation comme `1, c à soupe`.
+- Tests de régression ajoutés avec une page reproduisant exactement le format de **Porc effiloché à la mijoteuse**.
+- Les formats déjà pris en charge (sections Ingrédients + Préparation explicites, et format historique sans titres de type Burrata) sont conservés.
+- Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance Python.
+- Validation locale complète à effectuer par l’installateur; validation navigateur/Canner à refaire après publication.
 
 ## Recettes — V1.2.0 / catégories, import sécurisé et suppression multiple — 2026-09-23
 

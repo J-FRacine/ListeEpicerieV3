@@ -127,7 +127,7 @@ class RecipesV120Tests(unittest.TestCase):
 
     def test_version_is_1_2_0(self):
         source = (ROOT / "app_versions.py").read_text(encoding="utf-8")
-        self.assertIn('"recipes": "1.2.0"', source)
+        self.assertIn('"recipes": "1.2.1"', source)
 
 
 if __name__ == "__main__":

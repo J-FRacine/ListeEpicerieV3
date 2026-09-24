@@ -937,7 +937,7 @@ La version de l’application apparaît près de son nom. Le Portail contient au
 """,
     },
     {
-        "title": "Journal de pression — V1.2.2",
+        "title": "Journal de pression — V1.2.3",
         "icon": "monitor_heart",
         "caption": "Saisie, moyennes, rappels et notifications privées",
         "keywords": (
@@ -948,6 +948,23 @@ La version de l’application apparaît près de son nom. Le Portail contient au
             "notification push appareil heure limite rappel matin soir rapport"
         ),
         "content": """
+### V1.2.3 — moyennes facultatives dans le rapport PDF
+
+Dans **Rapport PDF**, une nouvelle case **Inclure les moyennes de l’intervalle dans le PDF** permet d’ajouter un résumé au rapport. Cette option est désactivée par défaut afin de conserver le format précédent si vous ne la cochez pas.
+
+Lorsque l’option est activée, le PDF affiche :
+
+- la moyenne de la pression systolique;
+- la moyenne de la pression diastolique;
+- la moyenne du pouls;
+- le nombre total de mesures utilisées.
+
+Le calcul utilise toutes les mesures réellement enregistrées entre la date de début et la date de fin, inclusivement. Les journées sans mesure ne comptent pas comme des valeurs nulles et ne modifient donc pas la moyenne.
+
+Le reste du rapport ne change pas : une ligne par date, regroupement des mesures d’une même journée, notes, option Matin/Soir et mention **Aucune donnée pour ce jour** lorsqu’une date ne contient aucune mesure. Les moyennes sont descriptives et aucune interprétation médicale n’est produite.
+
+Aucune migration PostgreSQL n’est nécessaire.
+
 ### V1.2.2 — rappel du Portail et heure locale
 
 Le **Journal de pression V1.2.2** corrige le calcul du rappel quotidien lorsque la date ou l’heure du navigateur diffère de celle du serveur. Le Portail, la **Saisie** et l’aperçu **Rappel** relisent maintenant la date et l’heure de l’appareil dans le contexte réel du navigateur au moment où l’écran s’ouvre.
@@ -1096,6 +1113,8 @@ Avec une sauvegarde JSON, une option permet aussi de remplacer les plages et ré
 ### Rapport PDF
 
 Dans **Rapport PDF**, inscrivez le **nom complet à imprimer**, puis choisissez la date de début et la date de fin.
+
+La case **Inclure les moyennes de l’intervalle dans le PDF** est facultative et désactivée par défaut. Lorsqu’elle est cochée, le PDF affiche la moyenne systolique, la moyenne diastolique, le pouls moyen et le nombre de mesures utilisées pour l’intervalle choisi.
 
 Par défaut, le rapport affiche l’heure exacte de chaque mesure. L’option **Afficher « Matin / Soir » plutôt que l’heure exacte** permet de produire un rapport plus simple :
 

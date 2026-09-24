@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from html import escape
 from pathlib import Path
 
@@ -130,6 +130,87 @@ def _note_text(
     )
 
 
+def calculate_blood_pressure_averages(
+    readings,
+    start_date,
+    end_date,
+):
+    """Calcule les moyennes des mesures réellement incluses dans le rapport."""
+
+    normalized_start = _normalize_date(
+        start_date
+    )
+    normalized_end = _normalize_date(
+        end_date
+    )
+
+    if normalized_end < normalized_start:
+        raise ValueError(
+            "La date de fin doit être "
+            "égale ou postérieure à "
+            "la date de début."
+        )
+
+    included = []
+
+    for reading in readings or []:
+        measured_date = _normalize_date(
+            reading["measured_date"]
+        )
+
+        if (
+            normalized_start
+            <= measured_date
+            <= normalized_end
+        ):
+            included.append(reading)
+
+    measurement_count = len(included)
+
+    if measurement_count <= 0:
+        return {
+            "measurement_count": 0,
+            "systolic_average": None,
+            "diastolic_average": None,
+            "pulse_average": None,
+        }
+
+    return {
+        "measurement_count": measurement_count,
+        "systolic_average": (
+            sum(
+                float(reading["systolic"])
+                for reading in included
+            )
+            / measurement_count
+        ),
+        "diastolic_average": (
+            sum(
+                float(reading["diastolic"])
+                for reading in included
+            )
+            / measurement_count
+        ),
+        "pulse_average": (
+            sum(
+                float(reading["pulse"])
+                for reading in included
+            )
+            / measurement_count
+        ),
+    }
+
+
+def _average_text(value) -> str:
+    if value is None:
+        return "—"
+
+    return (
+        f"{float(value):.1f}"
+        .replace(".", ",")
+    )
+
+
 def build_blood_pressure_pdf(
     *,
     full_name,
@@ -138,6 +219,7 @@ def build_blood_pressure_pdf(
     readings,
     output_path,
     time_display_mode="exact",
+    include_averages=False,
 ):
     """Crée le rapport PDF du journal de pression."""
 
@@ -209,6 +291,16 @@ def build_blood_pressure_pdf(
             )
         )
 
+    averages = (
+        calculate_blood_pressure_averages(
+            readings,
+            normalized_start,
+            normalized_end,
+        )
+        if bool(include_averages)
+        else None
+    )
+
     page_width, page_height = landscape(
         letter
     )
@@ -275,6 +367,42 @@ def build_blood_pressure_pdf(
         leading=9.4,
     )
 
+    average_title_style = ParagraphStyle(
+        "AverageTitle",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=9.2,
+        leading=11,
+        textColor=colors.HexColor(
+            "#173553"
+        ),
+        spaceAfter=3,
+    )
+
+    average_label_style = ParagraphStyle(
+        "AverageLabel",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=7.4,
+        leading=9,
+        textColor=colors.HexColor(
+            "#647484"
+        ),
+        alignment=TA_CENTER,
+    )
+
+    average_value_style = ParagraphStyle(
+        "AverageValue",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=10.4,
+        leading=12,
+        textColor=colors.HexColor(
+            "#173553"
+        ),
+        alignment=TA_CENTER,
+    )
+
     story = [
         Paragraph(
             "Journal de pression artérielle",
@@ -304,6 +432,136 @@ def build_blood_pressure_pdf(
                 header_style,
             )
         )
+
+    if averages is not None:
+        story.append(
+            Spacer(
+                1,
+                3 * mm,
+            )
+        )
+        story.append(
+            Paragraph(
+                "Moyennes de l’intervalle",
+                average_title_style,
+            )
+        )
+
+        if averages["measurement_count"] > 0:
+            average_rows = [
+                [
+                    Paragraph(
+                        "Systolique moyenne",
+                        average_label_style,
+                    ),
+                    Paragraph(
+                        "Diastolique moyenne",
+                        average_label_style,
+                    ),
+                    Paragraph(
+                        "Pouls moyen",
+                        average_label_style,
+                    ),
+                    Paragraph(
+                        "Mesures utilisées",
+                        average_label_style,
+                    ),
+                ],
+                [
+                    Paragraph(
+                        (
+                            f"{_average_text(averages['systolic_average'])} "
+                            "mmHg"
+                        ),
+                        average_value_style,
+                    ),
+                    Paragraph(
+                        (
+                            f"{_average_text(averages['diastolic_average'])} "
+                            "mmHg"
+                        ),
+                        average_value_style,
+                    ),
+                    Paragraph(
+                        (
+                            f"{_average_text(averages['pulse_average'])} "
+                            "bpm"
+                        ),
+                        average_value_style,
+                    ),
+                    Paragraph(
+                        str(
+                            averages["measurement_count"]
+                        ),
+                        average_value_style,
+                    ),
+                ],
+            ]
+
+            average_table = Table(
+                average_rows,
+                colWidths=[
+                    64 * mm,
+                    64 * mm,
+                    64 * mm,
+                    64 * mm,
+                ],
+                hAlign="LEFT",
+            )
+            average_table.setStyle(
+                TableStyle(
+                    [
+                        (
+                            "BACKGROUND",
+                            (0, 0),
+                            (-1, -1),
+                            colors.HexColor(
+                                "#F3F6F8"
+                            ),
+                        ),
+                        (
+                            "BOX",
+                            (0, 0),
+                            (-1, -1),
+                            0.55,
+                            colors.HexColor(
+                                "#A8B4BF"
+                            ),
+                        ),
+                        (
+                            "INNERGRID",
+                            (0, 0),
+                            (-1, -1),
+                            0.35,
+                            colors.HexColor(
+                                "#D2D9DF"
+                            ),
+                        ),
+                        (
+                            "TOPPADDING",
+                            (0, 0),
+                            (-1, -1),
+                            4,
+                        ),
+                        (
+                            "BOTTOMPADDING",
+                            (0, 0),
+                            (-1, -1),
+                            4,
+                        ),
+                    ]
+                )
+            )
+            story.append(
+                average_table
+            )
+        else:
+            story.append(
+                Paragraph(
+                    "Aucune mesure disponible pour calculer une moyenne.",
+                    small_style,
+                )
+            )
 
     story.append(
         Spacer(
@@ -552,14 +810,24 @@ def build_blood_pressure_pdf(
             4 * mm,
         )
     )
+
+    if averages is not None:
+        footer_text = (
+            "Les moyennes, lorsqu’elles sont affichées, utilisent toutes "
+            "les mesures réellement enregistrées dans l’intervalle choisi. "
+            "Aucune interprétation médicale n’est effectuée."
+        )
+    else:
+        footer_text = (
+            "Rapport produit à partir des données privées "
+            "de l’utilisateur dans JF Apps. "
+            "Aucune moyenne ni interprétation médicale "
+            "n’est calculée."
+        )
+
     story.append(
         Paragraph(
-            (
-                "Rapport produit à partir des données privées "
-                "de l’utilisateur dans JF Apps. "
-                "Aucune moyenne ni interprétation médicale "
-                "n’est calculée."
-            ),
+            footer_text,
             small_style,
         )
     )

@@ -11,7 +11,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
 | Recettes | 1.2.1 |
-| Journal de pression | 1.2.2 |
+| Journal de pression | 1.2.3 |
 | Finances | 1.14.3 |
 | Personnages JDR | 1.10.0 |
 | Commentaires et suggestions | 1.0.0 |
@@ -160,6 +160,17 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation locale avant finalisation : **54 tests ciblés Phase 15B**, **214 tests JDR** et **518 tests JF Apps**, tous réussis; compilation Python complète réussie.
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur, incluant le lancement depuis Combat rapide, le résumé dynamique, la clarté Difficulté du jet / Dégâts et les valeurs calculées de Spiritual Weapon.
 - PostgreSQL de production n’a pas été testé indépendamment par ChatGPT.
+
+## Journal de pression — V1.2.3 / moyennes facultatives dans le PDF — 2026-09-24
+
+- Base GitHub vérifiée avant développement : `6ba8ce57ccfdbd08af8a376309454848714a1313` (`main`), Journal de pression V1.2.2.
+- Dans **Rapport PDF**, ajout d’une case facultative **Inclure les moyennes de l’intervalle dans le PDF**, désactivée par défaut afin de préserver le rendu actuel.
+- Lorsque l’option est cochée, le PDF affiche un bloc **Moyennes de l’intervalle** avec moyenne systolique, moyenne diastolique, pouls moyen et nombre de mesures utilisées.
+- Le calcul utilise toutes les mesures réellement comprises entre les dates de début et de fin, inclusivement; les journées sans mesure n’ajoutent aucune valeur fictive.
+- Les règles existantes du rapport restent inchangées : une ligne par date, deux mesures par ligne avec lignes « suite » au besoin, notes, option Heure exacte / Matin-Soir et mention **Aucune donnée pour ce jour**.
+- Le pied du rapport précise qu’aucune interprétation médicale n’est effectuée.
+- Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance.
+- Validation locale complète à effectuer par l’installateur; validation navigateur/Canner à confirmer après publication. PostgreSQL de production n’est pas testé par l’installateur.
 
 ## Journal de pression — finalisation V1.2.2 — 2026-09-18
 

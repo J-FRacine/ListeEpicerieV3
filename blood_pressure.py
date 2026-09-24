@@ -1938,6 +1938,20 @@ def blood_pressure_panel(
                     "text-xs jf-muted -mt-2"
                 )
 
+                report_averages_input = ui.checkbox(
+                    "Inclure les moyennes de l’intervalle dans le PDF"
+                ).classes(
+                    "w-full"
+                )
+                ui.label(
+                    "Si cette option est cochée, le rapport affiche "
+                    "la moyenne systolique, la moyenne diastolique, "
+                    "le pouls moyen et le nombre de mesures utilisées. "
+                    "Toutes les mesures de l’intervalle sont prises en compte."
+                ).classes(
+                    "text-xs jf-muted -mt-2"
+                )
+
                 recipient_input = ui.input(
                     label=(
                         "Courriel du destinataire "
@@ -2046,6 +2060,9 @@ def blood_pressure_panel(
                                     report_period_labels_input.value
                                 )
                                 else "exact"
+                            ),
+                            include_averages=bool(
+                                report_averages_input.value
                             ),
                         )
 

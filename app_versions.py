@@ -16,13 +16,32 @@ APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
     "recipes": "1.2.1",
-    "blood_pressure": "1.2.2",
+    "blood_pressure": "1.2.3",
     "finances": "1.14.3",
     "rpg": "1.10.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "blood_pressure",
+        "version": "1.2.3",
+        "date": "2026-09-24",
+        "title": "Journal de pression — V1.2.3 — moyennes facultatives dans le PDF",
+        "summary": (
+            "Le rapport PDF peut maintenant inclure, au choix, les moyennes "
+            "systolique, diastolique et du pouls pour l’intervalle sélectionné."
+        ),
+        "changes": [
+            "Nouvelle case Inclure les moyennes de l’intervalle dans le PDF, désactivée par défaut.",
+            "Lorsque l’option est cochée, le PDF affiche la moyenne systolique, la moyenne diastolique, le pouls moyen et le nombre de mesures utilisées.",
+            "Le calcul utilise toutes les mesures réellement enregistrées entre les dates du rapport, inclusivement.",
+            "Les journées sans mesure n’ajoutent aucune valeur fictive aux moyennes.",
+            "Le rapport conserve une ligne par journée, les mesures regroupées par deux, les notes et la mention Aucune donnée pour ce jour.",
+            "Aucune interprétation médicale n’est ajoutée au rapport.",
+            "Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance.",
+        ],
+    },
     {
         "app_key": "recipes",
         "version": "1.2.1",

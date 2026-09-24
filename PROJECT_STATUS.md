@@ -10,7 +10,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 |---|---:|
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
-| Recettes | 1.4.0 |
+| Recettes | 1.4.1 |
 | Journal de pression | 1.2.3 |
 | Finances | 1.14.3 |
 | Personnages JDR | 1.10.0 |
@@ -184,6 +184,17 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation locale réussie : **9 tests ciblés Journal**, **528 tests JF Apps** et compilation Python complète.
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
+
+## Recettes — V1.4.1 / correction de l’affichage des en-têtes — 2026-09-24
+
+- Base GitHub vérifiée : `0795d7989efd2f536ef6adb29312e9b9c5cb5dab` (`main`), Recettes V1.4.0.
+- Validation navigateur réelle de V1.4.0 : le compteur trouvait correctement les recettes, mais les cinq en-têtes apparaissaient comme de simples lignes vides.
+- Cause : l’en-tête personnalisé placé dans le slot `header` de `ui.expansion` n’était pas rendu correctement dans l’environnement NiceGUI déployé.
+- Correction : remplacement de cette structure par une carte JF Apps explicite, avec **Consulter** à gauche, vignette facultative, nom/résumé et bouton d’ouverture/fermeture à droite.
+- L’état ouvert/fermé reste mémorisé par recette avec la logique existante.
+- Aucun changement aux données de recettes, photos, nutrition, catégories, import ChatGPT ou Bibliothèque partagée.
+- Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance.
+- Validation locale par compilation/tests à effectuer via l’installateur; validation navigateur/Canner à refaire après publication.
 
 ## Recettes — V1.4.0 / photos et simplification de l’interface — 2026-09-24
 

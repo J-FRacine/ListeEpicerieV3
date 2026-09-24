@@ -177,7 +177,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Recettes — V1.4.0",
+        "title": "Recettes — V1.4.1",
         "icon": "restaurant_menu",
         "caption": "Créer, consulter, cuisiner et envoyer les ingrédients à l’épicerie",
         "keywords": (
@@ -189,6 +189,16 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "temps cuisson préparation étiquettes source"
         ),
         "content": """
+### V1.4.1 — correction de l’affichage de la liste
+
+Après le déploiement de V1.4.0, certains navigateurs affichaient seulement une ligne vide pour chaque recette. Le problème venait du mécanisme utilisé pour personnaliser l’en-tête de la zone repliable.
+
+Les recettes utilisent maintenant un en-tête contrôlé directement par JF Apps. **Consulter** reste à gauche du nom, suivi de la vignette lorsqu’une photo existe, du nom et du résumé de la recette. Le bouton à droite affiche ou masque les détails.
+
+Les données, photos, catégories, valeurs nutritives, import ChatGPT et fonctions de partage ne sont pas modifiés par ce correctif.
+
+Aucune migration PostgreSQL n’est nécessaire.
+
 ### V1.4.0 — photos et interface simplifiée
 
 Chaque recette peut maintenant contenir **une photo principale facultative**. Utilisez **Photo** dans les actions de la recette pour ajouter, remplacer ou supprimer l’image.

@@ -15,7 +15,7 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
-    "recipes": "1.4.0",
+    "recipes": "1.4.1",
     "blood_pressure": "1.2.3",
     "finances": "1.14.3",
     "rpg": "1.10.0",
@@ -23,6 +23,24 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "recipes",
+        "version": "1.4.1",
+        "date": "2026-09-24",
+        "title": "Recettes — V1.4.1 — correction de l’affichage des recettes",
+        "summary": (
+            "Corrige les en-têtes invisibles des recettes observés après "
+            "le déploiement de V1.4.0."
+        ),
+        "changes": [
+            "Le slot d’en-tête personnalisé de ui.expansion est remplacé par une carte contrôlée directement par JF Apps.",
+            "Consulter reste à gauche du nom de la recette, comme prévu en V1.4.0.",
+            "La vignette, le nom, les portions, le nombre d’ingrédients et la catégorie sont de nouveau visibles dans chaque en-tête.",
+            "Un bouton à droite ouvre ou ferme les détails de la recette et l’état ouvert/fermé reste mémorisé.",
+            "Les photos, la nutrition, l’import ChatGPT et la Bibliothèque partagée restent inchangés.",
+            "Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance.",
+        ],
+    },
     {
         "app_key": "recipes",
         "version": "1.4.0",

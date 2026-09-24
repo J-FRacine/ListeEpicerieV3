@@ -576,65 +576,86 @@ def recipes_panel():
                     summary_message=_summary_message,
                 )
 
-            with ui.expansion(
-                value=recipe_id in open_recipe_ids,
-                on_value_change=(
-                    lambda event, selected_recipe_id=recipe_id: save_recipe_open_state(
-                        selected_recipe_id,
-                        bool(event.value),
-                    )
-                ),
-            ).props("expand-separator").classes(
-                "w-full bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-3"
-            ) as recipe_expansion:
-                with recipe_expansion.add_slot("header"):
-                    with ui.row().classes(
-                        "w-full items-center gap-3 flex-nowrap"
-                    ):
-                        consult_button = ui.button(
-                            "Consulter",
-                            icon="menu_book",
-                            on_click=consult_selected,
-                        ).props(
-                            "color=primary dense no-caps"
-                        ).classes("shrink-0")
-                        consult_button.on(
-                            "click",
-                            js_handler="event.stopPropagation()",
+            details_state = {
+                "open": recipe_id in open_recipe_ids
+            }
+
+            def toggle_recipe_details(
+                selected_recipe_id=recipe_id,
+            ):
+                new_value = not details_state["open"]
+                details_state["open"] = new_value
+                save_recipe_open_state(
+                    selected_recipe_id,
+                    new_value,
+                )
+                details_container.set_visibility(
+                    new_value
+                )
+
+            with ui.card().classes(
+                "w-full p-0 bg-white rounded-xl shadow-sm "
+                "border border-gray-200 overflow-hidden mt-3"
+            ):
+                with ui.row().classes(
+                    "w-full items-center gap-3 flex-nowrap px-3 py-3"
+                ):
+                    ui.button(
+                        "Consulter",
+                        icon="menu_book",
+                        on_click=consult_selected,
+                    ).props(
+                        "color=primary dense no-caps"
+                    ).classes("shrink-0")
+
+                    if recipe_thumbnail_url:
+                        ui.image(
+                            recipe_thumbnail_url
+                        ).classes(
+                            "w-14 h-14 rounded-lg shrink-0"
+                        ).props("fit=cover")
+                    else:
+                        ui.icon("restaurant").classes(
+                            "text-2xl text-primary shrink-0"
                         )
 
-                        if recipe_thumbnail_url:
-                            ui.image(
-                                recipe_thumbnail_url
-                            ).classes(
-                                "w-14 h-14 rounded-lg shrink-0"
-                            ).props("fit=cover")
-                        else:
-                            ui.icon("restaurant").classes(
-                                "text-2xl text-primary shrink-0"
+                    with ui.column().classes(
+                        "gap-0 min-w-0 grow"
+                    ):
+                        ui.label(
+                            recipe["name"]
+                        ).classes(
+                            "text-base font-medium whitespace-normal"
+                        ).style(
+                            "overflow-wrap:anywhere;"
+                        )
+                        ui.label(
+                            _recipe_caption(
+                                recipe["servings"],
+                                ingredient_count,
+                                category_text,
                             )
+                        ).classes(
+                            "text-sm text-gray-500 whitespace-normal"
+                        )
 
-                        with ui.column().classes(
-                            "gap-0 min-w-0 grow"
-                        ):
-                            ui.label(
-                                recipe["name"]
-                            ).classes(
-                                "text-base font-medium whitespace-normal"
-                            ).style(
-                                "overflow-wrap:anywhere;"
-                            )
-                            ui.label(
-                                _recipe_caption(
-                                    recipe["servings"],
-                                    ingredient_count,
-                                    category_text,
-                                )
-                            ).classes(
-                                "text-sm text-gray-500 whitespace-normal"
-                            )
+                    ui.button(
+                        icon="unfold_more",
+                        on_click=toggle_recipe_details,
+                    ).props(
+                        "flat round dense color=primary"
+                    ).classes("shrink-0").tooltip(
+                        "Afficher ou masquer les détails"
+                    )
 
-                with ui.column().classes("w-full gap-3 px-2 pb-3"):
+                details_container = ui.column().classes(
+                    "w-full gap-3 px-4 pb-4"
+                )
+                details_container.set_visibility(
+                    details_state["open"]
+                )
+
+                with details_container:
                     if recipe["description"]:
                         ui.label(recipe["description"]).classes(
                             "text-sm text-gray-600 whitespace-normal"

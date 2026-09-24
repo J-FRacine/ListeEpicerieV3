@@ -392,6 +392,29 @@ def migrate_grocery_schema(get_connection):
                 """
             )
 
+            # Recettes V1.4.0 : une photo principale optimisée par recette.
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS grocery_recipe_photos (
+                    recipe_id INTEGER PRIMARY KEY
+                        REFERENCES grocery_recipes(id)
+                        ON DELETE CASCADE,
+                    file_name TEXT,
+                    mime_type TEXT NOT NULL DEFAULT 'image/jpeg',
+                    image_data BYTEA NOT NULL,
+                    image_width INTEGER,
+                    image_height INTEGER,
+                    image_size INTEGER NOT NULL,
+                    thumbnail_data BYTEA NOT NULL,
+                    thumbnail_width INTEGER,
+                    thumbnail_height INTEGER,
+                    thumbnail_size INTEGER NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+
             cur.execute(
                 """
                 DROP INDEX IF EXISTS categories_family_name_unique;

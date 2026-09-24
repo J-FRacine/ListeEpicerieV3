@@ -15,7 +15,7 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
-    "recipes": "1.3.1",
+    "recipes": "1.4.0",
     "blood_pressure": "1.2.3",
     "finances": "1.14.3",
     "rpg": "1.10.0",
@@ -23,6 +23,27 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "recipes",
+        "version": "1.4.0",
+        "date": "2026-09-24",
+        "title": "Recettes — V1.4.0 — photos et interface simplifiée",
+        "summary": (
+            "Recettes ajoute une photo principale optimisée, simplifie "
+            "la consultation et retire l’ancien import Google Sites."
+        ),
+        "changes": [
+            "Une photo principale JPEG, PNG ou WEBP peut être ajoutée, remplacée ou supprimée pour chaque recette.",
+            "Les photos de départ sont limitées à 8 Mo et 25 mégapixels; elles sont orientées, redimensionnées, converties en JPEG et compressées automatiquement.",
+            "Une vignette légère est générée séparément pour éviter de charger la photo pleine grandeur dans la liste des recettes.",
+            "Consulter est maintenant placé dans l’en-tête de chaque recette, à gauche du nom, avec la vignette lorsqu’une photo existe.",
+            "La photo apparaît dans la fiche Consulter et dans le Mode cuisine.",
+            "L’import ChatGPT masque le JSON brut dans une section repliée; l’aperçu de confirmation reste prioritaire.",
+            "L’ancien bouton Importer mon ancien site et le moteur Google Sites sont retirés.",
+            "La sauvegarde/restauration familiale conserve la photo et sa vignette.",
+            "Migration PostgreSQL automatique et idempotente pour grocery_recipe_photos; aucun SQL manuel et aucune nouvelle dépendance.",
+        ],
+    },
     {
         "app_key": "recipes",
         "version": "1.3.1",

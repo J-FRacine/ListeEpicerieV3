@@ -177,18 +177,32 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Recettes — V1.3.1",
+        "title": "Recettes — V1.4.0",
         "icon": "restaurant_menu",
         "caption": "Créer, consulter, cuisiner et envoyer les ingrédients à l’épicerie",
         "keywords": (
             "recettes cuisine ingrédients préparation portions recherche "
             "bibliothèque partage épicerie besoins mode cuisine "
-            "import google sites ancien site recettes de l ours "
             "catégories sous-catégories supprimer plusieurs sélection "
+            "photo image vignette compression poids "
             "chatgpt json nutrition nutritif calories protéines glucides "
             "temps cuisson préparation étiquettes source"
         ),
         "content": """
+### V1.4.0 — photos et interface simplifiée
+
+Chaque recette peut maintenant contenir **une photo principale facultative**. Utilisez **Photo** dans les actions de la recette pour ajouter, remplacer ou supprimer l’image.
+
+Formats acceptés : **JPEG, PNG et WEBP**. Comme pour les portraits de Personnages JDR, JF Apps vérifie le fichier, applique son orientation EXIF, réduit ses dimensions et le convertit en JPEG. Le fichier original doit faire au maximum **8 Mo** et **25 mégapixels**. La photo enregistrée est limitée à **1200 px** sur son plus grand côté et JF Apps ajuste automatiquement la compression pour viser moins d’environ **900 Ko**. Une petite vignette distincte est créée pour la liste afin de ne pas charger l’image pleine grandeur inutilement.
+
+Le bouton **Consulter** se trouve maintenant directement dans l’en-tête de chaque recette, à gauche du nom. Lorsqu’une photo existe, sa vignette apparaît aussi dans cet en-tête. La photo pleine grandeur est affichée dans **Consulter** et dans le **Mode cuisine**.
+
+Dans **Importer depuis ChatGPT**, le JSON brut est maintenant rangé dans la section repliée **Coller du JSON ou voir le JSON source**. L’aperçu de la recette, les items reconnus/manquants et le bouton Importer restent donc au centre de l’écran.
+
+L’ancien mécanisme **Importer mon ancien site** est retiré. JF Apps devient la source principale des recettes; la prochaine étape prévue est la publication dynamique vers le site public plutôt qu’une nouvelle tentative de lecture de l’ancien Google Sites.
+
+Les photos sont incluses dans la sauvegarde/restauration familiale. Une table `grocery_recipe_photos` est créée automatiquement et de façon idempotente. Aucun SQL manuel n’est requis et Pillow était déjà une dépendance de JF Apps pour les portraits JDR.
+
 ### V1.3.1 — compatibilité des tableaux nutritionnels ChatGPT
 
 L’import **Depuis ChatGPT** accepte maintenant deux formes de tableau nutritionnel dans `jf_apps_recipe_import` version 1 : la forme simple de V1.3.0 et une forme enrichie contenant des sous-blocs `per_serving` et `whole_recipe`, même lorsque `basis` contient une phrase descriptive.

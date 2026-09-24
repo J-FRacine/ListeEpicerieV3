@@ -1,3 +1,5 @@
+import base64
+import binascii
 import json
 
 import db as _db
@@ -200,6 +202,51 @@ def export_family_backup(user_id, family_id):
                     (recipe["id"],),
                 )
                 ingredients = [dict(row) for row in cur.fetchall()]
+
+                cur.execute(
+                    """
+                    SELECT
+                        file_name,
+                        mime_type,
+                        image_data,
+                        image_width,
+                        image_height,
+                        image_size,
+                        thumbnail_data,
+                        thumbnail_width,
+                        thumbnail_height,
+                        thumbnail_size
+                    FROM grocery_recipe_photos
+                    WHERE recipe_id = %s;
+                    """,
+                    (recipe["id"],),
+                )
+                photo_row = cur.fetchone()
+                photo = None
+                if photo_row:
+                    image_data = photo_row["image_data"]
+                    thumbnail_data = photo_row["thumbnail_data"]
+                    if isinstance(image_data, memoryview):
+                        image_data = image_data.tobytes()
+                    if isinstance(thumbnail_data, memoryview):
+                        thumbnail_data = thumbnail_data.tobytes()
+                    photo = {
+                        "file_name": photo_row["file_name"],
+                        "mime_type": photo_row["mime_type"],
+                        "image_width": photo_row["image_width"],
+                        "image_height": photo_row["image_height"],
+                        "image_size": photo_row["image_size"],
+                        "thumbnail_width": photo_row["thumbnail_width"],
+                        "thumbnail_height": photo_row["thumbnail_height"],
+                        "thumbnail_size": photo_row["thumbnail_size"],
+                        "image_data_base64": base64.b64encode(
+                            bytes(image_data)
+                        ).decode("ascii"),
+                        "thumbnail_data_base64": base64.b64encode(
+                            bytes(thumbnail_data)
+                        ).decode("ascii"),
+                    }
+
                 recipes.append(
                     {
                         "name": recipe["name"],
@@ -207,6 +254,7 @@ def export_family_backup(user_id, family_id):
                         "instructions": recipe["instructions"],
                         "servings": recipe["servings"],
                         "recipe_extra": recipe["recipe_extra"] or {},
+                        "photo": photo,
                         "recipe_category": recipe["recipe_category"] or "",
                         "recipe_category_parent": (
                             recipe["recipe_category_parent"] or ""
@@ -406,12 +454,19 @@ def _recipe_values(recipe):
     if not isinstance(recipe_extra, dict):
         recipe_extra = {}
 
+    photo = recipe.get("photo")
+    if photo is not None and not isinstance(photo, dict):
+        raise ValueError(
+            f"La photo de la recette « {name} » est invalide."
+        )
+
     return {
         "name": name,
         "description": str(recipe.get("description") or "").strip(),
         "instructions": str(recipe.get("instructions") or "").strip(),
         "servings": servings,
         "recipe_extra": recipe_extra,
+        "photo": photo,
         "recipe_category": str(
             recipe.get("recipe_category") or ""
         ).strip(),
@@ -1112,6 +1167,77 @@ def import_family_backup(
                             ingredient["quantity"],
                             ingredient["note"],
                             ingredient["sort_order"] or position * 10,
+                        ),
+                    )
+
+                photo = recipe.get("photo")
+                if photo:
+                    try:
+                        image_data = base64.b64decode(
+                            str(photo.get("image_data_base64") or ""),
+                            validate=True,
+                        )
+                        thumbnail_data = base64.b64decode(
+                            str(photo.get("thumbnail_data_base64") or ""),
+                            validate=True,
+                        )
+                    except (ValueError, binascii.Error) as error:
+                        raise ValueError(
+                            f"La photo sauvegardée de « {recipe['name']} » "
+                            "est invalide."
+                        ) from error
+
+                    if not image_data or not thumbnail_data:
+                        raise ValueError(
+                            f"La photo sauvegardée de « {recipe['name']} » "
+                            "est incomplète."
+                        )
+
+                    cur.execute(
+                        """
+                        INSERT INTO grocery_recipe_photos (
+                            recipe_id,
+                            file_name,
+                            mime_type,
+                            image_data,
+                            image_width,
+                            image_height,
+                            image_size,
+                            thumbnail_data,
+                            thumbnail_width,
+                            thumbnail_height,
+                            thumbnail_size
+                        )
+                        VALUES (
+                            %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s, %s
+                        )
+                        ON CONFLICT (recipe_id)
+                        DO UPDATE SET
+                            file_name = EXCLUDED.file_name,
+                            mime_type = EXCLUDED.mime_type,
+                            image_data = EXCLUDED.image_data,
+                            image_width = EXCLUDED.image_width,
+                            image_height = EXCLUDED.image_height,
+                            image_size = EXCLUDED.image_size,
+                            thumbnail_data = EXCLUDED.thumbnail_data,
+                            thumbnail_width = EXCLUDED.thumbnail_width,
+                            thumbnail_height = EXCLUDED.thumbnail_height,
+                            thumbnail_size = EXCLUDED.thumbnail_size,
+                            updated_at = NOW();
+                        """,
+                        (
+                            recipe_id,
+                            photo.get("file_name"),
+                            photo.get("mime_type") or "image/jpeg",
+                            image_data,
+                            photo.get("image_width"),
+                            photo.get("image_height"),
+                            photo.get("image_size") or len(image_data),
+                            thumbnail_data,
+                            photo.get("thumbnail_width"),
+                            photo.get("thumbnail_height"),
+                            photo.get("thumbnail_size") or len(thumbnail_data),
                         ),
                     )
 

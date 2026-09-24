@@ -10,7 +10,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 |---|---:|
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
-| Recettes | 1.3.1 |
+| Recettes | 1.4.0 |
 | Journal de pression | 1.2.3 |
 | Finances | 1.14.3 |
 | Personnages JDR | 1.10.0 |
@@ -184,6 +184,22 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation locale réussie : **9 tests ciblés Journal**, **528 tests JF Apps** et compilation Python complète.
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
+
+## Recettes — V1.4.0 / photos et simplification de l’interface — 2026-09-24
+
+- Base GitHub vérifiée avant développement : `408f7df74c7e8412985d1b4bd973e61e2b302f3d` (`main`), Recettes V1.3.1.
+- La publication existante vers la **Bibliothèque partagée** est conservée sans modification.
+- Ajout d’une **photo principale par recette**, indépendante des photos JDR mais basée sur le même principe de validation et d’optimisation.
+- JPEG, PNG et WEBP acceptés; fichier source limité à 8 Mo et 25 mégapixels; orientation EXIF, conversion JPEG, maximum 1200 px et compression contrôlée sous environ 900 Ko.
+- Une vignette séparée de 320 px est enregistrée et utilisée dans la liste afin de réduire le poids de l’interface.
+- Le bouton **Consulter** est déplacé dans l’en-tête de la recette, à gauche du nom; la vignette apparaît entre le bouton et le titre lorsqu’elle existe.
+- La photo pleine grandeur est affichée dans **Consulter** et dans le **Mode cuisine**.
+- La fenêtre **Importer depuis ChatGPT** replie le JSON brut par défaut; l’aperçu de confirmation reste prioritaire.
+- L’ancien bouton **Importer mon ancien site** est supprimé. Les anciens modules Google Sites sont réduits à des fichiers historiques sans logique réseau et leurs tests de parsing sont retirés.
+- La sauvegarde/restauration familiale inclut l’image et la vignette en Base64.
+- Nouvelle table `grocery_recipe_photos`, créée automatiquement et idempotente avec `ON DELETE CASCADE`; aucun SQL manuel et aucune nouvelle dépendance.
+- Cette version prépare la future publication dynamique des recettes et de leurs photos vers le site public, mais cette liaison publique n’est pas encore ajoutée ici.
+- Validation locale complète à effectuer par l’installateur; validation navigateur/Canner/PostgreSQL de production à confirmer après publication.
 
 ## Recettes — V1.3.1 / compatibilité nutrition ChatGPT enrichie — 2026-09-24
 

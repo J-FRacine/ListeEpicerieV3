@@ -101,10 +101,15 @@ def open_chatgpt_recipe_import_dialog(
                 "un aperçu avant toute écriture."
             ).classes("text-sm text-gray-600")
 
-            json_input = ui.textarea(
-                label="JSON de la recette",
-                placeholder='{"format":"jf_apps_recipe_import","version":1,...}',
-            ).props("autogrow").classes("w-full font-mono")
+            with ui.expansion(
+                "Coller du JSON ou voir le JSON source",
+                icon="code",
+                value=False,
+            ).classes("w-full") as json_source_expansion:
+                json_input = ui.textarea(
+                    label="JSON de la recette",
+                    placeholder='{"format":"jf_apps_recipe_import","version":1,...}',
+                ).props("autogrow").classes("w-full font-mono")
 
             async def on_upload(event):
                 try:
@@ -194,6 +199,8 @@ def open_chatgpt_recipe_import_dialog(
 
                 state["candidate"] = candidate
                 state["preview"] = preview
+                json_source_expansion.value = False
+                json_source_expansion.update()
                 preview_box.clear()
 
                 extra = candidate.get("extra") or {}

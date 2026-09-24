@@ -47,6 +47,7 @@ def build_recipe_reader(
     recipe,
     ingredients,
     extras=None,
+    photo_data_url=None,
     on_add_to_needs,
     summary_message,
 ):
@@ -184,6 +185,13 @@ def build_recipe_reader(
                     "flat round color=primary"
                 ).tooltip("Quitter le mode cuisine")
 
+            if photo_data_url:
+                ui.image(
+                    photo_data_url
+                ).classes(
+                    "w-full max-h-[38vh] rounded-xl mt-3"
+                ).props("fit=contain")
+
             with ui.element("div").classes(
                 "w-full grid grid-cols-1 lg:grid-cols-2 gap-5 mt-3"
             ):
@@ -258,6 +266,13 @@ def build_recipe_reader(
                             "text-sm text-gray-600 whitespace-normal"
                         ).style("overflow-wrap:anywhere;")
                 ui.button(icon="close", on_click=reader_dialog.close).props("flat round")
+
+            if photo_data_url:
+                ui.image(
+                    photo_data_url
+                ).classes(
+                    "w-full max-h-[420px] rounded-xl mt-3"
+                ).props("fit=contain")
 
             with ui.element("div").classes(
                 "w-full grid grid-cols-1 md:grid-cols-2 gap-5 mt-3"

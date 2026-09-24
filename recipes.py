@@ -38,8 +38,13 @@ from recipes_extras import (
     save_recipe_metadata,
 )
 from recipes_extras_ui import open_nutrition_dialog
+from recipes_photo_data import (
+    get_recipe_photo,
+    get_recipe_photo_thumbnails,
+)
+from recipes_photo_images import recipe_photo_to_data_url
+from recipes_photo_ui import open_recipe_photo_dialog
 from recipes_reader import build_recipe_reader, recipe_matches
-from recipes_site_import_ui import open_recipe_site_import_dialog
 from state import get_current_family_id, set_current_family_id
 from utils import ensure_family_selected
 
@@ -308,16 +313,6 @@ def recipes_panel():
 
     with ui.row().classes("w-full gap-2 flex-wrap mt-2"):
         ui.button(
-            "Importer mon ancien site",
-            icon="cloud_download",
-            on_click=lambda: open_recipe_site_import_dialog(
-                user_id=user_id,
-                family_id=family_id,
-                on_imported=render_recipes.refresh,
-            ),
-        ).props("outline color=primary")
-
-        ui.button(
             "Importer depuis ChatGPT",
             icon="data_object",
             on_click=lambda: open_chatgpt_recipe_import_dialog(
@@ -469,6 +464,10 @@ def recipes_panel():
         recipe_rows = get_recipes(user_id, family_id)
         items = get_items(user_id, family_id)
         options = _item_options(items)
+        photo_thumbnails = get_recipe_photo_thumbnails(
+            user_id,
+            family_id,
+        )
 
         current_category_rows = list_recipe_categories(user_id, family_id)
         category_assignments = get_recipe_category_assignments(
@@ -538,23 +537,103 @@ def recipes_panel():
                 category_assignment.get("category_path") or ""
             )
 
+            recipe_thumbnail = photo_thumbnails.get(
+                int(recipe_id)
+            )
+            recipe_thumbnail_url = recipe_photo_to_data_url(
+                recipe_thumbnail
+            )
+
+            def consult_selected(
+                selected_recipe=recipe,
+                selected_ingredients=ingredients,
+                selected_extras=recipe_extras,
+            ):
+                try:
+                    full_photo = get_recipe_photo(
+                        user_id,
+                        selected_recipe["id"],
+                    )
+                except Exception as error:
+                    ui.notify(
+                        f"La photo n’a pas pu être chargée : {error}",
+                        type="warning",
+                    )
+                    full_photo = None
+
+                build_recipe_reader(
+                    ui=ui,
+                    recipe=selected_recipe,
+                    ingredients=selected_ingredients,
+                    extras=selected_extras,
+                    photo_data_url=recipe_photo_to_data_url(
+                        full_photo
+                    ),
+                    on_add_to_needs=lambda selected_id=selected_recipe["id"]: apply_recipe_to_needs(
+                        user_id,
+                        selected_id,
+                    ),
+                    summary_message=_summary_message,
+                )
+
             with ui.expansion(
-                text=recipe["name"],
-                caption=_recipe_caption(
-                    recipe["servings"],
-                    ingredient_count,
-                    category_text,
-                ),
-                icon="restaurant",
                 value=recipe_id in open_recipe_ids,
                 on_value_change=(
                     lambda event, selected_recipe_id=recipe_id: save_recipe_open_state(
-                        selected_recipe_id, bool(event.value)
+                        selected_recipe_id,
+                        bool(event.value),
                     )
                 ),
             ).props("expand-separator").classes(
                 "w-full bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-3"
-            ):
+            ) as recipe_expansion:
+                with recipe_expansion.add_slot("header"):
+                    with ui.row().classes(
+                        "w-full items-center gap-3 flex-nowrap"
+                    ):
+                        consult_button = ui.button(
+                            "Consulter",
+                            icon="menu_book",
+                            on_click=consult_selected,
+                        ).props(
+                            "color=primary dense no-caps"
+                        ).classes("shrink-0")
+                        consult_button.on(
+                            "click",
+                            js_handler="event.stopPropagation()",
+                        )
+
+                        if recipe_thumbnail_url:
+                            ui.image(
+                                recipe_thumbnail_url
+                            ).classes(
+                                "w-14 h-14 rounded-lg shrink-0"
+                            ).props("fit=cover")
+                        else:
+                            ui.icon("restaurant").classes(
+                                "text-2xl text-primary shrink-0"
+                            )
+
+                        with ui.column().classes(
+                            "gap-0 min-w-0 grow"
+                        ):
+                            ui.label(
+                                recipe["name"]
+                            ).classes(
+                                "text-base font-medium whitespace-normal"
+                            ).style(
+                                "overflow-wrap:anywhere;"
+                            )
+                            ui.label(
+                                _recipe_caption(
+                                    recipe["servings"],
+                                    ingredient_count,
+                                    category_text,
+                                )
+                            ).classes(
+                                "text-sm text-gray-500 whitespace-normal"
+                            )
+
                 with ui.column().classes("w-full gap-3 px-2 pb-3"):
                     if recipe["description"]:
                         ui.label(recipe["description"]).classes(
@@ -593,26 +672,6 @@ def recipes_panel():
                                 ).classes("text-xs")
 
                     with ui.row().classes("w-full items-center gap-2 flex-wrap"):
-                        def apply_selected(selected=recipe):
-                            return apply_recipe_to_needs(user_id, selected["id"])
-
-                        ui.button(
-                            "Consulter",
-                            icon="menu_book",
-                            on_click=lambda selected_recipe=recipe, selected_ingredients=ingredients, selected_extras=recipe_extras: (
-                                build_recipe_reader(
-                                    ui=ui,
-                                    recipe=selected_recipe,
-                                    ingredients=selected_ingredients,
-                                    extras=selected_extras,
-                                    on_add_to_needs=lambda selected_id=selected_recipe["id"]: apply_recipe_to_needs(
-                                        user_id, selected_id
-                                    ),
-                                    summary_message=_summary_message,
-                                )
-                            ),
-                        ).props("color=primary")
-
                         def add_selected_to_needs(selected=recipe):
                             try:
                                 result = apply_recipe_to_needs(user_id, selected["id"])
@@ -628,6 +687,16 @@ def recipes_panel():
                             icon="playlist_add",
                             on_click=add_selected_to_needs,
                         ).props("outline color=positive")
+
+                        ui.button(
+                            "Photo",
+                            icon="photo_camera",
+                            on_click=lambda selected=recipe: open_recipe_photo_dialog(
+                                user_id=user_id,
+                                recipe=selected,
+                                on_saved=render_recipes.refresh,
+                            ),
+                        ).props("flat color=primary")
 
                         ui.button(
                             "Valeurs nutritives",

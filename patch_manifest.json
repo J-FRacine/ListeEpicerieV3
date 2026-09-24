@@ -1,0 +1,275 @@
+[
+  {
+    "op": "insert_before",
+    "file": "grocery_schema.py",
+    "marker": "            cur.execute(\n                \"\"\"\n                DROP INDEX IF EXISTS categories_family_name_unique;\n",
+    "addition": "            # Recettes V1.3.0 : métadonnées enrichies et nutrition.\n            # Un seul JSONB permet d'ajouter les données sans casser les\n            # recettes existantes ni multiplier les colonnes optionnelles.\n            cur.execute(\n                \"\"\"\n                ALTER TABLE grocery_recipes\n                ADD COLUMN IF NOT EXISTS recipe_extra JSONB\n                    NOT NULL DEFAULT '{}'::jsonb;\n                \"\"\"\n            )\n\n",
+    "label": "schéma recipe_extra V1.3.0"
+  },
+  {
+    "op": "replace",
+    "file": "recipes.py",
+    "old": "from recipes_reader import build_recipe_reader, recipe_matches\nfrom recipes_site_import_ui import open_recipe_site_import_dialog\n",
+    "new": "from recipes_chatgpt_import_ui import open_chatgpt_recipe_import_dialog\nfrom recipes_extras import (\n    get_recipe_extras,\n    nutrition_short_label,\n    recipe_extra_search_text,\n    recipe_time_label,\n    save_recipe_metadata,\n)\nfrom recipes_extras_ui import open_nutrition_dialog\nfrom recipes_reader import build_recipe_reader, recipe_matches\nfrom recipes_site_import_ui import open_recipe_site_import_dialog\n",
+    "label": "imports Recettes V1.3.0"
+  },
+  {
+    "op": "replace",
+    "file": "recipes.py",
+    "old": "                ui.label(\n                    \"Sur ordinateur, utilisez cet écran pour préparer le contenu. Sur téléphone ou tablette, le bouton Consulter offre une lecture plus simple.\"\n                ).classes(\"text-xs text-gray-500\")\n\n                name_input = ui.input(\n",
+    "new": "                ui.label(\n                    \"Sur ordinateur, utilisez cet écran pour préparer le contenu. Sur téléphone ou tablette, le bouton Consulter offre une lecture plus simple.\"\n                ).classes(\"text-xs text-gray-500\")\n\n                extras = (\n                    get_recipe_extras(user_id, recipe[\"id\"])\n                    if recipe\n                    else {}\n                )\n                source = extras.get(\"source\") or {}\n\n                name_input = ui.input(\n",
+    "label": "chargement métadonnées recette"
+  },
+  {
+    "op": "replace",
+    "file": "recipes.py",
+    "old": "                description_input = ui.textarea(\n                    label=\"Description facultative\",\n                    value=recipe[\"description\"] if recipe else \"\",\n                    placeholder=\"Ex. Repas familial simple et économique\",\n                ).props(\"autogrow\").classes(\"w-full\")\n\n                instructions_input = ui.textarea(\n",
+    "new": "                description_input = ui.textarea(\n                    label=\"Description facultative\",\n                    value=recipe[\"description\"] if recipe else \"\",\n                    placeholder=\"Ex. Repas familial simple et économique\",\n                ).props(\"autogrow\").classes(\"w-full\")\n\n                with ui.row().classes(\"w-full gap-3 flex-wrap\"):\n                    prep_time_input = ui.number(\n                        label=\"Préparation (minutes)\",\n                        value=extras.get(\"prep_time_minutes\"),\n                        min=0,\n                        step=1,\n                    ).classes(\"grow min-w-[170px]\")\n                    cook_time_input = ui.number(\n                        label=\"Cuisson (minutes)\",\n                        value=extras.get(\"cook_time_minutes\"),\n                        min=0,\n                        step=1,\n                    ).classes(\"grow min-w-[170px]\")\n\n                tags_input = ui.input(\n                    label=\"Étiquettes facultatives\",\n                    value=\", \".join(extras.get(\"tags\") or []),\n                    placeholder=\"Ex. rapide, congélation, végétarien\",\n                ).classes(\"w-full\")\n\n                with ui.row().classes(\"w-full gap-3 flex-wrap\"):\n                    source_name_input = ui.input(\n                        label=\"Source facultative\",\n                        value=source.get(\"name\") or \"\",\n                        placeholder=\"Ex. ChatGPT, Ricardo, recette familiale\",\n                    ).classes(\"grow min-w-[220px]\")\n                    source_url_input = ui.input(\n                        label=\"Lien source facultatif\",\n                        value=source.get(\"url\") or \"\",\n                        placeholder=\"https://...\",\n                    ).classes(\"grow min-w-[280px]\")\n\n                instructions_input = ui.textarea(\n",
+    "label": "éditeur enrichi Recettes"
+  },
+  {
+    "op": "replace",
+    "file": "recipes.py",
+    "old": "                        set_recipe_category(\n                            user_id,\n                            saved_recipe_id,\n                            category_input.value,\n                        )\n",
+    "new": "                        set_recipe_category(\n                            user_id,\n                            saved_recipe_id,\n                            category_input.value,\n                        )\n                        save_recipe_metadata(\n                            user_id,\n                            saved_recipe_id,\n                            prep_time_minutes=prep_time_input.value,\n                            cook_time_minutes=cook_time_input.value,\n                            tags=tags_input.value,\n                            source_name=source_name_input.value,\n                            source_url=source_url_input.value,\n                        )\n",
+    "label": "sauvegarde métadonnées recette"
+  },
+  {
+    "op": "replace",
+    "file": "recipes.py",
+    "old": "        ui.button(\n            \"Importer mon ancien site\",\n            icon=\"cloud_download\",\n            on_click=lambda: open_recipe_site_import_dialog(\n                user_id=user_id,\n                family_id=family_id,\n                on_imported=render_recipes.refresh,\n            ),\n        ).props(\"outline color=primary\")\n\n",
+    "new": "        ui.button(\n            \"Importer mon ancien site\",\n            icon=\"cloud_download\",\n            on_click=lambda: open_recipe_site_import_dialog(\n                user_id=user_id,\n                family_id=family_id,\n                on_imported=render_recipes.refresh,\n            ),\n        ).props(\"outline color=primary\")\n\n        ui.button(\n            \"Importer depuis ChatGPT\",\n            icon=\"data_object\",\n            on_click=lambda: open_chatgpt_recipe_import_dialog(\n                user_id=user_id,\n                family_id=family_id,\n                on_imported=render_recipes.refresh,\n            ),\n        ).props(\"outline color=primary\")\n\n",
+    "label": "bouton import ChatGPT"
+  },
+  {
+    "op": "replace",
+    "file": "recipes.py",
+    "old": "            placeholder=\"Nom, description, préparation, ingrédient ou catégorie\",\n",
+    "new": "            placeholder=\"Nom, description, préparation, ingrédient, catégorie ou étiquette\",\n",
+    "label": "recherche étiquettes"
+  },
+  {
+    "op": "replace",
+    "file": "recipes.py",
+    "old": "        for recipe in recipe_rows:\n            ingredients = get_recipe_ingredients(user_id, recipe[\"id\"])\n            assignment = category_assignments.get(int(recipe[\"id\"]), {})\n            assigned_category_id = assignment.get(\"category_id\")\n            if not category_matches_filter(\n                assigned_category_id,\n                search_state[\"category_id\"],\n                current_category_rows,\n            ):\n                continue\n            category_text = str(\n                assignment.get(\"category_path\") or \"\"\n            )\n            text_matches = recipe_matches(\n                recipe,\n                ingredients,\n                search_state[\"text\"],\n            ) or (\n                bool(query)\n                and query in category_text.casefold()\n            )\n            if text_matches:\n                details.append((recipe, ingredients, assignment))\n",
+    "new": "        for recipe in recipe_rows:\n            ingredients = get_recipe_ingredients(user_id, recipe[\"id\"])\n            assignment = category_assignments.get(int(recipe[\"id\"]), {})\n            extras = get_recipe_extras(user_id, recipe[\"id\"])\n            assigned_category_id = assignment.get(\"category_id\")\n            if not category_matches_filter(\n                assigned_category_id,\n                search_state[\"category_id\"],\n                current_category_rows,\n            ):\n                continue\n            category_text = str(\n                assignment.get(\"category_path\") or \"\"\n            )\n            text_matches = recipe_matches(\n                recipe,\n                ingredients,\n                search_state[\"text\"],\n            ) or (\n                bool(query)\n                and query in category_text.casefold()\n            ) or (\n                bool(query)\n                and query in recipe_extra_search_text(extras)\n            )\n            if text_matches:\n                details.append((recipe, ingredients, assignment, extras))\n",
+    "label": "chargement extras dans liste"
+  },
+  {
+    "op": "replace",
+    "file": "recipes.py",
+    "old": "        for recipe, ingredients, category_assignment in details:\n",
+    "new": "        for recipe, ingredients, category_assignment, recipe_extras in details:\n",
+    "label": "tuple extras recette"
+  },
+  {
+    "op": "replace",
+    "file": "recipes.py",
+    "old": "                    with ui.row().classes(\"w-full items-center gap-2 flex-wrap\"):\n                        def apply_selected(selected=recipe):\n",
+    "new": "                    time_label = recipe_time_label(recipe_extras)\n                    tags = recipe_extras.get(\"tags\") or []\n                    source = recipe_extras.get(\"source\") or {}\n                    nutrition = recipe_extras.get(\"nutrition\")\n\n                    with ui.row().classes(\"w-full items-center gap-2 flex-wrap\"):\n                        if time_label:\n                            ui.badge(time_label).props(\"outline color=primary\")\n                        for tag in tags:\n                            ui.badge(tag).props(\"outline color=secondary\")\n                        if nutrition:\n                            ui.badge(\n                                nutrition_short_label(\n                                    nutrition,\n                                    recipe[\"servings\"],\n                                )\n                            ).props(\"outline color=positive\")\n\n                    if source.get(\"name\") or source.get(\"url\"):\n                        with ui.row().classes(\"w-full gap-2 items-center flex-wrap\"):\n                            if source.get(\"name\"):\n                                ui.label(\n                                    \"Source : \" + source[\"name\"]\n                                ).classes(\"text-xs text-gray-500\")\n                            if source.get(\"url\"):\n                                ui.link(\n                                    \"Ouvrir la source\",\n                                    source[\"url\"],\n                                    new_tab=True,\n                                ).classes(\"text-xs\")\n\n                    with ui.row().classes(\"w-full items-center gap-2 flex-wrap\"):\n                        def apply_selected(selected=recipe):\n",
+    "label": "affichage métadonnées recette"
+  },
+  {
+    "op": "replace",
+    "file": "recipes.py",
+    "old": "                            on_click=lambda selected_recipe=recipe, selected_ingredients=ingredients: (\n",
+    "new": "                            on_click=lambda selected_recipe=recipe, selected_ingredients=ingredients, selected_extras=recipe_extras: (\n",
+    "label": "capture extras dans bouton Consulter"
+  },
+  {
+    "op": "replace",
+    "file": "recipes.py",
+    "old": "                                build_recipe_reader(\n                                    ui=ui,\n                                    recipe=selected_recipe,\n                                    ingredients=selected_ingredients,\n                                    on_add_to_needs=lambda selected_id=selected_recipe[\"id\"]: apply_recipe_to_needs(\n                                        user_id, selected_id\n                                    ),\n                                    summary_message=_summary_message,\n                                )\n",
+    "new": "                                build_recipe_reader(\n                                    ui=ui,\n                                    recipe=selected_recipe,\n                                    ingredients=selected_ingredients,\n                                    extras=selected_extras,\n                                    on_add_to_needs=lambda selected_id=selected_recipe[\"id\"]: apply_recipe_to_needs(\n                                        user_id, selected_id\n                                    ),\n                                    summary_message=_summary_message,\n                                )\n",
+    "label": "lecteur avec nutrition/métadonnées"
+  },
+  {
+    "op": "insert_before",
+    "file": "recipes.py",
+    "marker": "                        ui.button(\n                            icon=\"edit\",\n                            on_click=lambda selected=recipe: recipe_form(\n",
+    "addition": "                        ui.button(\n                            \"Valeurs nutritives\",\n                            icon=\"monitor_weight\",\n                            on_click=lambda selected=recipe: open_nutrition_dialog(\n                                user_id=user_id,\n                                recipe=selected,\n                                on_saved=render_recipes.refresh,\n                            ),\n                        ).props(\"flat color=primary\")\n\n",
+    "label": "bouton nutrition"
+  },
+  {
+    "op": "insert_before",
+    "file": "recipes_reader.py",
+    "marker": "def instruction_steps(value):\n",
+    "addition": "from recipes_extras import nutrition_rows, recipe_time_label\n\n\n",
+    "label": "import nutrition lecteur"
+  },
+  {
+    "op": "replace",
+    "file": "recipes_reader.py",
+    "old": "    ingredients,\n    on_add_to_needs,\n    summary_message,\n):\n",
+    "new": "    ingredients,\n    extras=None,\n    on_add_to_needs,\n    summary_message,\n):\n",
+    "label": "signature lecteur extras"
+  },
+  {
+    "op": "replace",
+    "file": "recipes_reader.py",
+    "old": "    \"\"\"Ouvre une lecture adaptée au téléphone/tablette et un mode cuisine.\"\"\"\n    steps = instruction_steps(recipe.get(\"instructions\"))\n",
+    "new": "    \"\"\"Ouvre une lecture adaptée au téléphone/tablette et un mode cuisine.\"\"\"\n    steps = instruction_steps(recipe.get(\"instructions\"))\n    extras = extras or {}\n    time_label = recipe_time_label(extras)\n    tags = extras.get(\"tags\") or []\n    source = extras.get(\"source\") or {}\n    nutrition = extras.get(\"nutrition\")\n    nutrition_table = nutrition_rows(\n        nutrition,\n        recipe.get(\"servings\"),\n    )\n\n    def render_extra_summary():\n        with ui.row().classes(\"gap-2 flex-wrap items-center\"):\n            if time_label:\n                ui.badge(time_label).props(\"outline color=primary\")\n            for tag in tags:\n                ui.badge(tag).props(\"outline color=secondary\")\n            if nutrition and nutrition.get(\"estimated\"):\n                ui.badge(\"Nutrition estimée\").props(\n                    \"outline color=orange\"\n                )\n\n    def render_nutrition():\n        if not nutrition_table:\n            return\n        ui.separator()\n        ui.label(\"Valeurs nutritives\").classes(\"text-lg font-bold\")\n        ui.label(\n            \"Valeurs approximatives\"\n            if nutrition and nutrition.get(\"estimated\")\n            else \"Valeurs enregistrées\"\n        ).classes(\"text-xs text-gray-500\")\n        with ui.card().classes(\"w-full p-3 shadow-none bg-gray-50\"):\n            with ui.row().classes(\n                \"w-full gap-2 items-center font-bold text-sm\"\n            ):\n                ui.label(\"Nutriment\").classes(\"grow\")\n                ui.label(\"Par portion\").classes(\"w-28 text-right\")\n                ui.label(\"Recette\").classes(\"w-28 text-right\")\n            for row in nutrition_table:\n                with ui.row().classes(\n                    \"w-full gap-2 items-center text-sm py-1\"\n                ):\n                    ui.label(row[\"label\"]).classes(\"grow\")\n                    ui.label(row[\"per_serving_text\"]).classes(\n                        \"w-28 text-right\"\n                    )\n                    ui.label(row[\"whole_recipe_text\"]).classes(\n                        \"w-28 text-right\"\n                    )\n",
+    "label": "initialisation lecteur enrichi"
+  },
+  {
+    "op": "insert_before",
+    "file": "recipes_reader.py",
+    "marker": "            ui.button(\n                \"Ajouter à la liste d’épicerie\",\n",
+    "addition": "            render_nutrition()\n\n",
+    "label": "nutrition mode cuisine"
+  },
+  {
+    "op": "insert_before",
+    "file": "recipes_reader.py",
+    "marker": "            with ui.row().classes(\"w-full justify-end gap-2 mt-4 flex-wrap\"):\n",
+    "addition": "            render_nutrition()\n\n",
+    "label": "nutrition lecteur normal"
+  },
+  {
+    "op": "replace",
+    "file": "grocery_backup.py",
+    "old": "import db as _db\n\n",
+    "new": "import json\n\nimport db as _db\n\n",
+    "label": "import json sauvegarde recettes"
+  },
+  {
+    "op": "replace",
+    "file": "grocery_backup.py",
+    "old": "                    recipe.instructions,\n                    recipe.servings,\n                    category.name AS recipe_category,\n",
+    "new": "                    recipe.instructions,\n                    recipe.servings,\n                    recipe.recipe_extra,\n                    category.name AS recipe_category,\n",
+    "label": "export recipe_extra SELECT"
+  },
+  {
+    "op": "replace",
+    "file": "grocery_backup.py",
+    "old": "                        \"servings\": recipe[\"servings\"],\n                        \"recipe_category\": recipe[\"recipe_category\"] or \"\",\n",
+    "new": "                        \"servings\": recipe[\"servings\"],\n                        \"recipe_extra\": recipe[\"recipe_extra\"] or {},\n                        \"recipe_category\": recipe[\"recipe_category\"] or \"\",\n",
+    "label": "export recipe_extra dict"
+  },
+  {
+    "op": "replace",
+    "file": "grocery_backup.py",
+    "old": "    return {\n        \"name\": name,\n        \"description\": str(recipe.get(\"description\") or \"\").strip(),\n        \"instructions\": str(recipe.get(\"instructions\") or \"\").strip(),\n        \"servings\": servings,\n",
+    "new": "    recipe_extra = recipe.get(\"recipe_extra\") or {}\n    if not isinstance(recipe_extra, dict):\n        recipe_extra = {}\n\n    return {\n        \"name\": name,\n        \"description\": str(recipe.get(\"description\") or \"\").strip(),\n        \"instructions\": str(recipe.get(\"instructions\") or \"\").strip(),\n        \"servings\": servings,\n        \"recipe_extra\": recipe_extra,\n",
+    "label": "lecture recipe_extra sauvegarde"
+  },
+  {
+    "op": "replace",
+    "file": "grocery_backup.py",
+    "old": "                            instructions,\n                            servings,\n                            created_by_user_id\n                        )\n                        VALUES (%s, %s, %s, %s, %s, %s, %s)\n",
+    "new": "                            instructions,\n                            servings,\n                            recipe_extra,\n                            created_by_user_id\n                        )\n                        VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s)\n",
+    "label": "insert recipe_extra restauration"
+  },
+  {
+    "op": "replace",
+    "file": "grocery_backup.py",
+    "old": "                            recipe[\"instructions\"],\n                            recipe[\"servings\"],\n                            user_id,\n",
+    "new": "                            recipe[\"instructions\"],\n                            recipe[\"servings\"],\n                            json.dumps(\n                                recipe[\"recipe_extra\"],\n                                ensure_ascii=False,\n                            ),\n                            user_id,\n",
+    "label": "valeur recipe_extra insert"
+  },
+  {
+    "op": "replace",
+    "file": "grocery_backup.py",
+    "old": "                            instructions = %s,\n                            servings = %s,\n                            updated_at = NOW()\n",
+    "new": "                            instructions = %s,\n                            servings = %s,\n                            recipe_extra = %s::jsonb,\n                            updated_at = NOW()\n",
+    "label": "update recipe_extra restauration"
+  },
+  {
+    "op": "replace",
+    "file": "grocery_backup.py",
+    "old": "                            recipe[\"instructions\"],\n                            recipe[\"servings\"],\n                            recipe_id,\n",
+    "new": "                            recipe[\"instructions\"],\n                            recipe[\"servings\"],\n                            json.dumps(\n                                recipe[\"recipe_extra\"],\n                                ensure_ascii=False,\n                            ),\n                            recipe_id,\n",
+    "label": "paramètres recipe_extra update"
+  },
+  {
+    "op": "replace",
+    "file": "app_versions.py",
+    "old": "    \"recipes\": \"1.2.1\",\n",
+    "new": "    \"recipes\": \"1.3.0\",\n",
+    "label": "version Recettes V1.3.0"
+  },
+  {
+    "op": "replace",
+    "file": "app_versions.py",
+    "old": "RELEASE_NOTES = [\n",
+    "new": "RELEASE_NOTES = [\n    {\n        \"app_key\": \"recipes\",\n        \"version\": \"1.3.0\",\n        \"date\": \"2026-09-24\",\n        \"title\": \"Recettes — V1.3.0 — import ChatGPT et valeurs nutritives\",\n        \"summary\": (\n            \"Recettes peut importer le format JSON JF Apps généré par ChatGPT \"\n            \"et conserver un tableau nutritionnel facultatif par recette.\"\n        ),\n        \"changes\": [\n            \"Nouvelle action Importer depuis ChatGPT avec JSON collé ou fichier .json, aperçu obligatoire et détection des doublons.\",\n            \"Format stable jf_apps_recipe_import version 1 : nom, portions, catégorie/sous-catégorie, étiquettes, temps, ingrédients, étapes, source et nutrition.\",\n            \"Les items d’épicerie existants sont réutilisés; les items manquants peuvent être créés de façon contrôlée.\",\n            \"Tableau nutritionnel facultatif avec calories, protéines, glucides, sucres, fibres, lipides, gras saturés, sodium et cholestérol.\",\n            \"Les valeurs peuvent être saisies par portion ou pour la recette complète; JF Apps affiche automatiquement les deux lectures.\",\n            \"Les valeurs importées peuvent être marquées comme estimées; le tableau reste modifiable manuellement après import.\",\n            \"Éditeur de recette enrichi avec temps de préparation/cuisson, étiquettes et source facultative.\",\n            \"La sauvegarde/restauration familiale conserve les nouvelles métadonnées et la nutrition.\",\n            \"Migration PostgreSQL automatique : ajout idempotent de recipe_extra JSONB; aucun SQL manuel et aucune nouvelle dépendance.\",\n        ],\n    },\n",
+    "label": "note de version Recettes V1.3.0"
+  },
+  {
+    "op": "replace",
+    "file": "tests/test_recipes_v1.py",
+    "old": "\"recipes\": \"1.2.1\"",
+    "new": "\"recipes\": \"1.3.0\"",
+    "label": "version dans tests/test_recipes_v1.py"
+  },
+  {
+    "op": "replace",
+    "file": "tests/test_recipes_v120.py",
+    "old": "\"recipes\": \"1.2.1\"",
+    "new": "\"recipes\": \"1.3.0\"",
+    "label": "version dans tests/test_recipes_v120.py"
+  },
+  {
+    "op": "replace",
+    "file": "manual.py",
+    "old": "\"title\": \"Recettes — V1.2.1\",",
+    "new": "\"title\": \"Recettes — V1.3.0\",",
+    "label": "titre manuel Recettes V1.3.0"
+  },
+  {
+    "op": "replace",
+    "file": "manual.py",
+    "old": "            \"catégories sous-catégories supprimer plusieurs sélection\"\n",
+    "new": "            \"catégories sous-catégories supprimer plusieurs sélection \"\n            \"chatgpt json nutrition nutritif calories protéines glucides \"\n            \"temps cuisson préparation étiquettes source\"\n",
+    "label": "mots-clés manuel Recettes V1.3.0"
+  },
+  {
+    "op": "replace",
+    "file": "manual.py",
+    "old": "        \"content\": \"\"\"\n### V1.2.1 — correction des pages avec Ingrédients mais sans titre Préparation\n",
+    "new": "        \"content\": \"\"\"\n### V1.3.0 — import ChatGPT et tableau nutritionnel\n\nRecettes accepte maintenant le format JSON **`jf_apps_recipe_import` version 1**. Utilisez **Importer depuis ChatGPT**, puis collez le JSON fourni par ChatGPT ou choisissez un fichier `.json`. L’application affiche un aperçu avant l’import et n’écrase jamais silencieusement une recette portant déjà le même nom.\n\nLe format peut contenir le nom, la description, les portions, la catégorie et sous-catégorie, des étiquettes, les temps de préparation et de cuisson, les ingrédients structurés, les étapes ordonnées, une source facultative et un tableau nutritionnel. Les identifiants internes JF Apps ne font jamais partie de ce format.\n\nLes ingrédients sont rapprochés des items existants de la famille. Les items manquants peuvent être créés dans une catégorie et un magasin choisis avant l’import. Les quantités culinaires et unités du JSON sont conservées comme précision de l’ingrédient afin de ne pas être perdues dans le modèle actuel de l’épicerie.\n\nChaque recette peut maintenant contenir un **tableau nutritionnel facultatif**. Le bouton **Valeurs nutritives** permet de saisir ou modifier : calories, protéines, glucides, sucres, fibres, lipides, gras saturés, sodium et cholestérol. Les valeurs peuvent être fournies **par portion** ou pour la **recette complète**; JF Apps calcule l’autre lecture automatiquement selon le nombre de portions.\n\nLorsque **Estimation** est cochée — ce sera normalement le cas pour les valeurs générées par ChatGPT — l’application l’indique clairement. Ces données demeurent informatives et peuvent être corrigées manuellement.\n\nL’éditeur de recette accepte également les **temps de préparation/cuisson**, les **étiquettes** et une **source** facultative. Ces informations sont visibles dans la consultation de la recette et peuvent participer à la recherche.\n\nLes nouvelles données sont stockées dans `recipe_extra` et incluses dans la sauvegarde/restauration familiale. La migration est automatique et idempotente; aucun SQL manuel n’est requis.\n\n### V1.2.1 — correction des pages avec Ingrédients mais sans titre Préparation\n",
+    "label": "section manuel V1.3.0"
+  },
+  {
+    "op": "replace",
+    "file": "manual.py",
+    "old": "L’architecture de cette première version autonome prépare les prochaines étapes : catégories et étiquettes propres aux recettes, étapes structurées et réordonnables, photos, et enrichissement de l’éditeur bureau. Ces fonctions ne sont pas encore ajoutées en V1.0.0.\n",
+    "new": "Les prochaines évolutions encore prévues concernent surtout les **étapes structurées et réordonnables** ainsi que les **photos de recettes**. Les catégories, étiquettes, métadonnées enrichies, import ChatGPT et valeurs nutritives sont maintenant disponibles dans les versions ultérieures.\n",
+    "label": "mise à jour travaux futurs Recettes"
+  },
+  {
+    "op": "replace",
+    "file": "PROJECT_STATUS.md",
+    "old": "Dernière mise à jour : 2026-09-22",
+    "new": "Dernière mise à jour : 2026-09-24",
+    "label": "date PROJECT_STATUS"
+  },
+  {
+    "op": "replace",
+    "file": "PROJECT_STATUS.md",
+    "old": "| Recettes | 1.2.1 |",
+    "new": "| Recettes | 1.3.0 |",
+    "label": "version Recettes PROJECT_STATUS"
+  },
+  {
+    "op": "insert_before",
+    "file": "PROJECT_STATUS.md",
+    "marker": "## Recettes — V1.2.1 / correction import pages hybrides — 2026-09-23\n",
+    "addition": "## Recettes — V1.3.0 / import ChatGPT et valeurs nutritives — 2026-09-24\n\n- Base GitHub vérifiée avant développement : `6ba8ce57ccfdbd08af8a376309454848714a1313` (`main`), Recettes V1.2.1.\n- Nouvelle action **Importer depuis ChatGPT** : JSON collé ou fichier `.json`, validation du schéma `jf_apps_recipe_import` version 1, aperçu obligatoire, détection des doublons et import sans identifiants internes.\n- Le format accepte : nom, description, portions, catégorie/sous-catégorie, étiquettes, temps de préparation/cuisson, ingrédients structurés, étapes ordonnées, source facultative et nutrition facultative.\n- Les ingrédients sont rapprochés des items existants; les items manquants peuvent être créés de façon contrôlée dans la catégorie/magasin d’épicerie choisis. Les quantités/unités culinaires restent conservées dans la précision de l’ingrédient.\n- Ajout d’un **tableau nutritionnel facultatif** : calories, protéines, glucides, sucres, fibres, lipides, gras saturés, sodium et cholestérol.\n- La base nutritionnelle peut être **par portion** ou **recette complète**; l’application affiche automatiquement les deux valeurs à partir du nombre de portions. Le marqueur **Estimation** distingue les valeurs approximatives, notamment celles générées par ChatGPT.\n- L’éditeur de recette gère maintenant temps de préparation, temps de cuisson, étiquettes et source. Ces métadonnées sont affichées dans la liste/consultation et incluses dans la recherche.\n- Stockage non destructif dans `grocery_recipes.recipe_extra` (JSONB), ajouté automatiquement et de façon idempotente. Aucun SQL manuel et aucune nouvelle dépendance.\n- Sauvegarde/restauration familiale étendue à `recipe_extra`, ce qui conserve nutrition, étiquettes, temps et source.\n- Les étapes importées sont conservées dans l’ordre dans le champ de préparation existant afin de préserver la compatibilité actuelle. Les étapes réellement structurées/réordonnables et les photos restent des évolutions ultérieures.\n- Validation locale complète à effectuer par l’installateur; validation navigateur/Canner/PostgreSQL de production à confirmer après publication.\n\n",
+    "label": "section PROJECT_STATUS V1.3.0"
+  },
+  {
+    "op": "replace",
+    "file": "recipes_reader.py",
+    "old": "                with ui.column().classes(\"gap-0 min-w-0 grow\"):\n                    ui.label(recipe[\"name\"]).classes(\n                        \"text-2xl sm:text-3xl font-bold whitespace-normal\"\n                    ).style(\"overflow-wrap:anywhere;\")\n                    ui.label(\n                        \"1 portion\" if recipe[\"servings\"] == 1 else f\"{recipe['servings']} portions\"\n                    ).classes(\"text-sm text-gray-500\")\n                async def close_cooking():\n",
+    "new": "                with ui.column().classes(\"gap-0 min-w-0 grow\"):\n                    ui.label(recipe[\"name\"]).classes(\n                        \"text-2xl sm:text-3xl font-bold whitespace-normal\"\n                    ).style(\"overflow-wrap:anywhere;\")\n                    ui.label(\n                        \"1 portion\" if recipe[\"servings\"] == 1 else f\"{recipe['servings']} portions\"\n                    ).classes(\"text-sm text-gray-500\")\n                    render_extra_summary()\n                async def close_cooking():\n",
+    "label": "résumé extras mode cuisine unique"
+  },
+  {
+    "op": "replace",
+    "file": "recipes_reader.py",
+    "old": "                with ui.column().classes(\"gap-1 min-w-0 grow\"):\n                    ui.label(recipe[\"name\"]).classes(\n                        \"text-2xl font-bold whitespace-normal\"\n                    ).style(\"overflow-wrap:anywhere;\")\n                    ui.label(\n                        \"1 portion\" if recipe[\"servings\"] == 1 else f\"{recipe['servings']} portions\"\n                    ).classes(\"text-sm text-gray-500\")\n                    if recipe.get(\"description\"):\n",
+    "new": "                with ui.column().classes(\"gap-1 min-w-0 grow\"):\n                    ui.label(recipe[\"name\"]).classes(\n                        \"text-2xl font-bold whitespace-normal\"\n                    ).style(\"overflow-wrap:anywhere;\")\n                    ui.label(\n                        \"1 portion\" if recipe[\"servings\"] == 1 else f\"{recipe['servings']} portions\"\n                    ).classes(\"text-sm text-gray-500\")\n                    render_extra_summary()\n                    if source.get(\"name\"):\n                        ui.label(\n                            \"Source : \" + source[\"name\"]\n                        ).classes(\"text-xs text-gray-500\")\n                    if source.get(\"url\"):\n                        ui.link(\n                            \"Ouvrir la source\",\n                            source[\"url\"],\n                            new_tab=True,\n                        ).classes(\"text-xs\")\n                    if recipe.get(\"description\"):\n",
+    "label": "résumé extras lecteur normal unique"
+  }
+]

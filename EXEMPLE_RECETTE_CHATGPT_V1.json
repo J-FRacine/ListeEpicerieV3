@@ -1,0 +1,49 @@
+{
+  "format": "jf_apps_recipe_import",
+  "version": 1,
+  "recipe": {
+    "name": "Nom de la recette",
+    "description": "Courte description",
+    "servings": 4,
+    "category": "Desserts",
+    "subcategory": "",
+    "tags": [
+      "congélation",
+      "dessert"
+    ],
+    "prep_time_minutes": 20,
+    "cook_time_minutes": 30,
+    "ingredients": [
+      {
+        "name": "Farine",
+        "quantity": 1.5,
+        "unit": "tasse",
+        "note": "",
+        "order": 1
+      }
+    ],
+    "steps": [
+      {
+        "order": 1,
+        "text": "Préchauffer le four."
+      }
+    ],
+    "source": {
+      "name": "ChatGPT",
+      "url": ""
+    },
+    "nutrition": {
+      "basis": "per_serving",
+      "estimated": true,
+      "calories_kcal": 285,
+      "protein_g": 8.5,
+      "carbohydrates_g": 31.2,
+      "sugars_g": 14.7,
+      "fiber_g": 4.1,
+      "fat_g": 15.3,
+      "saturated_fat_g": 6.2,
+      "sodium_mg": 210,
+      "cholesterol_mg": 42
+    }
+  }
+}

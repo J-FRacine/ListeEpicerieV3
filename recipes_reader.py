@@ -83,6 +83,14 @@ def build_recipe_reader(
             if nutrition and nutrition.get("estimated")
             else "Valeurs enregistrées"
         ).classes("text-xs text-gray-500")
+        if nutrition and nutrition.get("serving_size"):
+            ui.label(
+                "Portion : " + nutrition["serving_size"]
+            ).classes("text-xs text-gray-500")
+        if nutrition and nutrition.get("basis_note"):
+            ui.label(
+                nutrition["basis_note"]
+            ).classes("text-xs text-gray-500 whitespace-normal")
         with ui.card().classes("w-full p-3 shadow-none bg-gray-50"):
             with ui.row().classes(
                 "w-full gap-2 items-center font-bold text-sm"
@@ -101,6 +109,14 @@ def build_recipe_reader(
                     ui.label(row["whole_recipe_text"]).classes(
                         "w-28 text-right"
                     )
+        for nutrition_note in (
+            nutrition.get("notes") or []
+            if nutrition
+            else []
+        ):
+            ui.label(
+                "• " + nutrition_note
+            ).classes("text-xs text-gray-500 whitespace-normal")
 
     async def request_wake_lock():
         try:

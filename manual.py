@@ -177,7 +177,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Recettes — V1.3.0",
+        "title": "Recettes — V1.3.1",
         "icon": "restaurant_menu",
         "caption": "Créer, consulter, cuisiner et envoyer les ingrédients à l’épicerie",
         "keywords": (
@@ -189,6 +189,14 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "temps cuisson préparation étiquettes source"
         ),
         "content": """
+### V1.3.1 — compatibilité des tableaux nutritionnels ChatGPT
+
+L’import **Depuis ChatGPT** accepte maintenant deux formes de tableau nutritionnel dans `jf_apps_recipe_import` version 1 : la forme simple de V1.3.0 et une forme enrichie contenant des sous-blocs `per_serving` et `whole_recipe`, même lorsque `basis` contient une phrase descriptive.
+
+Lorsqu’un bloc `per_serving` est fourni, il sert de base et JF Apps calcule la recette complète selon le nombre de portions. Si seul `whole_recipe` est fourni, JF Apps calcule la valeur par portion. Les champs facultatifs `serving_size`, `notes` et la description libre de la base de calcul sont conservés. Une source utilisant `type: chatgpt` et `label` est aussi reconnue.
+
+Le format d’échange reste **version 1** et les anciens fichiers V1.3.0 restent compatibles. Aucune migration PostgreSQL n’est nécessaire.
+
 ### V1.3.0 — import ChatGPT et tableau nutritionnel
 
 Recettes accepte maintenant le format JSON **`jf_apps_recipe_import` version 1**. Utilisez **Importer depuis ChatGPT**, puis collez le JSON fourni par ChatGPT ou choisissez un fichier `.json`. L’application affiche un aperçu avant l’import et n’écrase jamais silencieusement une recette portant déjà le même nom.

@@ -259,8 +259,18 @@ def parse_recipe_import(value):
         source = {"name": source, "url": ""}
     if not isinstance(source, dict):
         raise ValueError("La source de la recette est invalide.")
+
+    source_name = (
+        source.get("name")
+        or source.get("label")
+        or (
+            "ChatGPT"
+            if str(source.get("type") or "").strip().casefold() == "chatgpt"
+            else ""
+        )
+    )
     source = {
-        "name": _clean_text(source.get("name"), 200),
+        "name": _clean_text(source_name, 200),
         "url": _clean_text(source.get("url"), 1000),
     }
 

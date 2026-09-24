@@ -10,7 +10,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 |---|---:|
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
-| Recettes | 1.3.0 |
+| Recettes | 1.3.1 |
 | Journal de pression | 1.2.3 |
 | Finances | 1.14.3 |
 | Personnages JDR | 1.10.0 |
@@ -184,6 +184,16 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation locale réussie : **9 tests ciblés Journal**, **528 tests JF Apps** et compilation Python complète.
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
+
+## Recettes — V1.3.1 / compatibilité nutrition ChatGPT enrichie — 2026-09-24
+
+- Base GitHub vérifiée : `59c5f37f18fdc152067b5527ad90b63f4cedb51c` (`main`), Recettes V1.3.0 et Journal V1.2.3.
+- Correction après validation réelle : un JSON avec une phrase dans `nutrition.basis` et des sous-blocs `whole_recipe` / `per_serving` était refusé.
+- Le normaliseur accepte maintenant le format simple V1.3.0 et le format enrichi; `per_serving` est privilégié lorsqu’il est fourni, sinon `whole_recipe` est accepté.
+- `serving_size`, les notes nutritionnelles et la description libre de la base de calcul sont conservés et affichés.
+- Les sources `type=chatgpt` / `label=...` sont reconnues.
+- L’éditeur manuel préserve ces métadonnées lors d’une modification.
+- Aucun changement de schéma, aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance.
 
 ## Recettes — V1.3.0 / import ChatGPT et valeurs nutritives — 2026-09-24
 

@@ -87,10 +87,15 @@ def open_nutrition_dialog(*, user_id, recipe, on_saved=None):
             preview = ui.column().classes("w-full gap-2")
 
             def refresh_preview():
-                candidate = {
-                    "basis": basis.value,
-                    "estimated": estimated.value,
-                }
+                candidate = dict(current)
+                candidate.pop("per_serving_values", None)
+                candidate.pop("whole_recipe_values", None)
+                candidate.update(
+                    {
+                        "basis": basis.value,
+                        "estimated": estimated.value,
+                    }
+                )
                 for key, _label, _unit in NUTRITION_FIELDS:
                     candidate[key] = inputs[key].value
                 preview.clear()
@@ -104,10 +109,15 @@ def open_nutrition_dialog(*, user_id, recipe, on_saved=None):
             ).props("flat color=primary")
 
             def save():
-                nutrition = {
-                    "basis": basis.value,
-                    "estimated": bool(estimated.value),
-                }
+                nutrition = dict(current)
+                nutrition.pop("per_serving_values", None)
+                nutrition.pop("whole_recipe_values", None)
+                nutrition.update(
+                    {
+                        "basis": basis.value,
+                        "estimated": bool(estimated.value),
+                    }
+                )
                 for key, _label, _unit in NUTRITION_FIELDS:
                     nutrition[key] = inputs[key].value
                 try:

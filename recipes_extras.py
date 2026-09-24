@@ -98,7 +98,7 @@ def normalize_nutrition(value):
     if not isinstance(value, dict):
         raise ValueError("Le tableau nutritionnel est invalide.")
 
-    basis = str(value.get("basis") or "per_serving").strip()
+    raw_basis = str(value.get("basis") or "").strip()
     aliases = {
         "per_serving": "per_serving",
         "par_portion": "per_serving",
@@ -107,18 +107,73 @@ def normalize_nutrition(value):
         "recette_complete": "whole_recipe",
         "total": "whole_recipe",
     }
-    basis = aliases.get(basis.casefold(), basis)
-    if basis not in BASIS_LABELS:
+    canonical_basis = aliases.get(raw_basis.casefold())
+
+    per_serving = (
+        value.get("per_serving")
+        if isinstance(value.get("per_serving"), dict)
+        else value.get("per_serving_values")
+    )
+    whole_recipe = (
+        value.get("whole_recipe")
+        if isinstance(value.get("whole_recipe"), dict)
+        else value.get("whole_recipe_values")
+    )
+
+    if canonical_basis == "per_serving":
+        numeric_source = per_serving if isinstance(per_serving, dict) else value
+        basis = "per_serving"
+    elif canonical_basis == "whole_recipe":
+        numeric_source = whole_recipe if isinstance(whole_recipe, dict) else value
+        basis = "whole_recipe"
+    elif isinstance(per_serving, dict) and per_serving:
+        numeric_source = per_serving
+        basis = "per_serving"
+    elif isinstance(whole_recipe, dict) and whole_recipe:
+        numeric_source = whole_recipe
+        basis = "whole_recipe"
+    elif not raw_basis:
+        numeric_source = value
+        basis = "per_serving"
+    else:
         raise ValueError(
-            "La base nutritionnelle doit être « per_serving » "
-            "ou « whole_recipe »."
+            "La base nutritionnelle doit être « per_serving » ou "
+            "« whole_recipe », ou le tableau doit fournir un bloc "
+            "« per_serving » / « whole_recipe »."
         )
+
+    notes_value = value.get("notes")
+    if isinstance(notes_value, str):
+        notes = [
+            line.strip()
+            for line in notes_value.splitlines()
+            if line.strip()
+        ]
+    elif isinstance(notes_value, (list, tuple)):
+        notes = [
+            _clean_text(note, 500)
+            for note in notes_value
+            if _clean_text(note, 500)
+        ][:20]
+    else:
+        notes = []
 
     result = {
         "basis": basis,
         "estimated": bool(value.get("estimated", True)),
+        "serving_size": _clean_text(value.get("serving_size"), 200),
+        "notes": notes,
+        "basis_note": (
+            _clean_text(raw_basis, 500)
+            if raw_basis and canonical_basis is None
+            else _clean_text(value.get("basis_note"), 500)
+        ),
     }
+
+    per_serving_values = {}
+    whole_recipe_values = {}
     any_value = False
+
     for key, label, _unit in NUTRITION_FIELDS:
         aliases_for_key = {
             "calories_kcal": ("calories_kcal", "calories", "kcal"),
@@ -136,15 +191,34 @@ def normalize_nutrition(value):
             "sodium_mg": ("sodium_mg", "sodium"),
             "cholesterol_mg": ("cholesterol_mg", "cholesterol"),
         }[key]
-        raw = None
-        for alias in aliases_for_key:
-            if alias in value:
-                raw = value.get(alias)
-                break
-        number = _number(raw, label) if raw not in (None, "") else None
+
+        def source_number(source):
+            if not isinstance(source, dict):
+                return None
+            for alias in aliases_for_key:
+                if alias in source and source.get(alias) not in (None, ""):
+                    return _number(source.get(alias), label)
+            return None
+
+        per_number = source_number(per_serving)
+        whole_number = source_number(whole_recipe)
+        if per_number is not None:
+            per_serving_values[key] = per_number
+        if whole_number is not None:
+            whole_recipe_values[key] = whole_number
+
+        number = source_number(numeric_source)
+        if number is None and numeric_source is not value:
+            number = source_number(value)
+
         result[key] = number
         if number is not None:
             any_value = True
+
+    if per_serving_values:
+        result["per_serving_values"] = per_serving_values
+    if whole_recipe_values:
+        result["whole_recipe_values"] = whole_recipe_values
 
     return result if any_value else None
 
@@ -187,8 +261,18 @@ def normalize_recipe_extra(value):
         source = {"name": source, "url": ""}
     if not isinstance(source, dict):
         source = {}
+
+    source_name = (
+        source.get("name")
+        or source.get("label")
+        or (
+            "ChatGPT"
+            if str(source.get("type") or "").strip().casefold() == "chatgpt"
+            else ""
+        )
+    )
     result["source"] = {
-        "name": _clean_text(source.get("name"), 200),
+        "name": _clean_text(source_name, 200),
         "url": _clean_text(source.get("url"), 1000),
     }
     result["nutrition"] = normalize_nutrition(result.get("nutrition"))
@@ -325,25 +409,41 @@ def nutrition_rows(nutrition, servings):
     except (TypeError, ValueError):
         servings = 1
 
+    explicit_per_serving = normalized.get("per_serving_values") or {}
+    explicit_whole_recipe = normalized.get("whole_recipe_values") or {}
+
     rows = []
     for key, label, unit in NUTRITION_FIELDS:
         value = normalized.get(key)
-        if value is None:
+        per_serving = explicit_per_serving.get(key)
+        whole = explicit_whole_recipe.get(key)
+
+        if per_serving is None and whole is None and value is None:
             continue
-        if normalized["basis"] == "per_serving":
-            per_serving = float(value)
-            whole = float(value) * servings
-        else:
-            whole = float(value)
-            per_serving = float(value) / servings
+
+        if per_serving is None:
+            if normalized["basis"] == "per_serving" and value is not None:
+                per_serving = float(value)
+            elif whole is not None:
+                per_serving = float(whole) / servings
+            elif value is not None:
+                per_serving = float(value) / servings
+
+        if whole is None:
+            if normalized["basis"] == "whole_recipe" and value is not None:
+                whole = float(value)
+            elif per_serving is not None:
+                whole = float(per_serving) * servings
+            elif value is not None:
+                whole = float(value) * servings
 
         rows.append(
             {
                 "key": key,
                 "label": label,
                 "unit": unit,
-                "per_serving": per_serving,
-                "whole_recipe": whole,
+                "per_serving": float(per_serving),
+                "whole_recipe": float(whole),
                 "per_serving_text": (
                     f"{_format_number(per_serving)} {unit}"
                     if unit != "kcal"

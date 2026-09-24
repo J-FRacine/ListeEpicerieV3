@@ -278,6 +278,22 @@ def open_chatgpt_recipe_import_dialog(
                             ui.badge("Estimation").props(
                                 "outline color=orange"
                             )
+                        if nutrition.get("serving_size"):
+                            ui.label(
+                                "Portion : " + nutrition["serving_size"]
+                            ).classes("text-xs text-gray-600")
+                        if nutrition.get("basis_note"):
+                            ui.label(
+                                nutrition["basis_note"]
+                            ).classes(
+                                "text-xs text-gray-600 whitespace-normal"
+                            )
+                        for nutrition_note in nutrition.get("notes") or []:
+                            ui.label(
+                                "• " + nutrition_note
+                            ).classes(
+                                "text-xs text-gray-600 whitespace-normal"
+                            )
 
             def import_selected():
                 candidate = state.get("candidate")

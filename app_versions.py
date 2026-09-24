@@ -15,7 +15,7 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
-    "recipes": "1.3.0",
+    "recipes": "1.3.1",
     "blood_pressure": "1.2.3",
     "finances": "1.14.3",
     "rpg": "1.10.0",
@@ -23,6 +23,24 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "recipes",
+        "version": "1.3.1",
+        "date": "2026-09-24",
+        "title": "Recettes — V1.3.1 — compatibilité nutrition ChatGPT",
+        "summary": (
+            "L’import accepte maintenant les tableaux nutritionnels simples "
+            "ou enrichis avec valeurs par portion et recette complète."
+        ),
+        "changes": [
+            "Correction de l’erreur lorsque nutrition.basis contient une description plutôt que per_serving ou whole_recipe.",
+            "Prise en charge des blocs nutrition.per_serving et nutrition.whole_recipe générés par ChatGPT.",
+            "La taille de portion, la description de calcul et les notes nutritionnelles sont conservées.",
+            "Les sources type=chatgpt / label=... sont reconnues.",
+            "Le format simple V1.3.0 reste compatible.",
+            "Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance.",
+        ],
+    },
     {
         "app_key": "recipes",
         "version": "1.3.0",

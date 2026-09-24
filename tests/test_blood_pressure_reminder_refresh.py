@@ -254,10 +254,10 @@ class BloodPressureReminderRefreshTests(unittest.TestCase):
         self.assertNotIn("_start_background_task(\n                    use_device_after_mount()", source)
         self.assertNotIn("_start_background_task(\n                    refresh_reminder_after_mount()", source)
 
-    def test_official_version_is_122_after_browser_validation(self):
+    def test_official_version_is_123(self):
         self.assertEqual(
             app_versions.APP_VERSIONS["blood_pressure"],
-            "1.2.2",
+            "1.2.3",
         )
 
 

@@ -40,7 +40,7 @@ class RecipesV1Tests(unittest.TestCase):
         self.assertIn('app_key="recipes"', app_source)
         self.assertIn('title="Recettes"', app_source)
         self.assertIn('badge=version_label("recipes")', app_source)
-        self.assertIn('"recipes": "1.2.1"', versions)
+        self.assertIn('"recipes": "1.3.0"', versions)
 
     def test_recipes_keeps_grocery_access_and_existing_data_model(self):
         app_source = (ROOT / "app.py").read_text(encoding="utf-8")

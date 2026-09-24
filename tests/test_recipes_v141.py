@@ -27,13 +27,14 @@ class RecipesV141Tests(unittest.TestCase):
 
     def test_details_toggle_preserves_open_state(self):
         source = (ROOT / "recipes.py").read_text(encoding="utf-8")
-        self.assertIn("details_state", source)
+        self.assertIn("details_context", source)
         self.assertIn("save_recipe_open_state(", source)
-        self.assertIn("details_container.set_visibility(", source)
+        self.assertIn('context.get("container")', source)
+        self.assertIn('details_context["container"] = details_container', source)
 
     def test_version_is_1_4_1(self):
         source = (ROOT / "app_versions.py").read_text(encoding="utf-8")
-        self.assertIn('"recipes": "1.4.1"', source)
+        self.assertIn('"recipes": "1.4.2"', source)
 
 
 if __name__ == "__main__":

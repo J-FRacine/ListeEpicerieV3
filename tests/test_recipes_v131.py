@@ -56,7 +56,7 @@ class RecipesV131Tests(unittest.TestCase):
 
     def test_version_is_1_3_1(self):
         source = (ROOT / "app_versions.py").read_text(encoding="utf-8")
-        self.assertIn('"recipes": "1.4.1"', source)
+        self.assertIn('"recipes": "1.4.2"', source)
 
 if __name__ == "__main__":
     unittest.main()

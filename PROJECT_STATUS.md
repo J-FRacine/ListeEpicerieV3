@@ -10,7 +10,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 |---|---:|
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
-| Recettes | 1.4.1 |
+| Recettes | 1.4.2 |
 | Journal de pression | 1.2.3 |
 | Finances | 1.14.3 |
 | Personnages JDR | 1.10.0 |
@@ -184,6 +184,17 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation locale réussie : **9 tests ciblés Journal**, **528 tests JF Apps** et compilation Python complète.
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
+
+## Recettes — V1.4.2 / correction de l’ouverture des recettes — 2026-09-24
+
+- Base GitHub vérifiée : `47cad63f46a5ec33067dde86f084617af71d35b7` (`main`), Recettes V1.4.1.
+- Validation navigateur réelle de V1.4.1 : les six en-têtes sont maintenant visibles, mais cliquer sur le bouton d’ouverture de n’importe quelle recette ouvre uniquement la dernière recette de la liste.
+- Cause confirmée : `toggle_recipe_details()` capturait correctement `recipe_id` par valeur par défaut, mais référençait `details_state` et `details_container` par fermeture tardive; après la boucle, toutes les fonctions pointaient donc vers le dernier conteneur.
+- Correction : chaque recette reçoit un dictionnaire `details_context` propre, capturé explicitement dans la fonction du bouton; le conteneur de détails correspondant y est associé dès sa création.
+- L’état ouvert/fermé reste mémorisé séparément par ID de recette.
+- Aucun changement aux données, photos, nutrition, catégories, import ChatGPT ou Bibliothèque partagée.
+- Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance.
+- Validation navigateur/Canner à refaire après publication.
 
 ## Recettes — V1.4.1 / correction de l’affichage des en-têtes — 2026-09-24
 

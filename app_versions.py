@@ -15,7 +15,7 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
-    "recipes": "1.4.1",
+    "recipes": "1.4.2",
     "blood_pressure": "1.2.3",
     "finances": "1.14.3",
     "rpg": "1.10.0",
@@ -23,6 +23,23 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "recipes",
+        "version": "1.4.2",
+        "date": "2026-09-24",
+        "title": "Recettes — V1.4.2 — ouverture de la bonne recette",
+        "summary": (
+            "Corrige l’ouverture des détails afin que chaque bouton agisse "
+            "sur sa propre recette plutôt que sur la dernière de la liste."
+        ),
+        "changes": [
+            "Chaque recette possède maintenant son propre contexte d’ouverture et son propre conteneur de détails.",
+            "Le bouton afficher/masquer d’une recette ne peut plus ouvrir la dernière recette de la liste par erreur.",
+            "L’état ouvert/fermé reste mémorisé séparément pour chaque recette.",
+            "Consulter, Photo, Valeurs nutritives, Modifier et Supprimer restent liés à la recette sélectionnée.",
+            "Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance.",
+        ],
+    },
     {
         "app_key": "recipes",
         "version": "1.4.1",

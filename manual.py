@@ -177,7 +177,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Recettes — V1.4.1",
+        "title": "Recettes — V1.4.2",
         "icon": "restaurant_menu",
         "caption": "Créer, consulter, cuisiner et envoyer les ingrédients à l’épicerie",
         "keywords": (
@@ -189,6 +189,16 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "temps cuisson préparation étiquettes source"
         ),
         "content": """
+### V1.4.2 — correction de l’ouverture des détails
+
+Après V1.4.1, les en-têtes étaient de nouveau visibles, mais le bouton d’ouverture de chaque recette agissait toujours sur le dernier bloc de la liste.
+
+Chaque recette possède maintenant son propre contexte d’affichage. Le bouton à droite ouvre et ferme uniquement la recette correspondante, et l’état ouvert/fermé continue d’être mémorisé séparément.
+
+Les boutons **Consulter**, **Photo**, **Valeurs nutritives**, **Modifier** et **Supprimer** conservent leur comportement actuel.
+
+Aucune migration PostgreSQL n’est nécessaire.
+
 ### V1.4.1 — correction de l’affichage de la liste
 
 Après le déploiement de V1.4.0, certains navigateurs affichaient seulement une ligne vide pour chaque recette. Le problème venait du mécanisme utilisé pour personnaliser l’en-tête de la zone repliable.

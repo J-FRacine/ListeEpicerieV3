@@ -576,22 +576,27 @@ def recipes_panel():
                     summary_message=_summary_message,
                 )
 
-            details_state = {
-                "open": recipe_id in open_recipe_ids
+            details_context = {
+                "open": recipe_id in open_recipe_ids,
+                "container": None,
             }
 
             def toggle_recipe_details(
                 selected_recipe_id=recipe_id,
+                context=details_context,
             ):
-                new_value = not details_state["open"]
-                details_state["open"] = new_value
+                new_value = not context["open"]
+                context["open"] = new_value
                 save_recipe_open_state(
                     selected_recipe_id,
                     new_value,
                 )
-                details_container.set_visibility(
-                    new_value
-                )
+
+                container = context.get("container")
+                if container is not None:
+                    container.set_visibility(
+                        new_value
+                    )
 
             with ui.card().classes(
                 "w-full p-0 bg-white rounded-xl shadow-sm "
@@ -651,8 +656,9 @@ def recipes_panel():
                 details_container = ui.column().classes(
                     "w-full gap-3 px-4 pb-4"
                 )
+                details_context["container"] = details_container
                 details_container.set_visibility(
-                    details_state["open"]
+                    details_context["open"]
                 )
 
                 with details_container:

@@ -1,3 +1,5 @@
+import json
+
 import db as _db
 
 from grocery_common import log_activity
@@ -160,6 +162,7 @@ def export_family_backup(user_id, family_id):
                     recipe.description,
                     recipe.instructions,
                     recipe.servings,
+                    recipe.recipe_extra,
                     category.name AS recipe_category,
                     parent.name AS recipe_category_parent
                 FROM grocery_recipes AS recipe
@@ -203,6 +206,7 @@ def export_family_backup(user_id, family_id):
                         "description": recipe["description"],
                         "instructions": recipe["instructions"],
                         "servings": recipe["servings"],
+                        "recipe_extra": recipe["recipe_extra"] or {},
                         "recipe_category": recipe["recipe_category"] or "",
                         "recipe_category_parent": (
                             recipe["recipe_category_parent"] or ""
@@ -398,11 +402,16 @@ def _recipe_values(recipe):
     if not isinstance(raw_ingredients, list):
         raise ValueError(f"Les ingrédients de la recette « {name} » sont invalides.")
 
+    recipe_extra = recipe.get("recipe_extra") or {}
+    if not isinstance(recipe_extra, dict):
+        recipe_extra = {}
+
     return {
         "name": name,
         "description": str(recipe.get("description") or "").strip(),
         "instructions": str(recipe.get("instructions") or "").strip(),
         "servings": servings,
+        "recipe_extra": recipe_extra,
         "recipe_category": str(
             recipe.get("recipe_category") or ""
         ).strip(),
@@ -1010,9 +1019,10 @@ def import_family_backup(
                             description,
                             instructions,
                             servings,
+                            recipe_extra,
                             created_by_user_id
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s)
                         RETURNING id;
                         """,
                         (
@@ -1022,6 +1032,10 @@ def import_family_backup(
                             recipe["description"],
                             recipe["instructions"],
                             recipe["servings"],
+                            json.dumps(
+                                recipe["recipe_extra"],
+                                ensure_ascii=False,
+                            ),
                             user_id,
                         ),
                     )
@@ -1036,6 +1050,7 @@ def import_family_backup(
                             description = %s,
                             instructions = %s,
                             servings = %s,
+                            recipe_extra = %s::jsonb,
                             updated_at = NOW()
                         WHERE id = %s;
                         """,
@@ -1044,6 +1059,10 @@ def import_family_backup(
                             recipe["description"],
                             recipe["instructions"],
                             recipe["servings"],
+                            json.dumps(
+                                recipe["recipe_extra"],
+                                ensure_ascii=False,
+                            ),
                             recipe_id,
                         ),
                     )

@@ -29,6 +29,15 @@ from recipes_management import (
     open_bulk_delete_dialog,
     open_recipe_categories_dialog,
 )
+from recipes_chatgpt_import_ui import open_chatgpt_recipe_import_dialog
+from recipes_extras import (
+    get_recipe_extras,
+    nutrition_short_label,
+    recipe_extra_search_text,
+    recipe_time_label,
+    save_recipe_metadata,
+)
+from recipes_extras_ui import open_nutrition_dialog
 from recipes_reader import build_recipe_reader, recipe_matches
 from recipes_site_import_ui import open_recipe_site_import_dialog
 from state import get_current_family_id, set_current_family_id
@@ -154,6 +163,13 @@ def recipes_panel():
                     "Sur ordinateur, utilisez cet écran pour préparer le contenu. Sur téléphone ou tablette, le bouton Consulter offre une lecture plus simple."
                 ).classes("text-xs text-gray-500")
 
+                extras = (
+                    get_recipe_extras(user_id, recipe["id"])
+                    if recipe
+                    else {}
+                )
+                source = extras.get("source") or {}
+
                 name_input = ui.input(
                     label="Nom",
                     value=recipe["name"] if recipe else "",
@@ -172,6 +188,38 @@ def recipes_panel():
                     value=recipe["description"] if recipe else "",
                     placeholder="Ex. Repas familial simple et économique",
                 ).props("autogrow").classes("w-full")
+
+                with ui.row().classes("w-full gap-3 flex-wrap"):
+                    prep_time_input = ui.number(
+                        label="Préparation (minutes)",
+                        value=extras.get("prep_time_minutes"),
+                        min=0,
+                        step=1,
+                    ).classes("grow min-w-[170px]")
+                    cook_time_input = ui.number(
+                        label="Cuisson (minutes)",
+                        value=extras.get("cook_time_minutes"),
+                        min=0,
+                        step=1,
+                    ).classes("grow min-w-[170px]")
+
+                tags_input = ui.input(
+                    label="Étiquettes facultatives",
+                    value=", ".join(extras.get("tags") or []),
+                    placeholder="Ex. rapide, congélation, végétarien",
+                ).classes("w-full")
+
+                with ui.row().classes("w-full gap-3 flex-wrap"):
+                    source_name_input = ui.input(
+                        label="Source facultative",
+                        value=source.get("name") or "",
+                        placeholder="Ex. ChatGPT, Ricardo, recette familiale",
+                    ).classes("grow min-w-[220px]")
+                    source_url_input = ui.input(
+                        label="Lien source facultatif",
+                        value=source.get("url") or "",
+                        placeholder="https://...",
+                    ).classes("grow min-w-[280px]")
 
                 instructions_input = ui.textarea(
                     label="Préparation — une étape par ligne de préférence",
@@ -228,6 +276,15 @@ def recipes_panel():
                             saved_recipe_id,
                             category_input.value,
                         )
+                        save_recipe_metadata(
+                            user_id,
+                            saved_recipe_id,
+                            prep_time_minutes=prep_time_input.value,
+                            cook_time_minutes=cook_time_input.value,
+                            tags=tags_input.value,
+                            source_name=source_name_input.value,
+                            source_url=source_url_input.value,
+                        )
                     except (ValueError, PermissionError) as error:
                         ui.notify(str(error), type="warning")
                         return
@@ -254,6 +311,16 @@ def recipes_panel():
             "Importer mon ancien site",
             icon="cloud_download",
             on_click=lambda: open_recipe_site_import_dialog(
+                user_id=user_id,
+                family_id=family_id,
+                on_imported=render_recipes.refresh,
+            ),
+        ).props("outline color=primary")
+
+        ui.button(
+            "Importer depuis ChatGPT",
+            icon="data_object",
+            on_click=lambda: open_chatgpt_recipe_import_dialog(
                 user_id=user_id,
                 family_id=family_id,
                 on_imported=render_recipes.refresh,
@@ -295,7 +362,7 @@ def recipes_panel():
     with ui.row().classes("w-full gap-2 items-end flex-wrap mt-2"):
         search_input = ui.input(
             label="Rechercher une recette",
-            placeholder="Nom, description, préparation, ingrédient ou catégorie",
+            placeholder="Nom, description, préparation, ingrédient, catégorie ou étiquette",
         ).props("clearable debounce=180 autocomplete=off").classes(
             "grow min-w-[260px]"
         )
@@ -413,6 +480,7 @@ def recipes_panel():
         for recipe in recipe_rows:
             ingredients = get_recipe_ingredients(user_id, recipe["id"])
             assignment = category_assignments.get(int(recipe["id"]), {})
+            extras = get_recipe_extras(user_id, recipe["id"])
             assigned_category_id = assignment.get("category_id")
             if not category_matches_filter(
                 assigned_category_id,
@@ -430,9 +498,12 @@ def recipes_panel():
             ) or (
                 bool(query)
                 and query in category_text.casefold()
+            ) or (
+                bool(query)
+                and query in recipe_extra_search_text(extras)
             )
             if text_matches:
-                details.append((recipe, ingredients, assignment))
+                details.append((recipe, ingredients, assignment, extras))
 
         valid_recipe_ids = {int(recipe["id"]) for recipe in recipe_rows}
         open_recipe_ids = get_open_recipe_ids() & valid_recipe_ids
@@ -460,7 +531,7 @@ def recipes_panel():
                 )
             return
 
-        for recipe, ingredients, category_assignment in details:
+        for recipe, ingredients, category_assignment, recipe_extras in details:
             recipe_id = recipe["id"]
             ingredient_count = len(ingredients)
             category_text = str(
@@ -490,6 +561,37 @@ def recipes_panel():
                             "text-sm text-gray-600 whitespace-normal"
                         ).style("overflow-wrap:anywhere;")
 
+                    time_label = recipe_time_label(recipe_extras)
+                    tags = recipe_extras.get("tags") or []
+                    source = recipe_extras.get("source") or {}
+                    nutrition = recipe_extras.get("nutrition")
+
+                    with ui.row().classes("w-full items-center gap-2 flex-wrap"):
+                        if time_label:
+                            ui.badge(time_label).props("outline color=primary")
+                        for tag in tags:
+                            ui.badge(tag).props("outline color=secondary")
+                        if nutrition:
+                            ui.badge(
+                                nutrition_short_label(
+                                    nutrition,
+                                    recipe["servings"],
+                                )
+                            ).props("outline color=positive")
+
+                    if source.get("name") or source.get("url"):
+                        with ui.row().classes("w-full gap-2 items-center flex-wrap"):
+                            if source.get("name"):
+                                ui.label(
+                                    "Source : " + source["name"]
+                                ).classes("text-xs text-gray-500")
+                            if source.get("url"):
+                                ui.link(
+                                    "Ouvrir la source",
+                                    source["url"],
+                                    new_tab=True,
+                                ).classes("text-xs")
+
                     with ui.row().classes("w-full items-center gap-2 flex-wrap"):
                         def apply_selected(selected=recipe):
                             return apply_recipe_to_needs(user_id, selected["id"])
@@ -497,11 +599,12 @@ def recipes_panel():
                         ui.button(
                             "Consulter",
                             icon="menu_book",
-                            on_click=lambda selected_recipe=recipe, selected_ingredients=ingredients: (
+                            on_click=lambda selected_recipe=recipe, selected_ingredients=ingredients, selected_extras=recipe_extras: (
                                 build_recipe_reader(
                                     ui=ui,
                                     recipe=selected_recipe,
                                     ingredients=selected_ingredients,
+                                    extras=selected_extras,
                                     on_add_to_needs=lambda selected_id=selected_recipe["id"]: apply_recipe_to_needs(
                                         user_id, selected_id
                                     ),
@@ -525,6 +628,16 @@ def recipes_panel():
                             icon="playlist_add",
                             on_click=add_selected_to_needs,
                         ).props("outline color=positive")
+
+                        ui.button(
+                            "Valeurs nutritives",
+                            icon="monitor_weight",
+                            on_click=lambda selected=recipe: open_nutrition_dialog(
+                                user_id=user_id,
+                                recipe=selected,
+                                on_saved=render_recipes.refresh,
+                            ),
+                        ).props("flat color=primary")
 
                         ui.button(
                             icon="edit",

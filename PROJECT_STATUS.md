@@ -1,6 +1,6 @@
 # JF Apps — État du projet
 
-Dernière mise à jour : 2026-09-22
+Dernière mise à jour : 2026-09-24
 
 Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversations. Le dépôt GitHub `J-FRacine/ListeEpicerieV3` sur `main` est la référence technique.
 
@@ -10,7 +10,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 |---|---:|
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
-| Recettes | 1.2.1 |
+| Recettes | 1.3.0 |
 | Journal de pression | 1.2.3 |
 | Finances | 1.14.3 |
 | Personnages JDR | 1.10.0 |
@@ -184,6 +184,20 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation locale réussie : **9 tests ciblés Journal**, **528 tests JF Apps** et compilation Python complète.
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
+
+## Recettes — V1.3.0 / import ChatGPT et valeurs nutritives — 2026-09-24
+
+- Base GitHub vérifiée avant développement : `6ba8ce57ccfdbd08af8a376309454848714a1313` (`main`), Recettes V1.2.1.
+- Nouvelle action **Importer depuis ChatGPT** : JSON collé ou fichier `.json`, validation du schéma `jf_apps_recipe_import` version 1, aperçu obligatoire, détection des doublons et import sans identifiants internes.
+- Le format accepte : nom, description, portions, catégorie/sous-catégorie, étiquettes, temps de préparation/cuisson, ingrédients structurés, étapes ordonnées, source facultative et nutrition facultative.
+- Les ingrédients sont rapprochés des items existants; les items manquants peuvent être créés de façon contrôlée dans la catégorie/magasin d’épicerie choisis. Les quantités/unités culinaires restent conservées dans la précision de l’ingrédient.
+- Ajout d’un **tableau nutritionnel facultatif** : calories, protéines, glucides, sucres, fibres, lipides, gras saturés, sodium et cholestérol.
+- La base nutritionnelle peut être **par portion** ou **recette complète**; l’application affiche automatiquement les deux valeurs à partir du nombre de portions. Le marqueur **Estimation** distingue les valeurs approximatives, notamment celles générées par ChatGPT.
+- L’éditeur de recette gère maintenant temps de préparation, temps de cuisson, étiquettes et source. Ces métadonnées sont affichées dans la liste/consultation et incluses dans la recherche.
+- Stockage non destructif dans `grocery_recipes.recipe_extra` (JSONB), ajouté automatiquement et de façon idempotente. Aucun SQL manuel et aucune nouvelle dépendance.
+- Sauvegarde/restauration familiale étendue à `recipe_extra`, ce qui conserve nutrition, étiquettes, temps et source.
+- Les étapes importées sont conservées dans l’ordre dans le champ de préparation existant afin de préserver la compatibilité actuelle. Les étapes réellement structurées/réordonnables et les photos restent des évolutions ultérieures.
+- Validation locale complète à effectuer par l’installateur; validation navigateur/Canner/PostgreSQL de production à confirmer après publication.
 
 ## Recettes — V1.2.1 / correction import pages hybrides — 2026-09-23
 

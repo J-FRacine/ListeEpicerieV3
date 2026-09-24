@@ -381,6 +381,17 @@ def migrate_grocery_schema(get_connection):
                 """
             )
 
+            # Recettes V1.3.0 : métadonnées enrichies et nutrition.
+            # Un seul JSONB permet d'ajouter les données sans casser les
+            # recettes existantes ni multiplier les colonnes optionnelles.
+            cur.execute(
+                """
+                ALTER TABLE grocery_recipes
+                ADD COLUMN IF NOT EXISTS recipe_extra JSONB
+                    NOT NULL DEFAULT '{}'::jsonb;
+                """
+            )
+
             cur.execute(
                 """
                 DROP INDEX IF EXISTS categories_family_name_unique;

@@ -177,16 +177,34 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Recettes — V1.2.1",
+        "title": "Recettes — V1.3.0",
         "icon": "restaurant_menu",
         "caption": "Créer, consulter, cuisiner et envoyer les ingrédients à l’épicerie",
         "keywords": (
             "recettes cuisine ingrédients préparation portions recherche "
             "bibliothèque partage épicerie besoins mode cuisine "
             "import google sites ancien site recettes de l ours "
-            "catégories sous-catégories supprimer plusieurs sélection"
+            "catégories sous-catégories supprimer plusieurs sélection "
+            "chatgpt json nutrition nutritif calories protéines glucides "
+            "temps cuisson préparation étiquettes source"
         ),
         "content": """
+### V1.3.0 — import ChatGPT et tableau nutritionnel
+
+Recettes accepte maintenant le format JSON **`jf_apps_recipe_import` version 1**. Utilisez **Importer depuis ChatGPT**, puis collez le JSON fourni par ChatGPT ou choisissez un fichier `.json`. L’application affiche un aperçu avant l’import et n’écrase jamais silencieusement une recette portant déjà le même nom.
+
+Le format peut contenir le nom, la description, les portions, la catégorie et sous-catégorie, des étiquettes, les temps de préparation et de cuisson, les ingrédients structurés, les étapes ordonnées, une source facultative et un tableau nutritionnel. Les identifiants internes JF Apps ne font jamais partie de ce format.
+
+Les ingrédients sont rapprochés des items existants de la famille. Les items manquants peuvent être créés dans une catégorie et un magasin choisis avant l’import. Les quantités culinaires et unités du JSON sont conservées comme précision de l’ingrédient afin de ne pas être perdues dans le modèle actuel de l’épicerie.
+
+Chaque recette peut maintenant contenir un **tableau nutritionnel facultatif**. Le bouton **Valeurs nutritives** permet de saisir ou modifier : calories, protéines, glucides, sucres, fibres, lipides, gras saturés, sodium et cholestérol. Les valeurs peuvent être fournies **par portion** ou pour la **recette complète**; JF Apps calcule l’autre lecture automatiquement selon le nombre de portions.
+
+Lorsque **Estimation** est cochée — ce sera normalement le cas pour les valeurs générées par ChatGPT — l’application l’indique clairement. Ces données demeurent informatives et peuvent être corrigées manuellement.
+
+L’éditeur de recette accepte également les **temps de préparation/cuisson**, les **étiquettes** et une **source** facultative. Ces informations sont visibles dans la consultation de la recette et peuvent participer à la recherche.
+
+Les nouvelles données sont stockées dans `recipe_extra` et incluses dans la sauvegarde/restauration familiale. La migration est automatique et idempotente; aucun SQL manuel n’est requis.
+
 ### V1.2.1 — correction des pages avec Ingrédients mais sans titre Préparation
 
 Certaines pages de **Recettes de l’Ours** utilisent un troisième format : elles affichent quelques paragraphes d’introduction, un titre **Ingrédients**, une liste à puces d’ingrédients, puis directement une liste numérotée d’étapes sans titre **Préparation**.
@@ -265,7 +283,7 @@ La publication dans la **Bibliothèque partagée** reste disponible. Une recette
 
 ### Prochaines évolutions prévues
 
-L’architecture de cette première version autonome prépare les prochaines étapes : catégories et étiquettes propres aux recettes, étapes structurées et réordonnables, photos, et enrichissement de l’éditeur bureau. Ces fonctions ne sont pas encore ajoutées en V1.0.0.
+Les prochaines évolutions encore prévues concernent surtout les **étapes structurées et réordonnables** ainsi que les **photos de recettes**. Les catégories, étiquettes, métadonnées enrichies, import ChatGPT et valeurs nutritives sont maintenant disponibles dans les versions ultérieures.
 """,
     },
     {

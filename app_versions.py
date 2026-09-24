@@ -15,7 +15,7 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
-    "recipes": "1.2.1",
+    "recipes": "1.3.0",
     "blood_pressure": "1.2.3",
     "finances": "1.14.3",
     "rpg": "1.10.0",
@@ -23,6 +23,27 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "recipes",
+        "version": "1.3.0",
+        "date": "2026-09-24",
+        "title": "Recettes — V1.3.0 — import ChatGPT et valeurs nutritives",
+        "summary": (
+            "Recettes peut importer le format JSON JF Apps généré par ChatGPT "
+            "et conserver un tableau nutritionnel facultatif par recette."
+        ),
+        "changes": [
+            "Nouvelle action Importer depuis ChatGPT avec JSON collé ou fichier .json, aperçu obligatoire et détection des doublons.",
+            "Format stable jf_apps_recipe_import version 1 : nom, portions, catégorie/sous-catégorie, étiquettes, temps, ingrédients, étapes, source et nutrition.",
+            "Les items d’épicerie existants sont réutilisés; les items manquants peuvent être créés de façon contrôlée.",
+            "Tableau nutritionnel facultatif avec calories, protéines, glucides, sucres, fibres, lipides, gras saturés, sodium et cholestérol.",
+            "Les valeurs peuvent être saisies par portion ou pour la recette complète; JF Apps affiche automatiquement les deux lectures.",
+            "Les valeurs importées peuvent être marquées comme estimées; le tableau reste modifiable manuellement après import.",
+            "Éditeur de recette enrichi avec temps de préparation/cuisson, étiquettes et source facultative.",
+            "La sauvegarde/restauration familiale conserve les nouvelles métadonnées et la nutrition.",
+            "Migration PostgreSQL automatique : ajout idempotent de recipe_extra JSONB; aucun SQL manuel et aucune nouvelle dépendance.",
+        ],
+    },
     {
         "app_key": "blood_pressure",
         "version": "1.2.3",

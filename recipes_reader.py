@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 
+from recipes_extras import nutrition_rows, recipe_time_label
+
+
 def instruction_steps(value):
     """Découpe une préparation en étapes lisibles sans réécrire le texte."""
     lines = [str(line).strip() for line in str(value or "").splitlines()]
@@ -43,11 +46,61 @@ def build_recipe_reader(
     ui,
     recipe,
     ingredients,
+    extras=None,
     on_add_to_needs,
     summary_message,
 ):
     """Ouvre une lecture adaptée au téléphone/tablette et un mode cuisine."""
     steps = instruction_steps(recipe.get("instructions"))
+    extras = extras or {}
+    time_label = recipe_time_label(extras)
+    tags = extras.get("tags") or []
+    source = extras.get("source") or {}
+    nutrition = extras.get("nutrition")
+    nutrition_table = nutrition_rows(
+        nutrition,
+        recipe.get("servings"),
+    )
+
+    def render_extra_summary():
+        with ui.row().classes("gap-2 flex-wrap items-center"):
+            if time_label:
+                ui.badge(time_label).props("outline color=primary")
+            for tag in tags:
+                ui.badge(tag).props("outline color=secondary")
+            if nutrition and nutrition.get("estimated"):
+                ui.badge("Nutrition estimée").props(
+                    "outline color=orange"
+                )
+
+    def render_nutrition():
+        if not nutrition_table:
+            return
+        ui.separator()
+        ui.label("Valeurs nutritives").classes("text-lg font-bold")
+        ui.label(
+            "Valeurs approximatives"
+            if nutrition and nutrition.get("estimated")
+            else "Valeurs enregistrées"
+        ).classes("text-xs text-gray-500")
+        with ui.card().classes("w-full p-3 shadow-none bg-gray-50"):
+            with ui.row().classes(
+                "w-full gap-2 items-center font-bold text-sm"
+            ):
+                ui.label("Nutriment").classes("grow")
+                ui.label("Par portion").classes("w-28 text-right")
+                ui.label("Recette").classes("w-28 text-right")
+            for row in nutrition_table:
+                with ui.row().classes(
+                    "w-full gap-2 items-center text-sm py-1"
+                ):
+                    ui.label(row["label"]).classes("grow")
+                    ui.label(row["per_serving_text"]).classes(
+                        "w-28 text-right"
+                    )
+                    ui.label(row["whole_recipe_text"]).classes(
+                        "w-28 text-right"
+                    )
 
     async def request_wake_lock():
         try:
@@ -107,6 +160,7 @@ def build_recipe_reader(
                     ui.label(
                         "1 portion" if recipe["servings"] == 1 else f"{recipe['servings']} portions"
                     ).classes("text-sm text-gray-500")
+                    render_extra_summary()
                 async def close_cooking():
                     await release_wake_lock()
                     cooking_dialog.close()
@@ -150,6 +204,8 @@ def build_recipe_reader(
                     else:
                         ui.label("Aucune étape de préparation.").classes("text-gray-500")
 
+            render_nutrition()
+
             ui.button(
                 "Ajouter à la liste d’épicerie",
                 icon="playlist_add",
@@ -170,6 +226,17 @@ def build_recipe_reader(
                     ui.label(
                         "1 portion" if recipe["servings"] == 1 else f"{recipe['servings']} portions"
                     ).classes("text-sm text-gray-500")
+                    render_extra_summary()
+                    if source.get("name"):
+                        ui.label(
+                            "Source : " + source["name"]
+                        ).classes("text-xs text-gray-500")
+                    if source.get("url"):
+                        ui.link(
+                            "Ouvrir la source",
+                            source["url"],
+                            new_tab=True,
+                        ).classes("text-xs")
                     if recipe.get("description"):
                         ui.label(recipe["description"]).classes(
                             "text-sm text-gray-600 whitespace-normal"
@@ -207,6 +274,8 @@ def build_recipe_reader(
                                 ).style("overflow-wrap:anywhere;")
                     else:
                         ui.label("Aucune étape de préparation.").classes("text-gray-500")
+
+            render_nutrition()
 
             with ui.row().classes("w-full justify-end gap-2 mt-4 flex-wrap"):
                 ui.button(

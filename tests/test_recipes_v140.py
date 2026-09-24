@@ -63,11 +63,12 @@ class RecipesV140Tests(unittest.TestCase):
         self.assertIn("ON DELETE CASCADE", source)
         self.assertIn("thumbnail_data BYTEA NOT NULL", source)
 
-    def test_ui_places_consult_in_recipe_header(self):
+    def test_ui_places_consult_in_visible_recipe_header(self):
         source = (ROOT / "recipes.py").read_text(encoding="utf-8")
-        self.assertIn('recipe_expansion.add_slot("header")', source)
-        header_position = source.index('recipe_expansion.add_slot("header")')
-        consult_position = source.index('"Consulter"', header_position)
+        self.assertNotIn('recipe_expansion.add_slot("header")', source)
+        self.assertIn('icon="unfold_more"', source)
+        self.assertIn("details_container.set_visibility", source)
+        consult_position = source.index('"Consulter"')
         name_position = source.index('recipe["name"]', consult_position)
         self.assertLess(consult_position, name_position)
         self.assertIn('"Photo"', source)
@@ -110,7 +111,7 @@ class RecipesV140Tests(unittest.TestCase):
         source = (ROOT / "app_versions.py").read_text(
             encoding="utf-8"
         )
-        self.assertIn('"recipes": "1.4.0"', source)
+        self.assertIn('"recipes": "1.4.1"', source)
 
 
 if __name__ == "__main__":

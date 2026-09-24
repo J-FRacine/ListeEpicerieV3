@@ -159,11 +159,11 @@ class RecipesV130Tests(unittest.TestCase):
         self.assertIn("recipe.recipe_extra", source)
         self.assertIn("json.dumps(", source)
 
-    def test_version_is_1_3_0(self):
+    def test_version_is_1_3_1(self):
         source = (ROOT / "app_versions.py").read_text(
             encoding="utf-8"
         )
-        self.assertIn('"recipes": "1.3.0"', source)
+        self.assertIn('"recipes": "1.3.1"', source)
 
 
 if __name__ == "__main__":

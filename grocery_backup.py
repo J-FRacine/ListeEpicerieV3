@@ -182,21 +182,35 @@ def export_family_backup(user_id, family_id):
                 cur.execute(
                     """
                     SELECT
-                        item.name,
-                        category.name AS category,
-                        COALESCE(store.name, 'Épicerie') AS store,
+                        COALESCE(
+                            item.name,
+                            ingredient.free_name
+                        ) AS name,
+                        CASE
+                            WHEN ingredient.item_id IS NULL THEN ''
+                            ELSE category.name
+                        END AS category,
+                        CASE
+                            WHEN ingredient.item_id IS NULL THEN ''
+                            ELSE COALESCE(store.name, 'Épicerie')
+                        END AS store,
                         ingredient.quantity,
                         ingredient.note,
-                        ingredient.sort_order
+                        ingredient.sort_order,
+                        (ingredient.item_id IS NULL) AS is_free
                     FROM grocery_recipe_ingredients AS ingredient
-                    JOIN items AS item
+                    LEFT JOIN items AS item
                       ON item.id = ingredient.item_id
                      AND item.deleted_at IS NULL
-                    JOIN categories AS category
+                    LEFT JOIN categories AS category
                       ON category.id = item.category_id
                     LEFT JOIN stores AS store
                       ON store.id = item.store_id
                     WHERE ingredient.recipe_id = %s
+                      AND (
+                          ingredient.item_id IS NULL
+                          OR item.id IS NOT NULL
+                      )
                     ORDER BY ingredient.sort_order, ingredient.id;
                     """,
                     (recipe["id"],),
@@ -405,6 +419,7 @@ def _line_item_reference(entry, label):
         "quantity": quantity,
         "sort_order": sort_order,
         "note": str(entry.get("note") or "").strip(),
+        "is_free": bool(entry.get("is_free", False)),
     }
 
 
@@ -1135,6 +1150,30 @@ def import_family_backup(
                     recipe["ingredients"],
                     start=1,
                 ):
+                    if ingredient.get("is_free"):
+                        cur.execute(
+                            """
+                            INSERT INTO grocery_recipe_ingredients (
+                                recipe_id,
+                                item_id,
+                                free_name,
+                                quantity,
+                                note,
+                                sort_order
+                            )
+                            VALUES (%s, NULL, %s, %s, %s, %s);
+                            """,
+                            (
+                                recipe_id,
+                                ingredient["name"],
+                                ingredient["quantity"],
+                                ingredient["note"],
+                                ingredient["sort_order"]
+                                or position * 10,
+                            ),
+                        )
+                        continue
+
                     item_key = (
                         ingredient["store"].casefold(),
                         ingredient["category"].casefold(),

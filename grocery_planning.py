@@ -213,7 +213,30 @@ def _apply_lines_to_needs(
     )
     rows = cur.fetchall()
 
+    free_ingredients_skipped = 0
+    if kind == "recipe":
+        cur.execute(
+            """
+            SELECT COUNT(*)::INTEGER AS free_count
+            FROM grocery_recipe_ingredients
+            WHERE recipe_id = %s
+              AND item_id IS NULL;
+            """,
+            (parent_id,),
+        )
+        free_ingredients_skipped = int(
+            cur.fetchone()["free_count"] or 0
+        )
+
     if not rows:
+        if kind == "recipe" and free_ingredients_skipped:
+            return {
+                "items_total": 0,
+                "items_added": 0,
+                "quantities_updated": 0,
+                "free_ingredients_skipped": free_ingredients_skipped,
+            }
+
         noun = "La liste modèle" if kind == "template" else "La recette"
         raise ValueError(f"{noun} ne contient aucun item actif.")
 
@@ -273,6 +296,7 @@ def _apply_lines_to_needs(
             "items_total": len(rows),
             "items_added": added,
             "quantities_updated": quantities_updated,
+            "free_ingredients_skipped": free_ingredients_skipped,
         },
     )
 
@@ -280,6 +304,7 @@ def _apply_lines_to_needs(
         "items_total": len(rows),
         "items_added": added,
         "quantities_updated": quantities_updated,
+        "free_ingredients_skipped": free_ingredients_skipped,
     }
 
 
@@ -809,7 +834,7 @@ def get_recipes(user_id, family_id):
                     recipe.servings,
                     recipe.created_at,
                     recipe.updated_at,
-                    COUNT(item.id)::INTEGER AS ingredient_count,
+                    COUNT(ingredient.id)::INTEGER AS ingredient_count,
                     EXISTS (
                         SELECT 1
                         FROM shared_grocery_content AS public_recipe
@@ -855,24 +880,38 @@ def get_recipe_ingredients(user_id, recipe_id):
                 SELECT
                     ingredient.id,
                     ingredient.item_id,
+                    ingredient.free_name,
                     ingredient.quantity,
                     ingredient.note,
                     ingredient.sort_order,
-                    item.name,
+                    COALESCE(item.name, ingredient.free_name) AS name,
                     item.note AS item_note,
-                    item.needed,
-                    category.name AS category,
-                    COALESCE(store.name, 'Sans magasin') AS store
+                    COALESCE(item.needed, 0) AS needed,
+                    CASE
+                        WHEN ingredient.item_id IS NULL
+                            THEN 'Ingrédient libre'
+                        ELSE category.name
+                    END AS category,
+                    CASE
+                        WHEN ingredient.item_id IS NULL
+                            THEN 'Recette'
+                        ELSE COALESCE(store.name, 'Sans magasin')
+                    END AS store,
+                    (ingredient.item_id IS NULL) AS is_free
                 FROM grocery_recipe_ingredients AS ingredient
-                JOIN items AS item
+                LEFT JOIN items AS item
                   ON item.id = ingredient.item_id
                  AND item.family_id = %s
                  AND item.deleted_at IS NULL
-                JOIN categories AS category
+                LEFT JOIN categories AS category
                   ON category.id = item.category_id
                 LEFT JOIN stores AS store
                   ON store.id = item.store_id
                 WHERE ingredient.recipe_id = %s
+                  AND (
+                      ingredient.item_id IS NULL
+                      OR item.id IS NOT NULL
+                  )
                 ORDER BY ingredient.sort_order, ingredient.id;
                 """,
                 (recipe["family_id"], recipe_id),
@@ -1095,7 +1134,66 @@ def add_recipe_ingredient(
             conn.commit()
 
 
-def update_recipe_ingredient(user_id, ingredient_id, quantity, note=""):
+def add_recipe_free_ingredient(
+    user_id,
+    recipe_id,
+    name,
+    quantity=1,
+    note="",
+):
+    clean_name = _clean_text(name)
+    clean_quantity = _positive_int(quantity)
+    clean_note = _clean_text(note)
+
+    if not clean_name:
+        raise ValueError("Le nom de l’ingrédient libre est obligatoire.")
+
+    with _db.get_connection() as conn:
+        with conn.cursor() as cur:
+            recipe = _load_parent(
+                cur,
+                user_id,
+                "recipe",
+                recipe_id,
+            )
+            cur.execute(
+                """
+                INSERT INTO grocery_recipe_ingredients (
+                    recipe_id,
+                    item_id,
+                    free_name,
+                    quantity,
+                    note,
+                    sort_order
+                )
+                VALUES (%s, NULL, %s, %s, %s, %s);
+                """,
+                (
+                    recipe_id,
+                    clean_name,
+                    clean_quantity,
+                    clean_note,
+                    _next_line_order(cur, "recipe", recipe_id),
+                ),
+            )
+            cur.execute(
+                """
+                UPDATE grocery_recipes
+                SET updated_at = NOW()
+                WHERE id = %s;
+                """,
+                (recipe["id"],),
+            )
+            conn.commit()
+
+
+def update_recipe_ingredient(
+    user_id,
+    ingredient_id,
+    quantity,
+    note="",
+    name=None,
+):
     clean_quantity = _positive_int(quantity)
     clean_note = _clean_text(note)
 
@@ -1103,7 +1201,10 @@ def update_recipe_ingredient(user_id, ingredient_id, quantity, note=""):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT recipe_id
+                SELECT
+                    recipe_id,
+                    item_id,
+                    free_name
                 FROM grocery_recipe_ingredients
                 WHERE id = %s;
                 """,
@@ -1119,15 +1220,41 @@ def update_recipe_ingredient(user_id, ingredient_id, quantity, note=""):
                 "recipe",
                 ingredient["recipe_id"],
             )
-            cur.execute(
-                """
-                UPDATE grocery_recipe_ingredients
-                SET quantity = %s,
-                    note = %s
-                WHERE id = %s;
-                """,
-                (clean_quantity, clean_note, ingredient_id),
-            )
+
+            if ingredient["item_id"] is None:
+                clean_name = _clean_text(
+                    ingredient["free_name"] if name is None else name
+                )
+                if not clean_name:
+                    raise ValueError(
+                        "Le nom de l’ingrédient libre est obligatoire."
+                    )
+                cur.execute(
+                    """
+                    UPDATE grocery_recipe_ingredients
+                    SET free_name = %s,
+                        quantity = %s,
+                        note = %s
+                    WHERE id = %s;
+                    """,
+                    (
+                        clean_name,
+                        clean_quantity,
+                        clean_note,
+                        ingredient_id,
+                    ),
+                )
+            else:
+                cur.execute(
+                    """
+                    UPDATE grocery_recipe_ingredients
+                    SET quantity = %s,
+                        note = %s
+                    WHERE id = %s;
+                    """,
+                    (clean_quantity, clean_note, ingredient_id),
+                )
+
             cur.execute(
                 """
                 UPDATE grocery_recipes

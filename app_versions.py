@@ -15,7 +15,7 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
-    "recipes": "1.4.2",
+    "recipes": "1.5.0",
     "blood_pressure": "1.2.3",
     "finances": "1.14.3",
     "rpg": "1.10.0",
@@ -23,6 +23,26 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "recipes",
+        "version": "1.5.0",
+        "date": "2026-09-24",
+        "title": "Recettes — V1.5.0 — ingrédients libres",
+        "summary": (
+            "Une recette peut maintenant contenir des ingrédients propres "
+            "à la recette sans créer d’items dans la Liste d’épicerie."
+        ),
+        "changes": [
+            "Ajout d’un deuxième type d’ingrédient : Item d’épicerie ou Ingrédient libre.",
+            "Les ingrédients libres peuvent être nommés, précisés, modifiés, supprimés et réordonnés comme les autres ingrédients.",
+            "Ajouter à l’épicerie traite uniquement les ingrédients reliés à de vrais items et indique combien d’ingrédients libres ont été ignorés.",
+            "L’import ChatGPT accepte kind=free/generic/libre et conserve par défaut les ingrédients non reconnus comme ingrédients libres au lieu de créer des items.",
+            "La création automatique des items manquants à l’import ChatGPT devient un choix explicite désactivé par défaut.",
+            "La sauvegarde/restauration et la Bibliothèque partagée préservent la distinction entre ingrédients liés et ingrédients libres.",
+            "Migration PostgreSQL automatique et idempotente : item_id devient facultatif, free_name est ajouté et la cohérence est protégée par une contrainte.",
+            "Aucun SQL manuel et aucune nouvelle dépendance.",
+        ],
+    },
     {
         "app_key": "recipes",
         "version": "1.4.2",

@@ -50,6 +50,10 @@ def _result_message(result):
         parts.append(f"{result['items_created']} item(s) créé(s)")
     if result["items_reused"]:
         parts.append(f"{result['items_reused']} item(s) réutilisé(s)")
+    if result.get("free_ingredients"):
+        parts.append(
+            f"{result['free_ingredients']} ingrédient(s) libre(s)"
+        )
     if result["ingredients_skipped"]:
         parts.append(
             f"{result['ingredients_skipped']} ingrédient(s) ignoré(s)"
@@ -150,8 +154,8 @@ def open_chatgpt_recipe_import_dialog(
                 "w-full gap-3 items-end flex-wrap"
             ):
                 create_missing = ui.checkbox(
-                    "Créer les items d’épicerie manquants",
-                    value=bool(categories),
+                    "Créer les ingrédients non reconnus comme items d’épicerie",
+                    value=False,
                 )
                 category_select = ui.select(
                     category_options,
@@ -244,12 +248,24 @@ def open_chatgpt_recipe_import_dialog(
 
                         ui.label(
                             f"{preview['matched_ingredients']} item(s) reconnu(s) · "
-                            f"{len(preview['missing_ingredients'])} à créer ou vérifier"
+                            f"{len(preview.get('free_ingredients') or [])} "
+                            "ingrédient(s) explicitement libre(s) · "
+                            f"{len(preview['missing_ingredients'])} non reconnu(s)"
                         ).classes("text-sm text-gray-600")
+
+                        if preview.get("free_ingredients"):
+                            ui.label(
+                                "Libres : "
+                                + ", ".join(
+                                    preview["free_ingredients"][:10]
+                                )
+                            ).classes(
+                                "text-xs text-blue-700 whitespace-normal"
+                            )
 
                         if preview["missing_ingredients"]:
                             ui.label(
-                                "Manquants : "
+                                "Non reconnus : "
                                 + ", ".join(
                                     preview["missing_ingredients"][:10]
                                 )
@@ -260,6 +276,8 @@ def open_chatgpt_recipe_import_dialog(
                                     ) > 10
                                     else ""
                                 )
+                                + ". Ils resteront des ingrédients libres "
+                                "si la création d’items n’est pas cochée."
                             ).classes(
                                 "text-xs text-orange-700 whitespace-normal"
                             )

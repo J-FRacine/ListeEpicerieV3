@@ -415,6 +415,54 @@ def migrate_grocery_schema(get_connection):
                 """
             )
 
+            # Recettes V1.5.0 : ingrédients libres / génériques.
+            # Un ingrédient de recette peut maintenant être relié à un item
+            # d'épicerie OU exister seulement dans la recette.
+            cur.execute(
+                """
+                ALTER TABLE grocery_recipe_ingredients
+                ALTER COLUMN item_id DROP NOT NULL;
+
+                ALTER TABLE grocery_recipe_ingredients
+                ADD COLUMN IF NOT EXISTS free_name TEXT;
+
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname =
+                            'grocery_recipe_ingredients_source_check'
+                          AND conrelid =
+                            'grocery_recipe_ingredients'::regclass
+                    ) THEN
+                        ALTER TABLE grocery_recipe_ingredients
+                        ADD CONSTRAINT
+                            grocery_recipe_ingredients_source_check
+                        CHECK (
+                            (
+                                item_id IS NOT NULL
+                                AND NULLIF(
+                                    BTRIM(COALESCE(free_name, '')),
+                                    ''
+                                ) IS NULL
+                            )
+                            OR
+                            (
+                                item_id IS NULL
+                                AND NULLIF(BTRIM(free_name), '') IS NOT NULL
+                            )
+                        );
+                    END IF;
+                END
+                $$;
+
+                ALTER TABLE shared_grocery_content_lines
+                ADD COLUMN IF NOT EXISTS is_free BOOLEAN
+                    NOT NULL DEFAULT FALSE;
+                """
+            )
+
             cur.execute(
                 """
                 DROP INDEX IF EXISTS categories_family_name_unique;

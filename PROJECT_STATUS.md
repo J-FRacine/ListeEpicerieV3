@@ -10,7 +10,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 |---|---:|
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
-| Recettes | 1.4.2 |
+| Recettes | 1.5.0 |
 | Journal de pression | 1.2.3 |
 | Finances | 1.14.3 |
 | Personnages JDR | 1.10.0 |
@@ -184,6 +184,21 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation locale réussie : **9 tests ciblés Journal**, **528 tests JF Apps** et compilation Python complète.
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
+
+## Recettes — V1.5.0 / ingrédients libres — 2026-09-24
+
+- Base GitHub vérifiée avant développement : `b27205f3eb39fb63c5019a806b2188add1736ca2` (`main`), Recettes V1.4.2.
+- Nouveau modèle d’ingrédient : une ligne de recette peut être reliée à un `item_id` existant ou contenir un `free_name` propre à la recette.
+- L’interface permet d’ajouter séparément un **Item d’épicerie existant** et un **Ingrédient libre**; les deux types partagent le même ordre d’affichage.
+- Un ingrédient libre peut être renommé et sa quantité/précision peuvent être modifiées sans créer d’item d’épicerie.
+- **Ajouter à l’épicerie** ne traite que les ingrédients reliés; le résultat indique les ingrédients libres volontairement ignorés et une recette composée uniquement d’ingrédients libres ne provoque plus d’erreur.
+- Import ChatGPT : `kind=free/generic/libre` force un ingrédient libre; `kind=grocery` force la logique d’item. Sans type, un item existant est réutilisé et un ingrédient non reconnu reste libre sauf si l’utilisateur coche explicitement la création des items manquants.
+- La création des items manquants dans l’import ChatGPT est maintenant désactivée par défaut pour éviter de polluer la Liste d’épicerie.
+- Sauvegarde/restauration familiale : `is_free` préserve les ingrédients propres aux recettes sans créer d’items lors d’une restauration.
+- Bibliothèque partagée : `shared_grocery_content_lines.is_free` conserve la distinction; copier une recette partagée ne transforme pas ses ingrédients libres en items.
+- Migration PostgreSQL automatique et idempotente : `grocery_recipe_ingredients.item_id` devient nullable, `free_name` est ajouté, une contrainte garantit exactement une source valide, et `shared_grocery_content_lines.is_free` est ajouté.
+- Aucun SQL manuel et aucune nouvelle dépendance.
+- Validation locale de syntaxe/tests à effectuer par l’installateur; validation navigateur/Canner/PostgreSQL de production à confirmer après publication.
 
 ## Recettes — V1.4.2 / correction de l’ouverture des recettes — 2026-09-24
 

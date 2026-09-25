@@ -177,7 +177,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Recettes — V1.4.2",
+        "title": "Recettes — V1.5.0",
         "icon": "restaurant_menu",
         "caption": "Créer, consulter, cuisiner et envoyer les ingrédients à l’épicerie",
         "keywords": (
@@ -186,9 +186,31 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "catégories sous-catégories supprimer plusieurs sélection "
             "photo image vignette compression poids "
             "chatgpt json nutrition nutritif calories protéines glucides "
-            "temps cuisson préparation étiquettes source"
+            "temps cuisson préparation étiquettes source "
+            "ingrédient libre générique groupe aliments item lié"
         ),
         "content": """
+### V1.5.0 — ingrédients libres et items d’épicerie
+
+Une recette peut maintenant mélanger deux types d’ingrédients :
+
+- **Item d’épicerie** : relié à un item réel de la famille. Il peut être envoyé aux besoins avec **Ajouter à l’épicerie**.
+- **Ingrédient libre** : existe seulement dans la recette, par exemple *légumes au choix*, *champignons*, *fines herbes*, *épices au goût* ou *bouillon pour couvrir*. Il ne crée aucun item dans la Liste d’épicerie.
+
+Dans les détails d’une recette, la section **Ajouter un ingrédient** contient maintenant les deux possibilités. Les ingrédients libres peuvent avoir un nom, une quantité et une précision. Ils peuvent ensuite être modifiés, supprimés et réordonnés avec les autres ingrédients.
+
+Lorsque **Ajouter à l’épicerie** est utilisé, JF Apps traite seulement les ingrédients reliés à de vrais items. Les ingrédients libres demeurent dans la recette et un message indique combien ont été laissés de côté.
+
+#### Import depuis ChatGPT
+
+Le format `jf_apps_recipe_import` reste en **version 1**. Un ingrédient peut maintenant préciser `kind: "free"` (les valeurs `generic`, `générique` et `libre` sont aussi reconnues) ou `kind: "grocery"`.
+
+Un ingrédient explicitement libre reste toujours libre. Un ingrédient dont le type n’est pas précisé est rapproché d’un item existant. S’il n’est pas reconnu, il reste **ingrédient libre par défaut**. La case **Créer les ingrédients non reconnus comme items d’épicerie** permet de demander explicitement la création de nouveaux items.
+
+Cette règle évite de remplir la Liste d’épicerie avec des formulations propres aux recettes comme *légumes au choix* ou *sel au goût*.
+
+Les sauvegardes familiales et la Bibliothèque partagée conservent cette distinction. Une migration automatique rend `item_id` facultatif dans `grocery_recipe_ingredients` et ajoute `free_name`; aucun SQL manuel n’est requis.
+
 ### V1.4.2 — correction de l’ouverture des détails
 
 Après V1.4.1, les en-têtes étaient de nouveau visibles, mais le bouton d’ouverture de chaque recette agissait toujours sur le dernier bloc de la liste.

@@ -92,7 +92,8 @@ def _load_source_lines(cur, content_type, source_id, family_id):
                 line.quantity,
                 ''::TEXT AS note,
                 category.name AS category_name,
-                line.sort_order
+                line.sort_order,
+                FALSE AS is_free
             FROM grocery_template_items AS line
             JOIN items AS item
               ON item.id = line.item_id
@@ -110,20 +111,31 @@ def _load_source_lines(cur, content_type, source_id, family_id):
         cur.execute(
             """
             SELECT
-                item.name AS item_name,
+                COALESCE(
+                    item.name,
+                    ingredient.free_name
+                ) AS item_name,
                 ingredient.quantity,
                 ingredient.note,
-                category.name AS category_name,
-                ingredient.sort_order
+                CASE
+                    WHEN ingredient.item_id IS NULL THEN ''
+                    ELSE category.name
+                END AS category_name,
+                ingredient.sort_order,
+                (ingredient.item_id IS NULL) AS is_free
             FROM grocery_recipe_ingredients AS ingredient
-            JOIN items AS item
+            LEFT JOIN items AS item
               ON item.id = ingredient.item_id
              AND item.family_id = %s
              AND item.deleted_at IS NULL
-            JOIN categories AS category
+            LEFT JOIN categories AS category
               ON category.id = item.category_id
              AND category.deleted_at IS NULL
             WHERE ingredient.recipe_id = %s
+              AND (
+                  ingredient.item_id IS NULL
+                  OR item.id IS NOT NULL
+              )
             ORDER BY ingredient.sort_order, ingredient.id;
             """,
             (family_id, source_id),
@@ -257,9 +269,10 @@ def _publish_source(
                 quantity,
                 note,
                 category_name,
-                sort_order
+                sort_order,
+                is_free
             )
-            VALUES (%s, %s, %s, %s, %s, %s);
+            VALUES (%s, %s, %s, %s, %s, %s, %s);
             """,
             (
                 public_id,
@@ -268,6 +281,7 @@ def _publish_source(
                 _clean_text(line["note"]),
                 _clean_text(line["category_name"]),
                 position * 10,
+                bool(line.get("is_free")),
             ),
         )
 
@@ -493,7 +507,8 @@ def get_shared_content(user_id, content_id):
                     quantity,
                     note,
                     category_name,
-                    sort_order
+                    sort_order,
+                    is_free
                 FROM shared_grocery_content_lines
                 WHERE content_id = %s
                 ORDER BY sort_order, id;
@@ -707,7 +722,8 @@ def copy_shared_content_to_family(user_id, content_id, family_id):
                     quantity,
                     note,
                     category_name,
-                    sort_order
+                    sort_order,
+                    is_free
                 FROM shared_grocery_content_lines
                 WHERE content_id = %s
                 ORDER BY sort_order, id;
@@ -784,9 +800,37 @@ def copy_shared_content_to_family(user_id, content_id, family_id):
             items_reused = 0
             ambiguous_matches = 0
             duplicate_lines_merged = 0
+            free_ingredients_copied = 0
             inserted_lines = {}
 
             for position, line in enumerate(lines, start=1):
+                if (
+                    content_type == "recipe"
+                    and bool(line.get("is_free"))
+                ):
+                    cur.execute(
+                        """
+                        INSERT INTO grocery_recipe_ingredients (
+                            recipe_id,
+                            item_id,
+                            free_name,
+                            quantity,
+                            note,
+                            sort_order
+                        )
+                        VALUES (%s, NULL, %s, %s, %s, %s);
+                        """,
+                        (
+                            new_parent_id,
+                            _clean_text(line["item_name"]),
+                            _positive_int(line["quantity"]),
+                            _clean_text(line["note"]),
+                            position * 10,
+                        ),
+                    )
+                    free_ingredients_copied += 1
+                    continue
+
                 item_id, created, ambiguous = _find_or_create_item(
                     cur,
                     family_id=family_id,
@@ -890,6 +934,7 @@ def copy_shared_content_to_family(user_id, content_id, family_id):
                     "items_reused": items_reused,
                     "ambiguous_matches": ambiguous_matches,
                     "duplicate_lines_merged": duplicate_lines_merged,
+                    "free_ingredients_copied": free_ingredients_copied,
                 },
             )
             conn.commit()
@@ -902,4 +947,5 @@ def copy_shared_content_to_family(user_id, content_id, family_id):
                 "items_reused": items_reused,
                 "ambiguous_matches": ambiguous_matches,
                 "duplicate_lines_merged": duplicate_lines_merged,
+                "free_ingredients_copied": free_ingredients_copied,
             }

@@ -2,6 +2,7 @@ from nicegui import app, ui
 
 from auth import get_current_user_id
 from db import (
+    add_recipe_free_ingredient,
     add_recipe_ingredient,
     apply_recipe_to_needs,
     create_recipe,
@@ -68,14 +69,27 @@ def _recipe_caption(servings, ingredient_count, category_path=""):
 
 
 def _summary_message(result):
-    total = result["items_total"]
-    added = result["items_added"]
-    quantities = result["quantities_updated"]
+    total = int(result.get("items_total") or 0)
+    added = int(result.get("items_added") or 0)
+    quantities = int(result.get("quantities_updated") or 0)
+    free_skipped = int(result.get("free_ingredients_skipped") or 0)
+
+    if total == 0 and free_skipped:
+        return (
+            "Aucun ingrédient relié à l’épicerie à ajouter. "
+            f"{free_skipped} ingrédient"
+            + ("" if free_skipped == 1 else "s")
+            + " libre"
+            + ("" if free_skipped == 1 else "s")
+            + " reste"
+            + ("" if free_skipped == 1 else "nt")
+            + " seulement dans la recette."
+        )
 
     message = (
-        f"{total} ingrédient traité"
+        f"{total} ingrédient relié traité"
         if total == 1
-        else f"{total} ingrédients traités"
+        else f"{total} ingrédients reliés traités"
     )
     message += (
         f", {added} ajouté aux besoins"
@@ -88,6 +102,13 @@ def _summary_message(result):
             f", {quantities} quantité augmentée"
             if quantities == 1
             else f", {quantities} quantités augmentées"
+        )
+
+    if free_skipped:
+        message += (
+            f", {free_skipped} ingrédient libre non ajouté"
+            if free_skipped == 1
+            else f", {free_skipped} ingrédients libres non ajoutés"
         )
 
     return message + "."
@@ -416,7 +437,25 @@ def recipes_panel():
     def edit_ingredient(ingredient):
         with ui.dialog() as dialog:
             with ui.card().classes("w-full max-w-md p-5"):
-                ui.label(ingredient["name"]).classes("text-xl font-bold")
+                is_free = bool(ingredient.get("is_free"))
+                ui.label(
+                    "Modifier l’ingrédient libre"
+                    if is_free
+                    else ingredient["name"]
+                ).classes("text-xl font-bold")
+
+                name_input = None
+                if is_free:
+                    name_input = ui.input(
+                        label="Nom",
+                        value=ingredient["name"],
+                        placeholder="Ex. légumes au choix, fines herbes...",
+                    ).classes("w-full")
+                    ui.label(
+                        "Cet ingrédient appartient seulement à la recette "
+                        "et ne sera pas ajouté automatiquement à l’épicerie."
+                    ).classes("text-xs text-gray-500")
+
                 quantity_input = ui.number(
                     label="Quantité",
                     value=ingredient["quantity"],
@@ -426,7 +465,7 @@ def recipes_panel():
                 note_input = ui.input(
                     label="Précision facultative",
                     value=ingredient["note"],
-                    placeholder="Ex. boîtes de 398 ml, au goût...",
+                    placeholder="Ex. au goût, assez pour couvrir...",
                 ).classes("w-full")
 
                 def save():
@@ -436,6 +475,11 @@ def recipes_panel():
                             ingredient["id"],
                             quantity_input.value,
                             note_input.value,
+                            name=(
+                                name_input.value
+                                if name_input is not None
+                                else None
+                            ),
                         )
                     except (ValueError, PermissionError) as error:
                         ui.notify(str(error), type="warning")
@@ -820,9 +864,20 @@ def recipes_panel():
                                         ).classes("font-bold whitespace-normal").style(
                                             "overflow-wrap:anywhere;"
                                         )
-                                        ui.label(
-                                            f"{ingredient['store']} · {ingredient['category']}"
-                                        ).classes("text-xs text-gray-500")
+                                        if ingredient.get("is_free"):
+                                            ui.label(
+                                                "Ingrédient libre · "
+                                                "non ajouté automatiquement à l’épicerie"
+                                            ).classes(
+                                                "text-xs text-orange-700"
+                                            )
+                                        else:
+                                            ui.label(
+                                                f"{ingredient['store']} · "
+                                                f"{ingredient['category']}"
+                                            ).classes(
+                                                "text-xs text-gray-500"
+                                            )
                                         if ingredient["note"]:
                                             ui.label(ingredient["note"]).classes(
                                                 "text-xs text-gray-600 whitespace-normal"
@@ -877,9 +932,17 @@ def recipes_panel():
                             "Cette recette ne contient encore aucun ingrédient."
                         ).classes("text-sm text-gray-500")
 
+                    ui.separator()
+                    ui.label("Ajouter un ingrédient").classes("font-bold")
+                    ui.label(
+                        "Choisissez un item d’épicerie existant ou ajoutez "
+                        "un ingrédient libre qui restera propre à la recette."
+                    ).classes("text-xs text-gray-500")
+
                     if options:
-                        ui.separator()
-                        ui.label("Ajouter un ingrédient existant").classes("font-bold")
+                        ui.label(
+                            "Item d’épicerie existant"
+                        ).classes("text-sm font-semibold mt-1")
                         with ui.row().classes("w-full items-end gap-2 flex-wrap"):
                             item_input = ui.select(
                                 options=options,
@@ -921,24 +984,78 @@ def recipes_panel():
                                     return
 
                                 save_recipe_open_state(selected_recipe_id, True)
-                                selected_item_input.value = None
-                                selected_quantity_input.value = 1
-                                selected_note_input.value = ""
-                                selected_item_input.update()
-                                selected_quantity_input.update()
-                                selected_note_input.update()
                                 render_recipes.refresh()
                                 ui.notify(
-                                    "Ingrédient ajouté à la recette.", type="positive"
+                                    "Item d’épicerie ajouté à la recette.",
+                                    type="positive",
                                 )
 
                             ui.button(
-                                "Ajouter", icon="add", on_click=add_selected
+                                "Ajouter l’item",
+                                icon="add",
+                                on_click=add_selected,
                             ).props("color=primary")
                     else:
                         ui.label(
-                            "Créez d’abord des items dans la Liste d’épicerie."
+                            "Aucun item d’épicerie disponible. "
+                            "Vous pouvez quand même ajouter des ingrédients libres."
                         ).classes("text-sm text-orange-700")
+
+                    ui.label(
+                        "Ingrédient libre"
+                    ).classes("text-sm font-semibold mt-2")
+                    with ui.row().classes("w-full items-end gap-2 flex-wrap"):
+                        free_name_input = ui.input(
+                            label="Nom",
+                            placeholder=(
+                                "Ex. légumes au choix, champignons, "
+                                "fines herbes..."
+                            ),
+                        ).classes("grow min-w-[230px]")
+                        free_quantity_input = ui.number(
+                            label="Quantité",
+                            value=1,
+                            min=1,
+                            step=1,
+                        ).classes("w-28")
+                        free_note_input = ui.input(
+                            label="Précision",
+                            placeholder="Ex. au goût, assez pour couvrir...",
+                        ).classes("grow min-w-[190px]")
+
+                        def add_free(
+                            selected_recipe_id=recipe_id,
+                            name_field=free_name_input,
+                            quantity_field=free_quantity_input,
+                            note_field=free_note_input,
+                        ):
+                            try:
+                                add_recipe_free_ingredient(
+                                    user_id,
+                                    selected_recipe_id,
+                                    name_field.value,
+                                    quantity_field.value,
+                                    note_field.value,
+                                )
+                            except (
+                                ValueError,
+                                PermissionError,
+                            ) as error:
+                                ui.notify(str(error), type="warning")
+                                return
+
+                            save_recipe_open_state(selected_recipe_id, True)
+                            render_recipes.refresh()
+                            ui.notify(
+                                "Ingrédient libre ajouté à la recette.",
+                                type="positive",
+                            )
+
+                        ui.button(
+                            "Ajouter libre",
+                            icon="post_add",
+                            on_click=add_free,
+                        ).props("outline color=primary")
 
                     if recipe["instructions"]:
                         ui.separator()

@@ -2184,6 +2184,7 @@ from grocery_common import (
 )
 from grocery_backup import export_family_backup, import_family_backup
 from grocery_planning import (
+    add_recipe_free_ingredient,
     add_recipe_ingredient,
     add_template_item,
     apply_recipe_to_needs,

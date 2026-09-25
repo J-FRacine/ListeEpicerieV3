@@ -67,6 +67,54 @@ def _ingredient_note(entry):
     return first or note
 
 
+def _ingredient_kind(entry):
+    if not isinstance(entry, dict):
+        return "auto"
+
+    if "grocery_item" in entry:
+        raw = entry.get("grocery_item")
+        if isinstance(raw, str):
+            enabled = raw.strip().casefold() not in {
+                "",
+                "0",
+                "false",
+                "faux",
+                "no",
+                "non",
+            }
+        else:
+            enabled = bool(raw)
+        return "grocery" if enabled else "free"
+
+    raw = str(
+        entry.get(
+            "kind",
+            entry.get(
+                "ingredient_type",
+                entry.get("type", ""),
+            ),
+        )
+        or ""
+    ).strip().casefold()
+
+    aliases = {
+        "free": "free",
+        "generic": "free",
+        "générique": "free",
+        "generique": "free",
+        "libre": "free",
+        "recipe_only": "free",
+        "grocery": "grocery",
+        "grocery_item": "grocery",
+        "item": "grocery",
+        "epicerie": "grocery",
+        "épicerie": "grocery",
+        "auto": "auto",
+        "": "auto",
+    }
+    return aliases.get(raw, "auto")
+
+
 def _normalize_ingredients(value):
     if not isinstance(value, list):
         raise ValueError("La liste des ingrédients est invalide.")
@@ -85,6 +133,7 @@ def _normalize_ingredients(value):
                     "note": "",
                     "order": index,
                     "display_note": "",
+                    "kind": "auto",
                 }
             )
             continue
@@ -125,6 +174,7 @@ def _normalize_ingredients(value):
                 "note": note,
                 "order": order,
                 "display_note": _ingredient_note(entry),
+                "kind": _ingredient_kind(entry),
             }
         )
 
@@ -328,8 +378,16 @@ def preview_recipe_import(candidate, existing_items, existing_recipes):
     }
 
     missing = []
+    free_ingredients = []
     matched = 0
+
     for ingredient in candidate.get("ingredients") or []:
+        if ingredient.get("kind") == "free":
+            free_ingredients.append(
+                ingredient.get("name") or "Ingrédient"
+            )
+            continue
+
         key = normalize_name(ingredient.get("name"))
         if key and key in item_keys:
             matched += 1
@@ -341,6 +399,7 @@ def preview_recipe_import(candidate, existing_items, existing_recipes):
         normalize_name(candidate.get("name")) in recipe_keys
     )
     result["matched_ingredients"] = matched
+    result["free_ingredients"] = free_ingredients
     result["missing_ingredients"] = missing
     return result
 
@@ -577,18 +636,26 @@ def import_recipe_candidate(
             reused_items = 0
             skipped_ingredients = 0
             linked_ingredients = 0
+            free_ingredients = 0
             seen_item_ids = set()
 
             for position, ingredient in enumerate(
                 normalized["ingredients"],
                 start=1,
             ):
+                ingredient_kind = ingredient.get("kind") or "auto"
                 key = normalize_name(ingredient["name"])
-                item_id = item_map.get(key)
-                if item_id is None:
-                    if not create_missing_items:
-                        skipped_ingredients += 1
-                        continue
+                item_id = (
+                    None
+                    if ingredient_kind == "free"
+                    else item_map.get(key)
+                )
+
+                if (
+                    item_id is None
+                    and ingredient_kind != "free"
+                    and create_missing_items
+                ):
                     cur.execute(
                         """
                         INSERT INTO items (
@@ -617,8 +684,31 @@ def import_recipe_candidate(
                     item_id = int(cur.fetchone()["id"])
                     item_map[key] = item_id
                     created_items += 1
-                else:
+                elif item_id is not None:
                     reused_items += 1
+
+                if item_id is None:
+                    cur.execute(
+                        """
+                        INSERT INTO grocery_recipe_ingredients (
+                            recipe_id,
+                            item_id,
+                            free_name,
+                            quantity,
+                            note,
+                            sort_order
+                        )
+                        VALUES (%s, NULL, %s, 1, %s, %s);
+                        """,
+                        (
+                            recipe_id,
+                            ingredient["name"],
+                            ingredient["display_note"],
+                            position * 10,
+                        ),
+                    )
+                    free_ingredients += 1
+                    continue
 
                 if item_id in seen_item_ids:
                     skipped_ingredients += 1
@@ -657,6 +747,7 @@ def import_recipe_candidate(
                     "source": "chatgpt_json_import",
                     "created_items": created_items,
                     "reused_items": reused_items,
+                    "free_ingredients": free_ingredients,
                     "nutrition": bool(
                         normalized["extra"].get("nutrition")
                     ),
@@ -670,6 +761,7 @@ def import_recipe_candidate(
         "items_created": created_items,
         "items_reused": reused_items,
         "ingredients_linked": linked_ingredients,
+        "free_ingredients": free_ingredients,
         "ingredients_skipped": skipped_ingredients,
         "nutrition_imported": bool(
             normalized["extra"].get("nutrition")
@@ -697,7 +789,16 @@ def example_import_payload():
                     "unit": "tasse",
                     "note": "",
                     "order": 1,
-                }
+                    "kind": "grocery",
+                },
+                {
+                    "name": "Fines herbes au choix",
+                    "quantity": "",
+                    "unit": "",
+                    "note": "au goût",
+                    "order": 2,
+                    "kind": "free",
+                },
             ],
             "steps": [
                 {"order": 1, "text": "Préchauffer le four."}

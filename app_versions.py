@@ -17,12 +17,30 @@ APP_VERSIONS = {
     "grocery": "1.2.1",
     "recipes": "1.5.0",
     "blood_pressure": "1.2.3",
-    "finances": "1.14.3",
+    "finances": "1.14.4",
     "rpg": "1.10.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.14.4",
+        "date": "2026-09-27",
+        "title": "Finances — V1.14.4 — paies réelles dans le disponible mensuel",
+        "summary": (
+            "Le disponible variable tient maintenant compte d’une paie confirmée "
+            "dont le montant diffère exceptionnellement du montant budgété."
+        ),
+        "changes": [
+            "La capacité normale reste calculée à partir du Budget et du nombre réel de paies prévues dans le mois.",
+            "Lorsqu’une occurrence confirmée de la paie principale diffère du montant budgété, seul l’écart réel est ajouté ou retiré du disponible du mois.",
+            "Une paie future non confirmée continue d’utiliser le montant normal du Budget; une exception ponctuelle ne modifie donc pas les mois suivants.",
+            "Tableau affiche séparément « Ajustement des paies réelles » lorsqu’un écart existe.",
+            "Le report au mois suivant utilise le solde corrigé par les paies réellement confirmées des mois antérieurs.",
+            "Aucune nouvelle table, colonne ou migration PostgreSQL; aucun SQL manuel et aucune nouvelle dépendance.",
+        ],
+    },
     {
         "app_key": "recipes",
         "version": "1.5.0",

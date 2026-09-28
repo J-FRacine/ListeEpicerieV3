@@ -9,6 +9,7 @@ def _budget_capacity_summary_v110(user_id, month_value):
         user_id, month_value,
         budget_summary=budget_summary,
         list_recurrences=list_recurrences,
+        list_transactions=list_transactions,
     )
 
 

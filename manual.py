@@ -351,7 +351,7 @@ Les prochaines évolutions encore prévues concernent surtout les **étapes stru
 """,
     },
     {
-        "title": "Finances — V1.14.3",
+        "title": "Finances — V1.14.4",
         "icon": "account_balance_wallet",
         "caption": "Prévisions, Budget, financements, conciliation et prêts partagés",
         "keywords": (
@@ -360,6 +360,20 @@ Les prochaines évolutions encore prévues concernent surtout les **étapes stru
             "compte solde départ solde actuel plus bas prévu fin mois"
         ),
         "content": """
+### V1.14.4 — paies réelles dans le disponible mensuel
+
+Le **Budget** reste la référence pour déterminer le montant normal disponible par paie et le nombre de paies du mois.
+
+Lorsqu’une occurrence de la **paie principale** est réellement confirmée avec un montant différent du montant prévu au Budget, Finances applique maintenant seulement cet écart au mois concerné. Par exemple, une paie exceptionnellement plus élevée parce qu’une déduction n’a pas été prélevée augmente le disponible variable de ce mois sans modifier le Budget ni les paies futures.
+
+Dans **Tableau > Dépenses variables du mois**, une ligne **Ajustement des paies réelles** apparaît lorsqu’au moins une paie confirmée diffère du montant normal. Le **Disponible de base** continue d’afficher la capacité prévue au Budget; le **Disponible ajusté ce mois** inclut ensuite l’écart réel et, lorsque l’option est active, le report du mois précédent.
+
+Seules les transactions de revenu **Confirmées** reliées à la récurrence de la paie principale sont utilisées pour cet ajustement. Les paies futures encore prévues utilisent donc leur montant budgété normal.
+
+Le calcul du report mensuel reprend également ces écarts réels pour les mois déjà passés, afin qu’un surplus ou un manque provenant d’une paie exceptionnelle soit correctement propagé.
+
+Aucune migration PostgreSQL n’est requise.
+
 ### V1.14.3 — avis Portail raccordés et Historique au mois complet
 
 Le **Portail** lit maintenant les échéances directement dans les données Finances. Un mauvais raccordement interne faisait échouer silencieusement la lecture des transactions et récurrences, même lorsque la case **Avis Portail** était correctement enregistrée.

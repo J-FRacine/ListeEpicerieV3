@@ -13,6 +13,7 @@ from finances_calculations import (
     month_start as _month_start,
     recurrence_dates_between as _recurrence_dates_between,
 )
+from finances_budget_payroll import confirmed_primary_income_adjustment
 
 
 def budget_summary(
@@ -49,9 +50,14 @@ def budget_summary(
 
 def _budget_capacity_summary_v110(
     user_id, month_value, *,
-    budget_summary, list_recurrences,
+    budget_summary, list_recurrences, list_transactions,
 ):
-    """Capacité disponible pour les dépenses variables du mois affiché."""
+    """Capacité disponible pour les dépenses variables du mois affiché.
+
+    Le Budget fournit la capacité normale du mois. Lorsqu'une occurrence réelle
+    de la paie principale est confirmée avec un montant différent, seul l'écart
+    entre le montant réel et le montant budgété est ajouté ou retiré.
+    """
 
     month = _month_start(month_value)
     month_end = _add_months(month, 1) - timedelta(days=1)
@@ -75,6 +81,9 @@ def _budget_capacity_summary_v110(
 
     pay_dates = []
     source = "budget"
+    primary_income_recurrence_id = None
+    expected_income_per_pay = None
+
     if linked_income_rows:
         # Le poste de revenu principal est celui qui représente le plus gros
         # montant par paie. Cela évite qu'un remboursement ponctuel soit compté
@@ -83,7 +92,15 @@ def _budget_capacity_summary_v110(
             linked_income_rows,
             key=lambda row: Decimal(row["biweekly_amount"]),
         )
-        recurrence = recurrence_by_id[int(primary_income["recurrence_id"])]
+        primary_income_recurrence_id = int(
+            primary_income["recurrence_id"]
+        )
+        expected_income_per_pay = Decimal(
+            primary_income["biweekly_amount"]
+        )
+        recurrence = recurrence_by_id[
+            primary_income_recurrence_id
+        ]
         pay_dates = _recurrence_dates_between(
             recurrence,
             month,
@@ -120,6 +137,10 @@ def _budget_capacity_summary_v110(
                         -Decimal(row.get("amount") or 0),
                     ),
                 )
+                primary_income_recurrence_id = int(
+                    recurrence["id"]
+                )
+                expected_income_per_pay = target_amount
                 pay_dates = _recurrence_dates_between(
                     recurrence,
                     month,
@@ -128,28 +149,50 @@ def _budget_capacity_summary_v110(
                 source = "recurrence_detected"
             else:
                 # Sans aucun ancrage de calendrier fiable, conserver le repli
-                # prudent de deux paies.
+                # prudent de deux paies. Aucun ajustement réel n'est appliqué
+                # puisque la paie principale ne peut pas être identifiée
+                # de façon sûre.
                 pay_dates = [month, month]
                 source = "fallback_2"
 
     if pay_dates:
         pay_count = len(pay_dates)
-        available_month = (
+        budget_available_month = (
             Decimal(summary["biweekly_remaining"])
             * Decimal(pay_count)
-        )
+        ).quantize(Decimal("0.01"))
     else:
         pay_count = 1 if income_rows else 0
-        available_month = Decimal(summary["monthly_remaining"])
+        budget_available_month = Decimal(
+            summary["monthly_remaining"]
+        ).quantize(Decimal("0.01"))
         source = "monthly"
+
+    pay_adjustment = confirmed_primary_income_adjustment(
+        user_id,
+        month=month,
+        month_end=month_end,
+        recurrence_id=primary_income_recurrence_id,
+        expected_per_pay=expected_income_per_pay,
+        list_transactions=list_transactions,
+    )
+
+    adjusted_available_month = (
+        budget_available_month
+        + Decimal(pay_adjustment["pay_actual_adjustment"])
+    ).quantize(Decimal("0.01"))
 
     return {
         **summary,
+        **pay_adjustment,
         "pay_count": pay_count,
         "pay_dates": pay_dates,
         "pay_count_source": source,
+        "primary_income_recurrence_id": primary_income_recurrence_id,
+        "expected_income_per_pay": expected_income_per_pay,
         "remaining_per_pay": Decimal(summary["biweekly_remaining"]),
-        "available_month": available_month,
+        "available_month_budget": budget_available_month,
+        "available_month": adjusted_available_month,
     }
 
 
@@ -157,11 +200,14 @@ def budget_capacity_summary(
     user_id, month_value, *,
     _budget_capacity_summary_v110, get_finance_settings, _variable_expense_total_for_month,
 ):
-    """Capacité variable avec report optionnel du solde mensuel."""
+    """Capacité variable avec paies réelles et report mensuel optionnel."""
 
     month = _month_start(month_value)
     base = dict(_budget_capacity_summary_v110(user_id, month))
     base_available = Decimal(base["available_month"])
+    budget_available = Decimal(
+        base.get("available_month_budget", base_available)
+    )
     settings = get_finance_settings(user_id)
     carry_enabled = bool(settings.get("carry_month_balance"))
     carry_start = settings.get("carry_start_month")
@@ -177,6 +223,8 @@ def budget_capacity_summary(
                     user_id,
                     cursor,
                 )
+                # Les mois historiques utilisent eux aussi les dépôts de paie
+                # réellement confirmés, afin que leur solde reporté reste juste.
                 cursor_available = Decimal(cursor_base["available_month"])
                 cursor_expenses = _variable_expense_total_for_month(
                     user_id,
@@ -188,7 +236,11 @@ def budget_capacity_summary(
                 cursor = _add_months(cursor, 1)
                 safety += 1
 
+    base["available_month_budget"] = budget_available
+    # ``available_month_base`` reste la capacité avant report, mais inclut
+    # maintenant l'écart des paies réellement confirmées.
     base["available_month_base"] = base_available
+    base["available_month_after_pay_adjustment"] = base_available
     base["carry_enabled"] = carry_enabled
     base["carry_start_month"] = carry_start
     base["carry_in"] = carry_in

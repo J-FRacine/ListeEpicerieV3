@@ -12,7 +12,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 | Liste d'épicerie | 1.2.1 |
 | Recettes | 1.5.0 |
 | Journal de pression | 1.2.3 |
-| Finances | 1.14.3 |
+| Finances | 1.14.4 |
 | Personnages JDR | 1.10.0 |
 | Commentaires et suggestions | 1.0.0 |
 
@@ -326,6 +326,20 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Aucun SQL manuel, aucune nouvelle table/colonne et aucune nouvelle dépendance Python.
 - Prochaines évolutions prévues : catégories et étiquettes propres aux recettes, étapes structurées/réordonnables, photos et éditeur bureau enrichi.
 - Validation fonctionnelle réelle de V1.0.0 effectuée avec succès par l’utilisateur dans le navigateur/Canner avant le démarrage de V1.1.0.
+
+## Finances — V1.14.4 / paies réelles dans la capacité variable — 2026-09-27
+
+- Base GitHub vérifiée avant développement : `e2c895b8c9c085f48a5fc3aa4b7488055b78e004` (`main`), Finances V1.14.3.
+- Problème observé en utilisation réelle : modifier le montant d’un dépôt de paie confirmé, par exemple parce qu’une déduction est absente pour cette paie seulement, ne changeait pas le **Disponible du mois**.
+- Cause : `_budget_capacity_summary_v110()` calculait exclusivement `Reste par paie × nombre de paies`, sans comparer les occurrences de paie confirmées avec le montant utilisé par le Budget.
+- Correction : la paie principale reste identifiée par la récurrence liée au plus gros revenu par paie, avec le mécanisme de détection existant en repli. Chaque occurrence confirmée de cette récurrence est comparée au montant budgété par paie.
+- Seul l’écart `montant réel − montant budgété` est appliqué. Une paie plus élevée augmente le disponible du mois; une paie plus faible le réduit; les occurrences futures non confirmées restent au montant normal.
+- **Tableau** affiche maintenant séparément **Ajustement des paies réelles** quand cet écart est non nul. Le **Disponible de base** demeure le montant prévu par le Budget.
+- Le report mensuel utilise lui aussi la capacité corrigée des mois passés, afin de propager le vrai solde.
+- Les transactions modifiées conservent déjà leur `recurrence_id` / `occurrence_date`; aucune migration de données n’est nécessaire.
+- Nouveau module pur `finances_budget_payroll.py` pour isoler et tester la logique sans PostgreSQL.
+- Aucune nouvelle table, colonne, migration PostgreSQL, dépendance ou SQL manuel.
+- Validation locale par compilation/tests à effectuer via l’installateur; validation navigateur/Canner/PostgreSQL de production à confirmer après publication.
 
 ## Finances — V1.14.3 / raccord des avis Portail et Historique au mois complet — 2026-09-22
 

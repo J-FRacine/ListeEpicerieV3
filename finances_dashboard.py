@@ -513,6 +513,18 @@ def build_dashboard_panel(
                 pay_count = int(capacity.get("pay_count") or 0)
                 carry_enabled = bool(capacity.get("carry_enabled"))
                 carry_in = Decimal(capacity.get("carry_in") or 0)
+                pay_adjustment = Decimal(
+                    capacity.get("pay_actual_adjustment") or 0
+                )
+                budget_available = Decimal(
+                    capacity.get(
+                        "available_month_budget",
+                        capacity.get(
+                            "available_month_base",
+                            capacity.get("available_month", 0),
+                        ),
+                    )
+                )
                 base_available = Decimal(
                     capacity.get(
                         "available_month_base",
@@ -531,31 +543,62 @@ def build_dashboard_panel(
                         else "jf-finance-expense",
                     ),
                 ]
-                if carry_enabled:
-                    values.extend(
-                        [
+
+                if carry_enabled or pay_adjustment:
+                    values.append(
+                        (
+                            f"Disponible de base — {pay_count} paie(s)",
+                            budget_available,
+                            "jf-finance-income"
+                            if budget_available >= 0
+                            else "jf-finance-expense",
+                        )
+                    )
+
+                    if pay_adjustment:
+                        realized_pay_count = int(
+                            capacity.get("realized_pay_count") or 0
+                        )
+                        values.append(
                             (
-                                f"Disponible de base — {pay_count} paie(s)",
-                                base_available,
+                                (
+                                    "Ajustement des paies réelles"
+                                    + (
+                                        f" — {realized_pay_count} paie(s)"
+                                        if realized_pay_count
+                                        else ""
+                                    )
+                                ),
+                                pay_adjustment,
                                 "jf-finance-income"
-                                if base_available >= 0
+                                if pay_adjustment >= 0
                                 else "jf-finance-expense",
-                            ),
+                            )
+                        )
+
+                    if carry_enabled:
+                        values.append(
                             (
                                 "Report du mois précédent",
                                 carry_in,
                                 "jf-finance-income"
                                 if carry_in >= 0
                                 else "jf-finance-expense",
-                            ),
+                            )
+                        )
+
+                    values.append(
+                        (
                             (
-                                "Disponible ajusté ce mois",
-                                adjusted_available,
-                                "jf-finance-income"
-                                if adjusted_available >= 0
-                                else "jf-finance-expense",
+                                "Disponible ajusté ce mois"
+                                if carry_enabled
+                                else f"Disponible ce mois — {pay_count} paie(s)"
                             ),
-                        ]
+                            adjusted_available,
+                            "jf-finance-income"
+                            if adjusted_available >= 0
+                            else "jf-finance-expense",
+                        )
                     )
                 else:
                     values.append(
@@ -567,6 +610,7 @@ def build_dashboard_panel(
                             else "jf-finance-expense",
                         )
                     )
+
                 values.extend(
                     [
                         (

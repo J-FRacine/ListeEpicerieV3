@@ -131,6 +131,26 @@ class DashboardPanelTests(unittest.TestCase):
         deps['refresh_all'].assert_called_once_with()
         ui.notify.assert_called_once_with('refus', type='warning')
 
+    def test_real_pay_adjustment_is_displayed_separately(self):
+        handle, ui, deps = build()
+        capacity = deps["dashboard_month_projection"].return_value["capacity"]
+        capacity.update(
+            available_month=D("175"),
+            available_month_budget=D("160"),
+            available_month_base=D("175"),
+            pay_actual_adjustment=D("15"),
+            realized_pay_count=1,
+        )
+        handle.refresh()
+
+        for text in (
+            "Disponible de base — 2 paie(s)",
+            "Ajustement des paies réelles — 1 paie(s)",
+            "15",
+            "Disponible ce mois — 2 paie(s)",
+        ):
+            self.assertIn(text, labels(ui))
+
     def test_carry_values_and_capacity_fallback_are_preserved(self):
         handle, ui, deps = build()
         projection = deps['dashboard_month_projection'].return_value

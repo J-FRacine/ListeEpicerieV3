@@ -38,6 +38,7 @@ class FinancesTests(unittest.TestCase):
                           next_date=date(2026, 12, 11))
         with patch.object(data, "list_budget_items", return_value=rows), \
              patch.object(data, "list_recurrences", return_value=[recurrence]), \
+             patch.object(data, "list_transactions", return_value=[]), \
              patch.object(data, "get_finance_settings", return_value={}):
             october = data.budget_capacity_summary(1, "2026-10")
             november = data.budget_capacity_summary(1, "2026-11")
@@ -171,7 +172,7 @@ class FinancesTests(unittest.TestCase):
         )
 
     def test_official_finances_version_is_1137_after_browser_validation(self):
-        self.assertEqual(app_versions.APP_VERSIONS["finances"], "1.14.3")
+        self.assertEqual(app_versions.APP_VERSIONS["finances"], "1.14.4")
 
 
 if __name__ == "__main__":

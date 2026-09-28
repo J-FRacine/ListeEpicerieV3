@@ -33,6 +33,7 @@ class BudgetTests(unittest.TestCase):
     def capacity(self, rows, recurrences):
         with patch.object(data, "list_budget_items", return_value=rows), \
              patch.object(data, "list_recurrences", return_value=recurrences), \
+             patch.object(data, "list_transactions", return_value=[]), \
              patch.object(data, "get_finance_settings", return_value={}):
             return data.budget_capacity_summary(1, "2026-10")
 
@@ -102,6 +103,7 @@ class BudgetTests(unittest.TestCase):
         cursor.execute.side_effect = execute
         with patch.object(data, "get_connection", connection), \
              patch.object(data, "list_recurrences", return_value=[]), \
+             patch.object(data, "list_transactions", return_value=[]), \
              patch.object(data, "get_finance_settings", return_value={}):
             result = data.budget_capacity_summary(1, "2026-10")
         self.assertEqual(result["available_month"], D("1000.00"))
@@ -191,7 +193,11 @@ assert callable(finances_budget_data.budget_forecast)
     def test_four_facades_delegate_with_successively_replaced_dependencies(self):
         contracts = {
             "budget_summary": ["list_budget_items"],
-            "_budget_capacity_summary_v110": ["budget_summary", "list_recurrences"],
+            "_budget_capacity_summary_v110": [
+                "budget_summary",
+                "list_recurrences",
+                "list_transactions",
+            ],
             "budget_capacity_summary": ["_budget_capacity_summary_v110", "get_finance_settings",
                                         "_variable_expense_total_for_month"],
             "budget_forecast": ["budget_capacity_summary", "_budget_capacity_summary_v110",

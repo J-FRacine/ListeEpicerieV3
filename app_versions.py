@@ -15,7 +15,7 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
-    "recipes": "1.5.0",
+    "recipes": "1.6.0",
     "blood_pressure": "1.2.3",
     "finances": "1.14.4",
     "rpg": "1.10.0",
@@ -23,6 +23,26 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "recipes",
+        "version": "1.6.0",
+        "date": "2026-09-30",
+        "title": "Recettes — V1.6.0 — navigation par catégories",
+        "summary": (
+            "L’écran Recettes devient un catalogue navigable par catégories "
+            "et sous-catégories plutôt qu’une longue liste unique."
+        ),
+        "changes": [
+            "À l’ouverture, des cartes affichent Toutes les recettes, Récentes, chaque catégorie principale et Sans catégorie lorsque nécessaire.",
+            "Chaque carte affiche automatiquement le nombre de recettes qu’elle contient, y compris les sous-catégories.",
+            "Une catégorie principale affiche ses sous-catégories sous forme de boutons avec compteurs.",
+            "Un fil d’Ariane permet de revenir rapidement aux catégories et indique la section consultée.",
+            "La recherche reste toujours accessible et cherche globalement dans toutes les catégories, ingrédients, étiquettes et textes de recette.",
+            "La vue Récentes montre jusqu’aux 10 recettes modifiées le plus récemment.",
+            "Le détail, Consulter, les photos, la nutrition, les ingrédients libres, la Bibliothèque partagée et l’édition restent inchangés.",
+            "Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance.",
+        ],
+    },
     {
         "app_key": "finances",
         "version": "1.14.4",

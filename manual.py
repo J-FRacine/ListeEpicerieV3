@@ -177,7 +177,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Recettes — V1.5.0",
+        "title": "Recettes — V1.6.0",
         "icon": "restaurant_menu",
         "caption": "Créer, consulter, cuisiner et envoyer les ingrédients à l’épicerie",
         "keywords": (
@@ -187,9 +187,31 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "photo image vignette compression poids "
             "chatgpt json nutrition nutritif calories protéines glucides "
             "temps cuisson préparation étiquettes source "
-            "ingrédient libre générique groupe aliments item lié"
+            "ingrédient libre générique groupe aliments item lié "
+            "navigation parcourir fil ariane récentes catalogue"
         ),
         "content": """
+### V1.6.0 — navigation par catégories
+
+L’écran **Mes recettes** s’ouvre maintenant comme un catalogue plutôt que comme une longue liste.
+
+La page d’accueil de Recettes affiche des cartes pour :
+
+- **Toutes les recettes**;
+- **Récentes**, qui montre jusqu’aux 10 recettes modifiées le plus récemment;
+- chaque **catégorie principale**, avec le nombre de recettes qu’elle contient;
+- **Sans catégorie** lorsqu’au moins une recette reste à classer.
+
+Le compteur d’une catégorie principale inclut les recettes classées directement dans cette catégorie et celles de ses sous-catégories.
+
+Après avoir choisi une catégorie, un **fil d’Ariane** indique la section consultée. Lorsqu’il existe des sous-catégories, des boutons comme **Toutes**, **Soupes**, **Bouchées**, etc. permettent de passer rapidement de l’une à l’autre. Chaque bouton affiche son nombre de recettes.
+
+La zone **Rechercher une recette** reste toujours disponible. Dès qu’un texte est saisi, la recherche devient globale : elle parcourt toutes les catégories ainsi que le nom, la description, la préparation, les ingrédients et les étiquettes. Effacer la recherche ramène à la section qui était consultée.
+
+Le contenu et les actions d’une recette ne changent pas : **Consulter**, photo, valeurs nutritives, modification, ingrédients, ajout à l’épicerie et publication dans la Bibliothèque partagée restent disponibles.
+
+Aucune migration PostgreSQL n’est nécessaire.
+
 ### V1.5.0 — ingrédients libres et items d’épicerie
 
 Une recette peut maintenant mélanger deux types d’ingrédients :

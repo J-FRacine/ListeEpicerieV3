@@ -19,7 +19,6 @@ from db import (
     update_recipe_ingredient,
 )
 from recipes_categories import (
-    category_matches_filter,
     get_recipe_category_assignment,
     get_recipe_category_assignments,
     list_recipe_categories,
@@ -29,6 +28,12 @@ from recipes_categories import (
 from recipes_management import (
     open_bulk_delete_dialog,
     open_recipe_categories_dialog,
+)
+from recipes_navigation import (
+    breadcrumb_parts,
+    build_category_navigation,
+    recent_recipe_ids,
+    recipe_ids_for_navigation,
 )
 from recipes_chatgpt_import_ui import open_chatgpt_recipe_import_dialog
 from recipes_extras import (
@@ -118,7 +123,12 @@ def recipes_panel():
     user_id = get_current_user_id()
     family_id = get_current_family_id()
     open_storage_key = f"open_grocery_recipes_{family_id}"
-    search_state = {"text": "", "category_id": 0}
+    search_state = {
+        "text": "",
+        "view": "home",
+        "main_category_id": None,
+        "subcategory_id": None,
+    }
 
     def get_open_recipe_ids():
         stored_ids = app.storage.user.get(open_storage_key, [])
@@ -374,39 +384,27 @@ def recipes_panel():
             on_click=lambda: ui.navigate.to("/?tab=bibliotheque"),
         ).props("flat color=primary")
 
-    category_filter_rows = list_recipe_categories(user_id, family_id)
-    with ui.row().classes("w-full gap-2 items-end flex-wrap mt-2"):
+    with ui.column().classes("w-full gap-1 mt-2"):
         search_input = ui.input(
             label="Rechercher une recette",
-            placeholder="Nom, description, préparation, ingrédient, catégorie ou étiquette",
+            placeholder=(
+                "Nom, description, préparation, ingrédient, "
+                "catégorie ou étiquette"
+            ),
         ).props("clearable debounce=180 autocomplete=off").classes(
-            "grow min-w-[260px]"
+            "w-full"
         )
         with search_input.add_slot("prepend"):
             ui.icon("search")
-
-        category_filter = ui.select(
-            recipe_category_options(
-                category_filter_rows,
-                include_all=True,
-            ),
-            value=0,
-            label="Catégorie",
-        ).props("outlined dense").classes("grow min-w-[220px]")
+        ui.label(
+            "La recherche couvre toutes les catégories."
+        ).classes("text-xs text-gray-500")
 
     def search_changed(event):
         search_state["text"] = str(event.value or "")
         render_recipes.refresh()
 
-    def category_changed(event):
-        try:
-            search_state["category_id"] = int(event.value or 0)
-        except (TypeError, ValueError):
-            search_state["category_id"] = 0
-        render_recipes.refresh()
-
     search_input.on_value_change(search_changed)
-    category_filter.on_value_change(category_changed)
 
     def confirm_delete(recipe):
         with ui.dialog() as dialog:
@@ -503,9 +501,295 @@ def recipes_panel():
             return
         render_recipes.refresh()
 
+    def navigate_recipes(
+        view,
+        *,
+        main_category_id=None,
+        subcategory_id=None,
+    ):
+        search_state["view"] = str(view or "home")
+        search_state["main_category_id"] = (
+            int(main_category_id)
+            if main_category_id not in (None, "")
+            else None
+        )
+        search_state["subcategory_id"] = (
+            int(subcategory_id)
+            if subcategory_id not in (None, "")
+            else None
+        )
+        render_recipes.refresh()
+
+    def render_navigation_card(
+        title,
+        count,
+        *,
+        icon,
+        on_click,
+        caption="",
+    ):
+        with ui.card().classes(
+            "w-full p-4 cursor-pointer shadow-sm "
+            "border border-gray-200 hover:shadow-md"
+        ) as card:
+            card.on("click", on_click)
+            with ui.row().classes(
+                "w-full items-center gap-3 flex-nowrap"
+            ):
+                ui.icon(icon).classes(
+                    "text-3xl text-primary shrink-0"
+                )
+                with ui.column().classes("gap-0 grow min-w-0"):
+                    ui.label(title).classes(
+                        "font-bold text-base whitespace-normal"
+                    )
+                    if caption:
+                        ui.label(caption).classes(
+                            "text-xs text-gray-500 whitespace-normal"
+                        )
+                ui.badge(str(int(count or 0))).props(
+                    "outline color=primary"
+                )
+
     @ui.refreshable
     def render_recipes():
         recipe_rows = get_recipes(user_id, family_id)
+        current_category_rows = list_recipe_categories(
+            user_id,
+            family_id,
+        )
+        category_assignments = get_recipe_category_assignments(
+            user_id,
+            family_id,
+        )
+        navigation = build_category_navigation(
+            recipe_rows,
+            current_category_rows,
+            category_assignments,
+        )
+
+        valid_recipe_ids = {
+            int(recipe["id"])
+            for recipe in recipe_rows
+        }
+        open_recipe_ids = get_open_recipe_ids() & valid_recipe_ids
+        app.storage.user[open_storage_key] = sorted(open_recipe_ids)
+
+        if not recipe_rows:
+            with ui.card().classes(
+                "w-full p-7 items-center text-center mt-3"
+            ):
+                ui.icon("menu_book").classes(
+                    "text-5xl text-primary"
+                )
+                ui.label("Aucune recette").classes(
+                    "text-xl font-bold"
+                )
+                ui.label(
+                    "Créez votre première recette, puis associez "
+                    "ses ingrédients aux items de la famille."
+                ).classes("text-gray-500")
+            return
+
+        query = str(
+            search_state["text"] or ""
+        ).strip().casefold()
+
+        if not query and search_state["view"] == "home":
+            with ui.row().classes(
+                "w-full items-center justify-between "
+                "gap-2 flex-wrap mt-2"
+            ):
+                with ui.column().classes("gap-0"):
+                    ui.label(
+                        "Parcourir par catégorie"
+                    ).classes("text-xl font-bold")
+                    ui.label(
+                        "Choisissez une catégorie pour afficher "
+                        "seulement les recettes qui vous intéressent."
+                    ).classes("text-sm text-gray-500")
+                ui.label(
+                    f"{navigation['total_count']} recettes"
+                ).classes("text-sm text-gray-500")
+
+            with ui.element("div").classes(
+                "w-full grid grid-cols-1 sm:grid-cols-2 "
+                "lg:grid-cols-3 xl:grid-cols-4 gap-3 mt-2"
+            ):
+                render_navigation_card(
+                    "Toutes les recettes",
+                    navigation["total_count"],
+                    icon="menu_book",
+                    caption="Afficher le catalogue complet",
+                    on_click=lambda _event: navigate_recipes("all"),
+                )
+                render_navigation_card(
+                    "Récentes",
+                    min(10, navigation["total_count"]),
+                    icon="history",
+                    caption="Les 10 dernières modifiées",
+                    on_click=lambda _event: navigate_recipes("recent"),
+                )
+
+                for main_category in navigation["main_categories"]:
+                    main_id = int(main_category["id"])
+                    render_navigation_card(
+                        main_category["name"],
+                        main_category["count"],
+                        icon="folder",
+                        caption=(
+                            f"{len(main_category['children'])} "
+                            "sous-catégorie(s)"
+                            if main_category["children"]
+                            else "Catégorie"
+                        ),
+                        on_click=(
+                            lambda _event, category_id=main_id:
+                            navigate_recipes(
+                                "main",
+                                main_category_id=category_id,
+                            )
+                        ),
+                    )
+
+                if navigation["uncategorized_count"]:
+                    render_navigation_card(
+                        "Sans catégorie",
+                        navigation["uncategorized_count"],
+                        icon="folder_off",
+                        caption="Recettes à classer",
+                        on_click=lambda _event: navigate_recipes(
+                            "uncategorized"
+                        ),
+                    )
+            return
+
+        if query:
+            candidate_recipe_ids = valid_recipe_ids
+            with ui.row().classes(
+                "w-full items-center gap-2 flex-wrap mt-2"
+            ):
+                ui.button(
+                    "Catégories",
+                    icon="arrow_back",
+                    on_click=lambda: (
+                        search_input.set_value(""),
+                        navigate_recipes("home"),
+                    ),
+                ).props("flat dense color=primary")
+                ui.icon("chevron_right").classes("text-gray-400")
+                ui.label(
+                    "Résultats de recherche"
+                ).classes("font-semibold")
+        else:
+            view = search_state["view"]
+            candidate_recipe_ids = recipe_ids_for_navigation(
+                recipe_rows,
+                current_category_rows,
+                category_assignments,
+                view=view,
+                main_category_id=search_state["main_category_id"],
+                subcategory_id=search_state["subcategory_id"],
+            )
+
+            with ui.row().classes(
+                "w-full items-center gap-1 flex-wrap mt-2"
+            ):
+                ui.button(
+                    "Catégories",
+                    icon="home",
+                    on_click=lambda: navigate_recipes("home"),
+                ).props("flat dense color=primary")
+
+                for part in breadcrumb_parts(
+                    current_category_rows,
+                    view=view,
+                    main_category_id=search_state["main_category_id"],
+                    subcategory_id=search_state["subcategory_id"],
+                ):
+                    ui.icon("chevron_right").classes(
+                        "text-gray-400"
+                    )
+                    ui.label(part).classes("font-semibold")
+
+            if view in {"main", "subcategory"}:
+                selected_main = next(
+                    (
+                        row
+                        for row in navigation["main_categories"]
+                        if int(row["id"])
+                        == int(search_state["main_category_id"])
+                    ),
+                    None,
+                )
+                if selected_main and selected_main["children"]:
+                    with ui.row().classes(
+                        "w-full gap-2 flex-wrap mt-1"
+                    ):
+                        all_button = ui.button(
+                            f"Toutes ({selected_main['count']})",
+                            on_click=lambda category_id=selected_main["id"]:
+                            navigate_recipes(
+                                "main",
+                                main_category_id=category_id,
+                            ),
+                        ).props("dense no-caps")
+                        if view == "main":
+                            all_button.props("color=primary")
+                        else:
+                            all_button.props("outline color=primary")
+
+                        for child in selected_main["children"]:
+                            child_id = int(child["id"])
+                            child_button = ui.button(
+                                f"{child['name']} ({child['count']})",
+                                on_click=(
+                                    lambda category_id=selected_main["id"],
+                                    sub_id=child_id:
+                                    navigate_recipes(
+                                        "subcategory",
+                                        main_category_id=category_id,
+                                        subcategory_id=sub_id,
+                                    )
+                                ),
+                            ).props("dense no-caps")
+                            if (
+                                view == "subcategory"
+                                and int(
+                                    search_state["subcategory_id"]
+                                    or 0
+                                ) == child_id
+                            ):
+                                child_button.props("color=primary")
+                            else:
+                                child_button.props(
+                                    "outline color=primary"
+                                )
+
+        candidate_rows = [
+            recipe
+            for recipe in recipe_rows
+            if int(recipe["id"]) in candidate_recipe_ids
+        ]
+
+        if not query and search_state["view"] == "recent":
+            recent_ids = recent_recipe_ids(
+                candidate_rows,
+                limit=10,
+            )
+            recent_position = {
+                recipe_id: index
+                for index, recipe_id in enumerate(recent_ids)
+            }
+            candidate_rows = [
+                recipe
+                for recipe in candidate_rows
+                if int(recipe["id"]) in recent_position
+            ]
+            candidate_rows.sort(
+                key=lambda recipe: recent_position[int(recipe["id"])]
+            )
+
         items = get_items(user_id, family_id)
         options = _item_options(items)
         photo_thumbnails = get_recipe_photo_thumbnails(
@@ -513,65 +797,70 @@ def recipes_panel():
             family_id,
         )
 
-        current_category_rows = list_recipe_categories(user_id, family_id)
-        category_assignments = get_recipe_category_assignments(
-            user_id,
-            family_id,
-        )
         details = []
-        query = str(search_state["text"] or "").strip().casefold()
-        for recipe in recipe_rows:
-            ingredients = get_recipe_ingredients(user_id, recipe["id"])
-            assignment = category_assignments.get(int(recipe["id"]), {})
-            extras = get_recipe_extras(user_id, recipe["id"])
-            assigned_category_id = assignment.get("category_id")
-            if not category_matches_filter(
-                assigned_category_id,
-                search_state["category_id"],
-                current_category_rows,
-            ):
-                continue
+        for recipe in candidate_rows:
+            ingredients = get_recipe_ingredients(
+                user_id,
+                recipe["id"],
+            )
+            assignment = category_assignments.get(
+                int(recipe["id"]),
+                {},
+            )
+            extras = get_recipe_extras(
+                user_id,
+                recipe["id"],
+            )
             category_text = str(
                 assignment.get("category_path") or ""
             )
-            text_matches = recipe_matches(
-                recipe,
-                ingredients,
-                search_state["text"],
-            ) or (
-                bool(query)
-                and query in category_text.casefold()
-            ) or (
-                bool(query)
-                and query in recipe_extra_search_text(extras)
+
+            if query:
+                text_matches = recipe_matches(
+                    recipe,
+                    ingredients,
+                    search_state["text"],
+                ) or (
+                    query in category_text.casefold()
+                ) or (
+                    query in recipe_extra_search_text(extras)
+                )
+                if not text_matches:
+                    continue
+
+            details.append(
+                (
+                    recipe,
+                    ingredients,
+                    assignment,
+                    extras,
+                )
             )
-            if text_matches:
-                details.append((recipe, ingredients, assignment, extras))
-
-        valid_recipe_ids = {int(recipe["id"]) for recipe in recipe_rows}
-        open_recipe_ids = get_open_recipe_ids() & valid_recipe_ids
-        app.storage.user[open_storage_key] = sorted(open_recipe_ids)
-
-        if not recipe_rows:
-            with ui.card().classes("w-full p-7 items-center text-center mt-3"):
-                ui.icon("menu_book").classes("text-5xl text-primary")
-                ui.label("Aucune recette").classes("text-xl font-bold")
-                ui.label(
-                    "Créez votre première recette, puis associez ses ingrédients aux items de la famille."
-                ).classes("text-gray-500")
-            return
 
         ui.label(
-            f"{len(details)} recette" if len(details) == 1 else f"{len(details)} recettes"
+            f"{len(details)} recette"
+            if len(details) == 1
+            else f"{len(details)} recettes"
         ).classes("text-sm text-gray-500 mt-1")
 
         if not details:
-            with ui.card().classes("w-full p-6 items-center text-center mt-2"):
-                ui.icon("search_off").classes("text-4xl text-gray-400")
-                ui.label("Aucune recette trouvée").classes("text-lg font-bold")
-                ui.label("Modifiez ou effacez la recherche pour voir d’autres recettes.").classes(
-                    "text-sm text-gray-500"
+            with ui.card().classes(
+                "w-full p-6 items-center text-center mt-2"
+            ):
+                ui.icon("search_off").classes(
+                    "text-4xl text-gray-400"
                 )
+                ui.label(
+                    "Aucune recette trouvée"
+                ).classes("text-lg font-bold")
+                ui.label(
+                    (
+                        "Modifiez ou effacez la recherche pour "
+                        "voir d’autres recettes."
+                        if query
+                        else "Cette catégorie ne contient aucune recette."
+                    )
+                ).classes("text-sm text-gray-500")
             return
 
         for recipe, ingredients, category_assignment, recipe_extras in details:

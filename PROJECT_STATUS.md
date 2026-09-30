@@ -1,6 +1,6 @@
 # JF Apps — État du projet
 
-Dernière mise à jour : 2026-09-24
+Dernière mise à jour : 2026-09-30
 
 Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversations. Le dépôt GitHub `J-FRacine/ListeEpicerieV3` sur `main` est la référence technique.
 
@@ -10,7 +10,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 |---|---:|
 | Portail JF Apps | 1.4.0 |
 | Liste d'épicerie | 1.2.1 |
-| Recettes | 1.5.0 |
+| Recettes | 1.6.0 |
 | Journal de pression | 1.2.3 |
 | Finances | 1.14.4 |
 | Personnages JDR | 1.10.0 |
@@ -184,6 +184,22 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation locale réussie : **9 tests ciblés Journal**, **528 tests JF Apps** et compilation Python complète.
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
+
+## Recettes — V1.6.0 / navigation par catégories — 2026-09-30
+
+- Base GitHub vérifiée avant développement : `876bb39460df78e469076ad45a4d1744033d8e73` (`main`), Recettes V1.5.0.
+- L’écran Recettes ne présente plus immédiatement toute la collection sous forme d’une longue liste.
+- À l’ouverture, une grille de navigation affiche **Toutes les recettes**, **Récentes**, chaque catégorie principale et **Sans catégorie** si nécessaire.
+- Les compteurs sont calculés à partir des affectations actuelles; le total d’une catégorie principale inclut ses recettes directes et celles de ses sous-catégories.
+- Après sélection d’une catégorie principale, ses sous-catégories sont présentées sous forme de boutons avec compteurs et une option **Toutes**.
+- Un fil d’Ariane indique la section courante et permet de revenir à l’accueil des catégories.
+- **Récentes** affiche au maximum les 10 recettes dont `updated_at` / `created_at` est le plus récent.
+- La recherche est globale : lorsqu’un texte est présent, elle ignore volontairement la catégorie courante et cherche dans toutes les recettes, ingrédients, catégories et métadonnées; lorsqu’elle est effacée, la navigation précédente réapparaît.
+- L’écran ne charge les ingrédients, extras et vignettes qu’après qu’une vue de recettes a été choisie; l’accueil des catégories évite donc de construire tous les détails inutilement.
+- Nouveau module pur `recipes_navigation.py` pour les compteurs, sélections, recettes récentes et fil d’Ariane.
+- Aucun changement au schéma PostgreSQL, aux données, aux photos, à la nutrition, aux ingrédients libres ou à la Bibliothèque partagée.
+- Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance.
+- Validation locale par compilation/tests à effectuer via l’installateur; validation navigateur/Canner à confirmer après publication.
 
 ## Recettes — V1.5.0 / ingrédients libres — 2026-09-24
 

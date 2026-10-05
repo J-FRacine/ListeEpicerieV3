@@ -476,6 +476,7 @@ def import_recipe_candidate(
     category_id,
     store_id=None,
     create_missing_items=True,
+    reuse_existing_items=True,
 ):
     import db as _db
     from grocery_common import log_activity
@@ -548,49 +549,52 @@ def import_recipe_candidate(
                         "pour les nouveaux items."
                     )
 
-            if store_id is None:
+                if store_id is None:
+                    cur.execute(
+                        """
+                        SELECT id
+                        FROM stores
+                        WHERE family_id = %s
+                          AND deleted_at IS NULL
+                        ORDER BY sort_order, LOWER(name), id
+                        LIMIT 1;
+                        """,
+                        (family_id,),
+                    )
+                    store = cur.fetchone()
+                    store_id = int(store["id"]) if store else None
+                else:
+                    cur.execute(
+                        """
+                        SELECT id
+                        FROM stores
+                        WHERE id = %s
+                          AND family_id = %s
+                          AND deleted_at IS NULL;
+                        """,
+                        (store_id, family_id),
+                    )
+                    if cur.fetchone() is None:
+                        raise ValueError(
+                            "Choisissez un magasin d’épicerie valide."
+                        )
+
+            if reuse_existing_items:
                 cur.execute(
                     """
-                    SELECT id
-                    FROM stores
+                    SELECT id, name
+                    FROM items
                     WHERE family_id = %s
-                      AND deleted_at IS NULL
-                    ORDER BY sort_order, LOWER(name), id
-                    LIMIT 1;
+                      AND deleted_at IS NULL;
                     """,
                     (family_id,),
                 )
-                store = cur.fetchone()
-                store_id = int(store["id"]) if store else None
+                item_map = {
+                    normalize_name(row["name"]): int(row["id"])
+                    for row in cur.fetchall()
+                }
             else:
-                cur.execute(
-                    """
-                    SELECT id
-                    FROM stores
-                    WHERE id = %s
-                      AND family_id = %s
-                      AND deleted_at IS NULL;
-                    """,
-                    (store_id, family_id),
-                )
-                if cur.fetchone() is None:
-                    raise ValueError(
-                        "Choisissez un magasin d’épicerie valide."
-                    )
-
-            cur.execute(
-                """
-                SELECT id, name
-                FROM items
-                WHERE family_id = %s
-                  AND deleted_at IS NULL;
-                """,
-                (family_id,),
-            )
-            item_map = {
-                normalize_name(row["name"]): int(row["id"])
-                for row in cur.fetchall()
-            }
+                item_map = {}
 
             recipe_category_id = _recipe_category_id(
                 cur,

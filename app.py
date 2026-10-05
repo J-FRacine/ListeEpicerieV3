@@ -1509,7 +1509,10 @@ def show_portal(user):
         )
 
         if (
-            "grocery" in allowed_app_keys
+            (
+                "grocery" in allowed_app_keys
+                or "recipes" in allowed_app_keys
+            )
             and not accessible_families
         ):
             with ui.card().classes(
@@ -1528,8 +1531,8 @@ def show_portal(user):
                         ui.label(
                             "La famille est votre espace de travail, même si "
                             "vous utilisez JF Apps seul. Elle doit être créée "
-                            "avant d’ajouter des items, des besoins, des listes "
-                            "modèles ou des recettes."
+                            "avant d’utiliser la Liste d’épicerie ou de gérer "
+                            "vos recettes."
                         ).classes("text-sm jf-muted")
                         with ui.row().classes("gap-2 flex-wrap mt-2"):
                             ui.button(
@@ -1567,7 +1570,7 @@ def show_portal(user):
                     title="Liste d’épicerie",
                     description=(
                         "Gérez les items, besoins, magasins, "
-                        "catégories, modèles et recettes."
+                        "catégories et listes modèles."
                     ),
                     icon="shopping_cart",
                     action_label="Ouvrir",
@@ -1577,7 +1580,7 @@ def show_portal(user):
                     ),
                 )
 
-            if "grocery" in allowed_app_keys:
+            if "recipes" in allowed_app_keys:
                 visible_app_count += 1
                 portal_action_card(
                     title="Recettes",
@@ -2263,6 +2266,15 @@ def application_header(
         app_key="grocery",
     )
 
+    current_user = get_current_user()
+    can_open_recipes = bool(
+        current_user
+        and user_has_app_access(
+            current_user["id"],
+            "recipes",
+        )
+    )
+
     if not show_tools:
         return
 
@@ -2301,12 +2313,13 @@ def application_header(
                         "/?tab=modeles"
                     ),
                 )
-                ui.menu_item(
-                    "Recettes",
-                    lambda: ui.navigate.to(
-                        "/?tab=recettes"
-                    ),
-                )
+                if can_open_recipes:
+                    ui.menu_item(
+                        "Recettes",
+                        lambda: ui.navigate.to(
+                            "/?tab=recettes"
+                        ),
+                    )
                 ui.separator()
                 ui.menu_item(
                     "Bibliothèque partagée",
@@ -2432,7 +2445,7 @@ def index(
     if normalized_tab in RECIPE_TABS:
         if not user_has_app_access(
             user["id"],
-            "grocery",
+            "recipes",
         ):
             with page_container():
                 portal_header(

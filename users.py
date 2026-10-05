@@ -96,7 +96,7 @@ def users_panel(current_user):
 
         app_input = ui.select(
             app_options,
-            value=["grocery"],
+            value=["grocery", "recipes"],
             multiple=True,
             label="Applications accessibles",
         ).props(
@@ -104,9 +104,9 @@ def users_panel(current_user):
         ).classes("w-full")
 
         ui.label(
-            "Le Journal de pression et Personnages JDR "
-            "sont disponibles. L’application Finances "
-            "reste affichée avec la mention « Bientôt »."
+            "Chaque application peut être attribuée séparément. "
+            "Recettes peut être autorisée même sans accès à la "
+            "Liste d’épicerie."
         ).classes(
             "text-xs text-gray-500"
         )

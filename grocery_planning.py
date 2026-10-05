@@ -1187,6 +1187,109 @@ def add_recipe_free_ingredient(
             conn.commit()
 
 
+def link_recipe_free_ingredient_to_item(
+    user_id,
+    ingredient_id,
+    item_id,
+    quantity=None,
+    note=None,
+):
+    """Relie un ingrédient libre à un item existant sans recréer la ligne."""
+
+    with _db.get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    recipe_id,
+                    item_id,
+                    free_name,
+                    quantity,
+                    note
+                FROM grocery_recipe_ingredients
+                WHERE id = %s;
+                """,
+                (ingredient_id,),
+            )
+            ingredient = cur.fetchone()
+            if ingredient is None:
+                raise ValueError("Cet ingrédient n’existe plus.")
+            if ingredient["item_id"] is not None:
+                raise ValueError(
+                    "Cet ingrédient est déjà relié à un item d’épicerie."
+                )
+
+            recipe = _load_parent(
+                cur,
+                user_id,
+                "recipe",
+                ingredient["recipe_id"],
+            )
+            _require_item(
+                cur,
+                recipe["family_id"],
+                item_id,
+            )
+
+            cur.execute(
+                """
+                SELECT 1
+                FROM grocery_recipe_ingredients
+                WHERE recipe_id = %s
+                  AND item_id = %s
+                  AND id <> %s
+                LIMIT 1;
+                """,
+                (
+                    ingredient["recipe_id"],
+                    item_id,
+                    ingredient_id,
+                ),
+            )
+            if cur.fetchone() is not None:
+                raise ValueError(
+                    "Cet item est déjà utilisé dans cette recette. "
+                    "Retirez le doublon ou choisissez un autre item."
+                )
+
+            clean_quantity = _positive_int(
+                ingredient["quantity"]
+                if quantity is None
+                else quantity
+            )
+            clean_note = _clean_text(
+                ingredient["note"]
+                if note is None
+                else note
+            )
+
+            cur.execute(
+                """
+                UPDATE grocery_recipe_ingredients
+                SET item_id = %s,
+                    free_name = NULL,
+                    quantity = %s,
+                    note = %s
+                WHERE id = %s;
+                """,
+                (
+                    item_id,
+                    clean_quantity,
+                    clean_note,
+                    ingredient_id,
+                ),
+            )
+            cur.execute(
+                """
+                UPDATE grocery_recipes
+                SET updated_at = NOW()
+                WHERE id = %s;
+                """,
+                (recipe["id"],),
+            )
+            conn.commit()
+
+
 def update_recipe_ingredient(
     user_id,
     ingredient_id,

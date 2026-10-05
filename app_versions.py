@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-PORTAL_VERSION = "1.4.0"
+PORTAL_VERSION = "1.5.0"
 
 APP_LABELS = {
     "portal": "Portail JF Apps",
@@ -15,7 +15,7 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
-    "recipes": "1.6.0",
+    "recipes": "1.7.0",
     "blood_pressure": "1.2.3",
     "finances": "1.14.4",
     "rpg": "1.10.0",
@@ -23,6 +23,44 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "portal",
+        "version": "1.5.0",
+        "date": "2026-10-05",
+        "title": "Portail — V1.5.0 — accès distinct à Recettes",
+        "summary": (
+            "Recettes devient une application attribuable séparément "
+            "dans la gestion des utilisateurs."
+        ),
+        "changes": [
+            "Recettes apparaît maintenant dans Applications accessibles pour la création et la modification d’un utilisateur.",
+            "La carte Recettes du Portail dépend de la permission recipes plutôt que de la permission grocery.",
+            "L’accès direct à la route Recettes est protégé par cette permission distincte.",
+            "Les comptes qui avaient accès à Liste d’épicerie reçoivent automatiquement Recettes lors de la migration afin de préserver leur accès actuel.",
+            "Un compte Recettes sans Épicerie peut créer, consulter et gérer ses recettes; les actions qui modifient directement l’épicerie sont masquées.",
+            "Migration automatique et idempotente de la contrainte user_app_access; aucun SQL manuel et aucune nouvelle dépendance.",
+        ],
+    },
+    {
+        "app_key": "recipes",
+        "version": "1.7.0",
+        "date": "2026-10-05",
+        "title": "Recettes — V1.7.0 — import multiple et liaison des ingrédients libres",
+        "summary": (
+            "Recettes importe plusieurs JSON ou un ZIP en une action et "
+            "peut relier un ingrédient libre à un item d’épicerie existant."
+        ),
+        "changes": [
+            "Importer depuis ChatGPT accepte maintenant plusieurs fichiers JSON sélectionnés ensemble.",
+            "Un fichier ZIP peut contenir jusqu’à 100 recettes JSON et est analysé avant toute écriture.",
+            "L’aperçu du lot distingue recettes prêtes, doublons existants, doublons du lot et fichiers invalides; Tout sélectionner / Tout désélectionner sont disponibles.",
+            "Importer la sélection traite toutes les recettes cochées et affiche un résumé des réussites et échecs.",
+            "Dans Modifier l’ingrédient libre, la case Relier à un item de la liste d’épicerie permet de convertir la ligne existante sans perdre quantité, précision ni ordre.",
+            "La conversion refuse un item déjà présent dans la même recette afin d’éviter un doublon silencieux.",
+            "Sans permission Épicerie, l’import conserve les ingrédients comme ingrédients libres et ne crée ni ne relie d’items d’épicerie.",
+            "Aucune migration du schéma Recettes et aucune nouvelle dépendance.",
+        ],
+    },
     {
         "app_key": "recipes",
         "version": "1.6.0",

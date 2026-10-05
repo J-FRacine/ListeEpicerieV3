@@ -1,6 +1,6 @@
 # JF Apps — État du projet
 
-Dernière mise à jour : 2026-09-30
+Dernière mise à jour : 2026-10-05
 
 Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversations. Le dépôt GitHub `J-FRacine/ListeEpicerieV3` sur `main` est la référence technique.
 
@@ -8,9 +8,9 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 
 | Application | Version |
 |---|---:|
-| Portail JF Apps | 1.4.0 |
+| Portail JF Apps | 1.5.0 |
 | Liste d'épicerie | 1.2.1 |
-| Recettes | 1.6.0 |
+| Recettes | 1.7.0 |
 | Journal de pression | 1.2.3 |
 | Finances | 1.14.4 |
 | Personnages JDR | 1.10.0 |
@@ -184,6 +184,22 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation locale réussie : **9 tests ciblés Journal**, **528 tests JF Apps** et compilation Python complète.
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
+
+## Portail V1.5.0 + Recettes V1.7.0 / accès, import multiple et liaison ingrédients — 2026-10-05
+
+- Base GitHub vérifiée avant développement : `a7d75fb9399d06c0e57addd6e4ad43115a7f44e1` (`main`), Portail V1.4.0 et Recettes V1.6.0.
+- **Portail V1.5.0** : `recipes` devient une clé officielle de `user_app_access`; la contrainte PostgreSQL est migrée automatiquement et les comptes qui possèdent déjà `grocery` reçoivent `recipes` afin de préserver leur accès historique.
+- Gestion des utilisateurs : Recettes apparaît dans les applications attribuables et est sélectionnée par défaut avec Épicerie lors de la création d’un compte.
+- La carte et la route Recettes utilisent maintenant la permission `recipes`; un utilisateur peut utiliser Recettes sans permission Épicerie.
+- Recettes adapte alors son interface : pas d’ajout aux besoins, pas de création/lien d’items via l’import, pas d’accès aux listes modèles ou à la Bibliothèque Épicerie depuis cette barre d’outils.
+- **Recettes V1.7.0** : l’import ChatGPT accepte une sélection multiple de JSON et les archives ZIP; l’analyse globale détecte les erreurs, doublons existants et doublons internes avant l’import.
+- Un ZIP est limité à 12 Mo, 100 JSON et 25 Mo décompressés; chaque JSON conserve la limite de 2 Mo.
+- La sélection du lot peut être cochée/décochée globalement; l’import affiche ensuite le nombre de réussites et d’échecs sans écraser une recette existante.
+- Dans l’éditeur d’un ingrédient libre, une option permet de relier la ligne à un item existant. La conversion conserve quantité, précision et ordre et refuse les doublons d’items dans la recette.
+- Nouveau module `recipes_batch_import.py`; `recipes_chatgpt_import_ui.py` est remplacé par l’interface de lot.
+- Aucune nouvelle dépendance. La seule migration PostgreSQL concerne la contrainte de permissions du Portail; aucun SQL manuel.
+- La publication dynamique vers l’ancien Google Sites reste une évolution séparée : elle nécessite un point d’accès public volontaire et une modification de l’intégration côté Google Sites.
+- Validation locale complète à effectuer par l’installateur; validation navigateur/Canner/PostgreSQL de production à confirmer après publication.
 
 ## Recettes — V1.6.0 / navigation par catégories — 2026-09-30
 

@@ -124,6 +124,14 @@ La restauration globale fonctionne volontairement en **fusion non destructive** 
 
 Les sauvegardes globales créées à partir du Portail V1.4.0 utilisent le format V2, qui contient davantage d’informations pour la restauration sélective. Les archives globales V1 produites par les versions précédentes restent acceptées lorsque leur structure est valide.
 
+### Accès distinct à Recettes — V1.5.0
+
+Dans **Utilisateurs > Applications accessibles**, **Recettes** est maintenant une permission indépendante de **Liste d’épicerie**. Une application retirée disparaît du Portail et sa route directe est refusée pour ce compte.
+
+Lors de la migration V1.5.0, les utilisateurs qui avaient déjà accès à Liste d’épicerie reçoivent automatiquement l’accès Recettes afin de ne pas perdre une fonction qu’ils utilisaient auparavant. L’administrateur peut ensuite retirer l’une ou l’autre permission séparément.
+
+Un utilisateur peut donc avoir **Recettes sans Liste d’épicerie**. Il peut gérer ses recettes dans les familles auxquelles il appartient, mais les actions qui modifient directement les besoins ou les items d’épicerie sont masquées.
+
 ### Applications
 
 La grille **Applications** du Portail contient :
@@ -177,7 +185,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Recettes — V1.6.0",
+        "title": "Recettes — V1.7.0",
         "icon": "restaurant_menu",
         "caption": "Créer, consulter, cuisiner et envoyer les ingrédients à l’épicerie",
         "keywords": (
@@ -191,6 +199,18 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "navigation parcourir fil ariane récentes catalogue"
         ),
         "content": """
+### V1.7.0 — import multiple et liaison à l’épicerie
+
+**Importer depuis ChatGPT** accepte maintenant plusieurs fichiers `.json` sélectionnés dans la même opération. Vous pouvez aussi choisir un fichier `.zip` contenant jusqu’à 100 JSON de recettes.
+
+JF Apps analyse tout le lot avant l’import. Chaque ligne indique si la recette est **Prête**, **Déjà dans JF Apps**, **Doublon dans le lot** ou **Fichier invalide**. Les actions **Tout sélectionner** et **Tout désélectionner** accélèrent les gros lots. **Importer la sélection** traite ensuite toutes les recettes cochées et affiche un résumé final.
+
+Un ZIP est seulement un contenant pratique : le format d’échange reste `jf_apps_recipe_import` version 1 et chaque JSON contient toujours une recette.
+
+Dans **Modifier l’ingrédient libre**, les comptes ayant accès à la Liste d’épicerie disposent maintenant de la case **Relier à un item de la liste d’épicerie**. Une liste recherchable permet de choisir l’item. La ligne de recette est conservée : quantité, précision et position ne sont pas perdues. Si l’item existe déjà ailleurs dans la même recette, la conversion est refusée afin d’éviter un doublon silencieux.
+
+Un compte autorisé à **Recettes** mais pas à **Liste d’épicerie** conserve toutes les fonctions propres aux recettes. Les boutons et opérations qui modifient directement l’épicerie sont masqués; les imports conservent alors leurs ingrédients comme ingrédients libres.
+
 ### V1.6.0 — navigation par catégories
 
 L’écran **Mes recettes** s’ouvre maintenant comme un catalogue plutôt que comme une longue liste.

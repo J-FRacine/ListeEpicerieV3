@@ -1,6 +1,7 @@
 from nicegui import app, ui
 
 from auth import get_current_user_id
+from app_access import user_has_app_access
 from db import (
     add_recipe_free_ingredient,
     add_recipe_ingredient,
@@ -11,6 +12,7 @@ from db import (
     get_items,
     get_recipe_ingredients,
     get_recipes,
+    link_recipe_free_ingredient_to_item,
     move_recipe_ingredient,
     refresh_public_recipe,
     remove_recipe_ingredient,
@@ -122,6 +124,10 @@ def _summary_message(result):
 def recipes_panel():
     user_id = get_current_user_id()
     family_id = get_current_family_id()
+    has_grocery_access = user_has_app_access(
+        user_id,
+        "grocery",
+    ) if user_id is not None else False
     open_storage_key = f"open_grocery_recipes_{family_id}"
     search_state = {
         "text": "",
@@ -187,7 +193,15 @@ def recipes_panel():
         with ui.column().classes("gap-0"):
             ui.label("Mes recettes").classes("text-2xl font-bold")
             ui.label(
-                "Créez, consultez et partagez vos recettes, puis envoyez leurs ingrédients dans la liste d’épicerie."
+                (
+                    "Créez, consultez et partagez vos recettes, puis "
+                    "envoyez leurs ingrédients dans la liste d’épicerie."
+                    if has_grocery_access
+                    else
+                    "Créez, consultez et partagez vos recettes. "
+                    "L’intégration à la Liste d’épicerie n’est pas "
+                    "activée pour ce compte."
+                )
             ).classes("text-sm text-gray-500")
         ui.icon("restaurant_menu").classes("text-4xl text-primary")
 
@@ -350,6 +364,7 @@ def recipes_panel():
                 user_id=user_id,
                 family_id=family_id,
                 on_imported=render_recipes.refresh,
+                allow_grocery_integration=has_grocery_access,
             ),
         ).props("outline color=primary")
 
@@ -373,16 +388,17 @@ def recipes_panel():
             ),
         ).props("flat color=negative")
 
-        ui.button(
-            "Listes modèles",
-            icon="checklist",
-            on_click=lambda: ui.navigate.to("/?tab=modeles"),
-        ).props("flat color=primary")
-        ui.button(
-            "Bibliothèque partagée",
-            icon="public",
-            on_click=lambda: ui.navigate.to("/?tab=bibliotheque"),
-        ).props("flat color=primary")
+        if has_grocery_access:
+            ui.button(
+                "Listes modèles",
+                icon="checklist",
+                on_click=lambda: ui.navigate.to("/?tab=modeles"),
+            ).props("flat color=primary")
+            ui.button(
+                "Bibliothèque partagée",
+                icon="public",
+                on_click=lambda: ui.navigate.to("/?tab=bibliotheque"),
+            ).props("flat color=primary")
 
     with ui.column().classes("w-full gap-1 mt-2"):
         search_input = ui.input(
@@ -443,6 +459,10 @@ def recipes_panel():
                 ).classes("text-xl font-bold")
 
                 name_input = None
+                link_checkbox = None
+                item_select = None
+                item_link_box = None
+
                 if is_free:
                     name_input = ui.input(
                         label="Nom",
@@ -453,6 +473,46 @@ def recipes_panel():
                         "Cet ingrédient appartient seulement à la recette "
                         "et ne sera pas ajouté automatiquement à l’épicerie."
                     ).classes("text-xs text-gray-500")
+
+                    if has_grocery_access:
+                        available_items = get_items(
+                            user_id,
+                            family_id,
+                        )
+                        link_options = _item_options(
+                            available_items
+                        )
+                        if link_options:
+                            link_checkbox = ui.checkbox(
+                                "Relier à un item de la liste d’épicerie",
+                                value=False,
+                            )
+                            item_link_box = ui.column().classes(
+                                "w-full gap-1"
+                            )
+                            item_link_box.set_visibility(False)
+                            with item_link_box:
+                                item_select = ui.select(
+                                    options=link_options,
+                                    label="Item d’épicerie",
+                                    with_input=True,
+                                ).props(
+                                    "clearable use-input input-debounce=0"
+                                ).classes("w-full")
+                                ui.label(
+                                    "Le nom de l’item remplacera le nom libre. "
+                                    "La quantité, la précision et la position "
+                                    "dans la recette seront conservées."
+                                ).classes("text-xs text-gray-500")
+
+                            def toggle_item_link(event):
+                                item_link_box.set_visibility(
+                                    bool(event.value)
+                                )
+
+                            link_checkbox.on_value_change(
+                                toggle_item_link
+                            )
 
                 quantity_input = ui.number(
                     label="Quantité",
@@ -468,22 +528,56 @@ def recipes_panel():
 
                 def save():
                     try:
-                        update_recipe_ingredient(
-                            user_id,
-                            ingredient["id"],
-                            quantity_input.value,
-                            note_input.value,
-                            name=(
-                                name_input.value
-                                if name_input is not None
-                                else None
-                            ),
-                        )
+                        if (
+                            is_free
+                            and link_checkbox is not None
+                            and bool(link_checkbox.value)
+                        ):
+                            if (
+                                item_select is None
+                                or item_select.value is None
+                            ):
+                                ui.notify(
+                                    "Choisissez l’item d’épicerie à relier.",
+                                    type="warning",
+                                )
+                                return
+                            link_recipe_free_ingredient_to_item(
+                                user_id,
+                                ingredient["id"],
+                                int(item_select.value),
+                                quantity=quantity_input.value,
+                                note=note_input.value,
+                            )
+                        else:
+                            update_recipe_ingredient(
+                                user_id,
+                                ingredient["id"],
+                                quantity_input.value,
+                                note_input.value,
+                                name=(
+                                    name_input.value
+                                    if name_input is not None
+                                    else None
+                                ),
+                            )
                     except (ValueError, PermissionError) as error:
                         ui.notify(str(error), type="warning")
                         return
                     dialog.close()
                     render_recipes.refresh()
+                    ui.notify(
+                        (
+                            "Ingrédient relié à l’épicerie."
+                            if (
+                                is_free
+                                and link_checkbox is not None
+                                and bool(link_checkbox.value)
+                            )
+                            else "Ingrédient modifié."
+                        ),
+                        type="positive",
+                    )
 
                 with ui.row().classes("w-full justify-end gap-2 mt-3"):
                     ui.button("Annuler", on_click=dialog.close).props("flat")
@@ -790,7 +884,10 @@ def recipes_panel():
                 key=lambda recipe: recent_position[int(recipe["id"])]
             )
 
-        items = get_items(user_id, family_id)
+        if has_grocery_access:
+            items = get_items(user_id, family_id)
+        else:
+            items = []
         options = _item_options(items)
         photo_thumbnails = get_recipe_photo_thumbnails(
             user_id,
@@ -902,11 +999,22 @@ def recipes_panel():
                     photo_data_url=recipe_photo_to_data_url(
                         full_photo
                     ),
-                    on_add_to_needs=lambda selected_id=selected_recipe["id"]: apply_recipe_to_needs(
-                        user_id,
-                        selected_id,
+                    on_add_to_needs=(
+                        (
+                            lambda selected_id=selected_recipe["id"]:
+                            apply_recipe_to_needs(
+                                user_id,
+                                selected_id,
+                            )
+                        )
+                        if has_grocery_access
+                        else None
                     ),
-                    summary_message=_summary_message,
+                    summary_message=(
+                        _summary_message
+                        if has_grocery_access
+                        else None
+                    ),
                 )
 
             details_context = {
@@ -1042,11 +1150,12 @@ def recipes_panel():
                                 _summary_message(result), type="positive", timeout=5000
                             )
 
-                        ui.button(
-                            "Ajouter à l’épicerie",
-                            icon="playlist_add",
-                            on_click=add_selected_to_needs,
-                        ).props("outline color=positive")
+                        if has_grocery_access:
+                            ui.button(
+                                "Ajouter à l’épicerie",
+                                icon="playlist_add",
+                                on_click=add_selected_to_needs,
+                            ).props("outline color=positive")
 
                         ui.button(
                             "Photo",
@@ -1228,7 +1337,7 @@ def recipes_panel():
                         "un ingrédient libre qui restera propre à la recette."
                     ).classes("text-xs text-gray-500")
 
-                    if options:
+                    if has_grocery_access and options:
                         ui.label(
                             "Item d’épicerie existant"
                         ).classes("text-sm font-semibold mt-1")
@@ -1284,11 +1393,17 @@ def recipes_panel():
                                 icon="add",
                                 on_click=add_selected,
                             ).props("color=primary")
-                    else:
+                    elif has_grocery_access:
                         ui.label(
                             "Aucun item d’épicerie disponible. "
                             "Vous pouvez quand même ajouter des ingrédients libres."
                         ).classes("text-sm text-orange-700")
+                    else:
+                        ui.label(
+                            "Les ingrédients sont ajoutés comme ingrédients "
+                            "libres parce que ce compte n’a pas accès à "
+                            "la Liste d’épicerie."
+                        ).classes("text-sm text-gray-500")
 
                     ui.label(
                         "Ingrédient libre"

@@ -48,8 +48,8 @@ def build_recipe_reader(
     ingredients,
     extras=None,
     photo_data_url=None,
-    on_add_to_needs,
-    summary_message,
+    on_add_to_needs=None,
+    summary_message=None,
 ):
     """Ouvre une lecture adaptée au téléphone/tablette et un mode cuisine."""
     steps = instruction_steps(recipe.get("instructions"))
@@ -158,12 +158,19 @@ def build_recipe_reader(
             pass
 
     def add_to_needs():
+        if on_add_to_needs is None:
+            return
         try:
             result = on_add_to_needs()
         except (ValueError, PermissionError) as error:
             ui.notify(str(error), type="warning")
             return
-        ui.notify(summary_message(result), type="positive", timeout=5000)
+        if summary_message is not None:
+            ui.notify(
+                summary_message(result),
+                type="positive",
+                timeout=5000,
+            )
 
     with ui.dialog().props("maximized persistent") as cooking_dialog:
         with ui.card().classes("w-full min-h-screen p-4 sm:p-6"):
@@ -230,11 +237,14 @@ def build_recipe_reader(
 
             render_nutrition()
 
-            ui.button(
-                "Ajouter à la liste d’épicerie",
-                icon="playlist_add",
-                on_click=add_to_needs,
-            ).props("color=positive size=lg").classes("w-full sm:w-auto mt-4")
+            if on_add_to_needs is not None:
+                ui.button(
+                    "Ajouter à la liste d’épicerie",
+                    icon="playlist_add",
+                    on_click=add_to_needs,
+                ).props(
+                    "color=positive size=lg"
+                ).classes("w-full sm:w-auto mt-4")
 
     async def open_cooking_mode():
         cooking_dialog.open()
@@ -309,11 +319,12 @@ def build_recipe_reader(
             render_nutrition()
 
             with ui.row().classes("w-full justify-end gap-2 mt-4 flex-wrap"):
-                ui.button(
-                    "Ajouter à la liste d’épicerie",
-                    icon="playlist_add",
-                    on_click=add_to_needs,
-                ).props("outline color=positive")
+                if on_add_to_needs is not None:
+                    ui.button(
+                        "Ajouter à la liste d’épicerie",
+                        icon="playlist_add",
+                        on_click=add_to_needs,
+                    ).props("outline color=positive")
                 ui.button(
                     "Mode cuisine",
                     icon="restaurant",

@@ -2196,6 +2196,7 @@ from grocery_planning import (
     delete_template,
     get_recipe_ingredients,
     get_recipes,
+    link_recipe_free_ingredient_to_item,
     get_template_items,
     get_templates,
     move_recipe_ingredient,

@@ -11,8 +11,18 @@ APP_DEFINITIONS = {
         "short_label": "Épicerie",
         "icon": "shopping_cart",
         "description": (
-            "Items, besoins, magasins, catégories, "
-            "modèles et recettes."
+            "Items, besoins, magasins, catégories "
+            "et listes modèles."
+        ),
+        "available": True,
+    },
+    "recipes": {
+        "label": "Recettes",
+        "short_label": "Recettes",
+        "icon": "restaurant_menu",
+        "description": (
+            "Création, consultation, cuisine et "
+            "gestion des recettes."
         ),
         "available": True,
     },
@@ -54,6 +64,7 @@ ALL_APP_KEYS = tuple(
 
 DEFAULT_APP_KEYS = (
     "grocery",
+    "recipes",
 )
 
 
@@ -173,7 +184,14 @@ def _initialize_profile(
                 user_id,
                 app_key
             )
-            VALUES (%s, 'grocery')
+            SELECT
+                %s,
+                app_key
+            FROM (
+                VALUES
+                    ('grocery'),
+                    ('recipes')
+            ) AS defaults(app_key)
             ON CONFLICT (
                 user_id,
                 app_key
@@ -209,8 +227,13 @@ def _initialize_all_profiles(
         )
         SELECT
             new_profile.user_id,
-            'grocery'
+            defaults.app_key
         FROM new_profiles AS new_profile
+        CROSS JOIN (
+            VALUES
+                ('grocery'),
+                ('recipes')
+        ) AS defaults(app_key)
         ON CONFLICT (
             user_id,
             app_key
@@ -232,7 +255,9 @@ def init_app_access_schema():
                         REFERENCES users(id)
                         ON DELETE CASCADE,
                     configured_at TIMESTAMPTZ
-                        NOT NULL DEFAULT NOW()
+                        NOT NULL DEFAULT NOW(),
+                    recipes_access_migrated BOOLEAN
+                        NOT NULL DEFAULT TRUE
                 );
                 """
             )
@@ -248,6 +273,7 @@ def init_app_access_schema():
                         CHECK (
                             app_key IN (
                                 'grocery',
+                                'recipes',
                                 'blood_pressure',
                                 'finances',
                                 'rpg'
@@ -258,6 +284,65 @@ def init_app_access_schema():
                     PRIMARY KEY (
                         user_id,
                         app_key
+                    )
+                );
+                """
+            )
+
+            # Portail V1.5.0 : Recettes devient une permission
+            # indépendante de Liste d’épicerie.
+            #
+            # Le marqueur recipes_access_migrated garantit que l’ancien
+            # comportement grocery -> recipes n’est reproduit qu’une seule fois.
+            # Après cette migration, un administrateur peut retirer Recettes
+            # sans que le prochain redémarrage ne la réaccorde.
+            cur.execute(
+                """
+                ALTER TABLE user_app_access_profiles
+                ADD COLUMN IF NOT EXISTS
+                    recipes_access_migrated BOOLEAN
+                    NOT NULL DEFAULT FALSE;
+                """
+            )
+
+            # La contrainte existante est recréée de façon idempotente
+            # pour accepter la nouvelle clé recipes.
+            cur.execute(
+                """
+                DO $$
+                DECLARE
+                    check_name TEXT;
+                BEGIN
+                    SELECT conname
+                    INTO check_name
+                    FROM pg_constraint
+                    WHERE conrelid = 'user_app_access'::regclass
+                      AND contype = 'c'
+                      AND pg_get_constraintdef(oid) ILIKE '%app_key%'
+                    LIMIT 1;
+
+                    IF check_name IS NOT NULL THEN
+                        EXECUTE format(
+                            'ALTER TABLE user_app_access DROP CONSTRAINT %I',
+                            check_name
+                        );
+                    END IF;
+                END
+                $$;
+                """
+            )
+
+            cur.execute(
+                """
+                ALTER TABLE user_app_access
+                ADD CONSTRAINT user_app_access_app_key_check
+                CHECK (
+                    app_key IN (
+                        'grocery',
+                        'recipes',
+                        'blood_pressure',
+                        'finances',
+                        'rpg'
                     )
                 );
                 """
@@ -275,6 +360,45 @@ def init_app_access_schema():
             )
 
             _initialize_all_profiles(cur)
+
+            # Avant V1.5.0, Recettes suivait automatiquement l’accès
+            # Épicerie. Cette migration est exécutée une seule fois par profil.
+            cur.execute(
+                """
+                INSERT INTO user_app_access (
+                    user_id,
+                    app_key
+                )
+                SELECT
+                    profile.user_id,
+                    'recipes'
+                FROM user_app_access_profiles AS profile
+                JOIN user_app_access AS grocery_access
+                  ON grocery_access.user_id = profile.user_id
+                 AND grocery_access.app_key = 'grocery'
+                WHERE NOT profile.recipes_access_migrated
+                ON CONFLICT (
+                    user_id,
+                    app_key
+                ) DO NOTHING;
+                """
+            )
+
+            cur.execute(
+                """
+                UPDATE user_app_access_profiles
+                SET recipes_access_migrated = TRUE
+                WHERE NOT recipes_access_migrated;
+                """
+            )
+
+            cur.execute(
+                """
+                ALTER TABLE user_app_access_profiles
+                ALTER COLUMN recipes_access_migrated
+                SET DEFAULT TRUE;
+                """
+            )
 
             conn.commit()
 
@@ -434,15 +558,18 @@ def set_user_app_access_for_admin(
                 """
                 INSERT INTO user_app_access_profiles (
                     user_id,
-                    configured_at
+                    configured_at,
+                    recipes_access_migrated
                 )
                 VALUES (
                     %s,
-                    NOW()
+                    NOW(),
+                    TRUE
                 )
                 ON CONFLICT (user_id)
                 DO UPDATE SET
-                    configured_at = NOW();
+                    configured_at = NOW(),
+                    recipes_access_migrated = TRUE;
                 """,
                 (target_user_id,),
             )

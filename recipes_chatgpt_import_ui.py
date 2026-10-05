@@ -5,10 +5,14 @@ import json
 
 from nicegui import ui
 
+from recipes_batch_import import (
+    batch_summary,
+    mark_batch_duplicates,
+    parse_recipe_upload,
+)
 from recipes_chatgpt_import import (
     example_import_payload,
     import_recipe_candidate,
-    parse_recipe_import,
     preview_recipe_import,
 )
 from recipes_extras import nutrition_rows
@@ -23,7 +27,7 @@ async def _read_result(value):
         return bytes(value)
     if isinstance(value, bytes):
         return value
-    raise ValueError("Le fichier JSON téléversé est invalide.")
+    raise ValueError("Le fichier téléversé est invalide.")
 
 
 async def _read_upload_event(event):
@@ -31,14 +35,22 @@ async def _read_upload_event(event):
     if current_file is not None:
         reader = getattr(current_file, "read", None)
         if not callable(reader):
-            raise ValueError("Le fichier JSON ne peut pas être lu.")
-        return await _read_result(reader())
+            raise ValueError("Le fichier ne peut pas être lu.")
+        content = await _read_result(reader())
+        filename = (
+            getattr(current_file, "name", None)
+            or getattr(event, "name", None)
+            or "recette.json"
+        )
+        return str(filename), content
 
     legacy_content = getattr(event, "content", None)
     reader = getattr(legacy_content, "read", None)
     if not callable(reader):
-        raise ValueError("Le fichier JSON ne peut pas être lu.")
-    return await _read_result(reader())
+        raise ValueError("Le fichier ne peut pas être lu.")
+    content = await _read_result(reader())
+    filename = getattr(event, "name", None) or "recette.json"
+    return str(filename), content
 
 
 def _result_message(result):
@@ -63,11 +75,26 @@ def _result_message(result):
     return " · ".join(parts) + "."
 
 
+def _entry_status(row):
+    if row.get("imported"):
+        return "Importée", "positive"
+    if row.get("import_error"):
+        return "Erreur d’import", "negative"
+    if row.get("error"):
+        return "Fichier invalide", "negative"
+    if row.get("duplicate_existing"):
+        return "Déjà dans JF Apps", "grey"
+    if row.get("duplicate_batch"):
+        return "Doublon dans le lot", "orange"
+    return "Prête", "positive"
+
+
 def open_chatgpt_recipe_import_dialog(
     *,
     user_id,
     family_id,
     on_imported,
+    allow_grocery_integration=True,
 ):
     from db import (
         get_categories,
@@ -76,9 +103,21 @@ def open_chatgpt_recipe_import_dialog(
         get_stores,
     )
 
-    categories = get_categories(user_id, family_id)
-    stores = get_stores(user_id, family_id)
-    existing_items = get_items(user_id, family_id)
+    categories = (
+        get_categories(user_id, family_id)
+        if allow_grocery_integration
+        else []
+    )
+    stores = (
+        get_stores(user_id, family_id)
+        if allow_grocery_integration
+        else []
+    )
+    existing_items = (
+        get_items(user_id, family_id)
+        if allow_grocery_integration
+        else []
+    )
     existing_recipes = get_recipes(user_id, family_id)
 
     category_options = {
@@ -92,17 +131,20 @@ def open_chatgpt_recipe_import_dialog(
     default_category = categories[0]["id"] if categories else None
     default_store = stores[0]["id"] if stores else None
 
-    state = {"candidate": None, "preview": None}
+    state = {
+        "raw_entries": [],
+        "entries": [],
+    }
 
     with ui.dialog() as dialog:
-        with ui.card().classes("w-full max-w-5xl p-5"):
-            ui.label("Importer une recette ChatGPT").classes(
+        with ui.card().classes("w-full max-w-6xl p-5"):
+            ui.label("Importer des recettes JSON").classes(
                 "text-xl font-bold"
             )
             ui.label(
-                "Collez le JSON que ChatGPT vous a fourni ou choisissez "
-                "un fichier .json. JF Apps vérifie la recette et affiche "
-                "un aperçu avant toute écriture."
+                "Sélectionnez un ou plusieurs fichiers JSON, ou un ZIP "
+                "contenant des JSON. JF Apps analyse tout le lot avant "
+                "l’import et ignore les doublons déjà présents."
             ).classes("text-sm text-gray-600")
 
             with ui.expansion(
@@ -112,31 +154,32 @@ def open_chatgpt_recipe_import_dialog(
             ).classes("w-full") as json_source_expansion:
                 json_input = ui.textarea(
                     label="JSON de la recette",
-                    placeholder='{"format":"jf_apps_recipe_import","version":1,...}',
+                    placeholder=(
+                        '{"format":"jf_apps_recipe_import",'
+                        '"version":1,...}'
+                    ),
                 ).props("autogrow").classes("w-full font-mono")
-
-            async def on_upload(event):
-                try:
-                    data = await _read_upload_event(event)
-                    json_input.value = data.decode(
-                        "utf-8-sig",
-                        errors="strict",
-                    )
-                    json_input.update()
-                    ui.notify(
-                        "Fichier JSON chargé. Cliquez sur Analyser.",
-                        type="positive",
-                    )
-                except Exception as error:
-                    ui.notify(str(error), type="warning")
+                ui.button(
+                    "Ajouter ce JSON au lot",
+                    icon="add",
+                    on_click=lambda: add_pasted_json(),
+                ).props("outline color=primary")
 
             ui.upload(
-                label="Choisir un fichier JSON",
-                on_upload=on_upload,
+                label="Choisir des JSON ou un ZIP",
+                on_upload=lambda event: on_upload(event),
                 auto_upload=True,
-                max_file_size=2_000_000,
-                max_files=1,
-            ).props('accept=".json,application/json"').classes("w-full")
+                max_file_size=12_000_000,
+                max_files=50,
+            ).props(
+                'accept=".json,.zip,application/json,application/zip" '
+                "multiple"
+            ).classes("w-full")
+
+            ui.label(
+                "Vous pouvez sélectionner plusieurs fichiers .json en une "
+                "seule fois. Un ZIP peut contenir jusqu’à 100 JSON."
+            ).classes("text-xs text-gray-500")
 
             with ui.expansion(
                 "Voir un exemple du format accepté",
@@ -150,195 +193,298 @@ def open_chatgpt_recipe_import_dialog(
                     )
                 ).classes("w-full text-xs")
 
-            with ui.row().classes(
-                "w-full gap-3 items-end flex-wrap"
-            ):
-                create_missing = ui.checkbox(
-                    "Créer les ingrédients non reconnus comme items d’épicerie",
-                    value=False,
-                )
-                category_select = ui.select(
-                    category_options,
-                    value=default_category,
-                    label="Catégorie des nouveaux items",
-                ).props("outlined dense").classes(
-                    "grow min-w-[220px]"
-                )
-                store_select = ui.select(
-                    store_options,
-                    value=default_store,
-                    label="Magasin des nouveaux items",
-                ).props("outlined dense clearable").classes(
-                    "grow min-w-[220px]"
-                )
+            create_missing = None
+            category_select = None
+            store_select = None
 
-            if not categories:
-                create_missing.value = False
-                create_missing.disable()
+            if allow_grocery_integration:
+                with ui.row().classes(
+                    "w-full gap-3 items-end flex-wrap"
+                ):
+                    create_missing = ui.checkbox(
+                        "Créer les ingrédients non reconnus comme items d’épicerie",
+                        value=False,
+                    )
+                    category_select = ui.select(
+                        category_options,
+                        value=default_category,
+                        label="Catégorie des nouveaux items",
+                    ).props("outlined dense").classes(
+                        "grow min-w-[220px]"
+                    )
+                    store_select = ui.select(
+                        store_options,
+                        value=default_store,
+                        label="Magasin des nouveaux items",
+                    ).props("outlined dense clearable").classes(
+                        "grow min-w-[220px]"
+                    )
+
+                if not categories:
+                    create_missing.value = False
+                    create_missing.disable()
+                    ui.label(
+                        "Aucune catégorie d’épicerie n’est disponible. "
+                        "La création automatique d’items est désactivée."
+                    ).classes("text-xs text-orange-700")
+            else:
                 ui.label(
-                    "Aucune catégorie d’épicerie n’est disponible. "
-                    "Créez-en une avant d’autoriser la création "
-                    "automatique d’items."
-                ).classes("text-xs text-orange-700")
+                    "Ce compte a accès à Recettes sans accès à la Liste "
+                    "d’épicerie. Les ingrédients importés resteront propres "
+                    "aux recettes et aucun item d’épicerie ne sera créé ou relié."
+                ).classes(
+                    "text-sm bg-blue-50 border border-blue-200 "
+                    "rounded-lg p-3"
+                )
 
-            preview_box = ui.column().classes("w-full gap-2")
+            summary_box = ui.row().classes(
+                "w-full gap-2 items-center flex-wrap"
+            )
+            entries_box = ui.column().classes("w-full gap-2")
 
-            def analyze():
+            def rebuild_entries():
+                rows = mark_batch_duplicates(
+                    state["raw_entries"],
+                    existing_recipes,
+                )
+                for row in rows:
+                    if row.get("candidate") and not row.get("error"):
+                        row["preview"] = preview_recipe_import(
+                            row["candidate"],
+                            existing_items,
+                            existing_recipes,
+                        )
+                state["entries"] = rows
+                render_entries()
+
+            def render_entries():
+                summary_box.clear()
+                entries_box.clear()
+                info = batch_summary(state["entries"])
+
+                with summary_box:
+                    if not state["entries"]:
+                        ui.label(
+                            "Aucun fichier chargé."
+                        ).classes("text-sm text-gray-500")
+                    else:
+                        ui.badge(
+                            f"{info['total']} fichier(s)/recette(s)"
+                        ).props("outline color=primary")
+                        ui.badge(
+                            f"{info['selected']} sélectionnée(s)"
+                        ).props("color=primary")
+                        if info["duplicates"]:
+                            ui.badge(
+                                f"{info['duplicates']} doublon(s)"
+                            ).props("color=grey")
+                        if info["invalid"]:
+                            ui.badge(
+                                f"{info['invalid']} invalide(s)"
+                            ).props("color=negative")
+
+                with entries_box:
+                    if not state["entries"]:
+                        return
+
+                    with ui.row().classes(
+                        "w-full gap-2 flex-wrap"
+                    ):
+                        ui.button(
+                            "Tout sélectionner",
+                            icon="done_all",
+                            on_click=lambda: select_all(True),
+                        ).props("flat dense color=primary")
+                        ui.button(
+                            "Tout désélectionner",
+                            icon="remove_done",
+                            on_click=lambda: select_all(False),
+                        ).props("flat dense")
+                        ui.button(
+                            "Effacer le lot",
+                            icon="delete_sweep",
+                            on_click=clear_batch,
+                        ).props("flat dense color=negative")
+
+                    for row in state["entries"]:
+                        status_label, status_color = _entry_status(row)
+                        candidate = row.get("candidate")
+                        disabled = bool(
+                            row.get("error")
+                            or row.get("duplicate_existing")
+                            or row.get("duplicate_batch")
+                            or row.get("imported")
+                        )
+
+                        with ui.card().classes(
+                            "w-full p-3 shadow-none border border-gray-200"
+                        ):
+                            with ui.row().classes(
+                                "w-full items-start gap-3 flex-nowrap"
+                            ):
+                                checkbox = ui.checkbox(
+                                    value=bool(row.get("selected")),
+                                    on_change=(
+                                        lambda event, entry=row:
+                                        set_selected(
+                                            entry["entry_id"],
+                                            bool(event.value),
+                                        )
+                                    ),
+                                )
+                                checkbox.set_enabled(not disabled)
+
+                                with ui.column().classes(
+                                    "gap-0 grow min-w-0"
+                                ):
+                                    ui.label(
+                                        (
+                                            candidate["name"]
+                                            if candidate
+                                            else row["source_name"]
+                                        )
+                                    ).classes(
+                                        "font-bold whitespace-normal"
+                                    )
+                                    ui.label(
+                                        row["source_name"]
+                                    ).classes(
+                                        "text-xs text-gray-500 "
+                                        "whitespace-normal"
+                                    )
+
+                                    if candidate:
+                                        category = (
+                                            candidate.get("category") or ""
+                                        )
+                                        if candidate.get("subcategory"):
+                                            category = (
+                                                category
+                                                + " › "
+                                                + candidate["subcategory"]
+                                            ).strip(" ›")
+                                        summary = (
+                                            f"{candidate['servings']} portion(s) · "
+                                            f"{len(candidate['ingredients'])} ingrédient(s) · "
+                                            f"{len(candidate['steps'])} étape(s)"
+                                        )
+                                        if category:
+                                            summary += f" · {category}"
+                                        ui.label(summary).classes(
+                                            "text-sm text-gray-600 "
+                                            "whitespace-normal"
+                                        )
+
+                                        preview = row.get("preview") or {}
+                                        ui.label(
+                                            f"{preview.get('matched_ingredients', 0)} item(s) reconnu(s) · "
+                                            f"{len(preview.get('free_ingredients') or [])} libre(s) · "
+                                            f"{len(preview.get('missing_ingredients') or [])} non reconnu(s)"
+                                        ).classes(
+                                            "text-xs text-gray-500"
+                                        )
+
+                                    if row.get("error"):
+                                        ui.label(row["error"]).classes(
+                                            "text-xs text-negative "
+                                            "whitespace-normal"
+                                        )
+                                    if row.get("import_error"):
+                                        ui.label(
+                                            row["import_error"]
+                                        ).classes(
+                                            "text-xs text-negative "
+                                            "whitespace-normal"
+                                        )
+
+                                ui.badge(status_label).props(
+                                    f"color={status_color}"
+                                )
+
+            def set_selected(entry_id, selected):
+                for row in state["entries"]:
+                    if int(row["entry_id"]) == int(entry_id):
+                        row["selected"] = bool(selected)
+                        break
+                render_entries()
+
+            def select_all(selected):
+                for row in state["entries"]:
+                    row["selected"] = bool(
+                        selected
+                        and row.get("candidate")
+                        and not row.get("error")
+                        and not row.get("duplicate_existing")
+                        and not row.get("duplicate_batch")
+                        and not row.get("imported")
+                    )
+                render_entries()
+
+            def clear_batch():
+                state["raw_entries"] = []
+                state["entries"] = []
+                render_entries()
+
+            async def on_upload(event):
                 try:
-                    candidate = parse_recipe_import(
-                        json_input.value or ""
+                    filename, content = await _read_upload_event(event)
+                    state["raw_entries"].extend(
+                        parse_recipe_upload(filename, content)
                     )
-                    preview = preview_recipe_import(
-                        candidate,
-                        existing_items,
-                        existing_recipes,
-                    )
+                    rebuild_entries()
                 except Exception as error:
-                    state["candidate"] = None
-                    state["preview"] = None
-                    preview_box.clear()
-                    with preview_box:
-                        ui.label(str(error)).classes("text-negative")
-                    return
+                    ui.notify(
+                        str(error),
+                        type="warning",
+                        timeout=8000,
+                    )
 
-                state["candidate"] = candidate
-                state["preview"] = preview
+            def add_pasted_json():
+                text = str(json_input.value or "").strip()
+                if not text:
+                    ui.notify(
+                        "Collez d’abord un JSON.",
+                        type="warning",
+                    )
+                    return
+                state["raw_entries"].extend(
+                    parse_recipe_upload(
+                        "JSON collé.json",
+                        text.encode("utf-8"),
+                    )
+                )
+                json_input.value = ""
+                json_input.update()
                 json_source_expansion.value = False
                 json_source_expansion.update()
-                preview_box.clear()
-
-                extra = candidate.get("extra") or {}
-                nutrition = extra.get("nutrition")
-                with preview_box:
-                    with ui.card().classes(
-                        "w-full p-4 shadow-none bg-blue-50"
-                    ):
-                        with ui.row().classes(
-                            "w-full items-center gap-2 flex-wrap"
-                        ):
-                            ui.label(candidate["name"]).classes(
-                                "text-lg font-bold"
-                            )
-                            if preview["duplicate"]:
-                                ui.badge(
-                                    "Déjà dans JF Apps"
-                                ).props("color=grey")
-                            if candidate.get("category"):
-                                category = candidate["category"]
-                                if candidate.get("subcategory"):
-                                    category += (
-                                        " › "
-                                        + candidate["subcategory"]
-                                    )
-                                ui.badge(category).props(
-                                    "outline color=primary"
-                                )
-
-                        ui.label(
-                            f"{candidate['servings']} portion(s) · "
-                            f"{len(candidate['ingredients'])} ingrédient(s) · "
-                            f"{len(candidate['steps'])} étape(s)"
-                        ).classes("text-sm text-gray-600")
-
-                        tags = extra.get("tags") or []
-                        if tags:
-                            ui.label(
-                                "Étiquettes : " + ", ".join(tags)
-                            ).classes("text-sm text-gray-600")
-
-                        ui.label(
-                            f"{preview['matched_ingredients']} item(s) reconnu(s) · "
-                            f"{len(preview.get('free_ingredients') or [])} "
-                            "ingrédient(s) explicitement libre(s) · "
-                            f"{len(preview['missing_ingredients'])} non reconnu(s)"
-                        ).classes("text-sm text-gray-600")
-
-                        if preview.get("free_ingredients"):
-                            ui.label(
-                                "Libres : "
-                                + ", ".join(
-                                    preview["free_ingredients"][:10]
-                                )
-                            ).classes(
-                                "text-xs text-blue-700 whitespace-normal"
-                            )
-
-                        if preview["missing_ingredients"]:
-                            ui.label(
-                                "Non reconnus : "
-                                + ", ".join(
-                                    preview["missing_ingredients"][:10]
-                                )
-                                + (
-                                    "…"
-                                    if len(
-                                        preview["missing_ingredients"]
-                                    ) > 10
-                                    else ""
-                                )
-                                + ". Ils resteront des ingrédients libres "
-                                "si la création d’items n’est pas cochée."
-                            ).classes(
-                                "text-xs text-orange-700 whitespace-normal"
-                            )
-
-                    if nutrition:
-                        ui.label("Tableau nutritionnel").classes(
-                            "font-bold mt-2"
-                        )
-                        rows = nutrition_rows(
-                            nutrition,
-                            candidate["servings"],
-                        )
-                        for row in rows:
-                            with ui.row().classes(
-                                "w-full text-sm gap-2 items-center"
-                            ):
-                                ui.label(row["label"]).classes("grow")
-                                ui.label(
-                                    row["per_serving_text"]
-                                    + " / portion"
-                                ).classes("text-right")
-                        if nutrition.get("estimated"):
-                            ui.badge("Estimation").props(
-                                "outline color=orange"
-                            )
-                        if nutrition.get("serving_size"):
-                            ui.label(
-                                "Portion : " + nutrition["serving_size"]
-                            ).classes("text-xs text-gray-600")
-                        if nutrition.get("basis_note"):
-                            ui.label(
-                                nutrition["basis_note"]
-                            ).classes(
-                                "text-xs text-gray-600 whitespace-normal"
-                            )
-                        for nutrition_note in nutrition.get("notes") or []:
-                            ui.label(
-                                "• " + nutrition_note
-                            ).classes(
-                                "text-xs text-gray-600 whitespace-normal"
-                            )
+                rebuild_entries()
 
             def import_selected():
-                candidate = state.get("candidate")
-                preview = state.get("preview")
-                if not candidate or not preview:
+                selected = [
+                    row
+                    for row in state["entries"]
+                    if row.get("selected")
+                    and row.get("candidate")
+                ]
+                if not selected:
                     ui.notify(
-                        "Analysez d’abord le JSON.",
+                        "Sélectionnez au moins une recette prête.",
                         type="warning",
                     )
                     return
-                if preview.get("duplicate"):
-                    ui.notify(
-                        "Une recette du même nom existe déjà. "
-                        "Elle ne sera pas écrasée.",
-                        type="warning",
-                    )
-                    return
-                if (
+
+                create_items = bool(
                     create_missing.value
-                    and category_select.value is None
+                    if create_missing is not None
+                    else False
+                )
+                if (
+                    allow_grocery_integration
+                    and create_items
+                    and (
+                        category_select is None
+                        or category_select.value is None
+                    )
                 ):
                     ui.notify(
                         "Choisissez une catégorie pour les nouveaux items.",
@@ -346,51 +492,90 @@ def open_chatgpt_recipe_import_dialog(
                     )
                     return
 
-                try:
-                    result = import_recipe_candidate(
-                        user_id,
-                        family_id,
-                        candidate,
-                        category_id=category_select.value,
-                        store_id=store_select.value,
-                        create_missing_items=bool(
-                            create_missing.value
-                        ),
+                imported_count = 0
+                failed_count = 0
+                result_messages = []
+
+                for row in selected:
+                    try:
+                        result = import_recipe_candidate(
+                            user_id,
+                            family_id,
+                            row["candidate"],
+                            category_id=(
+                                category_select.value
+                                if category_select is not None
+                                else None
+                            ),
+                            store_id=(
+                                store_select.value
+                                if store_select is not None
+                                else None
+                            ),
+                            create_missing_items=create_items,
+                            reuse_existing_items=bool(
+                                allow_grocery_integration
+                            ),
+                        )
+                    except Exception as error:
+                        row["import_error"] = str(error)
+                        row["selected"] = False
+                        failed_count += 1
+                        continue
+
+                    row["imported"] = True
+                    row["selected"] = False
+                    imported_count += 1
+                    result_messages.append(
+                        _result_message(result)
                     )
-                except Exception as error:
+                    existing_recipes.append({
+                        "name": result["name"]
+                    })
+
+                if imported_count:
+                    on_imported()
+
+                render_entries()
+
+                if imported_count:
+                    message = (
+                        f"{imported_count} recette(s) importée(s)"
+                    )
+                    if failed_count:
+                        message += f" · {failed_count} échec(s)"
                     ui.notify(
-                        str(error),
+                        message + ".",
+                        type=(
+                            "warning"
+                            if failed_count
+                            else "positive"
+                        ),
+                        timeout=9000,
+                        close_button=True,
+                    )
+                elif failed_count:
+                    ui.notify(
+                        "Aucune recette importée. "
+                        f"{failed_count} import(s) ont échoué.",
                         type="warning",
                         timeout=9000,
                         close_button=True,
                     )
-                    return
 
-                dialog.close()
-                on_imported()
-                ui.notify(
-                    _result_message(result),
-                    type="positive",
-                    timeout=9000,
-                    close_button=True,
-                )
+            render_entries()
 
             with ui.row().classes(
-                "w-full justify-between gap-2 mt-3 flex-wrap"
+                "w-full justify-end gap-2 mt-3 flex-wrap"
             ):
                 ui.button(
-                    "Analyser",
-                    icon="fact_check",
-                    on_click=analyze,
-                ).props("outline color=primary")
-                with ui.row().classes("gap-2"):
-                    ui.button(
-                        "Fermer",
-                        on_click=dialog.close,
-                    ).props("flat")
-                    ui.button(
-                        "Importer",
-                        icon="download",
-                        on_click=import_selected,
-                    ).props("color=positive")
+                    "Fermer",
+                    on_click=dialog.close,
+                ).props("flat")
+                ui.button(
+                    "Importer la sélection",
+                    icon="download",
+                    on_click=import_selected,
+                ).props("color=positive")
+
     dialog.open()

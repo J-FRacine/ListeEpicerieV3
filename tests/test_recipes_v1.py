@@ -40,17 +40,18 @@ class RecipesV1Tests(unittest.TestCase):
         self.assertIn('app_key="recipes"', app_source)
         self.assertIn('title="Recettes"', app_source)
         self.assertIn('badge=version_label("recipes")', app_source)
-        self.assertIn('"recipes": "1.6.0"', versions)
+        self.assertIn('"recipes": "1.7.0"', versions)
 
-    def test_recipes_keeps_grocery_access_and_existing_data_model(self):
+    def test_recipes_uses_its_own_access_and_existing_data_model(self):
         app_source = (ROOT / "app.py").read_text(encoding="utf-8")
         recipe_route = app_source.index("if normalized_tab in RECIPE_TABS:")
-        grocery_check = app_source.index('"grocery",', recipe_route)
+        recipe_check = app_source.index('"recipes",', recipe_route)
         recipe_panel = app_source.index("recipes_panel()", recipe_route)
-        self.assertLess(grocery_check, recipe_panel)
+        self.assertLess(recipe_check, recipe_panel)
         reader_source = (ROOT / "recipes_reader.py").read_text(encoding="utf-8")
         self.assertIn("wakeLock", reader_source)
         self.assertIn("Ajouter à la liste d’épicerie", reader_source)
+        self.assertIn("on_add_to_needs=None", reader_source)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 
 from recipes_extras import nutrition_rows, recipe_time_label
+from recipes_ingredient_analysis import metric_label
 
 
 def instruction_steps(value):
@@ -50,6 +51,7 @@ def build_recipe_reader(
     photo_data_url=None,
     on_add_to_needs=None,
     summary_message=None,
+    on_export=None,
 ):
     """Ouvre une lecture adaptée au téléphone/tablette et un mode cuisine."""
     steps = instruction_steps(recipe.get("instructions"))
@@ -58,6 +60,7 @@ def build_recipe_reader(
     tags = extras.get("tags") or []
     source = extras.get("source") or {}
     nutrition = extras.get("nutrition")
+    ingredient_metrics = extras.get("ingredient_metrics") or {}
     nutrition_table = nutrition_rows(
         nutrition,
         recipe.get("servings"),
@@ -218,6 +221,15 @@ def build_recipe_reader(
                                         ui.label(str(ingredient["note"])).classes(
                                             "text-base text-gray-600 whitespace-normal"
                                         ).style("overflow-wrap:anywhere;")
+                                    metric = metric_label(
+                                        ingredient_metrics,
+                                        ingredient.get("id"),
+                                        ingredient.get("name"),
+                                    )
+                                    if metric:
+                                        ui.label(metric).classes(
+                                            "text-sm text-blue-700 font-semibold"
+                                        )
                     else:
                         ui.label("Aucun ingrédient.").classes("text-gray-500")
 
@@ -301,6 +313,15 @@ def build_recipe_reader(
                                         ui.label(str(ingredient["note"])).classes(
                                             "text-sm text-gray-600 whitespace-normal"
                                         ).style("overflow-wrap:anywhere;")
+                                    metric = metric_label(
+                                        ingredient_metrics,
+                                        ingredient.get("id"),
+                                        ingredient.get("name"),
+                                    )
+                                    if metric:
+                                        ui.label(metric).classes(
+                                            "text-xs text-blue-700 font-semibold"
+                                        )
                     else:
                         ui.label("Aucun ingrédient.").classes("text-gray-500")
 
@@ -325,6 +346,12 @@ def build_recipe_reader(
                         icon="playlist_add",
                         on_click=add_to_needs,
                     ).props("outline color=positive")
+                if on_export is not None:
+                    ui.button(
+                        "Imprimer / PDF / courriel",
+                        icon="picture_as_pdf",
+                        on_click=on_export,
+                    ).props("outline color=primary")
                 ui.button(
                     "Mode cuisine",
                     icon="restaurant",

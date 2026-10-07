@@ -10,6 +10,7 @@ from recipes_extras import (
     nutrition_rows,
     save_recipe_nutrition,
 )
+from recipes_ingredient_tools_ui import open_measurement_converter_dialog
 
 
 def _render_rows(nutrition, servings):
@@ -53,10 +54,38 @@ def open_nutrition_dialog(*, user_id, recipe, on_saved=None):
             ui.label("Valeurs nutritives").classes("text-xl font-bold")
             ui.label(recipe["name"]).classes("text-sm text-gray-600")
             ui.label(
-                "Les valeurs peuvent être saisies manuellement ou importées "
-                "avec une recette ChatGPT. Lorsque « Estimation » est cochée, "
-                "elles sont présentées comme approximatives."
+                "Les valeurs peuvent être saisies manuellement, importées avec "
+                "une recette ChatGPT ou calculées à partir des ingrédients. "
+                "Un calcul automatique reste toujours une estimation."
             ).classes("text-xs text-gray-500")
+
+            def open_generator():
+                dialog.close()
+                open_measurement_converter_dialog(
+                    user_id=user_id,
+                    recipe=recipe,
+                    on_saved=on_saved,
+                )
+
+            with ui.card().classes(
+                "w-full p-3 shadow-none bg-blue-50 border border-blue-100"
+            ):
+                with ui.row().classes(
+                    "w-full items-center justify-between gap-3 flex-wrap"
+                ):
+                    with ui.column().classes("gap-0 grow"):
+                        ui.label(
+                            "Calcul automatique"
+                        ).classes("font-bold")
+                        ui.label(
+                            "JF Apps convertit les mesures en grammes, vous laisse "
+                            "corriger les correspondances, puis estime le tableau."
+                        ).classes("text-xs text-gray-600 whitespace-normal")
+                    ui.button(
+                        "Calculer automatiquement",
+                        icon="calculate",
+                        on_click=open_generator,
+                    ).props("color=primary")
 
             with ui.row().classes("w-full gap-3 flex-wrap"):
                 basis = ui.select(

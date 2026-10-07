@@ -46,6 +46,8 @@ from recipes_extras import (
     save_recipe_metadata,
 )
 from recipes_extras_ui import open_nutrition_dialog
+from recipes_export_ui import open_recipe_export_dialog
+from recipes_ingredient_tools_ui import open_measurement_converter_dialog
 from recipes_photo_data import (
     get_recipe_photo,
     get_recipe_photo_thumbnails,
@@ -1015,6 +1017,13 @@ def recipes_panel():
                         if has_grocery_access
                         else None
                     ),
+                    on_export=(
+                        lambda selected=selected_recipe:
+                        open_recipe_export_dialog(
+                            user_id=user_id,
+                            recipe=selected,
+                        )
+                    ),
                 )
 
             details_context = {
@@ -1174,6 +1183,25 @@ def recipes_panel():
                                 user_id=user_id,
                                 recipe=selected,
                                 on_saved=render_recipes.refresh,
+                            ),
+                        ).props("flat color=primary")
+
+                        ui.button(
+                            "Mesures",
+                            icon="scale",
+                            on_click=lambda selected=recipe: open_measurement_converter_dialog(
+                                user_id=user_id,
+                                recipe=selected,
+                                on_saved=render_recipes.refresh,
+                            ),
+                        ).props("flat color=primary")
+
+                        ui.button(
+                            "PDF / courriel",
+                            icon="picture_as_pdf",
+                            on_click=lambda selected=recipe: open_recipe_export_dialog(
+                                user_id=user_id,
+                                recipe=selected,
                             ),
                         ).props("flat color=primary")
 

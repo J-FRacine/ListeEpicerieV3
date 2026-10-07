@@ -15,7 +15,7 @@ APP_LABELS = {
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
     "grocery": "1.2.1",
-    "recipes": "1.7.0",
+    "recipes": "1.8.0",
     "blood_pressure": "1.2.3",
     "finances": "1.14.4",
     "rpg": "1.10.0",
@@ -23,6 +23,27 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "recipes",
+        "version": "1.8.0",
+        "date": "2026-10-07",
+        "title": "Recettes — V1.8.0 — mesures, nutrition et impression",
+        "summary": (
+            "Recettes convertit les mesures culinaires en grammes, estime "
+            "les valeurs nutritives et génère une fiche PDF imprimable."
+        ),
+        "changes": [
+            "Nouveau bouton Mesures : reconnaissance des tasses, cuillères, ml, litres, oz, lb, grammes, fractions et unités courantes.",
+            "Les conversions de volume utilisent une densité propre à l’ingrédient; la mesure originale n’est jamais remplacée et le poids est affiché avec le symbole ≈ lorsqu’il s’agit d’une estimation.",
+            "Un catalogue nutritionnel générique intégré propose des correspondances pour les ingrédients courants; l’utilisateur peut choisir ou corriger l’aliment de référence et le poids en grammes.",
+            "Calcul automatique du tableau nutritionnel à partir des grammes enregistrés, avec total de recette et valeurs par portion; le résultat est toujours marqué Estimation.",
+            "Les ingrédients non reconnus ou non quantifiables sont signalés et exclus explicitement du calcul plutôt que d’être inventés.",
+            "Le bouton Valeurs nutritives conserve la saisie manuelle et ajoute Calculer automatiquement.",
+            "Consulter affiche les conversions en grammes enregistrées sous les mesures originales.",
+            "Nouvelle fiche PDF imprimable avec options photo, nutrition et conversions métriques; un courriel prérempli peut être préparé, le PDF restant à joindre manuellement.",
+            "Les conversions sont stockées dans recipe_extra existant; aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance.",
+        ],
+    },
     {
         "app_key": "portal",
         "version": "1.5.0",

@@ -223,6 +223,46 @@ def normalize_nutrition(value):
     return result if any_value else None
 
 
+def _normalize_ingredient_metrics(value):
+    if not isinstance(value, dict):
+        return {}
+
+    result = {}
+    for raw_id, raw in value.items():
+        try:
+            ingredient_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if ingredient_id <= 0 or not isinstance(raw, dict):
+            continue
+
+        grams = raw.get("grams")
+        if grams in (None, ""):
+            grams_value = None
+        else:
+            try:
+                grams_value = round(max(0.0, float(grams)), 2)
+            except (TypeError, ValueError):
+                grams_value = None
+
+        food_key = _clean_text(raw.get("food_key"), 80)
+        name_key = _clean_text(raw.get("name_key"), 180)
+        source = str(raw.get("source") or "auto").strip().casefold()
+        source = "manual" if source == "manual" else "auto"
+
+        if grams_value is None and not food_key:
+            continue
+
+        result[str(ingredient_id)] = {
+            "grams": grams_value,
+            "food_key": food_key,
+            "source": source,
+            "name_key": name_key,
+        }
+
+    return result
+
+
 def default_recipe_extra():
     return {
         "prep_time_minutes": None,
@@ -230,6 +270,7 @@ def default_recipe_extra():
         "tags": [],
         "source": {"name": "", "url": ""},
         "nutrition": None,
+        "ingredient_metrics": {},
     }
 
 
@@ -243,6 +284,7 @@ def normalize_recipe_extra(value):
                 "tags": value.get("tags", []),
                 "source": value.get("source") or {},
                 "nutrition": value.get("nutrition"),
+                "ingredient_metrics": value.get("ingredient_metrics") or {},
             }
         )
 
@@ -276,6 +318,9 @@ def normalize_recipe_extra(value):
         "url": _clean_text(source.get("url"), 1000),
     }
     result["nutrition"] = normalize_nutrition(result.get("nutrition"))
+    result["ingredient_metrics"] = _normalize_ingredient_metrics(
+        result.get("ingredient_metrics")
+    )
     return result
 
 
@@ -352,6 +397,12 @@ def save_recipe_metadata(
         "name": _clean_text(source_name, 200),
         "url": _clean_text(source_url, 1000),
     }
+    return _save_extra(user_id, recipe_id, current)
+
+
+def save_recipe_ingredient_metrics(user_id, recipe_id, metrics):
+    current = get_recipe_extras(user_id, recipe_id)
+    current["ingredient_metrics"] = _normalize_ingredient_metrics(metrics)
     return _save_extra(user_id, recipe_id, current)
 
 

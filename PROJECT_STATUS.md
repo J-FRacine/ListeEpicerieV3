@@ -1,6 +1,6 @@
 # JF Apps — État du projet
 
-Dernière mise à jour : 2026-10-05
+Dernière mise à jour : 2026-10-07
 
 Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversations. Le dépôt GitHub `J-FRacine/ListeEpicerieV3` sur `main` est la référence technique.
 
@@ -10,7 +10,7 @@ Ce fichier sert de point de reprise pour ChatGPT, Codex et les futures conversat
 |---|---:|
 | Portail JF Apps | 1.5.0 |
 | Liste d'épicerie | 1.2.1 |
-| Recettes | 1.7.0 |
+| Recettes | 1.8.0 |
 | Journal de pression | 1.2.3 |
 | Finances | 1.14.4 |
 | Personnages JDR | 1.10.0 |
@@ -184,6 +184,20 @@ Important : ces versions sont celles présentes dans GitHub `main`. Leur validat
 - Validation locale réussie : **9 tests ciblés Journal**, **528 tests JF Apps** et compilation Python complète.
 - Validation fonctionnelle réelle dans le navigateur effectuée avec succès par l’utilisateur : le rappel du Portail est correct et **Saisir maintenant** propose l’heure locale attendue.
 - PostgreSQL de production / Canner n’ont pas été testés indépendamment par le script de validation.
+
+## Recettes — V1.8.0 / mesures, nutrition automatique et impression — 2026-10-07
+
+- Base GitHub vérifiée avant développement : `6959e611d03775f93410ee70abaa1a223ea236ca` (`main`), Recettes V1.7.0 et Portail V1.5.0.
+- Nouveau moteur `recipes_ingredient_analysis.py` : fractions et mesures culinaires sont interprétées, puis converties en grammes soit directement (g/kg/oz/lb), soit selon la densité de l’aliment (tasse/ml/cuillères), soit selon un poids moyen par unité lorsque disponible.
+- Nouveau catalogue `recipes_food_catalog.py` de valeurs génériques par 100 g pour des ingrédients courants. Il sert à l’estimation seulement; aucune marque ou produit commercial précis n’est supposé.
+- Les conversions sont enregistrées dans `recipe_extra.ingredient_metrics`, déjà inclus dans la sauvegarde/restauration puisque `recipe_extra` est conservé. La mesure originale de la recette n’est pas modifiée.
+- `recipes_ingredient_tools_ui.py` permet de choisir/corriger l’aliment de référence, modifier les grammes, enregistrer les conversions et calculer le tableau nutritionnel. Les ingrédients non résolus sont explicitement listés comme non inclus.
+- L’éditeur nutritionnel manuel est conservé et ajoute le bouton **Calculer automatiquement**. Le calcul généré est toujours marqué `estimated=True`.
+- **Consulter** et le Mode cuisine affichent `≈ X g` lorsqu’une conversion est enregistrée.
+- `recipes_pdf.py` et `recipes_export_ui.py` ajoutent la fiche PDF imprimable avec photo/nutrition/grammes facultatifs et la préparation d’un courriel via `mailto:`. Le PDF doit être joint manuellement, comme dans Journal de pression.
+- `reportlab` était déjà une dépendance de JF Apps; aucune nouvelle dépendance n’est ajoutée.
+- Aucune nouvelle table/colonne et aucune migration PostgreSQL; aucun SQL manuel.
+- Validation locale par l’installateur; validation navigateur/Canner à confirmer après publication.
 
 ## Portail V1.5.0 + Recettes V1.7.0 / accès, import multiple et liaison ingrédients — 2026-10-05
 

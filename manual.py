@@ -185,7 +185,7 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
 """,
     },
     {
-        "title": "Recettes — V1.7.0",
+        "title": "Recettes — V1.8.0",
         "icon": "restaurant_menu",
         "caption": "Créer, consulter, cuisiner et envoyer les ingrédients à l’épicerie",
         "keywords": (
@@ -199,6 +199,20 @@ Après une mise à jour, un rechargement complet du navigateur ou une réouvertu
             "navigation parcourir fil ariane récentes catalogue"
         ),
         "content": """
+### V1.8.0 — mesures, nutrition automatique et PDF
+
+Le bouton **Mesures** analyse les mesures culinaires enregistrées dans la précision de chaque ingrédient. JF Apps comprend notamment les grammes, kilogrammes, onces, livres, millilitres, litres, tasses, cuillères à soupe, cuillères à thé et plusieurs fractions comme `1/2`, `2/3` ou `1 1/2`.
+
+Une tasse n’a pas le même poids selon l’aliment. JF Apps utilise donc un **aliment de référence** et une densité propre à cet ingrédient. Les poids obtenus par conversion ou par poids moyen d’une unité sont affichés avec **≈**. La mesure originale reste toujours visible et intacte. Vous pouvez corriger manuellement le choix de l’aliment et le nombre de grammes.
+
+Dans **Valeurs nutritives**, **Calculer automatiquement** ouvre le même outil. Une fois les poids vérifiés, **Calculer la nutrition** additionne les valeurs génériques par 100 g et produit le total de la recette ainsi que les valeurs par portion. Le résultat porte toujours la mention **Estimation**. Un ingrédient non reconnu, non quantifié ou trop ambigu est laissé hors du calcul et apparaît dans les notes; JF Apps ne lui invente aucune valeur.
+
+La saisie nutritionnelle manuelle demeure disponible et peut remplacer une estimation automatique. Les conversions et choix d’aliments sont enregistrés dans les métadonnées privées de la recette.
+
+Dans les actions d’une recette et dans **Consulter**, **PDF / courriel** permet de générer une fiche imprimable. Vous pouvez inclure la photo, le tableau nutritionnel et les grammes convertis. Le PDF est téléchargé puis peut être imprimé depuis l’appareil. **Préparer le courriel** ouvre un message avec le sujet et le texte de la recette; pour des raisons de sécurité du navigateur, le PDF doit être joint manuellement au message.
+
+Aucune migration PostgreSQL n’est nécessaire.
+
 ### V1.7.0 — import multiple et liaison à l’épicerie
 
 **Importer depuis ChatGPT** accepte maintenant plusieurs fichiers `.json` sélectionnés dans la même opération. Vous pouvez aussi choisir un fichier `.zip` contenant jusqu’à 100 JSON de recettes.

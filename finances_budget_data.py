@@ -7,6 +7,7 @@ aucune optimisation des KPI n'est effectuée ici.
 """
 from datetime import date, timedelta
 from decimal import Decimal
+import unicodedata
 
 from finances_calculations import (
     add_months as _add_months,
@@ -16,17 +17,50 @@ from finances_calculations import (
 from finances_budget_payroll import confirmed_primary_income_adjustment
 
 
+def _normalized_income_description(value):
+    text = unicodedata.normalize("NFKD", str(value or "").strip().casefold())
+    return " ".join(
+        "".join(char for char in text if not unicodedata.combining(char)).split()
+    )
+
+
+def _as_date(value):
+    if isinstance(value, date):
+        return value
+    if value in (None, ""):
+        return None
+    try:
+        return date.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
 def supplemental_confirmed_income_total(
     rows,
     *,
     excluded_recurrence_ids=(),
+    primary_description=None,
+    primary_dates=(),
 ):
-    # Total des revenus confirmés qui ne sont pas déjà absorbés par Budget.
+    """Totalise uniquement les vrais revenus secondaires confirmés.
+
+    Les revenus déjà représentés dans Budget sont exclus par leur recurrence_id.
+    Pour les anciennes transactions de paie dont le recurrence_id est absent ou
+    incorrect, la paie principale est aussi reconnue par la combinaison de la
+    date d'occurrence prévue et de la description de sa récurrence.
+    """
     excluded = {
         int(value)
         for value in excluded_recurrence_ids
         if value not in (None, "")
     }
+    normalized_primary = _normalized_income_description(primary_description)
+    primary_date_set = {
+        parsed
+        for parsed in (_as_date(value) for value in primary_dates or ())
+        if parsed is not None
+    }
+
     total = Decimal("0.00")
     for raw in rows or ():
         row = dict(raw)
@@ -36,6 +70,7 @@ def supplemental_confirmed_income_total(
             continue
         if bool(row.get("budget_excluded")):
             continue
+
         recurrence_id = row.get("recurrence_id")
         if recurrence_id not in (None, ""):
             try:
@@ -43,6 +78,22 @@ def supplemental_confirmed_income_total(
                     continue
             except (TypeError, ValueError):
                 pass
+
+        # Une ancienne paie peut avoir perdu son lien de récurrence. Dans ce
+        # cas, ne jamais la reclasser comme revenu secondaire si elle tombe sur
+        # une date de paie attendue et porte le même libellé que la récurrence
+        # de revenu principale.
+        transaction_date = _as_date(
+            row.get("occurrence_date") or row.get("transaction_date")
+        )
+        if (
+            normalized_primary
+            and transaction_date in primary_date_set
+            and _normalized_income_description(row.get("description"))
+            == normalized_primary
+        ):
+            continue
+
         total += Decimal(row.get("amount") or 0)
     return total.quantize(Decimal("0.01"))
 
@@ -118,6 +169,7 @@ def _budget_capacity_summary_v110(
     pay_dates = []
     source = "budget"
     primary_income_recurrence_id = None
+    primary_income_description = None
     expected_income_per_pay = None
 
     if linked_income_rows:
@@ -137,6 +189,10 @@ def _budget_capacity_summary_v110(
         recurrence = recurrence_by_id[
             primary_income_recurrence_id
         ]
+        primary_income_description = (
+            recurrence.get("description")
+            or primary_income.get("description")
+        )
         pay_dates = _recurrence_dates_between(
             recurrence,
             month,
@@ -176,6 +232,7 @@ def _budget_capacity_summary_v110(
                 primary_income_recurrence_id = int(
                     recurrence["id"]
                 )
+                primary_income_description = recurrence.get("description")
                 expected_income_per_pay = target_amount
                 pay_dates = _recurrence_dates_between(
                     recurrence,
@@ -228,6 +285,8 @@ def _budget_capacity_summary_v110(
     supplemental_income = supplemental_confirmed_income_total(
         confirmed_income_rows,
         excluded_recurrence_ids=excluded_income_recurrence_ids,
+        primary_description=primary_income_description,
+        primary_dates=pay_dates,
     )
 
     adjusted_available_month = (

@@ -99,6 +99,88 @@ def find_attack(
     return None
 
 
+def combat_attack_label(attack: Mapping[str, Any]) -> str:
+    # Libellé de Combat rapide privilégiant le vrai nom de l'équipement.
+    attack_name = str(
+        attack.get("attack_name")
+        or f"Attaque {attack.get('id', '')}"
+    ).strip()
+    equipment_name = str(
+        attack.get("linked_equipment_name") or ""
+    ).strip()
+    if equipment_name:
+        if equipment_name.casefold() != attack_name.casefold():
+            return f"{equipment_name} — {attack_name}"
+        return equipment_name
+    return attack_name
+
+
+def combat_attacks_with_equipment(
+    attacks: Sequence[Mapping[str, Any]],
+    equipment: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    # Ajoute les armes transportées/équipées qui n'ont pas d'attaque liée.
+    result = [dict(row) for row in (attacks or ())]
+    linked_equipment_ids = {
+        int(row["linked_equipment_id"])
+        for row in result
+        if row.get("linked_equipment_id") not in (None, "")
+    }
+    used_ids = {
+        int(row["id"])
+        for row in result
+        if row.get("id") not in (None, "")
+    }
+
+    for raw in equipment or ():
+        row = dict(raw)
+        if str(row.get("item_type") or "") != "weapon":
+            continue
+        if not (bool(row.get("equipped")) or bool(row.get("carried"))):
+            continue
+        try:
+            equipment_id = int(row["id"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if equipment_id in linked_equipment_ids:
+            continue
+
+        virtual_id = -equipment_id
+        while virtual_id in used_ids:
+            virtual_id -= 1_000_000
+        used_ids.add(virtual_id)
+
+        enhancement = max(0, _as_int(row.get("weapon_enhancement_bonus")))
+        masterwork = bool(row.get("weapon_masterwork"))
+        weapon_bonus = max(enhancement, 1 if masterwork else 0)
+
+        result.append({
+            "id": virtual_id,
+            "attack_name": row.get("item_name") or f"Arme {equipment_id}",
+            "ability_key": "str",
+            "magic_bonus": weapon_bonus,
+            "misc_bonus": 0,
+            "damage": row.get("weapon_damage") or "",
+            "critical": row.get("weapon_critical") or "",
+            "attack_range": row.get("weapon_range") or "",
+            "attack_type": row.get("weapon_damage_type") or "",
+            "notes": None,
+            "ammunition_current": row.get("weapon_ammunition_current"),
+            "ammunition_max": row.get("weapon_ammunition_max"),
+            "linked_equipment_id": equipment_id,
+            "linked_equipment_name": row.get("item_name"),
+            "linked_equipment_equipped": bool(row.get("equipped")),
+            "linked_equipment_carried": bool(row.get("carried")),
+            "weapon_masterwork": masterwork,
+            "weapon_enhancement_bonus": enhancement,
+            "weapon_attack_bonus": weapon_bonus,
+            "weapon_damage_bonus": enhancement,
+            "combat_equipment_only": True,
+        })
+
+    return result
+
+
 def combat_spell_reference(
     *,
     character: Mapping[str, Any],
@@ -277,6 +359,9 @@ def build_combat_session(
     format_modifier: Callable[[Any], str],
     character_url: Callable[..., str],
     notify_error: Callable[[Exception, str], None],
+    list_rpg_equipment: Callable[
+        ..., Sequence[Mapping[str, Any]]
+    ] | None = None,
 ) -> CombatSessionHandle:
     """Prépare une fenêtre Combat rapide avec les dons structurés."""
 
@@ -284,6 +369,18 @@ def build_combat_session(
         attacks = list(
             list_rpg_attacks(user_id, character["id"])
         )
+        if list_rpg_equipment is not None:
+            try:
+                equipment = list(
+                    list_rpg_equipment(user_id, character["id"])
+                )
+                attacks = combat_attacks_with_equipment(attacks, equipment)
+            except Exception as error:
+                notify_error(
+                    error,
+                    "Les armes de l’Équipement n’ont pas pu être "
+                    "chargées dans Combat rapide.",
+                )
         saves = list(
             list_rpg_saves(user_id, character["id"])
         )
@@ -292,9 +389,7 @@ def build_combat_session(
         )
 
         attack_options = {
-            int(row["id"]): str(
-                row.get("attack_name") or f"Attaque {row['id']}"
-            )
+            int(row["id"]): combat_attack_label(row)
             for row in attacks
         }
         first_attack = next(iter(attack_options), None)
@@ -359,8 +454,8 @@ def build_combat_session(
                     ).props("options-dense").classes("w-full")
                     if not attack_options:
                         ui.label(
-                            "Aucune attaque enregistrée. Ajoutez-en "
-                            "depuis l’onglet Attaques."
+                            "Aucune attaque ni arme transportée. "
+                            "Ajoutez une attaque ou une arme dans Équipement."
                         ).classes("text-sm jf-muted")
 
                     with ui.element("div").classes(

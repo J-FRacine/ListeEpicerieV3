@@ -1,0 +1,59 @@
+Installation Recettes V1.8.0
+Base attendue : Recettes V1.7.0
+Base GitHub vérifiée : 6959e611d03775f93410ee70abaa1a223ea236ca
+
+Fonctions : conversions en grammes, nutrition estimée, PDF/impression/courriel.
+Stockage : recipe_extra JSONB existant.
+Aucune migration PostgreSQL.
+Aucun SQL manuel.
+Aucune nouvelle dépendance : reportlab est déjà présent.
+Prévalidation des modifications et de la syntaxe Python...
+Prévalidation : OK
+Sauvegarde locale : _backup_recettes_v1.8.0_20261007_113024
+
+=== Compilation Python ===
+Compilation Python : OK
+
+=== Tests ciblés Recettes ===
+.....................................................................................
+----------------------------------------------------------------------
+Ran 85 tests in 0.514s
+
+OK
+
+=== Suite complète JF Apps ===
+....................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+----------------------------------------------------------------------
+Ran 660 tests in 10.475s
+
+OK
+
+SUCCES - Recettes V1.8.0 installée et validée localement.
+Paquet GitHub : A_PUBLIER_GITHUB_RECETTES_V1.8.0_MESURES_NUTRITION_PDF.zip
+Journal : tests-resultats-recettes-v1.8.0.log
+Fichiers à publier :
+ - recipes_extras.py
+ - recipes.py
+ - recipes_reader.py
+ - app_versions.py
+ - manual.py
+ - PROJECT_STATUS.md
+ - tests/test_recipes_batch_import.py
+ - tests/test_recipes_v1.py
+ - tests/test_recipes_v120.py
+ - tests/test_recipes_v130.py
+ - tests/test_recipes_v131.py
+ - tests/test_recipes_v140.py
+ - tests/test_recipes_v141.py
+ - tests/test_recipes_v142.py
+ - tests/test_recipes_v150.py
+ - tests/test_recipes_v160.py
+ - recipes_extras_ui.py
+ - recipes_food_catalog.py
+ - recipes_ingredient_analysis.py
+ - recipes_ingredient_tools_ui.py
+ - recipes_pdf.py
+ - recipes_export_ui.py
+ - tests/test_recipes_v180.py
+
+Validation navigateur/Canner à faire après publication. Le script ne teste pas PostgreSQL de production.

@@ -212,6 +212,7 @@ def rpg_character_panel(
         user_id=user_id,
         character=character,
         list_rpg_attacks=list_rpg_attacks,
+        list_rpg_equipment=list_rpg_equipment,
         list_rpg_saves=list_rpg_saves,
         list_rpg_feats=list_rpg_feats,
         collect_feat_combat_effects=collect_feat_combat_effects,

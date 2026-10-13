@@ -516,6 +516,9 @@ def build_dashboard_panel(
                 pay_adjustment = Decimal(
                     capacity.get("pay_actual_adjustment") or 0
                 )
+                supplemental_income = Decimal(
+                    capacity.get("supplemental_income_total") or 0
+                )
                 budget_available = Decimal(
                     capacity.get(
                         "available_month_budget",
@@ -544,7 +547,7 @@ def build_dashboard_panel(
                     ),
                 ]
 
-                if carry_enabled or pay_adjustment:
+                if carry_enabled or pay_adjustment or supplemental_income:
                     values.append(
                         (
                             f"Disponible de base — {pay_count} paie(s)",
@@ -573,6 +576,15 @@ def build_dashboard_panel(
                                 "jf-finance-income"
                                 if pay_adjustment >= 0
                                 else "jf-finance-expense",
+                            )
+                        )
+
+                    if supplemental_income:
+                        values.append(
+                            (
+                                "Revenus secondaires confirmés",
+                                supplemental_income,
+                                "jf-finance-income",
                             )
                         )
 

@@ -16,6 +16,37 @@ from finances_calculations import (
 from finances_budget_payroll import confirmed_primary_income_adjustment
 
 
+def supplemental_confirmed_income_total(
+    rows,
+    *,
+    excluded_recurrence_ids=(),
+):
+    # Total des revenus confirmés qui ne sont pas déjà absorbés par Budget.
+    excluded = {
+        int(value)
+        for value in excluded_recurrence_ids
+        if value not in (None, "")
+    }
+    total = Decimal("0.00")
+    for raw in rows or ():
+        row = dict(raw)
+        if row.get("transaction_type") not in (None, "income"):
+            continue
+        if row.get("status") not in (None, "confirmed"):
+            continue
+        if bool(row.get("budget_excluded")):
+            continue
+        recurrence_id = row.get("recurrence_id")
+        if recurrence_id not in (None, ""):
+            try:
+                if int(recurrence_id) in excluded:
+                    continue
+            except (TypeError, ValueError):
+                pass
+        total += Decimal(row.get("amount") or 0)
+    return total.quantize(Decimal("0.01"))
+
+
 def budget_summary(
     user_id, month_value=None, *,
     list_budget_items,
@@ -67,6 +98,11 @@ def _budget_capacity_summary_v110(
         row for row in active_rows
         if row["item_type"] == "income"
     ]
+    budget_income_recurrence_ids = {
+        int(row["recurrence_id"])
+        for row in income_rows
+        if row.get("recurrence_id") not in (None, "")
+    }
 
     recurrence_by_id = {
         int(row["id"]): dict(row)
@@ -177,9 +213,27 @@ def _budget_capacity_summary_v110(
         list_transactions=list_transactions,
     )
 
+    confirmed_income_rows = list_transactions(
+        user_id,
+        start_date=month,
+        end_date=month_end,
+        transaction_type="income",
+        status="confirmed",
+        include_linked_transfer_destinations=False,
+        limit=100000,
+    )
+    excluded_income_recurrence_ids = set(budget_income_recurrence_ids)
+    if primary_income_recurrence_id not in (None, ""):
+        excluded_income_recurrence_ids.add(int(primary_income_recurrence_id))
+    supplemental_income = supplemental_confirmed_income_total(
+        confirmed_income_rows,
+        excluded_recurrence_ids=excluded_income_recurrence_ids,
+    )
+
     adjusted_available_month = (
         budget_available_month
         + Decimal(pay_adjustment["pay_actual_adjustment"])
+        + supplemental_income
     ).quantize(Decimal("0.01"))
 
     return {
@@ -190,6 +244,7 @@ def _budget_capacity_summary_v110(
         "pay_count_source": source,
         "primary_income_recurrence_id": primary_income_recurrence_id,
         "expected_income_per_pay": expected_income_per_pay,
+        "supplemental_income_total": supplemental_income,
         "remaining_per_pay": Decimal(summary["biweekly_remaining"]),
         "available_month_budget": budget_available_month,
         "available_month": adjusted_available_month,

@@ -17,12 +17,48 @@ APP_VERSIONS = {
     "grocery": "1.2.1",
     "recipes": "1.8.0",
     "blood_pressure": "1.2.3",
-    "finances": "1.14.4",
-    "rpg": "1.10.0",
+    "finances": "1.14.5",
+    "rpg": "1.10.1",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.14.5",
+        "date": "2026-10-13",
+        "title": "Finances — V1.14.5 — revenus secondaires dans le disponible",
+        "summary": (
+            "Les revenus confirmés ponctuels du mois augmentent maintenant "
+            "la capacité disponible lorsqu’ils ne sont pas déjà représentés "
+            "dans le Budget."
+        ),
+        "changes": [
+            "Un revenu confirmé non Hors budget et non déjà absorbé par une récurrence de revenu du Budget augmente le Disponible ce mois.",
+            "La paie principale et les revenus récurrents déjà présents dans Budget restent exclus de ce supplément afin d’éviter le double comptage.",
+            "Le Tableau affiche séparément Revenus secondaires confirmés lorsqu’un tel montant existe.",
+            "Le report mensuel réutilise automatiquement cette capacité corrigée.",
+            "Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance.",
+        ],
+    },
+    {
+        "app_key": "rpg",
+        "version": "1.10.1",
+        "date": "2026-10-13",
+        "title": "Personnages JDR — V1.10.1 — armes réelles dans Combat rapide",
+        "summary": (
+            "Combat rapide reprend maintenant aussi les armes physiques "
+            "transportées ou équipées, même lorsqu’aucune attaque liée "
+            "n’a encore été créée."
+        ),
+        "changes": [
+            "Les attaques existantes restent prioritaires et conservent leurs liens, dons et valeurs.",
+            "Une arme transportée ou équipée sans attaque liée apparaît automatiquement comme choix temporaire dans Combat rapide.",
+            "Le vrai nom de l’équipement est privilégié dans le sélecteur au lieu d’un libellé générique.",
+            "Le bonus Masterwork (+1 à l’attaque) et le bonus d’altération de l’arme sont repris dans ce choix temporaire.",
+            "Aucune attaque n’est créée silencieusement dans la base et aucune migration PostgreSQL n’est nécessaire.",
+        ],
+    },
     {
         "app_key": "recipes",
         "version": "1.8.0",

@@ -615,7 +615,7 @@ L’application demeure volontairement plus simple qu’une comptabilité compl�
 
 L’onglet **Budget** sert principalement aux revenus récurrents et aux dépenses fixes. Chaque poste peut avoir une **date de début** et une **date de fin** facultatives. Cela permet, par exemple, de conserver un loyer valide jusqu’au 30 juin et un nouveau montant à partir du 1er juillet sans réécrire les mois passés.
 
-Le Budget calcule le reste mensuel et le **Reste par paie**. Lorsqu’un revenu aux deux semaines est lié à une récurrence, JF Apps utilise les dates réelles/projetées pour déterminer si le mois affiché contient **2 ou 3 paies**. Le Tableau reçoit alors le **Disponible ce mois** correspondant.
+Le Budget calcule le reste mensuel et le **Reste par paie**. Lorsqu’un revenu aux deux semaines est lié à une récurrence, JF Apps utilise les dates réelles/projetées pour déterminer si le mois affiché contient **2 ou 3 paies**. Le Tableau reçoit alors le **Disponible ce mois** correspondant.\n\nÀ partir de **Finances V1.14.5**, un **revenu secondaire confirmé** saisi pour le mois augmente aussi le Disponible ce mois lorsqu’il n’est pas marqué **Hors budget** et qu’il n’est pas déjà représenté par une récurrence de revenu du Budget. La paie principale et les revenus déjà absorbés par le Budget ne sont pas comptés une deuxième fois.
 
 Lors de l’ajout ou de la modification d’un poste Budget, **Récurrence associée** permet maintenant de choisir **+ Créer une nouvelle récurrence**. La fréquence, les dates, le mode de paiement, la catégorie, les étiquettes, le mode de confirmation, l’indicateur Programmé et le rappel peuvent être définis dans la même fenêtre. Le poste et sa récurrence sont enregistrés dans une seule transaction afin de ne pas laisser de récurrence orpheline en cas d’erreur.
 
@@ -1518,7 +1518,7 @@ L’onglet permanent **Création guidée** permet de reprendre un personnage exi
 
 ### Combat rapide
 
-Le bouton **Combat rapide**, près des actions du personnage actif, affiche PV, dégâts non létaux, défenses, initiative, BMO/DMD, sauvegardes et attaques. Il permet d’appliquer dégâts, soins et dégâts non létaux, avec un modificateur temporaire d’attaque et des notes tactiques non persistantes.
+Le bouton **Combat rapide**, près des actions du personnage actif, affiche PV, dégâts non létaux, défenses, initiative, BMO/DMD, sauvegardes et attaques. Il permet d’appliquer dégâts, soins et dégâts non létaux, avec un modificateur temporaire d’attaque et des notes tactiques non persistantes.\n\nÀ partir de **JDR V1.10.1**, les armes physiques marquées comme **transportées ou équipées** dans Équipement sont aussi proposées dans Combat rapide même si aucune attaque liée n’a encore été créée. Le nom réel de l’équipement est utilisé; une arme **Masterwork** reprend son +1 à l’attaque et une arme magique reprend son bonus d’altération. Ce choix reste temporaire : l’application ne crée pas silencieusement une nouvelle attaque dans la base.
 
 **Enregistrer les pertes** conserve les autres valeurs Combat et recharge la feuille Combat. **Voir la fiche Combat** ouvre la feuille complète. Les onglets existants et la progression guidée restent disponibles.
 

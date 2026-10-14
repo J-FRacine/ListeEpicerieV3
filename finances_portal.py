@@ -30,11 +30,7 @@ def _relative_due_text(due_date, today_value):
     delta = (due_date - today_value).days
     if delta < 0:
         days = abs(delta)
-        return (
-            "En retard de 1 jour"
-            if days == 1
-            else f"En retard de {days} jours"
-        )
+        return "En retard de 1 jour" if days == 1 else f"En retard de {days} jours"
     if delta == 0:
         return "Prévu aujourd’hui"
     if delta == 1:
@@ -50,20 +46,11 @@ def collect_finance_portal_reminders(
     today_value=None,
     lookahead_days=PORTAL_REMINDER_LOOKAHEAD_DAYS,
 ):
-    """Retourne les échéances Finances explicitement marquées pour rappel.
-
-    Une transaction prévue déjà marquée « Programmée à la banque » n'est plus
-    considérée comme un rappel actif dans le Portail.
-
-    Les transactions matérialisées d'une récurrence ont priorité sur la ligne de
-    récurrence afin d'éviter un doublon.
-    """
     if list_transactions_fn is None or list_recurrences_fn is None:
         from finances_data import (
             list_recurrences as db_list_recurrences,
             list_transactions as db_list_transactions,
         )
-
         if list_transactions_fn is None:
             list_transactions_fn = db_list_transactions
         if list_recurrences_fn is None:
@@ -92,15 +79,11 @@ def collect_finance_portal_reminders(
     reminders = []
     materialized_recurrences = set()
 
-    for row in transaction_rows or []:
+    for row in transaction_rows:
         if not bool(row.get("reminder_enabled")):
             continue
 
         status = str(row.get("status") or "").strip()
-
-        # Une transaction prévue déjà programmée auprès de la banque ne doit
-        # plus produire de rappel. Pour une transaction confirmée, le champ
-        # bank_programmed n'est pas utilisé comme état métier.
         if status == "planned" and bool(row.get("bank_programmed")):
             continue
 
@@ -114,33 +97,23 @@ def collect_finance_portal_reminders(
         if recurrence_id:
             materialized_recurrences.add((int(recurrence_id), due_date))
 
-        description = str(row.get("description") or "Transaction").strip()
-        payment_method = str(row.get("payment_method_name") or "").strip()
-        amount_text = _money_text(row.get("amount"))
+        reminders.append({
+            "kind": "transaction",
+            "id": row.get("id"),
+            "recurrence_id": recurrence_id,
+            "due_date": due_date,
+            "description": str(row.get("description") or "Transaction").strip(),
+            "amount_text": _money_text(row.get("amount")),
+            "payment_method_name": str(row.get("payment_method_name") or "").strip(),
+            "relative_text": _relative_due_text(due_date, today_value),
+            "days_until_due": (due_date - today_value).days,
+            "can_mark_done": row.get("id") not in (None, ""),
+        })
 
-        reminders.append(
-            {
-                "kind": "transaction",
-                "id": row.get("id"),
-                "recurrence_id": recurrence_id,
-                "due_date": due_date,
-                "description": description,
-                "amount_text": amount_text,
-                "payment_method_name": payment_method,
-                "relative_text": _relative_due_text(due_date, today_value),
-                "days_until_due": (due_date - today_value).days,
-                "status": status,
-                "can_mark_done": row.get("id") not in (None, ""),
-            }
-        )
-
-    recurrence_rows = list_recurrences_fn(user_id) or []
-    for row in recurrence_rows:
+    for row in list_recurrences_fn(user_id) or []:
         if not bool(row.get("is_active", True)):
             continue
         if not bool(row.get("reminder_enabled")):
-            continue
-        if bool(row.get("bank_programmed")):
             continue
 
         due_date = _as_date(row.get("next_date"))
@@ -148,70 +121,58 @@ def collect_finance_portal_reminders(
             continue
 
         recurrence_id = row.get("id")
-        if recurrence_id and (
-            int(recurrence_id),
-            due_date,
-        ) in materialized_recurrences:
+        if recurrence_id and (int(recurrence_id), due_date) in materialized_recurrences:
             continue
 
-        description = str(row.get("description") or "Récurrence").strip()
-        payment_method = str(row.get("payment_method_name") or "").strip()
-        amount_text = _money_text(row.get("amount"))
+        reminders.append({
+            "kind": "recurrence",
+            "id": recurrence_id,
+            "recurrence_id": recurrence_id,
+            "due_date": due_date,
+            "description": str(row.get("description") or "Récurrence").strip(),
+            "amount_text": _money_text(row.get("amount")),
+            "payment_method_name": str(row.get("payment_method_name") or "").strip(),
+            "relative_text": _relative_due_text(due_date, today_value),
+            "days_until_due": (due_date - today_value).days,
+            "can_mark_done": recurrence_id not in (None, ""),
+        })
 
-        reminders.append(
-            {
-                "kind": "recurrence",
-                "id": recurrence_id,
-                "recurrence_id": recurrence_id,
-                "due_date": due_date,
-                "description": description,
-                "amount_text": amount_text,
-                "payment_method_name": payment_method,
-                "relative_text": _relative_due_text(due_date, today_value),
-                "days_until_due": (due_date - today_value).days,
-                "status": "",
-                "can_mark_done": False,
-            }
-        )
-
-    reminders.sort(
-        key=lambda row: (
-            row["due_date"],
-            str(row["description"]).casefold(),
-            str(row.get("id") or ""),
-        )
-    )
+    reminders.sort(key=lambda row: (
+        row["due_date"],
+        str(row["description"]).casefold(),
+        str(row.get("id") or ""),
+    ))
     return reminders
 
 
-def mark_finance_portal_transaction_done(user_id, transaction_id):
-    """Ferme le rappel et marque comme programmée si la transaction est prévue."""
+def mark_finance_portal_item_done(user_id, *, kind, item_id, due_date=None):
     from db import get_connection
     from finances_portal_writes import (
+        mark_recurrence_occurrence_programmed,
         mark_transaction_done_from_portal,
     )
 
+    if kind == "recurrence":
+        return mark_recurrence_occurrence_programmed(
+            user_id,
+            item_id,
+            due_date,
+            get_connection=get_connection,
+        )
+
     return mark_transaction_done_from_portal(
         user_id,
-        transaction_id,
+        item_id,
         get_connection=get_connection,
     )
 
 
-def finances_portal_reminder(
-    user_id,
-    *,
-    ui_module=None,
-    today_value=None,
-):
+def finances_portal_reminder(user_id, *, ui_module=None, today_value=None):
     if ui_module is None:
         from nicegui import ui as ui_module
 
     try:
-        rows = collect_finance_portal_reminders(
-            user_id,
-            today_value=today_value,
-        )
+        rows = collect_finance_portal_reminders(user_id, today_value=today_value)
     except Exception as error:
         print("Avis Finances du Portail indisponibles :", error)
         return
@@ -219,36 +180,31 @@ def finances_portal_reminder(
     if not rows:
         return
 
-    def mark_done(transaction_id):
+    def mark_done(row):
         try:
-            result = mark_finance_portal_transaction_done(
+            result = mark_finance_portal_item_done(
                 user_id,
-                transaction_id,
+                kind=row["kind"],
+                item_id=row["id"],
+                due_date=row["due_date"],
             )
         except Exception as error:
             ui_module.notify(
-                str(error) or "Impossible de modifier cette transaction.",
+                str(error) or "Impossible de modifier cette échéance.",
                 type="negative",
             )
             return
 
-        if result.get("bank_programmed"):
-            message = (
-                "Transaction marquée comme programmée. "
-                "Le rappel est retiré."
-            )
-        else:
-            message = "Rappel retiré."
-
-        ui_module.notify(message, type="positive")
-
-        # Rechargement volontairement simple du Portail : aucun composant
-        # refreshable local n'est nécessaire pour cette petite action.
+        ui_module.notify(
+            "Échéance marquée comme programmée. Le rappel est retiré."
+            if result.get("bank_programmed")
+            else "Rappel retiré.",
+            type="positive",
+        )
         ui_module.navigate.to("/?tab=portail")
 
     with ui_module.element("div").classes(
-        "w-full mt-3 rounded-xl border border-orange-200 "
-        "bg-orange-50 px-3 py-3"
+        "w-full mt-3 rounded-xl border border-orange-200 bg-orange-50 px-3 py-3"
     ):
         with ui_module.row().classes(
             "w-full items-start justify-between gap-3 flex-wrap"
@@ -261,7 +217,6 @@ def finances_portal_reminder(
                     ui_module.label("Échéances Finances").classes(
                         "font-bold text-orange-900"
                     )
-
                 ui_module.label(
                     "Transactions et paiements marqués pour rappel "
                     f"dans les {PORTAL_REMINDER_LOOKAHEAD_DAYS} prochains jours."
@@ -280,9 +235,7 @@ def finances_portal_reminder(
                 "w-full items-center gap-2 flex-nowrap py-1"
             ):
                 icon = "warning" if row["days_until_due"] < 0 else "event"
-                ui_module.icon(icon).classes(
-                    "text-orange-700 text-lg shrink-0"
-                )
+                ui_module.icon(icon).classes("text-orange-700 text-lg shrink-0")
 
                 with ui_module.column().classes("gap-0 grow min-w-0"):
                     title = row["description"]
@@ -303,10 +256,7 @@ def finances_portal_reminder(
                     ui_module.button(
                         "Fait",
                         icon="task_alt",
-                        on_click=(
-                            lambda _event, transaction_id=row["id"]:
-                            mark_done(transaction_id)
-                        ),
+                        on_click=lambda _event, selected=row: mark_done(selected),
                     ).props(
                         "outline dense no-caps color=positive"
                     ).classes("shrink-0")

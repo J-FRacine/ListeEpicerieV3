@@ -359,9 +359,11 @@ def fitness_panel(user, show_heading=False):
                 except (ValueError, TypeError) as err:
                     ui.notify(str(err), type='negative')
                     return
+                # Notifier tant que le contexte du dialogue existe encore.
+                # render() reconstruit base et supprime le parent du dialogue.
+                ui.notify('Séance enregistrée', type='positive')
                 dialog.close()
                 render()
-                ui.notify('Séance enregistrée', type='positive')
 
             with ui.row().classes('justify-between w-full items-center'):
                 ui.button('Voir l’explication', icon='help_outline', on_click=lambda ex=ex: _open_quick_help(ex)).props('flat')

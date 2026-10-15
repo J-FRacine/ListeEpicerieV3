@@ -1,18 +1,17 @@
-JF Apps — Mise en forme V1.0.1 — Marche extérieure quotidienne
+JF Apps – Mise en forme V1.0.3 – Correctif enregistrement
 
-Fichiers à remplacer à la racine du dépôt GitHub :
-- fitness.py
-- fitness_data.py
+FICHIER À REMPLACER DANS GITHUB : fitness.py
 
-N'ajouter aucun autre fichier. Aucun SQL manuel et aucune nouvelle dépendance.
-La colonne skip_reason est ajoutée automatiquement à fitness_entries à l'ouverture par l'initialisation habituelle.
+Corrige l'erreur NiceGUI : « The parent element this slot belongs to has been deleted » après l'enregistrement d'un exercice.
+La notification est maintenant affichée avant la fermeture du dialogue et la reconstruction de l'écran.
+Les explications illustrées de V1.0.2 et la marche extérieure sont conservées.
 
-Nouveautés :
-- Marche extérieure proposée tous les jours, avec objectif progressif (5/10/15/20 minutes selon les semaines).
-- Marche sur place proposée comme alternative facultative : elle ne compte pas deux fois la marche du jour.
-- Possibilité de noter « Reporté à cause de la météo » sans enregistrer faussement une séance.
-- Historique adapté à la substitution marche extérieure / marche sur place.
+Aucun SQL manuel. Aucune nouvelle dépendance.
 
-Déploiement : remplacer ces deux fichiers, Commit changes, attendre le redéploiement Canner, puis actualiser la page. Vérifier la marche extérieure, le report météo et l'historique.
+INSTALLATION
+1. Remplacer fitness.py dans GitHub.
+2. Faire Commit changes et attendre le redéploiement Canner.
+3. Tester « Faire » > Enregistrer, puis « Modifier » > Enregistrer sur plusieurs exercices.
+4. Vérifier que les séances restent bien cochées après actualisation.
 
-Note : cette mise à jour n'ajoute pas de version dans app_versions.py afin de respecter la demande de ne livrer que les fichiers du module concernés.
+VÉRIFICATION : compilation Python OK. Test d'intégration sur Canner à effectuer.

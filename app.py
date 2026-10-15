@@ -47,6 +47,8 @@ from feedback_data import (
     count_user_unread_feedback,
     init_feedback_schema,
 )
+from fitness import fitness_panel
+from fitness_data import init_fitness_schema
 from finances import finances_panel
 from finances_portal import finances_portal_reminder
 from finances_data import init_finances_schema
@@ -186,6 +188,7 @@ FEEDBACK_TABS = {
     "feedback",
     "avis",
 }
+FITNESS_TABS = {"mise-en-forme", "forme", "fitness"}
 FINANCE_TABS = {
     "finances",
     "finance",
@@ -225,6 +228,11 @@ APP_SHELL_META = {
         "title": "Finances",
         "subtitle": "Dépenses, revenus et conciliation",
         "icon": "account_balance_wallet",
+    },
+    "fitness": {
+        "title": "Mise en forme",
+        "subtitle": "Exercices quotidiens sans appareil",
+        "icon": "fitness_center",
     },
     "rpg": {
         "title": "Personnages JDR",
@@ -1628,6 +1636,17 @@ def show_portal(user):
                     ),
                 )
 
+            if "fitness" in allowed_app_keys:
+                visible_app_count += 1
+                portal_action_card(
+                    title="Mise en forme",
+                    description="Programme doux sans appareil et suivi quotidien privé.",
+                    icon="fitness_center",
+                    action_label="Ouvrir",
+                    badge=version_label("fitness"),
+                    on_click=lambda: ui.navigate.to("/?tab=forme"),
+                )
+
             if "rpg" in allowed_app_keys:
                 visible_app_count += 1
                 portal_action_card(
@@ -2543,6 +2562,18 @@ def index(
 
         return
 
+    if normalized_tab in FITNESS_TABS:
+        if not user_has_app_access(user["id"], "fitness"):
+            with page_container():
+                portal_header("Accès non autorisé")
+                show_app_access_denied("Mise en forme")
+            return
+        set_current_tab("forme")
+        with page_container():
+            portal_header(app_key="fitness")
+            fitness_panel(user)
+        return
+
     if normalized_tab in RPG_TABS:
         if not user_has_app_access(
             user["id"],
@@ -2789,6 +2820,7 @@ init_blood_pressure_push_schema()
 init_rpg_character_schema()
 init_feedback_schema()
 init_finances_schema()
+init_fitness_schema()
 
 app.on_startup(
     start_blood_pressure_push_monitor

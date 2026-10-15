@@ -8,6 +8,7 @@ APP_LABELS = {
     "recipes": "Recettes",
     "blood_pressure": "Journal de pression",
     "finances": "Finances",
+    "fitness": "Mise en forme",
     "rpg": "Personnages JDR",
     "feedback": "Commentaires et suggestions",
 }
@@ -18,11 +19,18 @@ APP_VERSIONS = {
     "recipes": "1.8.0",
     "blood_pressure": "1.2.3",
     "finances": "1.14.5",
+    "fitness": "1.0.0",
     "rpg": "1.10.1",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "fitness", "version": "1.0.0", "date": "2026-10-15",
+        "title": "Mise en forme — V1.0.0",
+        "summary": "Programme d’exercices doux sans appareil, avec historique privé.",
+        "changes": ["Programme progressif de huit semaines, ajustable", "Exercices à domicile et suivi individuel par date", "Historique des 28 derniers jours et ressenti facultatif", "Données privées par utilisateur, migration automatique sans SQL manuel"],
+    },
     {
         "app_key": "finances",
         "version": "1.14.5",

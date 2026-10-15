@@ -46,6 +46,13 @@ APP_DEFINITIONS = {
         ),
         "available": True,
     },
+    "fitness": {
+        "label": "Mise en forme",
+        "short_label": "Forme",
+        "icon": "fitness_center",
+        "description": "Exercices sans appareil et suivi quotidien privé.",
+        "available": True,
+    },
     "rpg": {
         "label": "Personnages JDR",
         "short_label": "JDR",
@@ -276,7 +283,8 @@ def init_app_access_schema():
                                 'recipes',
                                 'blood_pressure',
                                 'finances',
-                                'rpg'
+                                'rpg',
+                                'fitness'
                             )
                         ),
                     granted_at TIMESTAMPTZ
@@ -342,7 +350,8 @@ def init_app_access_schema():
                         'recipes',
                         'blood_pressure',
                         'finances',
-                        'rpg'
+                        'rpg',
+                        'fitness'
                     )
                 );
                 """

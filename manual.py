@@ -5,6 +5,21 @@ from onboarding import organization_diagram
 
 
 MANUAL_SECTIONS = [
+    {"title":"Mise en forme", "icon":"fitness_center",
+     "caption":"Exercices sans appareil et suivi des séances",
+     "keywords":"forme exercices marche chaise activité physique progression historique",
+     "content":"""### Mise en forme — V1.0.0
+
+Ouvrez **Mise en forme** depuis le Portail. Le programme de départ est volontairement doux et réparti sur huit semaines. Chaque jour, la marche sur place est proposée; le lundi et le jeudi s’ajoutent trois mouvements simples de renforcement.
+
+- Appuyez sur **Faire** puis cochez l’exercice réalisé; modifiez la durée ou les répétitions si nécessaire.
+- Indiquez facultativement si l’exercice était facile, correct ou difficile et ajoutez une note.
+- Utilisez les flèches de date pour compléter ou corriger une journée passée.
+- **Plus doux** et **Progresser** ajustent le niveau conseillé sans effacer l’historique.
+- Consultez l’historique de 28 jours pour voir les journées terminées ou partielles.
+
+Les données sont privées à votre compte. Ce programme général ne remplace pas un avis médical. Arrêtez en cas de douleur thoracique, malaise ou essoufflement inhabituel.
+"""},
     {
         "title": "Premiers pas",
         "icon": "rocket_launch",

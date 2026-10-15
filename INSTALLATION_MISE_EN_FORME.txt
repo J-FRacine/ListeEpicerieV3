@@ -1,0 +1,45 @@
+JF APPS — MISE EN FORME V1.0.0 — 15 OCTOBRE 2026
+
+IMPORTANT
+Ce ZIP contient UNIQUEMENT les fichiers nouveaux ou modifiés.
+Fichiers complets, prêts à copier à la racine du dépôt GitHub.
+
+À REMPLACER (4)
+  app.py
+  app_access.py
+  app_versions.py
+  manual.py
+
+À AJOUTER (2)
+  fitness.py
+  fitness_data.py
+
+INSTALLATION
+1. Effectuer une sauvegarde de l'installation actuelle.
+2. Extraire ce ZIP et déposer ses 6 fichiers à la racine du dépôt GitHub JF Apps.
+3. Enregistrer les modifications (commit) et laisser Canner redéployer.
+4. Actualiser la page (Ctrl+F5 au besoin).
+5. Dans le Portail, ouvrir « Mise en forme ».
+6. Le compte administrateur a accès automatiquement. Pour les autres comptes,
+   accorder « Mise en forme » dans la gestion des accès.
+
+FONCTIONS
+- Programme indicatif sur 8 semaines sans appareil.
+- Marche sur place chaque jour et renforcement les lundis et jeudis.
+- Ajustement du niveau avec « Plus doux » et « Progresser ».
+- Validation, durée/répétitions réalisées, difficulté, notes.
+- Consultation/correction des journées passées, historique sur 28 jours.
+- Données privées par compte dans fitness_settings et fitness_entries.
+
+DONNÉES
+- Création automatique des deux tables PostgreSQL au démarrage.
+- Aucun SQL manuel et aucune nouvelle dépendance.
+- Aucune donnée d'une autre application n'est changée.
+- Les données « Mise en forme » ne sont PAS encore ajoutées à la sauvegarde
+  globale du Centre de maintenance; à prévoir lors d'une prochaine version.
+
+VALIDATION EFFECTUÉE
+- Syntaxe et compilation de tous les fichiers modifiés : OK.
+- Cinq assertions sur le programme et sa progression : OK.
+- Déploiement Canner, base PostgreSQL et fonctionnement navigateur :
+  NON TESTÉS ici, à vérifier après installation.

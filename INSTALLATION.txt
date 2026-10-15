@@ -1,0 +1,18 @@
+JF Apps — Mise en forme V1.0.1 — Marche extérieure quotidienne
+
+Fichiers à remplacer à la racine du dépôt GitHub :
+- fitness.py
+- fitness_data.py
+
+N'ajouter aucun autre fichier. Aucun SQL manuel et aucune nouvelle dépendance.
+La colonne skip_reason est ajoutée automatiquement à fitness_entries à l'ouverture par l'initialisation habituelle.
+
+Nouveautés :
+- Marche extérieure proposée tous les jours, avec objectif progressif (5/10/15/20 minutes selon les semaines).
+- Marche sur place proposée comme alternative facultative : elle ne compte pas deux fois la marche du jour.
+- Possibilité de noter « Reporté à cause de la météo » sans enregistrer faussement une séance.
+- Historique adapté à la substitution marche extérieure / marche sur place.
+
+Déploiement : remplacer ces deux fichiers, Commit changes, attendre le redéploiement Canner, puis actualiser la page. Vérifier la marche extérieure, le report météo et l'historique.
+
+Note : cette mise à jour n'ajoute pas de version dans app_versions.py afin de respecter la demande de ne livrer que les fichiers du module concernés.

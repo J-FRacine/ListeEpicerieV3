@@ -1,0 +1,43 @@
+JF Apps – Mise en forme – Feuille explicative illustrée
+=======================================================
+
+OBJECTIF
+--------
+Ajouter une feuille explicative facile à consulter directement depuis l'application
+Mise en forme.
+
+NOUVEAUTÉS
+----------
+- bouton « Feuille explicative » dans l'écran principal;
+- fiche illustrée intégrée à l'application, sans lien externe;
+- dessins simples pour chaque exercice;
+- explications pas à pas;
+- conseils utiles et éléments à éviter;
+- bouton « ? » sur chaque exercice pour ouvrir l'aide rapide correspondante;
+- bouton « Voir l'explication » aussi présent dans la fenêtre d'enregistrement.
+
+FICHIERS À REMPLACER
+--------------------
+- fitness.py
+
+AUCUN SQL MANUEL
+----------------
+Aucune modification de base de données.
+
+AUCUNE NOUVELLE DÉPENDANCE
+--------------------------
+Aucune dépendance supplémentaire.
+
+INSTALLATION
+------------
+1. Dans GitHub, remplacer fitness.py par celui de ce paquet.
+2. Faire Commit changes.
+3. Laisser Canner redéployer.
+4. Ouvrir JF Apps > Mise en forme.
+5. Vérifier le bouton « Feuille explicative » et les boutons « ? » sur les exercices.
+
+VÉRIFICATIONS EFFECTUÉES
+------------------------
+- py_compile de fitness.py : OK
+- compatibilité avec fitness_data.py existant : OK
+

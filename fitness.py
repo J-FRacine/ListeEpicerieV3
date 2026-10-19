@@ -2,7 +2,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from urllib.parse import quote
 from nicegui import ui
-from fitness_data import settings, week_number, daily_plan, entries_between, save_entry, change_level, day_progress
+from fitness_data import settings, week_number, daily_plan, entries_between, save_entry, change_level, day_progress, update_reminder_preferences
 
 
 EXERCISE_GUIDE = {
@@ -287,6 +287,11 @@ def fitness_panel(user, show_heading=False):
                     ui.button('Plus doux', icon='remove', on_click=lambda: adjust(-1)).props('outline dense')
                     ui.button('Progresser', icon='add', on_click=lambda: adjust(1)).props('outline dense')
             ui.label('La progression est indicative : restez à une étape confortable. Les changements de niveau modifient les prochains objectifs, pas les séances enregistrées.').classes('text-xs text-gray-500')
+            def toggle_reminder(enabled):
+                update_reminder_preferences(uid, enabled=enabled)
+                saved['reminder_enabled'] = enabled
+                ui.notify('Préférence de rappel enregistrée.', type='positive')
+            ui.switch('Afficher le rappel quotidien sur le Portail', value=saved.get('reminder_enabled', True), on_change=lambda e: toggle_reminder(e.value)).props('dense')
             with ui.row().classes('items-center gap-2 flex-wrap'):
                 ui.button(icon='chevron_left', on_click=lambda: go(-1)).props('flat round')
                 ui.label(day.strftime('%d/%m/%Y')).classes('text-lg font-bold')

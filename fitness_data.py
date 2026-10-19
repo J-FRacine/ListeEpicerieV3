@@ -33,13 +33,15 @@ def init_fitness_schema():
                 CONSTRAINT fitness_value_check CHECK (actual_value IS NULL OR actual_value BETWEEN 0 AND 999)
             )''')
             cur.execute('''ALTER TABLE fitness_entries ADD COLUMN IF NOT EXISTS skip_reason TEXT''')
+            cur.execute('ALTER TABLE fitness_settings ADD COLUMN IF NOT EXISTS reminder_enabled BOOLEAN NOT NULL DEFAULT TRUE')
+            cur.execute('ALTER TABLE fitness_settings ADD COLUMN IF NOT EXISTS reminder_snoozed_on DATE')
         conn.commit()
 
 def settings(user_id):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute('INSERT INTO fitness_settings(user_id) VALUES (%s) ON CONFLICT(user_id) DO NOTHING',(user_id,))
-            cur.execute('SELECT started_on, level_offset FROM fitness_settings WHERE user_id=%s',(user_id,))
+            cur.execute('SELECT started_on, level_offset, reminder_enabled, reminder_snoozed_on FROM fitness_settings WHERE user_id=%s',(user_id,))
             out=cur.fetchone()
         conn.commit()
     return out
@@ -97,4 +99,15 @@ def change_level(user_id, delta):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute('UPDATE fitness_settings SET level_offset=GREATEST(-7,LEAST(7,level_offset+%s)),updated_at=NOW() WHERE user_id=%s',(delta,user_id))
+        conn.commit()
+
+
+def update_reminder_preferences(user_id, enabled=None, snooze_date=None):
+    """Modifie uniquement les préférences de rappel de cet utilisateur."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            if enabled is not None:
+                cur.execute('UPDATE fitness_settings SET reminder_enabled=%s, updated_at=NOW() WHERE user_id=%s', (bool(enabled), user_id))
+            if snooze_date is not None:
+                cur.execute('UPDATE fitness_settings SET reminder_snoozed_on=%s, updated_at=NOW() WHERE user_id=%s', (snooze_date, user_id))
         conn.commit()

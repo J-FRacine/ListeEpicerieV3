@@ -48,6 +48,7 @@ from feedback_data import (
     init_feedback_schema,
 )
 from fitness import fitness_panel
+from fitness_reminder import fitness_portal_reminder
 from fitness_data import init_fitness_schema
 from finances import finances_panel
 from finances_portal import finances_portal_reminder
@@ -1511,6 +1512,9 @@ def show_portal(user):
                         finances_portal_reminder(
                             user["id"]
                         )
+
+                    if "fitness" in allowed_app_keys:
+                        fitness_portal_reminder(user["id"])
 
         accessible_families = get_accessible_families(
             user["id"]

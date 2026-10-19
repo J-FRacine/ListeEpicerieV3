@@ -1,0 +1,49 @@
+JF APPS — RAPPEL QUOTIDIEN DE MISE EN FORME
+Portail V1.5.1 — Mise en forme V1.1.0 — 19 octobre 2026
+
+CONTENU DU CORRECTIF
+--------------------
+Remplacer ces cinq fichiers existants à la racine de GitHub :
+  app.py
+  app_versions.py
+  fitness.py
+  fitness_data.py
+  manual.py
+
+Ajouter ce nouveau fichier à la racine :
+  fitness_reminder.py
+
+FONCTIONNEMENT
+--------------
+- Avis visible sur le Portail si une activité prévue aujourd'hui reste à faire.
+- Bouton Faire mes exercices, ouvrant Mise en forme.
+- Bouton Déjà fait, qui revérifie les enregistrements.
+- Bouton Reporter à demain : cache l'avis jusqu'au jour suivant sans valider d'exercice.
+- Interrupteur d'activation dans l'application Mise en forme.
+- Le rappel respecte les autorisations et les données de l'utilisateur.
+- Les jours de renforcement, l'avis le précise.
+- La marche sur place peut remplacer la marche extérieure.
+- Si météo défavorable a été indiquée, le Portail le signale; les objectifs
+  non effectués ne sont pas marqués comme réalisés.
+
+MISE A JOUR ET SECURITE
+----------------------
+- Une migration automatique ajoute deux colonnes aux préférences de Mise en forme.
+- Aucun SQL manuel; aucune nouvelle dépendance.
+- Aucune autre application ni table financière modifiée.
+- Les entrées d'exercices existantes sont conservées.
+
+INSTALLATION
+------------
+1. Faire une sauvegarde du dépôt ou de l'installation actuelle.
+2. Déposer les six fichiers dans la racine du dépôt GitHub.
+3. Faire Commit changes.
+4. Attendre le redéploiement Canner.
+5. Ouvrir le Portail : vérifier l'avis si la séance du jour est incomplète.
+6. Ouvrir Mise en forme, enregistrer les exercices, puis revenir au Portail.
+7. Vérifier les options Déjà fait, Reporter à demain et l'interrupteur de rappel.
+
+VERIFICATIONS
+-------------
+Compilation Python des six fichiers : OK.
+Le test réel NiceGUI et PostgreSQL sur Canner est à effectuer après déploiement.

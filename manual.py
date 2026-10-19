@@ -5,21 +5,6 @@ from onboarding import organization_diagram
 
 
 MANUAL_SECTIONS = [
-    {"title":"Mise en forme", "icon":"fitness_center",
-     "caption":"Exercices sans appareil et suivi des séances",
-     "keywords":"forme exercices marche chaise activité physique progression historique",
-     "content":"""### Mise en forme — V1.0.0
-
-Ouvrez **Mise en forme** depuis le Portail. Le programme de départ est volontairement doux et réparti sur huit semaines. Chaque jour, la marche sur place est proposée; le lundi et le jeudi s’ajoutent trois mouvements simples de renforcement.
-
-- Appuyez sur **Faire** puis cochez l’exercice réalisé; modifiez la durée ou les répétitions si nécessaire.
-- Indiquez facultativement si l’exercice était facile, correct ou difficile et ajoutez une note.
-- Utilisez les flèches de date pour compléter ou corriger une journée passée.
-- **Plus doux** et **Progresser** ajustent le niveau conseillé sans effacer l’historique.
-- Consultez l’historique de 28 jours pour voir les journées terminées ou partielles.
-
-Les données sont privées à votre compte. Ce programme général ne remplace pas un avis médical. Arrêtez en cas de douleur thoracique, malaise ou essoufflement inhabituel.
-"""},
     {
         "title": "Premiers pas",
         "icon": "rocket_launch",
@@ -1325,6 +1310,22 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
             "sorts spells clerc cleric préparation emplacements slots oraisons domaine DD sagesse prière lancement conversion spontanée combat rapide"
         ),
         "content": """
+### V1.11.0 — rounds, effets actifs et journal de combat
+
+**Combat rapide** comprend maintenant un bloc **Round et effets actifs**. Le round commence à 1 et le bouton **Round suivant** fait avancer la rencontre d’un round.
+
+Un effet temporaire peut recevoir un nom, une cible de calcul, un bonus ou malus, une durée et une note. Les cibles disponibles sont notamment **Attaque**, **CA totale**, **Initiative**, **BMO / CMB**, **DMD / CMD**, les trois sauvegardes ou **Tous les jets de sauvegarde**. **État / note seulement** permet de suivre un état comme À terre, Frayé ou Invisible sans inventer automatiquement une règle Pathfinder.
+
+Une durée de **0 round** signifie **Jusqu’à la fin du combat**. Pour une durée chiffrée, le compteur diminue à chaque Round suivant et l’effet disparaît automatiquement lorsqu’il expire.
+
+Les effets sont volontairement **temporaires à la session de Combat rapide** : ils ajustent les chiffres affichés pendant la rencontre, mais ne réécrivent pas silencieusement les bonus permanents de la feuille. Les PV et dégâts non létaux conservent leur bouton d’enregistrement existant.
+
+Le **Journal de session** note les ajouts/retraits/expirations d’effets, les changements de round et les pertes ou soins rapides. Ce journal est un aide-mémoire temporaire et n’est pas enregistré dans la base.
+
+La fenêtre Combat rapide utilise aussi une mise en forme plus dense sur ordinateur : grille de statistiques élargie, sections mieux séparées, effets lisibles en une ligne et formulaire compact. Sur téléphone, les statistiques passent sur deux colonnes et le formulaire des effets s’empile verticalement.
+
+Aucune migration PostgreSQL n’est requise.
+
 ### V1.10.0 — lancement guidé des sorts
 
 La **Phase 15B** est maintenant officiellement intégrée à **JDR V1.10.0**. Dans l’onglet **Sorts**, chaque sort préparé possède un bouton **Lancer**. Avant de consommer l’emplacement, une fenêtre affiche le nom du sort, son niveau, le niveau de lanceur, la **Difficulté du jet**, la portée, la cible ou zone, la durée, une formule de jet lorsqu’elle est intégrée, le résumé et les notes disponibles.

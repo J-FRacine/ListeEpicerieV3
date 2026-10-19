@@ -8,7 +8,6 @@ APP_LABELS = {
     "recipes": "Recettes",
     "blood_pressure": "Journal de pression",
     "finances": "Finances",
-    "fitness": "Mise en forme",
     "rpg": "Personnages JDR",
     "feedback": "Commentaires et suggestions",
 }
@@ -19,17 +18,30 @@ APP_VERSIONS = {
     "recipes": "1.8.0",
     "blood_pressure": "1.2.3",
     "finances": "1.14.5",
-    "fitness": "1.0.0",
-    "rpg": "1.10.1",
+    "rpg": "1.11.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
     {
-        "app_key": "fitness", "version": "1.0.0", "date": "2026-10-15",
-        "title": "Mise en forme — V1.0.0",
-        "summary": "Programme d’exercices doux sans appareil, avec historique privé.",
-        "changes": ["Programme progressif de huit semaines, ajustable", "Exercices à domicile et suivi individuel par date", "Historique des 28 derniers jours et ressenti facultatif", "Données privées par utilisateur, migration automatique sans SQL manuel"],
+        "app_key": "rpg",
+        "version": "1.11.0",
+        "date": "2026-10-19",
+        "title": "Personnages JDR — V1.11.0 — rounds et effets de combat",
+        "summary": (
+            "Combat rapide suit maintenant les rounds, les effets temporaires "
+            "et un journal de session dans une présentation plus compacte."
+        ),
+        "changes": [
+            "Ajout d’un compteur de rounds avec action Round suivant.",
+            "Ajout d’effets temporaires avec nom, cible, bonus ou malus, durée en rounds et note.",
+            "Les effets peuvent modifier explicitement Attaque, CA, Initiative, BMO, DMD et les sauvegardes, ou rester de simples états informatifs.",
+            "Une durée de 0 signifie jusqu’à la fin du combat; les effets à durée limitée expirent automatiquement en avançant les rounds.",
+            "Ajout d’un journal temporaire des rounds, effets, dégâts et soins de la session.",
+            "Les effets de session ne modifient pas silencieusement les valeurs permanentes de la fiche.",
+            "Mise en forme de Combat rapide adaptée aux grands écrans et au téléphone.",
+            "Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance.",
+        ],
     },
     {
         "app_key": "finances",

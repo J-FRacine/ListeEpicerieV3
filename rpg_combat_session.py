@@ -10,6 +10,8 @@ from rpg_character_spell_casting import (
     remaining_prepared_uses,
 )
 
+from rpg_combat_effects_ui import build_combat_effects_panel
+
 
 COMBAT_FIELDS = (
     "str_score",
@@ -396,8 +398,8 @@ def build_combat_session(
 
         with ui.dialog() as dialog:
             with ui.card().classes(
-                "w-full max-w-5xl p-4 "
-                "max-h-[92vh] overflow-auto"
+                "jf-rpg-combat-dialog w-full p-4 "
+                "max-h-[94vh] overflow-auto"
             ):
                 with ui.row().classes(
                     "w-full items-start justify-between "
@@ -418,7 +420,7 @@ def build_combat_session(
                     ).props("flat round")
 
                 with ui.element("div").classes(
-                    "jf-rpg-result-grid mt-3"
+                    "jf-rpg-combat-stats-grid mt-3"
                 ):
                     stat_labels = {}
                     for key, label in (
@@ -443,7 +445,15 @@ def build_combat_session(
                                 "jf-rpg-stat-value"
                             )
 
-                with ui.card().classes("w-full p-4 mt-3"):
+                effects_handle = build_combat_effects_panel(
+                    ui=ui,
+                    format_modifier=format_modifier,
+                    on_changed=lambda: refresh_stats(),
+                )
+
+                with ui.card().classes(
+                    "jf-rpg-combat-section w-full p-4 mt-3"
+                ):
                     ui.label("Attaque utilisée").classes(
                         "text-lg font-bold"
                     )
@@ -502,7 +512,7 @@ def build_combat_session(
 
                 active_controls = {}
                 if feats:
-                    with ui.card().classes("w-full p-4 mt-3"):
+                    with ui.card().classes("jf-rpg-combat-section w-full p-4 mt-3"):
                         ui.label("Dons").classes(
                             "text-lg font-bold"
                         )
@@ -586,7 +596,7 @@ def build_combat_session(
 
                 @ui.refreshable
                 def render_combat_spells():
-                    with ui.card().classes("w-full p-4 mt-3"):
+                    with ui.card().classes("jf-rpg-combat-section w-full p-4 mt-3"):
                         ui.label("Sorts préparés").classes("text-lg font-bold")
                         ui.label(
                             "Lancez un sort sans quitter Combat rapide. La même utilisation "
@@ -842,7 +852,7 @@ def build_combat_session(
 
                 render_combat_spells()
 
-                with ui.card().classes("w-full p-4 mt-3"):
+                with ui.card().classes("jf-rpg-combat-section w-full p-4 mt-3"):
                     ui.label("Pertes et soins rapides").classes(
                         "text-lg font-bold"
                     )
@@ -889,6 +899,23 @@ def build_combat_session(
                         ).props("inputmode=numeric")
 
                     def apply_quick_changes() -> None:
+                        damage_value = max(
+                            0,
+                            _as_int(damage_taken.value),
+                        )
+                        healing_value = max(
+                            0,
+                            _as_int(healing_received.value),
+                        )
+                        nonlethal_add_value = max(
+                            0,
+                            _as_int(nonlethal_added.value),
+                        )
+                        nonlethal_remove_value = max(
+                            0,
+                            _as_int(nonlethal_removed.value),
+                        )
+
                         current_hp.value = adjusted_current_hp(
                             current_hp.value,
                             damage=damage_taken.value,
@@ -913,6 +940,27 @@ def build_combat_session(
                             nonlethal_removed,
                         ):
                             control.update()
+                        if (
+                            damage_value
+                            or healing_value
+                            or nonlethal_add_value
+                            or nonlethal_remove_value
+                        ):
+                            pieces = []
+                            if damage_value:
+                                pieces.append(f"-{damage_value} PV")
+                            if healing_value:
+                                pieces.append(f"+{healing_value} PV")
+                            if nonlethal_add_value:
+                                pieces.append(
+                                    f"+{nonlethal_add_value} non létaux"
+                                )
+                            if nonlethal_remove_value:
+                                pieces.append(
+                                    f"-{nonlethal_remove_value} non létaux"
+                                )
+                            effects_handle.log(" / ".join(pieces))
+
                         refresh_stats()
 
                     ui.button(
@@ -962,13 +1010,17 @@ def build_combat_session(
                         save_total=save_total,
                         feat_effects=effects,
                     )
+                    session_modifiers = effects_handle.modifiers()
 
                     stat_labels["hp"].set_text(
                         f"{snapshot['current_hp']}/"
                         f"{snapshot['max_hp']}"
                     )
                     stat_labels["ac"].set_text(
-                        str(snapshot["armor_class"])
+                        str(
+                            _as_int(snapshot["armor_class"])
+                            + session_modifiers["ac"]
+                        )
                     )
                     stat_labels["touch"].set_text(
                         str(snapshot["touch_armor_class"])
@@ -977,13 +1029,22 @@ def build_combat_session(
                         str(snapshot["flat_footed_armor_class"])
                     )
                     stat_labels["initiative"].set_text(
-                        format_modifier(snapshot["initiative"])
+                        format_modifier(
+                            _as_int(snapshot["initiative"])
+                            + session_modifiers["initiative"]
+                        )
                     )
                     stat_labels["cmb"].set_text(
-                        format_modifier(snapshot["cmb"])
+                        format_modifier(
+                            _as_int(snapshot["cmb"])
+                            + session_modifiers["cmb"]
+                        )
                     )
                     stat_labels["cmd"].set_text(
-                        str(snapshot["cmd"])
+                        str(
+                            _as_int(snapshot["cmd"])
+                            + session_modifiers["cmd"]
+                        )
                     )
                     stat_labels["fortitude"].set_text(
                         format_modifier(
@@ -991,6 +1052,8 @@ def build_combat_session(
                                 "fortitude",
                                 0,
                             )
+                            + session_modifiers["save_all"]
+                            + session_modifiers["fortitude"]
                         )
                     )
                     stat_labels["reflex"].set_text(
@@ -999,6 +1062,8 @@ def build_combat_session(
                                 "reflex",
                                 0,
                             )
+                            + session_modifiers["save_all"]
+                            + session_modifiers["reflex"]
                         )
                     )
                     stat_labels["will"].set_text(
@@ -1007,6 +1072,8 @@ def build_combat_session(
                                 "will",
                                 0,
                             )
+                            + session_modifiers["save_all"]
+                            + session_modifiers["will"]
                         )
                     )
 
@@ -1018,7 +1085,10 @@ def build_combat_session(
                     else:
                         attack_total_display.value = (
                             format_modifier(
-                                snapshot["selected_attack_total"]
+                                _as_int(
+                                    snapshot["selected_attack_total"]
+                                )
+                                + session_modifiers["attack"]
                             )
                         )
                         damage_display.value = (

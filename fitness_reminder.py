@@ -11,7 +11,7 @@ def fitness_portal_reminder(user_id: int) -> None:
         if config.get('reminder_enabled') is False or config.get('reminder_snoozed_on') == today:
             return
         week = week_number(config['started_on'], today, config['level_offset'])
-        plan = daily_plan(week, today)
+        plan = daily_plan(week, today, config.get("schedule_mode", "daily"), config.get("strength_weekdays"))
         rows = entries_between(user_id, today, today)
         records = {(row['session_date'], row['exercise_key']): row for row in rows}
         done, required = day_progress(plan, records, today)

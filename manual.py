@@ -8,10 +8,11 @@ MANUAL_SECTIONS = [
     {"title":"Mise en forme", "icon":"fitness_center",
      "caption":"Exercices sans appareil et suivi des séances",
      "keywords":"forme exercices marche chaise activité physique progression historique",
-     "content":"""### Mise en forme — V1.1.0
+     "content":"""### Mise en forme — V1.1.1
 
-Ouvrez **Mise en forme** depuis le Portail. Le programme de départ est volontairement doux et réparti sur huit semaines. Chaque jour, la marche extérieure est proposée et peut être remplacée par la marche sur place lorsque la météo est défavorable; le lundi et le jeudi s’ajoutent trois mouvements simples de renforcement.
+Ouvrez **Mise en forme** depuis le Portail. Le programme de départ est volontairement doux et réparti sur huit semaines. Chaque jour, la marche extérieure est proposée et peut être remplacée par la marche sur place lorsque la météo est défavorable; trois mouvements simples de renforcement sont aussi proposés chaque jour par défaut. Vous pourrez ensuite choisir les journées qui vous conviennent.
 
+- Dans **Fréquence du renforcement**, choisissez **Tous les jours** (mode initial) ou **Seulement les jours que je choisis**. Si vous choisissez les jours, sélectionnez au moins une journée. La marche reste quotidienne dans les deux modes.
 - Appuyez sur **Faire** puis cochez l’exercice réalisé; modifiez la durée ou les répétitions si nécessaire.
 - Indiquez facultativement si l’exercice était facile, correct ou difficile et ajoutez une note.
 - Utilisez les flèches de date pour compléter ou corriger une journée passée.

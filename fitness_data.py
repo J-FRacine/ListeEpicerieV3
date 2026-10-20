@@ -35,13 +35,15 @@ def init_fitness_schema():
             cur.execute('''ALTER TABLE fitness_entries ADD COLUMN IF NOT EXISTS skip_reason TEXT''')
             cur.execute('ALTER TABLE fitness_settings ADD COLUMN IF NOT EXISTS reminder_enabled BOOLEAN NOT NULL DEFAULT TRUE')
             cur.execute('ALTER TABLE fitness_settings ADD COLUMN IF NOT EXISTS reminder_snoozed_on DATE')
+            cur.execute("ALTER TABLE fitness_settings ADD COLUMN IF NOT EXISTS schedule_mode TEXT NOT NULL DEFAULT 'daily'")
+            cur.execute("ALTER TABLE fitness_settings ADD COLUMN IF NOT EXISTS strength_weekdays INTEGER[] NOT NULL DEFAULT ARRAY[0,3]::INTEGER[]")
         conn.commit()
 
 def settings(user_id):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute('INSERT INTO fitness_settings(user_id) VALUES (%s) ON CONFLICT(user_id) DO NOTHING',(user_id,))
-            cur.execute('SELECT started_on, level_offset, reminder_enabled, reminder_snoozed_on FROM fitness_settings WHERE user_id=%s',(user_id,))
+            cur.execute('SELECT started_on, level_offset, reminder_enabled, reminder_snoozed_on, schedule_mode, strength_weekdays FROM fitness_settings WHERE user_id=%s',(user_id,))
             out=cur.fetchone()
         conn.commit()
     return out
@@ -49,13 +51,13 @@ def settings(user_id):
 def week_number(started_on, day, offset=0):
     return max(1,min(8,1+(day-started_on).days//7+offset))
 
-def daily_plan(week, day):
+def daily_plan(week, day, schedule_mode="daily", strength_weekdays=None):
     stage=(max(1,min(8,week))-1)//2
     walking=(5,10,15,20)[stage]
     reps=[(5,5,8),(7,7,10),(9,9,12),(10,10,15)][stage]
     plan=[dict(key='outdoor_walk',name='Marche extérieure',unit='minutes',target=walking,info=EXERCISES[0][4]),
           dict(key='walk',name='Marche sur place (si météo défavorable)',unit='minutes',target=walking,info=EXERCISES[1][4],optional=True)]
-    if day.weekday() in (0,3):
+    if schedule_mode == "daily" or day.weekday() in (strength_weekdays if strength_weekdays is not None else (0, 3)):
         for ex,n in zip(EXERCISES[2:],reps):
             plan.append(dict(key=ex[0],name=ex[1],unit=ex[2],target=n,info=ex[4]))
     return plan
@@ -110,4 +112,17 @@ def update_reminder_preferences(user_id, enabled=None, snooze_date=None):
                 cur.execute('UPDATE fitness_settings SET reminder_enabled=%s, updated_at=NOW() WHERE user_id=%s', (bool(enabled), user_id))
             if snooze_date is not None:
                 cur.execute('UPDATE fitness_settings SET reminder_snoozed_on=%s, updated_at=NOW() WHERE user_id=%s', (snooze_date, user_id))
+        conn.commit()
+
+
+def update_training_schedule(user_id, mode, weekdays=None):
+    """Mode quotidien par défaut, ou renforcement aux jours choisis."""
+    if mode not in ('daily', 'selected'):
+        raise ValueError('Mode de planification invalide')
+    days = sorted(set(int(day) for day in (weekdays if weekdays is not None else [0, 3])))
+    if not days or any(day < 0 or day > 6 for day in days):
+        raise ValueError('Choisissez au moins un jour de renforcement')
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute('UPDATE fitness_settings SET schedule_mode=%s, strength_weekdays=%s, updated_at=NOW() WHERE user_id=%s', (mode, days, user_id))
         conn.commit()

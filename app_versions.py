@@ -19,12 +19,23 @@ APP_VERSIONS = {
     "recipes": "1.8.0",
     "blood_pressure": "1.2.3",
     "finances": "1.14.5",
-    "fitness": "1.1.0",
+    "fitness": "1.1.1",
     "rpg": "1.10.1",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "fitness", "version": "1.1.1", "date": "2026-10-20",
+        "title": "Mise en forme — renforcement quotidien ou jours au choix",
+        "summary": "Le renforcement apparaît tous les jours par défaut, avec choix des journées lorsque souhaité.",
+        "changes": [
+            "Renforcement tous les jours par défaut : chaise, pompes au mur et montées sur les pointes.",
+            "Option de choisir les journées de renforcement plus tard, individuellement par utilisateur.",
+            "Marche extérieure quotidienne conservée; rappels du Portail synchronisés avec la planification.",
+            "Migration PostgreSQL automatique, sans SQL manuel et sans perte de l’historique.",
+        ],
+    },
     {
         "app_key": "fitness", "version": "1.1.0", "date": "2026-10-19",
         "title": "Mise en forme — rappel quotidien dans le Portail",

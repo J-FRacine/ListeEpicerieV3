@@ -2,7 +2,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from urllib.parse import quote
 from nicegui import ui
-from fitness_data import settings, week_number, daily_plan, entries_between, save_entry, change_level, day_progress, update_reminder_preferences
+from fitness_data import settings, week_number, daily_plan, entries_between, save_entry, change_level, day_progress, update_reminder_preferences, update_training_schedule
 
 
 EXERCISE_GUIDE = {
@@ -272,7 +272,7 @@ def fitness_panel(user, show_heading=False):
     def render():
         day = selected['day']
         week = week_number(saved['started_on'], day, saved['level_offset'])
-        plan = daily_plan(week, day)
+        plan = daily_plan(week, day, saved.get("schedule_mode", "daily"), saved.get("strength_weekdays"))
         rows = entries_between(uid, min(day, today - timedelta(days=27)), today)
         records = {(r['session_date'], r['exercise_key']): r for r in rows}
         with base:
@@ -292,8 +292,31 @@ def fitness_panel(user, show_heading=False):
                 saved['reminder_enabled'] = enabled
                 ui.notify('Préférence de rappel enregistrée.', type='positive')
             ui.switch('Afficher le rappel quotidien sur le Portail', value=saved.get('reminder_enabled', True), on_change=lambda e: toggle_reminder(e.value)).props('dense')
+            ui.label('Fréquence du renforcement').classes('font-medium')
+            def set_training_mode(mode):
+                update_training_schedule(uid, mode, saved.get('strength_weekdays') or [0, 3])
+                saved['schedule_mode'] = mode
+                ui.notify('Planification enregistrée.', type='positive')
+                render()
+            ui.select({'daily': 'Tous les jours (pour créer l’habitude)', 'selected': 'Seulement les jours que je choisis'},
+                      value=saved.get('schedule_mode', 'daily'), label='Exercices de renforcement',
+                      on_change=lambda e: set_training_mode(e.value)).classes('w-full max-w-md')
+            if saved.get('schedule_mode') == 'selected':
+                def set_weekdays(value):
+                    if not value:
+                        ui.notify('Sélectionnez au moins un jour.', type='warning')
+                        return
+                    update_training_schedule(uid, 'selected', value)
+                    saved['strength_weekdays'] = value
+                    ui.notify('Jours enregistrés.', type='positive')
+                    render()
+                ui.select({0: 'Lundi', 1: 'Mardi', 2: 'Mercredi', 3: 'Jeudi', 4: 'Vendredi', 5: 'Samedi', 6: 'Dimanche'},
+                          label='Jours avec renforcement', multiple=True,
+                          value=saved.get('strength_weekdays') or [0, 3],
+                          on_change=lambda e: set_weekdays(e.value)).props('use-chips').classes('w-full max-w-lg')
+            ui.label('La marche reste proposée tous les jours. Tu peux changer de mode quand tu le souhaites.').classes('text-xs text-gray-500')
             with ui.row().classes('items-center gap-2 flex-wrap'):
-                ui.button(icon='chevron_left', on_click=lambda: go(-1)).props('flat round')
+                ui.button(icon='chevron_left' , on_click=lambda: go(-1)).props('flat round')
                 ui.label(day.strftime('%d/%m/%Y')).classes('text-lg font-bold')
                 ui.button(icon='chevron_right', on_click=lambda: go(1)).props('flat round')
                 ui.button('Aujourd’hui', on_click=lambda: go(0)).props('outline dense')
@@ -318,7 +341,7 @@ def fitness_panel(user, show_heading=False):
                 completed_days = 0
                 for i in range(27, -1, -1):
                     d = today - timedelta(days=i)
-                    dp = daily_plan(week_number(saved['started_on'], d, saved['level_offset']), d)
+                    dp = daily_plan(week_number(saved['started_on'], d, saved['level_offset']), d, saved.get('schedule_mode', 'daily'), saved.get('strength_weekdays'))
                     n, required = day_progress(dp, records, d)
                     if n == required:
                         completed_days += 1
@@ -326,7 +349,7 @@ def fitness_panel(user, show_heading=False):
                 with ui.row().classes('gap-1 flex-wrap'):
                     for i in range(27, -1, -1):
                         d = today - timedelta(days=i)
-                        dp = daily_plan(week_number(saved['started_on'], d, saved['level_offset']), d)
+                        dp = daily_plan(week_number(saved['started_on'], d, saved['level_offset']), d, saved.get('schedule_mode', 'daily'), saved.get('strength_weekdays'))
                         n, required = day_progress(dp, records, d)
                         status = 'check_circle' if n == required else ('timelapse' if n else 'radio_button_unchecked')
                         ui.button(icon=status, on_click=lambda d=d: choose(d)).props('flat dense round').tooltip(f'{d:%d/%m}: {n}/{required}')

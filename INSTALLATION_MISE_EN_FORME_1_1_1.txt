@@ -1,0 +1,31 @@
+JF Apps — Mise en forme V1.1.1 (20 octobre 2026)
+==================================================
+
+NOUVEAUTÉS
+- Les trois exercices de renforcement sont proposés chaque jour par défaut.
+- Marche extérieure quotidienne inchangée; marche sur place reste une alternative.
+- Choix facultatif des jours de renforcement dans Mise en forme.
+- Les rappels du Portail suivent le mode choisi.
+- Conservation des séances déjà enregistrées.
+
+FICHIERS À REMPLACER À LA RACINE DU DÉPÔT GITHUB
+- fitness.py
+- fitness_data.py
+- fitness_reminder.py
+- app_versions.py
+- manual.py
+
+INSTALLATION
+1. Faire une sauvegarde de sécurité.
+2. Remplacer les cinq fichiers dans GitHub, puis Commit changes.
+3. Laisser Canner redéployer.
+4. Ouvrir Mise en forme. Le mode « Tous les jours » est choisi par défaut.
+5. Vérifier un mardi, puis le choix « Seulement les jours que je choisis ».
+6. Vérifier le rappel du Portail et une séance enregistrée antérieurement.
+
+Aucune nouvelle dépendance. Les colonnes sont créées automatiquement au premier démarrage.
+Aucun SQL manuel. Compilation Python vérifiée.
+Le fonctionnement réel sur Canner / PostgreSQL devra être validé après déploiement.
+
+Note santé : la proposition quotidienne n'est pas une obligation. Commencer doucement,
+prendre du repos en cas de fatigue ou douleur et ajuster les répétitions selon la tolérance.

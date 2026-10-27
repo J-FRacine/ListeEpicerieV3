@@ -18,11 +18,28 @@ APP_VERSIONS = {
     "recipes": "1.8.0",
     "blood_pressure": "1.2.3",
     "finances": "1.14.5",
-    "rpg": "1.12.0",
+    "rpg": "1.12.1",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "rpg",
+        "version": "1.12.1",
+        "date": "2026-10-27",
+        "title": "Personnages JDR — V1.12.1 — remplacement de sort stable",
+        "summary": (
+            "Corrige la case Préparé aujourd’hui afin que la fenêtre de remplacement "
+            "reste ouverte lorsqu’un niveau de sorts est déjà complet."
+        ),
+        "changes": [
+            "Le clic sur Préparé aujourd’hui n’actualise plus la référence immédiatement lorsqu’un remplacement est requis.",
+            "La fenêtre de choix du sort à remplacer reste affichée jusqu’à Annuler ou Remplacer.",
+            "Annuler remet simplement la case à son état précédent sans refermer la fiche du sort.",
+            "Une erreur d’ajout ou de retrait restaure aussi la case sans reconstruire inutilement la liste.",
+            "Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance.",
+        ],
+    },
     {
         "app_key": "rpg",
         "version": "1.12.0",

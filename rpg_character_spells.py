@@ -124,13 +124,22 @@ def build_spells_panel(
                     ui.button("Enregistrer", icon="save", on_click=save_profile).props("color=primary")
         dialog.open()
 
-    def open_replacement_dialog(profile, values, *, after_success=None):
+    def is_capacity_error(error):
+        return str(error or "").strip().startswith("Trop d’emplacements ")
+
+    def open_replacement_dialog(
+        profile,
+        values,
+        *,
+        after_success=None,
+        after_cancel=None,
+    ):
         """Propose un remplacement explicite quand le niveau est complet."""
         try:
             prepared_rows = list(list_prepared_spells(user_id, character["id"]))
         except Exception as error:
             notify_error(error, "Les sorts préparés n’ont pas pu être rechargés.")
-            return
+            return False
 
         level = int(values.get("spell_level") or 0)
         slot_kind = str(values.get("slot_kind") or "normal")
@@ -144,7 +153,7 @@ def build_spells_panel(
                 "Aucun sort du même niveau ne peut être remplacé.",
                 type="warning",
             )
-            return
+            return False
 
         options = {
             int(row["id"]): (
@@ -157,7 +166,7 @@ def build_spells_panel(
             )
             for row in candidates
         }
-        with ui.dialog() as replace_dialog:
+        with ui.dialog().props("persistent") as replace_dialog:
             with ui.card().classes("w-full max-w-xl p-5"):
                 ui.label("Aucun emplacement disponible").classes("text-xl font-bold")
                 ui.label(
@@ -192,14 +201,20 @@ def build_spells_panel(
                         after_success()
                     ui.notify("Sort remplacé dans la préparation du jour.", type="positive")
 
+                def cancel_replace():
+                    replace_dialog.close()
+                    if after_cancel:
+                        after_cancel()
+
                 with ui.row().classes("w-full justify-end gap-2 mt-3"):
-                    ui.button("Annuler", on_click=replace_dialog.close).props("flat")
+                    ui.button("Annuler", on_click=cancel_replace).props("flat")
                     ui.button(
                         "Remplacer",
                         icon="swap_horiz",
                         on_click=confirm_replace,
                     ).props("color=primary")
         replace_dialog.open()
+        return True
 
     def open_preparation_dialog(profile, row=None):
         editing = row is not None
@@ -328,7 +343,7 @@ def build_spells_panel(
                             preparation_id=row.get("id") if editing else None,
                         )
                     except SpellRuleError as error:
-                        if not editing:
+                        if not editing and is_capacity_error(error):
                             dialog.close()
                             open_replacement_dialog(profile, values)
                             return
@@ -800,8 +815,17 @@ def build_spells_panel(
                             ui.label("Description / effets").classes("font-bold mt-3")
                             ui.label(description).classes("text-sm whitespace-pre-wrap")
 
-                        def toggle_prepared(event, selected=dict(spell), existing=list(same)):
+                        def toggle_prepared(
+                            event,
+                            selected=dict(spell),
+                            existing=list(same),
+                            source_checkbox=checkbox,
+                        ):
                             checked = bool(event.value)
+
+                            def restore_checkbox(value):
+                                source_checkbox.value = bool(value)
+                                source_checkbox.update()
                             if checked and not existing:
                                 notes = "\n".join(
                                     part for part in (
@@ -830,13 +854,22 @@ def build_spells_panel(
                                 }
                                 try:
                                     save_prepared_spell(user_id, character["id"], values)
-                                except SpellRuleError:
-                                    open_replacement_dialog(profile, values)
-                                    render_spell_reference.refresh()
+                                except SpellRuleError as error:
+                                    if not is_capacity_error(error):
+                                        notify_error(error, "Le sort n’a pas pu être ajouté à la journée.")
+                                        restore_checkbox(False)
+                                        return
+                                    opened = open_replacement_dialog(
+                                        profile,
+                                        values,
+                                        after_cancel=lambda: restore_checkbox(False),
+                                    )
+                                    if not opened:
+                                        restore_checkbox(False)
                                     return
                                 except Exception as error:
                                     notify_error(error, "Le sort n’a pas pu être ajouté à la journée.")
-                                    render_spell_reference.refresh()
+                                    restore_checkbox(False)
                                     return
                                 ui.notify("Sort ajouté à la préparation du jour.", type="positive")
                             elif not checked and existing:
@@ -859,7 +892,7 @@ def build_spells_panel(
                                         )
                                 except Exception as error:
                                     notify_error(error, "Le sort n’a pas pu être retiré de la journée.")
-                                    render_spell_reference.refresh()
+                                    restore_checkbox(True)
                                     return
                                 ui.notify("Sort retiré de la préparation du jour.", type="positive")
                             render_spells.refresh()

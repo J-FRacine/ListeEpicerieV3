@@ -1291,7 +1291,7 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
 """,
     },
     {
-        "title": "Personnages JDR — V1.12.0",
+        "title": "Personnages JDR — V1.12.1",
         "icon": "casino",
         "caption": "Combat rapide persistant, référence des sorts, préparation guidée, objets magiques, armes liées, dons, foi et feuille Pathfinder / Ravenloft",
         "keywords": (
@@ -1310,6 +1310,14 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
             "sorts spells clerc cleric préparation emplacements slots oraisons domaine DD sagesse prière lancement conversion spontanée combat rapide référence description effet damage dégâts round journal remplacement"
         ),
         "content": """
+### V1.12.1 — correctif Préparé aujourd’hui
+
+Dans **Référence des sorts**, lorsqu’un niveau est déjà complet, la case **Préparé aujourd’hui** ouvre maintenant correctement la fenêtre de remplacement et la conserve à l’écran. L’ancienne V1.12.0 rafraîchissait la liste immédiatement après l’ouverture, ce qui détruisait le dialogue presque instantanément.
+
+La fenêtre reste ouverte jusqu’à **Annuler** ou **Remplacer**. Annuler remet la case à son état précédent sans refermer la fiche consultée.
+
+Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance Python ne sont requis pour JDR V1.12.1.
+
 ### V1.12.0 — combat persistant et référence des sorts
 
 **Combat rapide conserve maintenant la session en cours** lorsque vous quittez la fenêtre pour consulter une autre section de la fiche puis revenez. Le round courant, les effets actifs, la sélection d’attaque, le bonus/malus temporaire, les dons activés, les notes de tactique, les PV temporaires de la fenêtre et les dégâts non létaux restent disponibles tant qu’ils ne sont pas effacés volontairement. Cette persistance est temporaire à la session serveur : elle ne transforme pas les effets de combat en bonus permanents de la fiche.

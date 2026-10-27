@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-PORTAL_VERSION = "1.5.1"
+PORTAL_VERSION = "1.5.0"
 
 APP_LABELS = {
     "portal": "Portail JF Apps",
@@ -8,7 +8,6 @@ APP_LABELS = {
     "recipes": "Recettes",
     "blood_pressure": "Journal de pression",
     "finances": "Finances",
-    "fitness": "Mise en forme",
     "rpg": "Personnages JDR",
     "feedback": "Commentaires et suggestions",
 }
@@ -19,47 +18,30 @@ APP_VERSIONS = {
     "recipes": "1.8.0",
     "blood_pressure": "1.2.3",
     "finances": "1.14.5",
-    "fitness": "1.1.1",
-    "rpg": "1.10.1",
+    "rpg": "1.12.0",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
     {
-        "app_key": "fitness", "version": "1.1.1", "date": "2026-10-20",
-        "title": "Mise en forme — renforcement quotidien ou jours au choix",
-        "summary": "Le renforcement apparaît tous les jours par défaut, avec choix des journées lorsque souhaité.",
+        "app_key": "rpg",
+        "version": "1.12.0",
+        "date": "2026-10-27",
+        "title": "Personnages JDR — V1.12.0 — combat persistant et référence des sorts",
+        "summary": (
+            "Combat rapide conserve maintenant la session jusqu’à une remise à zéro "
+            "explicite, et l’onglet Sorts ajoute une référence consultable avec préparation directe."
+        ),
         "changes": [
-            "Renforcement tous les jours par défaut : chaise, pompes au mur et montées sur les pointes.",
-            "Option de choisir les journées de renforcement plus tard, individuellement par utilisateur.",
-            "Marche extérieure quotidienne conservée; rappels du Portail synchronisés avec la planification.",
-            "Migration PostgreSQL automatique, sans SQL manuel et sans perte de l’historique.",
+            "Combat rapide conserve le round, les effets, la sélection d’attaque, les modificateurs temporaires, les dons actifs, les notes et les valeurs de PV/non-létaux lorsqu’on quitte puis revient à la fenêtre.",
+            "Un bouton Effacer / Réinitialiser le combat est placé en haut de la fenêtre et demande confirmation avant d’effacer la session temporaire.",
+            "Round et effets actifs accepte désormais un modificateur distinct Dégâts / Damage, sans modifier le jet d’attaque.",
+            "Lorsqu’un ajout de sort dépasse les emplacements du niveau, l’application propose explicitement de remplacer un sort déjà préparé du même niveau et du même type d’emplacement.",
+            "La section Sorts possède maintenant les sous-pages Ma journée et Référence des sorts, avec recherche, filtres, description, temps d’incantation, composantes, portée, cible/zone, durée, sauvegarde et résistance à la magie lorsque la référence ouverte est disponible.",
+            "La case Préparé aujourd’hui ajoute ou retire directement un sort de la préparation du jour; un niveau complet déclenche le même assistant de remplacement.",
+            "La référence détaillée utilise les données ouvertes du Core Rulebook sous OGL 1.0a lorsqu’elles sont accessibles et se replie sur le catalogue local JF Apps en cas d’indisponibilité réseau.",
+            "Aucune migration PostgreSQL et aucun SQL manuel ne sont requis pour cette version.",
         ],
-    },
-    {
-        "app_key": "fitness", "version": "1.1.0", "date": "2026-10-19",
-        "title": "Mise en forme — rappel quotidien dans le Portail",
-        "summary": "Le Portail indique les exercices du jour non encore réalisés, avec report facultatif.",
-        "changes": [
-            "Rappel quotidien selon le programme et les exercices réellement enregistrés.",
-            "Lien direct vers Mise en forme et vérification « Déjà fait ».",
-            "Report au lendemain sans marquer la séance comme effectuée.",
-            "Activation ou désactivation dans l'application, indépendamment pour chaque utilisateur.",
-            "Prise en compte de la météo défavorable et de la marche intérieure alternative.",
-            "Migration automatique des préférences sans SQL manuel.",
-        ],
-    },
-    {
-        "app_key": "portal", "version": "1.5.1", "date": "2026-10-19",
-        "title": "Portail — avis quotidien de mise en forme",
-        "summary": "Ajout d'un rappel des exercices restant à faire pour les utilisateurs autorisés.",
-        "changes": ["Carte de rappel non intrusive sur l'accueil", "Aucun avis si les objectifs sont complétés ou si le rappel est reporté ou désactivé"],
-    },
-    {
-        "app_key": "fitness", "version": "1.0.0", "date": "2026-10-15",
-        "title": "Mise en forme — V1.0.0",
-        "summary": "Programme d’exercices doux sans appareil, avec historique privé.",
-        "changes": ["Programme progressif de huit semaines, ajustable", "Exercices à domicile et suivi individuel par date", "Historique des 28 derniers jours et ressenti facultatif", "Données privées par utilisateur, migration automatique sans SQL manuel"],
     },
     {
         "app_key": "finances",

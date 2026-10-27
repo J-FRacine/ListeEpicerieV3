@@ -612,109 +612,35 @@ RPG_CSS = r"""
     }
 }
 
-/* JDR V1.11 - mise en forme de la session de combat */
-.jf-rpg-combat-dialog {
-    max-width: 78rem;
-    border-top: 5px solid #65508f;
-}
-
-.jf-rpg-combat-stats-grid {
+.jf-rpg-effect-entry-grid {
     display: grid;
-    grid-template-columns: repeat(10, minmax(5.7rem, 1fr));
-    gap: .55rem;
+    grid-template-columns: minmax(15rem, 2fr) minmax(13rem, 1.4fr) minmax(8rem, 0.8fr) minmax(8rem, 0.8fr);
+    gap: 0.65rem;
     width: 100%;
 }
 
-.jf-rpg-combat-stats-grid .jf-rpg-result-item {
-    min-height: 4.8rem;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+.jf-rpg-effect-row {
+    padding: 0.45rem 0.6rem;
+    border-radius: 10px;
+    background: rgba(36, 81, 118, 0.06);
 }
 
-.jf-rpg-combat-section {
-    border: 1px solid var(--jf-border);
-    box-shadow: none;
+.jf-rpg-spell-reference-item {
+    border-radius: 12px;
+    margin-top: 0.4rem;
 }
 
-.jf-rpg-round-badge {
-    display: inline-flex;
-    align-items: center;
-    min-height: 2.4rem;
-    padding: .38rem .85rem;
-    border-radius: 999px;
-    color: white;
-    background: #65508f;
-    font-size: 1rem;
-    font-weight: 850;
-    white-space: nowrap;
-}
-
-.jf-rpg-combat-effect-form {
-    display: grid;
-    grid-template-columns:
-        minmax(11rem, 1.45fr)
-        minmax(9rem, 1fr)
-        minmax(7rem, .65fr)
-        minmax(7rem, .65fr)
-        minmax(10rem, 1.25fr);
-    gap: .55rem;
-    width: 100%;
-}
-
-.jf-rpg-combat-effect-row {
-    display: flex;
-    align-items: center;
-    gap: .65rem;
-    width: 100%;
-    padding: .6rem .7rem;
-    border: 1px solid var(--jf-border);
-    border-left: 4px solid #65508f;
-    border-radius: 11px;
-    background: rgba(101, 80, 143, .055);
-}
-
-.jf-rpg-combat-log {
-    width: 100%;
-    max-height: 10rem;
-    overflow-y: auto;
-    padding: .65rem .75rem;
-    border-radius: 11px;
-    background: rgba(34, 70, 122, .055);
-}
-
-@media (max-width: 1100px) {
-    .jf-rpg-combat-stats-grid {
-        grid-template-columns: repeat(5, minmax(6rem, 1fr));
-    }
-
-    .jf-rpg-combat-effect-form {
-        grid-template-columns: repeat(2, minmax(9rem, 1fr));
+@media (max-width: 760px) {
+    .jf-rpg-effect-entry-grid {
+        grid-template-columns: 1fr 1fr;
     }
 }
 
-@media (max-width: 680px) {
-    .jf-rpg-combat-dialog {
-        padding: .75rem !important;
-    }
-
-    .jf-rpg-combat-stats-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .jf-rpg-combat-stats-grid .jf-rpg-stat-value {
-        font-size: 1.28rem;
-    }
-
-    .jf-rpg-combat-effect-form {
+@media (max-width: 480px) {
+    .jf-rpg-effect-entry-grid {
         grid-template-columns: 1fr;
     }
-
-    .jf-rpg-combat-effect-row {
-        align-items: flex-start;
-    }
 }
-
 """
 
 

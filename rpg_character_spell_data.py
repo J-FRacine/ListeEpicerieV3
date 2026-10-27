@@ -418,6 +418,121 @@ def save_prepared_spell(
             return saved_id
 
 
+
+def replace_prepared_spell(
+    user_id,
+    character_id,
+    values,
+    replacement_preparation_id,
+):
+    """Remplace explicitement un emplacement déjà préparé par un nouveau sort.
+
+    L’opération est atomique : si le nouveau sort ne peut toujours pas tenir
+    dans les emplacements après le retrait choisi, aucune modification n’est
+    conservée.
+    """
+    _ensure()
+    normalized = _normalize_preparation(values)
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            character = _require_character(cur, user_id, character_id)
+            profile = _profile_from_cursor(cur, character)
+            cur.execute(
+                """
+                SELECT *
+                FROM rpg_character_prepared_spells
+                WHERE id=%s AND character_id=%s;
+                """,
+                (replacement_preparation_id, character_id),
+            )
+            replacement = cur.fetchone()
+            if not replacement:
+                raise ValueError("Le sort à remplacer n’existe plus.")
+            replacement = dict(replacement)
+
+            if int(replacement.get("spell_level") or 0) != int(normalized["spell_level"]):
+                raise ValueError("Le sort remplacé doit être du même niveau.")
+            if str(replacement.get("slot_kind") or "normal") != str(normalized["slot_kind"]):
+                raise ValueError("Le sort remplacé doit utiliser le même type d’emplacement.")
+
+            old_count = max(1, int(replacement.get("prepared_count") or 1))
+            old_used = max(0, int(replacement.get("used_count") or 0))
+            if old_count <= 1:
+                cur.execute(
+                    """
+                    DELETE FROM rpg_character_prepared_spells
+                    WHERE id=%s AND character_id=%s;
+                    """,
+                    (replacement_preparation_id, character_id),
+                )
+            else:
+                new_count = old_count - 1
+                cur.execute(
+                    """
+                    UPDATE rpg_character_prepared_spells
+                    SET prepared_count=%s, used_count=%s, updated_at=NOW()
+                    WHERE id=%s AND character_id=%s;
+                    """,
+                    (
+                        new_count,
+                        min(old_used, new_count),
+                        replacement_preparation_id,
+                        character_id,
+                    ),
+                )
+
+            cur.execute(
+                """
+                SELECT *
+                FROM rpg_character_prepared_spells
+                WHERE character_id = %s
+                ORDER BY id;
+                """,
+                (character_id,),
+            )
+            existing = [dict(row) for row in cur.fetchall()]
+            score = effective_ability_score(character, profile["ability_key"])
+            slot_rows = cleric_slot_table(profile["class_level"], score)
+            validate_preparation_capacity(
+                slot_rows=slot_rows,
+                existing_rows=existing,
+                spell_level=normalized["spell_level"],
+                slot_kind=normalized["slot_kind"],
+                prepared_count=normalized["prepared_count"],
+            )
+
+            cur.execute(
+                """
+                INSERT INTO rpg_character_prepared_spells (
+                    character_id, catalog_key, spell_name, spell_level,
+                    slot_kind, domain_source, prepared_count, used_count,
+                    school, range_text, summary, source_text, notes, sort_order
+                )
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id;
+                """,
+                (
+                    character_id,
+                    normalized["catalog_key"],
+                    normalized["spell_name"],
+                    normalized["spell_level"],
+                    normalized["slot_kind"],
+                    normalized["domain_source"],
+                    normalized["prepared_count"],
+                    normalized["used_count"],
+                    normalized["school"],
+                    normalized["range_text"],
+                    normalized["summary"],
+                    normalized["source_text"],
+                    normalized["notes"],
+                    normalized["sort_order"],
+                ),
+            )
+            saved_id = int(cur.fetchone()["id"])
+            conn.commit()
+            return saved_id
+
 def delete_prepared_spell(user_id, character_id, preparation_id):
     _ensure()
     with get_connection() as conn:

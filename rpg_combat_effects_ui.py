@@ -1,288 +1,135 @@
-"""Panneau temporaire rounds / effets de Combat rapide."""
+"""Composants NiceGUI pour les rounds et effets temporaires de Combat rapide."""
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
-from rpg_combat_effects import (
-    EFFECT_TARGETS,
-    advance_effect_round,
-    effect_duration_text,
-    normalize_effect,
-    summarize_effect_modifiers,
-)
-
-
-@dataclass
-class CombatEffectsHandle:
-    active_effects: list[dict[str, Any]]
-    combat_log: list[str]
-    round_state: dict[str, int]
-    on_log: Callable[[str], None]
-    on_refresh: Callable[[], None]
-
-    def modifiers(self) -> dict[str, int]:
-        return summarize_effect_modifiers(self.active_effects)
-
-    def log(self, message: str) -> None:
-        self.on_log(message)
-
-    def refresh(self) -> None:
-        self.on_refresh()
+from rpg_combat_effects import EFFECT_TARGET_LABELS
 
 
 def build_combat_effects_panel(
     *,
-    ui,
-    format_modifier,
-    on_changed,
-) -> CombatEffectsHandle:
-    active_effects: list[dict[str, Any]] = []
-    combat_log: list[str] = []
-    round_state = {"value": 1}
-    next_effect_id = {"value": 1}
+    ui: Any,
+    state_getter: Callable[[], Mapping[str, Any]],
+    add_effect: Callable[..., Any],
+    remove_effect: Callable[[Any], Any],
+    advance_round: Callable[[], Any],
+    on_change: Callable[[], None],
+):
+    """Affiche et rafraîchit la section Round et effets actifs."""
 
-    def add_log(message: str) -> None:
-        clean = str(message or "").strip()
-        if not clean:
-            return
-        combat_log.insert(
-            0,
-            f"R{round_state['value']} — {clean}",
-        )
-        del combat_log[12:]
-
-    with ui.card().classes(
-        "jf-rpg-combat-section w-full p-4 mt-3"
-    ):
-        with ui.row().classes(
-            "w-full items-center justify-between gap-3 flex-wrap"
-        ):
-            with ui.column().classes("gap-0"):
-                ui.label("Round et effets actifs").classes(
-                    "text-lg font-bold"
-                )
-                ui.label(
-                    "Les effets sont temporaires à cette session et ne "
-                    "réécrivent pas les bonus permanents de la fiche."
-                ).classes("text-xs jf-muted")
-            round_label = ui.label("Round 1").classes(
-                "jf-rpg-round-badge"
-            )
-
-        with ui.element("div").classes(
-            "jf-rpg-combat-effect-form mt-3"
-        ):
-            effect_name = ui.input(
-                label="Effet / état",
-                placeholder="Ex. Bénédiction, À terre, Frayé…",
-            ).props("dense outlined maxlength=120")
-            effect_target = ui.select(
-                EFFECT_TARGETS,
-                value="state",
-                label="Modifie",
-            ).props("dense outlined options-dense")
-            effect_modifier = ui.number(
-                label="Bonus / malus",
-                value=0,
-                step=1,
-            ).props("dense outlined inputmode=numeric")
-            effect_rounds = ui.number(
-                label="Durée (rounds)",
-                value=0,
-                min=0,
-                step=1,
-            ).props("dense outlined inputmode=numeric").tooltip(
-                "0 = jusqu’à la fin du combat"
-            )
-            effect_note = ui.input(
-                label="Note",
-                placeholder="Optionnel",
-            ).props("dense outlined maxlength=500")
-
-        @ui.refreshable
-        def render_effects():
-            if not active_effects:
-                ui.label(
-                    "Aucun effet temporaire actif."
-                ).classes("text-sm jf-muted mt-3")
-                return
-
-            with ui.column().classes("w-full gap-2 mt-3"):
-                for effect in active_effects:
-                    with ui.element("div").classes(
-                        "jf-rpg-combat-effect-row"
-                    ):
-                        with ui.column().classes(
-                            "gap-0 grow min-w-0"
-                        ):
-                            ui.label(effect["name"]).classes("font-bold")
-                            details = [
-                                EFFECT_TARGETS.get(
-                                    effect["target"],
-                                    "État",
-                                ),
-                                effect_duration_text(effect),
-                            ]
-                            if effect["target"] != "state":
-                                details.insert(
-                                    1,
-                                    format_modifier(
-                                        effect["modifier"]
-                                    ),
-                                )
-                            ui.label(
-                                " · ".join(details)
-                            ).classes("text-xs jf-muted")
-                            if effect.get("note"):
-                                ui.label(
-                                    effect["note"]
-                                ).classes(
-                                    "text-xs jf-muted "
-                                    "whitespace-pre-wrap"
-                                )
-
-                        def remove_effect(
-                            _event=None,
-                            *,
-                            effect_id=effect["id"],
-                            effect_name_value=effect["name"],
-                        ):
-                            active_effects[:] = [
-                                row
-                                for row in active_effects
-                                if row["id"] != effect_id
-                            ]
-                            add_log(
-                                f"Effet retiré : {effect_name_value}"
-                            )
-                            render_effects.refresh()
-                            render_log.refresh()
-                            on_changed()
-
-                        ui.button(
-                            icon="close",
-                            on_click=remove_effect,
-                        ).props(
-                            "flat dense round color=negative"
-                        ).tooltip("Retirer l’effet")
-
-        @ui.refreshable
-        def render_log():
-            with ui.element("div").classes(
-                "jf-rpg-combat-log mt-3"
-            ):
-                ui.label("Journal de session").classes("font-bold")
-                if not combat_log:
+    @ui.refreshable
+    def render():
+        state = dict(state_getter() or {})
+        with ui.card().classes("w-full p-4 mt-3"):
+            with ui.row().classes("w-full items-start justify-between gap-3 flex-wrap"):
+                with ui.column().classes("gap-0"):
+                    ui.label("Round et effets actifs").classes("text-lg font-bold")
                     ui.label(
-                        "Rounds, effets, dégâts et soins apparaîtront ici."
-                    ).classes("text-xs jf-muted")
-                else:
-                    for entry in combat_log:
-                        ui.label(entry).classes("text-xs")
+                        "Les effets sont temporaires à cette session et ne réécrivent pas "
+                        "les bonus permanents de la fiche."
+                    ).classes("text-sm jf-muted")
+                with ui.row().classes("items-center gap-2"):
+                    ui.badge(f"Round {int(state.get('round') or 1)}").props(
+                        "color=primary"
+                    ).classes("text-sm font-bold px-3 py-1")
 
-        def add_effect():
-            try:
-                effect = normalize_effect(
-                    effect_id=next_effect_id["value"],
-                    name=effect_name.value,
-                    target=effect_target.value,
-                    modifier=effect_modifier.value,
-                    rounds=effect_rounds.value,
-                    note=effect_note.value,
+                    def next_round():
+                        advance_round()
+                        render.refresh()
+                        on_change()
+
+                    ui.button(
+                        "Round suivant",
+                        icon="skip_next",
+                        on_click=next_round,
+                    ).props("outline color=primary")
+
+            with ui.element("div").classes("jf-rpg-effect-entry-grid mt-3"):
+                name_input = ui.input(
+                    label="Effet / état",
+                    placeholder="Ex. Bless, Stunned, flanc…",
+                ).classes("w-full")
+                target_input = ui.select(
+                    EFFECT_TARGET_LABELS,
+                    label="Modifie",
+                    value="note",
+                ).props("options-dense").classes("w-full")
+                modifier_input = ui.number(
+                    label="Bonus / malus",
+                    value=0,
+                    step=1,
+                ).props("inputmode=numeric").classes("w-full")
+                rounds_input = ui.number(
+                    label="Durée (rounds)",
+                    value=0,
+                    min=0,
+                    step=1,
+                ).props("inputmode=numeric").classes("w-full")
+
+            ui.label(
+                "Durée 0 = reste actif jusqu’à suppression manuelle."
+            ).classes("text-xs jf-muted mt-1")
+
+            def submit_effect():
+                add_effect(
+                    name=name_input.value,
+                    target=target_input.value,
+                    modifier=modifier_input.value,
+                    rounds=rounds_input.value,
                 )
-            except ValueError as error:
-                ui.notify(str(error), type="warning")
-                return
+                render.refresh()
+                on_change()
 
-            next_effect_id["value"] += 1
-            active_effects.append(effect)
-            add_log(f"Effet ajouté : {effect['name']}")
-
-            effect_name.value = ""
-            effect_modifier.value = 0
-            effect_rounds.value = 0
-            effect_note.value = ""
-            for control in (
-                effect_name,
-                effect_modifier,
-                effect_rounds,
-                effect_note,
-            ):
-                control.update()
-
-            render_effects.refresh()
-            render_log.refresh()
-            on_changed()
-
-        def next_round():
-            active, expired = advance_effect_round(
-                active_effects
-            )
-            active_effects[:] = active
-            round_state["value"] += 1
-            round_label.set_text(
-                f"Round {round_state['value']}"
-            )
-
-            if expired:
-                for effect in expired:
-                    add_log(
-                        f"Effet expiré : {effect['name']}"
-                    )
-            else:
-                add_log("Round suivant")
-
-            render_effects.refresh()
-            render_log.refresh()
-            on_changed()
-
-        def reset_session():
-            active_effects.clear()
-            combat_log.clear()
-            round_state["value"] = 1
-            round_label.set_text("Round 1")
-            render_effects.refresh()
-            render_log.refresh()
-            on_changed()
-            ui.notify(
-                "Round et effets temporaires réinitialisés.",
-                type="positive",
-            )
-
-        with ui.row().classes(
-            "w-full items-center justify-between gap-2 mt-3 flex-wrap"
-        ):
             ui.button(
                 "Ajouter l’effet",
                 icon="add",
-                on_click=add_effect,
-            ).props("outline color=primary")
-            with ui.row().classes("gap-2 flex-wrap"):
-                ui.button(
-                    "Réinitialiser",
-                    icon="restart_alt",
-                    on_click=reset_session,
-                ).props("flat color=secondary")
-                ui.button(
-                    "Round suivant",
-                    icon="skip_next",
-                    on_click=next_round,
-                ).props("color=primary")
+                on_click=submit_effect,
+            ).props("outline color=primary").classes("mt-2")
 
-        render_effects()
-        render_log()
+            effects = list(state.get("effects") or [])
+            if not effects:
+                ui.label("Aucun effet temporaire actif.").classes("text-sm jf-muted mt-3")
+            else:
+                with ui.column().classes("w-full gap-1 mt-3"):
+                    for row in effects:
+                        with ui.row().classes(
+                            "w-full items-center justify-between gap-2 jf-rpg-effect-row"
+                        ):
+                            parts = [str(row.get("name") or "Effet")]
+                            target = str(row.get("target") or "note")
+                            modifier = int(row.get("modifier") or 0)
+                            if target != "note":
+                                parts.append(
+                                    f"{EFFECT_TARGET_LABELS.get(target, target)} {modifier:+d}"
+                                )
+                            remaining = row.get("remaining_rounds")
+                            if remaining not in (None, "", 0):
+                                parts.append(f"{remaining} round(s)")
+                            ui.label(" • ".join(parts)).classes("text-sm font-medium grow")
 
-    return CombatEffectsHandle(
-        active_effects=active_effects,
-        combat_log=combat_log,
-        round_state=round_state,
-        on_log=lambda message: (
-            add_log(message),
-            render_log.refresh(),
-        ),
-        on_refresh=lambda: (
-            render_effects.refresh(),
-            render_log.refresh(),
-        ),
-    )
+                            def remove(_event=None, effect_id=row.get("id")):
+                                remove_effect(effect_id)
+                                render.refresh()
+                                on_change()
+
+                            ui.button(icon="close", on_click=remove).props(
+                                "flat round dense color=negative"
+                            ).tooltip("Retirer l’effet")
+
+            journal = list(state.get("journal") or [])
+            with ui.expansion("Journal de session", icon="menu_book").props(
+                "dense expand-separator"
+            ).classes("w-full mt-3"):
+                if not journal:
+                    ui.label("Rounds, effets, dégâts et soins apparaîtront ici.").classes(
+                        "text-sm jf-muted"
+                    )
+                else:
+                    for entry in reversed(journal[-30:]):
+                        ui.label(
+                            f"R{entry.get('round', '?')} · {entry.get('at', '')} — "
+                            f"{entry.get('message', '')}"
+                        ).classes("text-xs py-1")
+
+    render()
+    return render

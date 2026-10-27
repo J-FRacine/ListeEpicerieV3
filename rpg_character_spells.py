@@ -2,6 +2,11 @@
 from __future__ import annotations
 
 from rpg_character_spell_cast_dialog import open_spell_cast_dialog
+from rpg_character_spell_rules import SpellRuleError
+from rpg_spell_reference_catalog import (
+    REFERENCE_ATTRIBUTION,
+    cleric_spell_reference_rows,
+)
 
 
 def build_spells_panel(
@@ -14,6 +19,7 @@ def build_spells_panel(
     save_spellcasting_profile,
     list_prepared_spells,
     save_prepared_spell,
+    replace_prepared_spell,
     delete_prepared_spell,
     set_prepared_spell_used_count,
     cast_prepared_spell,
@@ -117,6 +123,83 @@ def build_spells_panel(
                     ui.button("Annuler", on_click=dialog.close).props("flat")
                     ui.button("Enregistrer", icon="save", on_click=save_profile).props("color=primary")
         dialog.open()
+
+    def open_replacement_dialog(profile, values, *, after_success=None):
+        """Propose un remplacement explicite quand le niveau est complet."""
+        try:
+            prepared_rows = list(list_prepared_spells(user_id, character["id"]))
+        except Exception as error:
+            notify_error(error, "Les sorts préparés n’ont pas pu être rechargés.")
+            return
+
+        level = int(values.get("spell_level") or 0)
+        slot_kind = str(values.get("slot_kind") or "normal")
+        candidates = [
+            row for row in prepared_rows
+            if int(row.get("spell_level") or 0) == level
+            and str(row.get("slot_kind") or "normal") == slot_kind
+        ]
+        if not candidates:
+            ui.notify(
+                "Aucun sort du même niveau ne peut être remplacé.",
+                type="warning",
+            )
+            return
+
+        options = {
+            int(row["id"]): (
+                f"{row.get('spell_name') or 'Sort'}"
+                + (
+                    f" — préparé {int(row.get('prepared_count') or 1)} fois"
+                    if int(row.get("prepared_count") or 1) > 1
+                    else ""
+                )
+            )
+            for row in candidates
+        }
+        with ui.dialog() as replace_dialog:
+            with ui.card().classes("w-full max-w-xl p-5"):
+                ui.label("Aucun emplacement disponible").classes("text-xl font-bold")
+                ui.label(
+                    f"Pour préparer {values.get('spell_name') or 'ce sort'}, choisissez "
+                    f"un sort de niveau {level} à remplacer. Rien ne sera retiré "
+                    "sans votre confirmation."
+                ).classes("text-sm jf-muted")
+                replacement_input = ui.select(
+                    options,
+                    label="Sort à retirer / remplacer",
+                    value=next(iter(options)),
+                ).props("options-dense").classes("w-full mt-2")
+
+                def confirm_replace():
+                    try:
+                        replace_prepared_spell(
+                            user_id,
+                            character["id"],
+                            values,
+                            replacement_input.value,
+                        )
+                    except Exception as error:
+                        notify_error(error, "Le remplacement du sort n’a pas pu être effectué.")
+                        return
+                    replace_dialog.close()
+                    render_spells.refresh()
+                    try:
+                        render_spell_reference.refresh()
+                    except Exception:
+                        pass
+                    if after_success:
+                        after_success()
+                    ui.notify("Sort remplacé dans la préparation du jour.", type="positive")
+
+                with ui.row().classes("w-full justify-end gap-2 mt-3"):
+                    ui.button("Annuler", on_click=replace_dialog.close).props("flat")
+                    ui.button(
+                        "Remplacer",
+                        icon="swap_horiz",
+                        on_click=confirm_replace,
+                    ).props("color=primary")
+        replace_dialog.open()
 
     def open_preparation_dialog(profile, row=None):
         editing = row is not None
@@ -222,33 +305,44 @@ def build_spells_panel(
                 catalog_input.on_value_change(apply_catalog)
 
                 def save():
-                    selected = catalog.get(str(catalog_input.value or "")) or {}
+                    values = {
+                        "catalog_key": catalog_input.value or row.get("catalog_key"),
+                        "spell_name": name_input.value,
+                        "spell_level": level_input.value,
+                        "slot_kind": slot_kind_input.value,
+                        "domain_source": domain_input.value,
+                        "prepared_count": prepared_count.value,
+                        "used_count": row.get("used_count") or 0,
+                        "school": school_input.value,
+                        "range_text": range_input.value,
+                        "summary": summary_input.value,
+                        "source_text": source_input.value,
+                        "notes": notes_input.value,
+                        "sort_order": row.get("sort_order") or 0,
+                    }
                     try:
                         save_prepared_spell(
                             user_id,
                             character["id"],
-                            {
-                                "catalog_key": catalog_input.value or row.get("catalog_key"),
-                                "spell_name": name_input.value,
-                                "spell_level": level_input.value,
-                                "slot_kind": slot_kind_input.value,
-                                "domain_source": domain_input.value,
-                                "prepared_count": prepared_count.value,
-                                "used_count": row.get("used_count") or 0,
-                                "school": school_input.value,
-                                "range_text": range_input.value,
-                                "summary": summary_input.value,
-                                "source_text": source_input.value,
-                                "notes": notes_input.value,
-                                "sort_order": row.get("sort_order") or 0,
-                            },
+                            values,
                             preparation_id=row.get("id") if editing else None,
                         )
+                    except SpellRuleError as error:
+                        if not editing:
+                            dialog.close()
+                            open_replacement_dialog(profile, values)
+                            return
+                        notify_error(error, "Le sort préparé n’a pas pu être enregistré.")
+                        return
                     except Exception as error:
                         notify_error(error, "Le sort préparé n’a pas pu être enregistré.")
                         return
                     dialog.close()
                     render_spells.refresh()
+                    try:
+                        render_spell_reference.refresh()
+                    except Exception:
+                        pass
                     ui.notify("Préparation enregistrée.", type="positive")
 
                 with ui.row().classes("w-full justify-end gap-2 mt-3"):
@@ -574,4 +668,215 @@ def build_spells_panel(
                                     on_click=lambda _event=None, selected=dict(row): confirm_delete(selected),
                                 ).props("flat round dense color=negative").tooltip("Retirer de la préparation")
 
-    render_spells()
+    @ui.refreshable
+    def render_spell_reference():
+        try:
+            profile = dict(get_spellcasting_profile(user_id, character["id"]))
+            prepared = list(list_prepared_spells(user_id, character["id"]))
+            score = effective_ability_score(character, profile.get("ability_key") or "wis")
+            slots = cleric_slot_table(profile.get("class_level") or 1, score)
+            maximum = max(int(item["spell_level"]) for item in slots)
+            domains = domains_from_faith()
+            local_catalog = list(
+                catalog_by_key(max_spell_level=maximum, domains=domains).values()
+            )
+            rows = cleric_spell_reference_rows(
+                max_spell_level=maximum,
+                local_catalog=local_catalog,
+            )
+        except Exception as error:
+            notify_error(error, "La référence des sorts n’a pas pu être chargée.")
+            return
+
+        with ui.card().classes("w-full p-5"):
+            ui.label("Renseignements sur les sorts").classes("text-xl font-bold")
+            ui.label(
+                "Consultez rapidement les effets d’un sort et ajoutez-le directement "
+                "à la préparation de la journée."
+            ).classes("text-sm jf-muted")
+            with ui.row().classes("w-full items-end gap-3 flex-wrap mt-3"):
+                search_input = ui.input(
+                    label="Rechercher",
+                    placeholder="Nom, école, effet…",
+                ).props("clearable").classes("grow min-w-[220px]")
+                level_input = ui.select(
+                    {-1: "Tous les niveaux", **{level: level_label(level) for level in range(maximum + 1)}},
+                    label="Niveau",
+                    value=-1,
+                ).props("options-dense").classes("min-w-[190px]")
+                schools = sorted({str(row.get("school") or "").strip() for row in rows if row.get("school")})
+                school_input = ui.select(
+                    {"": "Toutes les écoles", **{school: school for school in schools}},
+                    label="École",
+                    value="",
+                ).props("options-dense clearable").classes("min-w-[180px]")
+
+            source_modes = {str(row.get("reference_source") or "") for row in rows}
+            if "remote" in source_modes:
+                ui.label(REFERENCE_ATTRIBUTION).classes("text-xs jf-muted mt-2")
+            else:
+                ui.label(
+                    "Référence en mode local : les résumés intégrés restent disponibles; "
+                    "les détails complets seront enrichis lorsque la source ouverte est accessible."
+                ).classes("text-xs jf-muted mt-2")
+
+            @ui.refreshable
+            def render_reference_results():
+                term = str(search_input.value or "").strip().casefold()
+                try:
+                    wanted_level = int(level_input.value)
+                except (TypeError, ValueError):
+                    wanted_level = -1
+                wanted_school = str(school_input.value or "").strip().casefold()
+                filtered = []
+                for row in rows:
+                    if wanted_level >= 0 and int(row.get("spell_level") or 0) != wanted_level:
+                        continue
+                    if wanted_school and str(row.get("school") or "").casefold() != wanted_school:
+                        continue
+                    haystack = " ".join(
+                        str(row.get(key) or "")
+                        for key in (
+                            "name", "school", "summary", "full_description",
+                            "target_text", "duration_text", "components_text",
+                        )
+                    ).casefold()
+                    if term and term not in haystack:
+                        continue
+                    filtered.append(row)
+
+                ui.label(f"{len(filtered)} sort(s) affiché(s)").classes("text-xs jf-muted mt-3")
+                if not filtered:
+                    ui.label("Aucun sort ne correspond aux filtres.").classes("text-sm jf-muted")
+                    return
+
+                for spell in filtered:
+                    same = [
+                        item for item in prepared
+                        if (
+                            str(item.get("catalog_key") or "") == str(spell.get("key") or "")
+                            or (
+                                str(item.get("spell_name") or "").casefold()
+                                == str(spell.get("name") or "").casefold()
+                                and int(item.get("spell_level") or 0) == int(spell.get("spell_level") or 0)
+                                and str(item.get("slot_kind") or "normal") == str(spell.get("slot_kind") or "normal")
+                            )
+                        )
+                    ]
+                    with ui.expansion(
+                        f"Niv. {spell['spell_level']} — {spell['name']}",
+                        icon="auto_stories",
+                    ).props("expand-separator").classes("w-full jf-rpg-spell-reference-item"):
+                        with ui.row().classes("w-full items-start justify-between gap-3 flex-wrap"):
+                            with ui.column().classes("gap-1 grow min-w-0"):
+                                meta = [str(spell.get("school") or "École non précisée")]
+                                if spell.get("domain_source"):
+                                    meta.append("Domaine " + str(spell["domain_source"]))
+                                ui.label(" • ".join(meta)).classes("text-xs text-primary font-bold")
+                                ui.label(
+                                    str(spell.get("summary") or "Aucun résumé disponible.")
+                                ).classes("text-sm")
+                            checkbox = ui.checkbox(
+                                "Préparé aujourd’hui",
+                                value=bool(same),
+                            )
+
+                        with ui.element("div").classes("jf-rpg-grid mt-3"):
+                            for label, value in (
+                                ("Temps d’incantation", spell.get("casting_time")),
+                                ("Composantes / exigences", spell.get("components_text")),
+                                ("Portée", spell.get("range_text")),
+                                ("Cible / zone / effet", spell.get("target_text")),
+                                ("Durée", spell.get("duration_text")),
+                                ("Jet de sauvegarde", spell.get("saving_throw_text")),
+                                ("Résistance à la magie", spell.get("spell_resistance_text")),
+                            ):
+                                with ui.column().classes("gap-0"):
+                                    ui.label(label).classes("text-xs jf-muted")
+                                    ui.label(str(value or "—")).classes("text-sm font-medium whitespace-pre-wrap")
+
+                        description = str(spell.get("full_description") or spell.get("summary") or "")
+                        if description:
+                            ui.label("Description / effets").classes("font-bold mt-3")
+                            ui.label(description).classes("text-sm whitespace-pre-wrap")
+
+                        def toggle_prepared(event, selected=dict(spell), existing=list(same)):
+                            checked = bool(event.value)
+                            if checked and not existing:
+                                notes = "\n".join(
+                                    part for part in (
+                                        f"Temps: {selected.get('casting_time')}" if selected.get("casting_time") else "",
+                                        f"Composantes: {selected.get('components_text')}" if selected.get("components_text") else "",
+                                        f"Cible/zone: {selected.get('target_text')}" if selected.get("target_text") else "",
+                                        f"Durée: {selected.get('duration_text')}" if selected.get("duration_text") else "",
+                                        f"Sauvegarde: {selected.get('saving_throw_text')}" if selected.get("saving_throw_text") else "",
+                                        f"RM: {selected.get('spell_resistance_text')}" if selected.get("spell_resistance_text") else "",
+                                    ) if part
+                                )
+                                values = {
+                                    "catalog_key": selected.get("key"),
+                                    "spell_name": selected.get("name"),
+                                    "spell_level": selected.get("spell_level"),
+                                    "slot_kind": selected.get("slot_kind") or "normal",
+                                    "domain_source": selected.get("domain_source"),
+                                    "prepared_count": 1,
+                                    "used_count": 0,
+                                    "school": selected.get("school"),
+                                    "range_text": selected.get("range_text"),
+                                    "summary": selected.get("summary"),
+                                    "source_text": selected.get("source_text"),
+                                    "notes": notes,
+                                    "sort_order": 0,
+                                }
+                                try:
+                                    save_prepared_spell(user_id, character["id"], values)
+                                except SpellRuleError:
+                                    open_replacement_dialog(profile, values)
+                                    render_spell_reference.refresh()
+                                    return
+                                except Exception as error:
+                                    notify_error(error, "Le sort n’a pas pu être ajouté à la journée.")
+                                    render_spell_reference.refresh()
+                                    return
+                                ui.notify("Sort ajouté à la préparation du jour.", type="positive")
+                            elif not checked and existing:
+                                selected_row = dict(existing[0])
+                                try:
+                                    count = int(selected_row.get("prepared_count") or 1)
+                                    if count <= 1:
+                                        delete_prepared_spell(user_id, character["id"], selected_row["id"])
+                                    else:
+                                        selected_row["prepared_count"] = count - 1
+                                        selected_row["used_count"] = min(
+                                            int(selected_row.get("used_count") or 0),
+                                            count - 1,
+                                        )
+                                        save_prepared_spell(
+                                            user_id,
+                                            character["id"],
+                                            selected_row,
+                                            preparation_id=selected_row["id"],
+                                        )
+                                except Exception as error:
+                                    notify_error(error, "Le sort n’a pas pu être retiré de la journée.")
+                                    render_spell_reference.refresh()
+                                    return
+                                ui.notify("Sort retiré de la préparation du jour.", type="positive")
+                            render_spells.refresh()
+                            render_spell_reference.refresh()
+
+                        checkbox.on_value_change(toggle_prepared)
+
+            search_input.on_value_change(lambda _event=None: render_reference_results.refresh())
+            level_input.on_value_change(lambda _event=None: render_reference_results.refresh())
+            school_input.on_value_change(lambda _event=None: render_reference_results.refresh())
+            render_reference_results()
+
+    with ui.tabs().props("dense no-caps inline-label").classes("w-full") as spell_tabs:
+        day_tab = ui.tab("Ma journée", icon="today")
+        reference_tab = ui.tab("Référence des sorts", icon="menu_book")
+    with ui.tab_panels(spell_tabs, value=day_tab).classes("w-full bg-transparent"):
+        with ui.tab_panel(day_tab).classes("px-0"):
+            render_spells()
+        with ui.tab_panel(reference_tab).classes("px-0"):
+            render_spell_reference()

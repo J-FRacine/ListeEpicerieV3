@@ -9,7 +9,16 @@ from rpg_character_spell_casting import (
     build_cast_reference,
     remaining_prepared_uses,
 )
-
+from rpg_combat_effects import (
+    add_effect as add_combat_effect,
+    add_journal_entry,
+    advance_round as advance_combat_round,
+    clear_combat_state,
+    combat_state,
+    effect_modifiers,
+    remove_effect as remove_combat_effect,
+    update_combat_state,
+)
 from rpg_combat_effects_ui import build_combat_effects_panel
 
 
@@ -260,9 +269,38 @@ def combat_summary(
         Any,
     ],
     feat_effects: Mapping[str, Any] | None = None,
+    session_effects: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Construit les chiffres utiles de Combat rapide."""
     effects = dict(feat_effects or {})
+    temporary = dict(session_effects or {})
+    feat_saves = dict(effects.get("save_modifiers") or {})
+    temp_saves = dict(temporary.get("save_modifiers") or {})
+    effects["attack_modifier"] = (
+        _as_int(effects.get("attack_modifier"))
+        + _as_int(temporary.get("attack_modifier"))
+    )
+    effects["damage_modifier"] = (
+        _as_int(effects.get("damage_modifier"))
+        + _as_int(temporary.get("damage_modifier"))
+    )
+    effects["ac_modifier"] = _as_int(temporary.get("ac_modifier"))
+    effects["initiative_modifier"] = (
+        _as_int(effects.get("initiative_modifier"))
+        + _as_int(temporary.get("initiative_modifier"))
+    )
+    effects["cmb_modifier"] = (
+        _as_int(effects.get("cmb_modifier"))
+        + _as_int(temporary.get("cmb_modifier"))
+    )
+    effects["cmd_modifier"] = (
+        _as_int(effects.get("cmd_modifier"))
+        + _as_int(temporary.get("cmd_modifier"))
+    )
+    effects["save_modifiers"] = {
+        key: _as_int(feat_saves.get(key)) + _as_int(temp_saves.get(key))
+        for key in {"all", "fortitude", "reflex", "will"}
+    }
     selected = find_attack(attacks, selected_attack_id)
     selected_total = None
     if selected is not None:
@@ -294,7 +332,10 @@ def combat_summary(
         "nonlethal_damage": _as_int(
             character.get("nonlethal_damage")
         ),
-        "armor_class": armor_class_total(character),
+        "armor_class": (
+            _as_int(armor_class_total(character))
+            + _as_int(effects.get("ac_modifier"))
+        ),
         "touch_armor_class": touch_armor_class(character),
         "flat_footed_armor_class": flat_footed_armor_class(character),
         "initiative": (
@@ -389,17 +430,32 @@ def build_combat_session(
         feats = list(
             list_rpg_feats(user_id, character["id"])
         )
+        session_state = combat_state(
+            user_id,
+            character["id"],
+            character=character,
+        )
+        refresh_callback = {"fn": lambda: None}
 
         attack_options = {
             int(row["id"]): combat_attack_label(row)
             for row in attacks
         }
-        first_attack = next(iter(attack_options), None)
+        saved_attack = session_state.get("selected_attack_id")
+        try:
+            saved_attack = int(saved_attack)
+        except (TypeError, ValueError):
+            saved_attack = None
+        first_attack = (
+            saved_attack
+            if saved_attack in attack_options
+            else next(iter(attack_options), None)
+        )
 
         with ui.dialog() as dialog:
             with ui.card().classes(
-                "jf-rpg-combat-dialog w-full p-4 "
-                "max-h-[94vh] overflow-auto"
+                "w-full max-w-5xl p-4 "
+                "max-h-[92vh] overflow-auto"
             ):
                 with ui.row().classes(
                     "w-full items-start justify-between "
@@ -414,13 +470,55 @@ def build_combat_session(
                             "activez vos dons, lancez vos sorts préparés et notez rapidement "
                             "les pertes de PV."
                         ).classes("text-sm jf-muted")
-                    ui.button(
-                        icon="close",
-                        on_click=dialog.close,
-                    ).props("flat round")
+                    with ui.row().classes("items-center gap-1"):
+                        def confirm_reset_session():
+                            with ui.dialog() as reset_dialog:
+                                with ui.card().classes("w-full max-w-md p-5"):
+                                    ui.label("Réinitialiser le combat?").classes(
+                                        "text-xl font-bold"
+                                    )
+                                    ui.label(
+                                        "Les rounds, effets, notes et valeurs temporaires de "
+                                        "Combat rapide seront effacés. Les données permanentes "
+                                        "de la fiche ne seront pas modifiées."
+                                    ).classes("text-sm jf-muted")
+
+                                    def do_reset():
+                                        clear_combat_state(user_id, character["id"])
+                                        reset_dialog.close()
+                                        dialog.close()
+                                        ui.notify(
+                                            "Combat rapide réinitialisé.",
+                                            type="positive",
+                                        )
+                                        ui.timer(0.05, open_dialog, once=True)
+
+                                    with ui.row().classes(
+                                        "w-full justify-end gap-2 mt-3"
+                                    ):
+                                        ui.button(
+                                            "Annuler",
+                                            on_click=reset_dialog.close,
+                                        ).props("flat")
+                                        ui.button(
+                                            "Réinitialiser",
+                                            icon="restart_alt",
+                                            on_click=do_reset,
+                                        ).props("color=negative")
+                            reset_dialog.open()
+
+                        ui.button(
+                            "Effacer / Réinitialiser le combat",
+                            icon="restart_alt",
+                            on_click=confirm_reset_session,
+                        ).props("outline color=negative")
+                        ui.button(
+                            icon="close",
+                            on_click=dialog.close,
+                        ).props("flat round")
 
                 with ui.element("div").classes(
-                    "jf-rpg-combat-stats-grid mt-3"
+                    "jf-rpg-result-grid mt-3"
                 ):
                     stat_labels = {}
                     for key, label in (
@@ -445,15 +543,24 @@ def build_combat_session(
                                 "jf-rpg-stat-value"
                             )
 
-                effects_handle = build_combat_effects_panel(
+                build_combat_effects_panel(
                     ui=ui,
-                    format_modifier=format_modifier,
-                    on_changed=lambda: refresh_stats(),
+                    state_getter=lambda: combat_state(
+                        user_id, character["id"], character=character
+                    ),
+                    add_effect=lambda **values: add_combat_effect(
+                        user_id, character["id"], **values
+                    ),
+                    remove_effect=lambda effect_id: remove_combat_effect(
+                        user_id, character["id"], effect_id
+                    ),
+                    advance_round=lambda: advance_combat_round(
+                        user_id, character["id"]
+                    ),
+                    on_change=lambda: refresh_callback["fn"](),
                 )
 
-                with ui.card().classes(
-                    "jf-rpg-combat-section w-full p-4 mt-3"
-                ):
+                with ui.card().classes("w-full p-4 mt-3"):
                     ui.label("Attaque utilisée").classes(
                         "text-lg font-bold"
                     )
@@ -473,7 +580,7 @@ def build_combat_session(
                     ):
                         temporary_bonus = ui.number(
                             label="Bonus/malus temporaire",
-                            value=0,
+                            value=session_state.get("temporary_attack_bonus") or 0,
                             step=1,
                         ).props("inputmode=numeric")
                         attack_total_display = ui.input(
@@ -499,6 +606,7 @@ def build_combat_session(
                             "Tactique ou autres modificateurs "
                             "utilisés pendant ce combat"
                         ),
+                        value=session_state.get("tactics") or "",
                         placeholder=(
                             "Ex. flanc, bénédiction, malus circonstanciel…"
                         ),
@@ -512,7 +620,7 @@ def build_combat_session(
 
                 active_controls = {}
                 if feats:
-                    with ui.card().classes("jf-rpg-combat-section w-full p-4 mt-3"):
+                    with ui.card().classes("w-full p-4 mt-3"):
                         ui.label("Dons").classes(
                             "text-lg font-bold"
                         )
@@ -572,7 +680,15 @@ def build_combat_session(
                                     if kind == "active":
                                         control = ui.checkbox(
                                             "Utiliser",
-                                            value=False,
+                                            value=(
+                                                int(feat["id"])
+                                                in {
+                                                    int(item)
+                                                    for item in session_state.get(
+                                                        "active_feat_ids", []
+                                                    )
+                                                }
+                                            ),
                                         )
                                         active_controls[
                                             int(feat["id"])
@@ -596,7 +712,7 @@ def build_combat_session(
 
                 @ui.refreshable
                 def render_combat_spells():
-                    with ui.card().classes("jf-rpg-combat-section w-full p-4 mt-3"):
+                    with ui.card().classes("w-full p-4 mt-3"):
                         ui.label("Sorts préparés").classes("text-lg font-bold")
                         ui.label(
                             "Lancez un sort sans quitter Combat rapide. La même utilisation "
@@ -852,7 +968,7 @@ def build_combat_session(
 
                 render_combat_spells()
 
-                with ui.card().classes("jf-rpg-combat-section w-full p-4 mt-3"):
+                with ui.card().classes("w-full p-4 mt-3"):
                     ui.label("Pertes et soins rapides").classes(
                         "text-lg font-bold"
                     )
@@ -861,7 +977,9 @@ def build_combat_session(
                     ):
                         current_hp = ui.number(
                             label="PV actuels",
-                            value=character.get("current_hp") or 0,
+                            value=session_state.get(
+                                "current_hp", character.get("current_hp") or 0
+                            ),
                             step=1,
                         ).props("inputmode=numeric")
                         damage_taken = ui.number(
@@ -878,9 +996,9 @@ def build_combat_session(
                         ).props("inputmode=numeric")
                         current_nonlethal = ui.number(
                             label="Dégâts non létaux",
-                            value=(
-                                character.get("nonlethal_damage")
-                                or 0
+                            value=session_state.get(
+                                "nonlethal_damage",
+                                character.get("nonlethal_damage") or 0,
                             ),
                             min=0,
                             step=1,
@@ -899,33 +1017,35 @@ def build_combat_session(
                         ).props("inputmode=numeric")
 
                     def apply_quick_changes() -> None:
-                        damage_value = max(
-                            0,
-                            _as_int(damage_taken.value),
-                        )
-                        healing_value = max(
-                            0,
-                            _as_int(healing_received.value),
-                        )
-                        nonlethal_add_value = max(
-                            0,
-                            _as_int(nonlethal_added.value),
-                        )
-                        nonlethal_remove_value = max(
-                            0,
-                            _as_int(nonlethal_removed.value),
-                        )
-
+                        damage_value = max(0, _as_int(damage_taken.value))
+                        healing_value = max(0, _as_int(healing_received.value))
+                        nonlethal_add_value = max(0, _as_int(nonlethal_added.value))
+                        nonlethal_remove_value = max(0, _as_int(nonlethal_removed.value))
                         current_hp.value = adjusted_current_hp(
                             current_hp.value,
-                            damage=damage_taken.value,
-                            healing=healing_received.value,
+                            damage=damage_value,
+                            healing=healing_value,
                         )
                         current_nonlethal.value = adjusted_nonlethal(
                             current_nonlethal.value,
-                            added=nonlethal_added.value,
-                            removed=nonlethal_removed.value,
+                            added=nonlethal_add_value,
+                            removed=nonlethal_remove_value,
                         )
+                        changes = []
+                        if damage_value:
+                            changes.append(f"{damage_value} dégâts")
+                        if healing_value:
+                            changes.append(f"{healing_value} soins")
+                        if nonlethal_add_value:
+                            changes.append(f"{nonlethal_add_value} non létaux reçus")
+                        if nonlethal_remove_value:
+                            changes.append(f"{nonlethal_remove_value} non létaux retirés")
+                        if changes:
+                            add_journal_entry(
+                                user_id,
+                                character["id"],
+                                "Pertes / soins : " + ", ".join(changes),
+                            )
                         current_hp.update()
                         current_nonlethal.update()
 
@@ -940,27 +1060,6 @@ def build_combat_session(
                             nonlethal_removed,
                         ):
                             control.update()
-                        if (
-                            damage_value
-                            or healing_value
-                            or nonlethal_add_value
-                            or nonlethal_remove_value
-                        ):
-                            pieces = []
-                            if damage_value:
-                                pieces.append(f"-{damage_value} PV")
-                            if healing_value:
-                                pieces.append(f"+{healing_value} PV")
-                            if nonlethal_add_value:
-                                pieces.append(
-                                    f"+{nonlethal_add_value} non létaux"
-                                )
-                            if nonlethal_remove_value:
-                                pieces.append(
-                                    f"-{nonlethal_remove_value} non létaux"
-                                )
-                            effects_handle.log(" / ".join(pieces))
-
                         refresh_stats()
 
                     ui.button(
@@ -980,6 +1079,16 @@ def build_combat_session(
                     }
 
                 def refresh_stats(_event=None) -> None:
+                    update_combat_state(
+                        user_id,
+                        character["id"],
+                        selected_attack_id=attack_select.value,
+                        temporary_attack_bonus=temporary_bonus.value or 0,
+                        tactics=tactics_input.value or "",
+                        current_hp=current_hp.value,
+                        nonlethal_damage=current_nonlethal.value,
+                        active_feat_ids=selected_active_ids(),
+                    )
                     draft = dict(character)
                     draft["current_hp"] = current_hp.value
                     draft["nonlethal_damage"] = (
@@ -1009,18 +1118,19 @@ def build_combat_session(
                         attack_total=attack_total,
                         save_total=save_total,
                         feat_effects=effects,
+                        session_effects=effect_modifiers(
+                            combat_state(
+                                user_id, character["id"], character=character
+                            )
+                        ),
                     )
-                    session_modifiers = effects_handle.modifiers()
 
                     stat_labels["hp"].set_text(
                         f"{snapshot['current_hp']}/"
                         f"{snapshot['max_hp']}"
                     )
                     stat_labels["ac"].set_text(
-                        str(
-                            _as_int(snapshot["armor_class"])
-                            + session_modifiers["ac"]
-                        )
+                        str(snapshot["armor_class"])
                     )
                     stat_labels["touch"].set_text(
                         str(snapshot["touch_armor_class"])
@@ -1029,22 +1139,13 @@ def build_combat_session(
                         str(snapshot["flat_footed_armor_class"])
                     )
                     stat_labels["initiative"].set_text(
-                        format_modifier(
-                            _as_int(snapshot["initiative"])
-                            + session_modifiers["initiative"]
-                        )
+                        format_modifier(snapshot["initiative"])
                     )
                     stat_labels["cmb"].set_text(
-                        format_modifier(
-                            _as_int(snapshot["cmb"])
-                            + session_modifiers["cmb"]
-                        )
+                        format_modifier(snapshot["cmb"])
                     )
                     stat_labels["cmd"].set_text(
-                        str(
-                            _as_int(snapshot["cmd"])
-                            + session_modifiers["cmd"]
-                        )
+                        str(snapshot["cmd"])
                     )
                     stat_labels["fortitude"].set_text(
                         format_modifier(
@@ -1052,8 +1153,6 @@ def build_combat_session(
                                 "fortitude",
                                 0,
                             )
-                            + session_modifiers["save_all"]
-                            + session_modifiers["fortitude"]
                         )
                     )
                     stat_labels["reflex"].set_text(
@@ -1062,8 +1161,6 @@ def build_combat_session(
                                 "reflex",
                                 0,
                             )
-                            + session_modifiers["save_all"]
-                            + session_modifiers["reflex"]
                         )
                     )
                     stat_labels["will"].set_text(
@@ -1072,8 +1169,6 @@ def build_combat_session(
                                 "will",
                                 0,
                             )
-                            + session_modifiers["save_all"]
-                            + session_modifiers["will"]
                         )
                     )
 
@@ -1085,14 +1180,17 @@ def build_combat_session(
                     else:
                         attack_total_display.value = (
                             format_modifier(
-                                _as_int(
-                                    snapshot["selected_attack_total"]
-                                )
-                                + session_modifiers["attack"]
+                                snapshot["selected_attack_total"]
                             )
                         )
+                        base_damage = str(selected.get("damage") or "—")
+                        damage_modifier = _as_int(
+                            snapshot["feat_effects"].get("damage_modifier")
+                        )
                         damage_display.value = (
-                            selected.get("damage") or "—"
+                            base_damage
+                            if not damage_modifier
+                            else f"{base_damage} {damage_modifier:+d} temporaire"
                         )
                         critical_display.value = (
                             selected.get("critical") or "—"
@@ -1141,11 +1239,13 @@ def build_combat_session(
 
                 attack_select.on_value_change(refresh_stats)
                 temporary_bonus.on_value_change(refresh_stats)
+                tactics_input.on_value_change(refresh_stats)
                 current_hp.on_value_change(refresh_stats)
                 current_nonlethal.on_value_change(refresh_stats)
                 for control in active_controls.values():
                     control.on_value_change(refresh_stats)
 
+                refresh_callback["fn"] = refresh_stats
                 refresh_stats()
 
                 def save_losses() -> None:

@@ -5,26 +5,6 @@ from onboarding import organization_diagram
 
 
 MANUAL_SECTIONS = [
-    {"title":"Mise en forme", "icon":"fitness_center",
-     "caption":"Exercices sans appareil et suivi des séances",
-     "keywords":"forme exercices marche chaise activité physique progression historique",
-     "content":"""### Mise en forme — V1.1.1
-
-Ouvrez **Mise en forme** depuis le Portail. Le programme de départ est volontairement doux et réparti sur huit semaines. Chaque jour, la marche extérieure est proposée et peut être remplacée par la marche sur place lorsque la météo est défavorable; trois mouvements simples de renforcement sont aussi proposés chaque jour par défaut. Vous pourrez ensuite choisir les journées qui vous conviennent.
-
-- Dans **Fréquence du renforcement**, choisissez **Tous les jours** (mode initial) ou **Seulement les jours que je choisis**. Si vous choisissez les jours, sélectionnez au moins une journée. La marche reste quotidienne dans les deux modes.
-- Appuyez sur **Faire** puis cochez l’exercice réalisé; modifiez la durée ou les répétitions si nécessaire.
-- Indiquez facultativement si l’exercice était facile, correct ou difficile et ajoutez une note.
-- Utilisez les flèches de date pour compléter ou corriger une journée passée.
-- **Plus doux** et **Progresser** ajustent le niveau conseillé sans effacer l’historique.
-- Consultez l’historique de 28 jours pour voir les journées terminées ou partielles.
-- Le bouton **Feuille explicative** et les petits boutons **?** donnent accès aux dessins et aux consignes des exercices.
-- Sur le **Portail**, un rappel des exercices du jour s'affiche tant que des objectifs restent à faire. **Faire mes exercices** ouvre l'application; **Déjà fait** vérifie les données enregistrées; **Reporter à demain** masque seulement le rappel du jour et ne simule pas une séance.
-- Désactivez ou réactivez les rappels avec **Afficher le rappel quotidien sur le Portail** dans Mise en forme.
-- Une marche sur place complétée remplace la marche extérieure pour le calcul; en cas de météo défavorable, le report est noté sans compter une marche non effectuée.
-
-Les données sont privées à votre compte. Ce programme général ne remplace pas un avis médical. Arrêtez en cas de douleur thoracique, malaise ou essoufflement inhabituel.
-"""},
     {
         "title": "Premiers pas",
         "icon": "rocket_launch",
@@ -1311,9 +1291,9 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
 """,
     },
     {
-        "title": "Personnages JDR — V1.10.0",
+        "title": "Personnages JDR — V1.12.0",
         "icon": "casino",
-        "caption": "Lancement guidé et sorts préparés, objets magiques, armes liées, dons, foi et feuille Pathfinder / Ravenloft",
+        "caption": "Combat rapide persistant, référence des sorts, préparation guidée, objets magiques, armes liées, dons, foi et feuille Pathfinder / Ravenloft",
         "keywords": (
             "jdr personnage ravenloft pathfinder feuille force "
             "dextérité constitution intelligence sagesse charisme "
@@ -1327,9 +1307,25 @@ Le bouton **Préparer le courriel** ouvre l’application de messagerie avec un 
             "combat casting selective channeling portrait photo image "
             "jpeg jpg png webp armes arme liée équipement attaques maître magique munitions iomedae "
             "objets magiques cloak resistance wand cure light wounds handy haversack sac contenu conteneur "
-            "sorts spells clerc cleric préparation emplacements slots oraisons domaine DD sagesse prière lancement conversion spontanée combat rapide"
+            "sorts spells clerc cleric préparation emplacements slots oraisons domaine DD sagesse prière lancement conversion spontanée combat rapide référence description effet damage dégâts round journal remplacement"
         ),
         "content": """
+### V1.12.0 — combat persistant et référence des sorts
+
+**Combat rapide conserve maintenant la session en cours** lorsque vous quittez la fenêtre pour consulter une autre section de la fiche puis revenez. Le round courant, les effets actifs, la sélection d’attaque, le bonus/malus temporaire, les dons activés, les notes de tactique, les PV temporaires de la fenêtre et les dégâts non létaux restent disponibles tant qu’ils ne sont pas effacés volontairement. Cette persistance est temporaire à la session serveur : elle ne transforme pas les effets de combat en bonus permanents de la fiche.
+
+Le bouton **Effacer / Réinitialiser le combat** est placé en haut de Combat rapide. Une confirmation est demandée avant de remettre à zéro les rounds, effets, notes et choix temporaires. Les valeurs permanentes enregistrées dans la fiche ne sont pas supprimées.
+
+La section **Round et effets actifs** permet de créer un effet temporaire avec un nom, une cible de modification, un bonus ou malus et une durée en rounds. La liste **Modifie** comprend maintenant **Dégâts / Damage** en plus de l’attaque, de la CA totale, de l’initiative, du BMO/CMB, du DMD/CMD et des sauvegardes. Un modificateur de dégâts est affiché séparément sur la ligne des dégâts et ne change pas le bonus d’attaque. Le bouton **Round suivant** réduit les durées et retire automatiquement les effets arrivés à expiration. Le journal de session conserve les ajouts/retraits d’effets ainsi que les pertes et soins appliqués pendant le combat.
+
+L’onglet **Sorts** comprend maintenant deux sous-pages : **Ma journée** et **Référence des sorts**. La référence permet de rechercher les sorts accessibles au Clerc, de filtrer par niveau et par école, puis d’ouvrir une fiche contenant le résumé, la description, le temps d’incantation, les composantes/exigences, la portée, la cible/zone/effet, la durée, le jet de sauvegarde et la résistance à la magie lorsque ces renseignements sont disponibles.
+
+La case **Préparé aujourd’hui** permet d’ajouter directement un sort à la préparation quotidienne ou de le retirer. Si tous les emplacements du même niveau sont déjà occupés, JF Apps ne bloque plus simplement l’ajout : une fenêtre propose les sorts déjà préparés du **même niveau et du même type d’emplacement**, puis demande lequel remplacer. Le remplacement ne se fait jamais automatiquement et doit être confirmé explicitement.
+
+La référence détaillée tente d’utiliser les données structurées ouvertes du **Pathfinder Roleplaying Game Core Rulebook**, diffusées sous **Open Game License 1.0a** via PSRD-Data / Moddable Games. Si la source distante est momentanément inaccessible, le catalogue local JF Apps reste utilisable avec les résumés intégrés.
+
+Aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance Python ne sont requis pour JDR V1.12.0.
+
 ### V1.10.0 — lancement guidé des sorts
 
 La **Phase 15B** est maintenant officiellement intégrée à **JDR V1.10.0**. Dans l’onglet **Sorts**, chaque sort préparé possède un bouton **Lancer**. Avant de consommer l’emplacement, une fenêtre affiche le nom du sort, son niveau, le niveau de lanceur, la **Difficulté du jet**, la portée, la cible ou zone, la durée, une formule de jet lorsqu’elle est intégrée, le résumé et les notes disponibles.

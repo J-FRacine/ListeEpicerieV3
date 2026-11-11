@@ -1,4 +1,4 @@
-"""Ajustement des paies réelles pour la capacité variable du Budget.
+"""Ajustement des paies prévues ou réelles pour la capacité du Budget.
 
 Ce module reste indépendant de PostgreSQL et de NiceGUI. Les lecteurs de
 transactions sont injectés afin que les calculs puissent être testés sans DB.
@@ -29,15 +29,21 @@ def payroll_adjustment_from_transactions(
     month,
     month_end,
 ):
-    """Calcule l'écart entre les paies confirmées et le Budget.
+    """Calcule l'écart des occurrences matérialisées par rapport au Budget.
 
-    Une seule transaction est retenue par occurrence de récurrence. Si des
-    doublons existent, la transaction ayant le plus grand identifiant gagne,
-    ce qui évite de multiplier accidentellement un même dépôt de paie.
+    Les transactions Prévue et Confirmée sont prises en compte lorsqu'elles
+    appartiennent à la récurrence de revenu principale.
+
+    Une occurrence normale au montant budgété produit un écart de 0.
+    Une occurrence modifiée individuellement ajuste immédiatement la capacité
+    du mois, même si elle est encore Prévue.
+
+    Une seule transaction est retenue par occurrence de récurrence.
     """
     if recurrence_id in (None, "") or expected_per_pay in (None, ""):
         return {
             "realized_pay_count": 0,
+            "adjusted_pay_count": 0,
             "actual_pay_total": ZERO,
             "expected_realized_pay_total": ZERO,
             "pay_actual_adjustment": ZERO,
@@ -53,7 +59,8 @@ def payroll_adjustment_from_transactions(
     for raw in rows or []:
         row = dict(raw)
 
-        if row.get("status") not in (None, "confirmed"):
+        status = row.get("status")
+        if status not in (None, "planned", "confirmed"):
             continue
         if row.get("transaction_type") not in (None, "income"):
             continue
@@ -72,10 +79,20 @@ def payroll_adjustment_from_transactions(
             continue
 
         current = by_occurrence.get(occurrence)
-        current_id = int(current.get("id") or 0) if current else -1
-        row_id = int(row.get("id") or 0)
-        if current is None or row_id >= current_id:
+        if current is None:
             by_occurrence[occurrence] = row
+            continue
+
+        current_status = current.get("status")
+        if current_status != "confirmed" and status == "confirmed":
+            by_occurrence[occurrence] = row
+            continue
+
+        if current_status == status:
+            current_id = int(current.get("id") or 0)
+            row_id = int(row.get("id") or 0)
+            if row_id >= current_id:
+                by_occurrence[occurrence] = row
 
     actual_total = sum(
         (
@@ -85,16 +102,24 @@ def payroll_adjustment_from_transactions(
         ZERO,
     ).quantize(CENT)
 
-    realized_count = len(by_occurrence)
+    adjusted_count = len(by_occurrence)
+    realized_count = sum(
+        1
+        for row in by_occurrence.values()
+        if row.get("status") in (None, "confirmed")
+    )
+
     expected_total = (
-        expected * Decimal(realized_count)
+        expected * Decimal(adjusted_count)
     ).quantize(CENT)
+
     adjustment = (
         actual_total - expected_total
     ).quantize(CENT)
 
     return {
         "realized_pay_count": realized_count,
+        "adjusted_pay_count": adjusted_count,
         "actual_pay_total": actual_total,
         "expected_realized_pay_total": expected_total,
         "pay_actual_adjustment": adjustment,
@@ -110,7 +135,11 @@ def confirmed_primary_income_adjustment(
     expected_per_pay,
     list_transactions,
 ):
-    """Lit les revenus confirmés du mois et calcule l'écart de paie."""
+    """Lit les occurrences prévues/confirmées et calcule leur écart au Budget.
+
+    Le nom historique de cette fonction est conservé pour compatibilité avec
+    les autres modules de Finances.
+    """
     if recurrence_id in (None, "") or expected_per_pay in (None, ""):
         return payroll_adjustment_from_transactions(
             [],
@@ -125,7 +154,6 @@ def confirmed_primary_income_adjustment(
         start_date=month,
         end_date=month_end,
         transaction_type="income",
-        status="confirmed",
         include_linked_transfer_destinations=False,
         limit=100000,
     )

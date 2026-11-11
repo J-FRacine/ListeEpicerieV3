@@ -41,6 +41,7 @@ def build_account_panel(
     bank_cashflow_month,
     bank_cashflow_year_summary,
     list_recurrences,
+    materialize_projected_occurrence,
     get_transaction,
     get_card_payment_transfer,
     set_bank_transaction_seen,
@@ -206,10 +207,11 @@ def build_account_panel(
                 recurrence_id = row.get("recurrence_id")
                 if not recurrence_id:
                     ui.notify(
-                        "Cette ligne est une projection et ne peut pas être modifiée comme transaction.",
-                        type="info",
+                        "Cette projection n’est liée à aucune récurrence.",
+                        type="warning",
                     )
                     return
+
                 recurrence = next(
                     (
                         item
@@ -221,7 +223,90 @@ def build_account_panel(
                 if not recurrence:
                     ui.notify("Récurrence introuvable.", type="warning")
                     return
-                recurrence_dialog(recurrence)
+
+                occurrence_date = (
+                    row.get("occurrence_date")
+                    or row.get("transaction_date")
+                )
+
+                with ui.dialog() as projected_dialog:
+                    with ui.card().classes("w-full max-w-xl p-4"):
+                        ui.label(
+                            "Modifier une occurrence projetée"
+                        ).classes("text-lg font-bold")
+                        ui.label(
+                            str(row.get("description") or "Récurrence")
+                        ).classes("font-semibold")
+                        ui.label(
+                            "Cette ligne provient d’une récurrence. "
+                            "Vous pouvez modifier seulement cette échéance "
+                            "ou modifier la règle pour les prochaines occurrences."
+                        ).classes("text-sm jf-muted")
+
+                        with ui.element("div").classes(
+                            "jf-finance-report-note mt-2"
+                        ):
+                            ui.label(
+                                "Occurrence : "
+                                + occurrence_date.strftime("%d/%m/%Y")
+                                + " · "
+                                + _money(row.get("amount") or 0)
+                            ).classes("text-sm")
+
+                        def edit_only_this_occurrence():
+                            try:
+                                transaction_id = (
+                                    materialize_projected_occurrence(
+                                        user_id,
+                                        recurrence_id,
+                                        occurrence_date,
+                                    )
+                                )
+                                transaction = get_transaction(
+                                    user_id,
+                                    transaction_id,
+                                )
+                            except Exception as error:
+                                ui.notify(str(error), type="warning")
+                                return
+
+                            projected_dialog.close()
+                            _transaction_dialog(
+                                user_id,
+                                refresh_all,
+                                transaction=transaction,
+                            )
+
+                        def edit_recurrence():
+                            projected_dialog.close()
+                            recurrence_dialog(recurrence)
+
+                        with ui.column().classes(
+                            "w-full gap-2 mt-3"
+                        ):
+                            ui.button(
+                                "Modifier seulement cette occurrence",
+                                icon="edit_calendar",
+                                on_click=edit_only_this_occurrence,
+                            ).props(
+                                "color=primary"
+                            ).classes("w-full")
+                            ui.button(
+                                "Modifier toute la récurrence",
+                                icon="event_repeat",
+                                on_click=edit_recurrence,
+                            ).props(
+                                "outline color=primary"
+                            ).classes("w-full")
+                        with ui.row().classes(
+                            "w-full justify-end mt-1"
+                        ):
+                            ui.button(
+                                "Annuler",
+                                on_click=projected_dialog.close,
+                            ).props("flat")
+
+                projected_dialog.open()
                 return
 
             transaction_id = row.get("id")

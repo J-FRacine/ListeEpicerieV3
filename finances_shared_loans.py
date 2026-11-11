@@ -14,7 +14,7 @@ from finances_shared_loans_data import (
     list_available_loan_participants,
     list_shared_loans,
     save_shared_loan,
-    shared_loan_amortization_preview,
+    shared_loan_amortization_timeline,
 )
 
 
@@ -253,7 +253,11 @@ def shared_loans_panel(user, refresh_parent=None):
 
     def detail_dialog(loan_id):
         loan = get_shared_loan(user_id, loan_id)
-        schedule = shared_loan_amortization_preview(user_id, loan_id, max_rows=36)
+        schedule = shared_loan_amortization_timeline(
+            user_id,
+            loan_id,
+            max_rows=36,
+        )
         with ui.dialog() as dialog:
             with ui.card().classes("w-full max-w-5xl p-4"):
                 with ui.row().classes("w-full items-start justify-between gap-2"):
@@ -294,17 +298,69 @@ def shared_loans_panel(user, refresh_parent=None):
                 else:
                     with ui.element("div").classes("w-full overflow-x-auto"):
                         with ui.element("div").classes("min-w-[650px]"):
-                            with ui.row().classes("w-full font-bold text-xs border-b py-1"):
-                                for text, cls in (("#", "w-10"),("Date", "w-24"),("Versement", "w-28 text-right"),("Intérêts", "w-28 text-right"),("Capital", "w-28 text-right"),("Solde", "grow text-right")):
+                            with ui.row().classes(
+                                "w-full font-bold text-xs border-b py-1"
+                            ):
+                                for text, cls in (
+                                    ("#", "w-10"),
+                                    ("Date", "w-24"),
+                                    ("Versement", "w-28 text-right"),
+                                    ("Intérêts", "w-28 text-right"),
+                                    ("Capital", "w-28 text-right"),
+                                    ("Solde", "grow text-right"),
+                                    ("État", "w-24 text-right"),
+                                ):
                                     ui.label(text).classes(cls)
+
                             for row in schedule:
-                                with ui.row().classes("w-full text-xs border-b py-1"):
-                                    ui.label(str(row["number"])).classes("w-10")
-                                    ui.label(row["date"].strftime("%d/%m/%Y")).classes("w-24")
-                                    ui.label(_money(row["payment"])).classes("w-28 text-right")
-                                    ui.label(_money(row["interest"])).classes("w-28 text-right")
-                                    ui.label(_money(row["principal"])).classes("w-28 text-right")
-                                    ui.label(_money(row["remaining"])).classes("grow text-right")
+                                state = row.get("state") or "future"
+                                row_style = ""
+                                if state == "paid":
+                                    row_style = (
+                                        "background: rgba(120,120,120,.09); "
+                                        "opacity: .58;"
+                                    )
+                                elif state == "next":
+                                    row_style = (
+                                        "background: rgba(34,70,122,.08); "
+                                        "border-left: 4px solid var(--q-primary);"
+                                    )
+
+                                with ui.row().classes(
+                                    "w-full text-xs border-b py-1 items-center"
+                                ).style(row_style):
+                                    ui.label(
+                                        str(row["number"])
+                                    ).classes("w-10")
+                                    ui.label(
+                                        row["date"].strftime("%d/%m/%Y")
+                                    ).classes("w-24")
+                                    ui.label(
+                                        _money(row["payment"])
+                                    ).classes("w-28 text-right")
+                                    ui.label(
+                                        _money(row["interest"])
+                                    ).classes("w-28 text-right")
+                                    ui.label(
+                                        _money(row["principal"])
+                                    ).classes("w-28 text-right")
+                                    ui.label(
+                                        _money(row["remaining"])
+                                    ).classes("grow text-right")
+
+                                    if state == "paid":
+                                        ui.label("✓ Payé").classes(
+                                            "w-24 text-right font-bold"
+                                        )
+                                    elif state == "next":
+                                        ui.label("Prochain").classes(
+                                            "w-24 text-right "
+                                            "font-bold text-primary"
+                                        )
+                                    else:
+                                        ui.label("À venir").classes(
+                                            "w-24 text-right text-gray-500"
+                                        )
         dialog.open()
 
     @ui.refreshable

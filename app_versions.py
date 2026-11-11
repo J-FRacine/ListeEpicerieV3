@@ -17,12 +17,32 @@ APP_VERSIONS = {
     "grocery": "1.2.1",
     "recipes": "1.8.0",
     "blood_pressure": "1.2.3",
-    "finances": "1.14.5",
+    "finances": "1.15.0",
     "rpg": "1.12.1",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+{
+    "app_key": "finances",
+    "version": "1.15.0",
+    "date": "2026-11-11",
+    "title": "Finances — V1.15.0 — occurrences ponctuelles et suivi des prêts",
+    "summary": (
+        "Compte peut maintenant modifier une seule occurrence projetée "
+        "sans changer la récurrence, et Prêts partagés distingue clairement "
+        "les versements payés du prochain versement."
+    ),
+    "changes": [
+        "Le crayon d’une Récurrence projetée propose Modifier seulement cette occurrence ou Modifier toute la récurrence.",
+        "Modifier seulement cette occurrence matérialise uniquement l’échéance choisie comme transaction prévue liée à sa récurrence; les autres occurrences restent inchangées.",
+        "Une date ou un montant exceptionnel ne fait pas réapparaître la projection originale de cette occurrence.",
+        "Dans le détail d’un prêt partagé, les versements réellement enregistrés sont affichés grisés avec l’état Payé.",
+        "La première échéance future est mise en évidence comme Prochain versement; les suivantes restent À venir.",
+        "Enregistrer un versement réel fait avancer automatiquement la prochaine échéance du prêt; un prêt soldé n’affiche plus de prochaine échéance.",
+        "Aucune nouvelle table, aucune migration PostgreSQL, aucun SQL manuel et aucune nouvelle dépendance.",
+    ],
+},
     {
         "app_key": "rpg",
         "version": "1.12.1",

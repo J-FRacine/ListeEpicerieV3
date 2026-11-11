@@ -85,6 +85,23 @@ def get_transaction(user_id, transaction_id):
     )
 
 
+# Matérialisation volontaire d’une seule occurrence projetée.
+import finances_projected_occurrence as _projected_occurrence
+
+
+def materialize_projected_occurrence(
+    user_id,
+    recurrence_id,
+    occurrence_date,
+):
+    return _projected_occurrence.materialize_projected_occurrence(
+        user_id,
+        recurrence_id,
+        occurrence_date,
+        get_connection=get_connection,
+    )
+
+
 # Extraction progressive des écritures de transactions.
 # Les fonctions originales restent encore présentes dans les fragments;
 # ces façades tardives conservent les signatures publiques actuelles.

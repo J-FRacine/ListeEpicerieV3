@@ -321,13 +321,31 @@ def add_shared_loan_event(
                 ),
             )
             new_status = "completed" if new_balance <= 0 else loan["status"]
+            next_due = loan.get("next_due_date")
+            if new_balance <= 0:
+                next_due = None
+            elif event_type == "payment" and next_due:
+                next_due = next_date(
+                    next_due,
+                    loan["frequency_unit"],
+                    int(loan["frequency_interval"] or 1),
+                )
+
             cur.execute(
                 """
                 UPDATE finance_shared_loans
-                SET current_balance=%s,status=%s,updated_at=NOW()
+                SET current_balance=%s,
+                    status=%s,
+                    next_due_date=%s,
+                    updated_at=NOW()
                 WHERE id=%s;
                 """,
-                (new_balance, new_status, int(loan_id)),
+                (
+                    new_balance,
+                    new_status,
+                    next_due,
+                    int(loan_id),
+                ),
             )
             conn.commit()
             return {
@@ -378,3 +396,55 @@ def shared_loan_amortization_preview(user_id, loan_id, max_rows=36):
             int(loan["frequency_interval"] or 1),
         )
     return rows
+
+def shared_loan_amortization_timeline(user_id, loan_id, max_rows=36):
+    """Combine les versements réels et la projection future du prêt."""
+    loan = get_shared_loan(user_id, loan_id)
+    payments = sorted(
+        (
+            dict(event)
+            for event in loan.get("events", [])
+            if event.get("event_type") == "payment"
+        ),
+        key=lambda row: (
+            row["event_date"],
+            int(row.get("id") or 0),
+        ),
+    )
+
+    rows = []
+    for number, event in enumerate(payments, start=1):
+        rows.append(
+            {
+                "number": number,
+                "date": event["event_date"],
+                "payment": Decimal(event.get("amount") or 0),
+                "interest": Decimal(
+                    event.get("interest_amount") or 0
+                ),
+                "principal": Decimal(
+                    event.get("principal_amount") or 0
+                ),
+                "remaining": Decimal(
+                    event.get("balance_after") or 0
+                ),
+                "state": "paid",
+                "actual": True,
+            }
+        )
+
+    future = shared_loan_amortization_preview(
+        user_id,
+        loan_id,
+        max_rows=max_rows,
+    )
+    offset = len(rows)
+    for index, future_row in enumerate(future, start=1):
+        row = dict(future_row)
+        row["number"] = offset + index
+        row["state"] = "next" if index == 1 else "future"
+        row["actual"] = False
+        rows.append(row)
+
+    return rows
+

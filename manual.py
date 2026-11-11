@@ -572,6 +572,10 @@ Lorsqu’un taux d’intérêt est supérieur à 0 %, le formulaire demande si l
 ### Prêts partagés
 
 L’onglet **Prêts partagés** crée un prêt indépendant des autres données Finances. Seuls le propriétaire et les utilisateurs explicitement associés au prêt peuvent le consulter. Chaque participant peut avoir un rôle et une permission propres au prêt. Le module conserve le solde, les mouvements et une projection d’amortissement sans donner accès aux comptes, cartes, Budget, transactions ou autres prêts.
+
+Dans le détail du prêt, l’échéancier combine maintenant le **réel** et le **prévu**. Les versements enregistrés dans l’Historique sont grisés et marqués **✓ Payé**; la première échéance future est mise en évidence comme **Prochain**; les suivantes portent **À venir**. Une ligne n’est jamais considérée payée seulement parce que sa date est passée.
+
+Lorsqu’un mouvement de type **Versement** est enregistré, le solde est recalculé et la **Prochaine échéance** avance automatiquement d’une période. Lorsque le prêt est complètement soldé, la prochaine échéance est retirée.
 """,
     },
     {
@@ -778,7 +782,11 @@ Pour un mode de paiement de type **Compte bancaire**, chaque mouvement de l’on
 
 Cette méthode simplifiée s’applique uniquement aux **comptes bancaires**. Les cartes de crédit continuent d’utiliser l’écran **Conciliation** par relevé.
 
-Chaque transaction réelle du Compte possède aussi une action **Modifier**. Une transaction confirmée non conciliée peut être ouverte directement. Si elle est déjà cochée **Vu**, Finances demande d’abord **Retirer la conciliation et modifier**; la transaction n’est pas supprimée et peut être conciliée de nouveau après la correction. Une ligne qui est encore une **Récurrence projetée** ouvre plutôt la récurrence d’origine, puisqu’elle n’est pas encore une vraie transaction. Un paiement de carte lié ouvre sa fiche de paiement liée; si son côté carte est déjà concilié, cette conciliation doit d’abord être retirée dans l’écran Conciliation.
+Chaque transaction réelle du Compte possède aussi une action **Modifier**. Une transaction confirmée non conciliée peut être ouverte directement. Si elle est déjà cochée **Vu**, Finances demande d’abord **Retirer la conciliation et modifier**; la transaction n’est pas supprimée et peut être conciliée de nouveau après la correction.
+
+Pour une **Récurrence projetée**, le crayon propose maintenant deux choix. **Modifier seulement cette occurrence** transforme uniquement l’échéance choisie en transaction prévue réelle, puis ouvre l’éditeur normal : son montant, sa date, sa description, sa catégorie, ses étiquettes ou son compte peuvent être changés sans modifier les occurrences suivantes. L’échéance reste liée à sa récurrence par sa date d’origine afin que la projection initiale ne réapparaisse pas. **Modifier toute la récurrence** conserve le comportement habituel et modifie la règle pour les occurrences futures.
+
+Un paiement de carte lié ouvre sa fiche de paiement liée; si son côté carte est déjà concilié, cette conciliation doit d’abord être retirée dans l’écran Conciliation.
 
 ### Rappels de transactions
 

@@ -1011,8 +1011,8 @@ def items_panel():
                 "hover:bg-blue-50 transition-colors"
             ):
                 with ui.row().classes(
-                    "w-full min-h-[48px] items-center "
-                    "flex-nowrap gap-1 px-2"
+                    "w-full min-h-[40px] items-center "
+                    "flex-nowrap gap-0 px-1"
                 ):
                     ui.button(
                         icon=(
@@ -1023,9 +1023,9 @@ def items_panel():
                         on_click=change_needed,
                     ).props(
                         (
-                            "flat round dense color=positive"
+                            "flat round dense size=sm color=positive"
                             if item["needed"]
-                            else "flat round dense color=grey-6"
+                            else "flat round dense size=sm color=grey-6"
                         )
                     ).tooltip(
                         (
@@ -1036,8 +1036,8 @@ def items_panel():
                     )
 
                     touch_area = ui.row().classes(
-                        "grow min-w-0 items-center gap-3 "
-                        "px-1 py-2 cursor-pointer"
+                        "grow min-w-0 items-center gap-1 "
+                        "px-1 py-1 cursor-pointer"
                     )
                     touch_area.on(
                         "click",
@@ -1055,7 +1055,7 @@ def items_panel():
                                 )
 
                             ui.label(title).classes(
-                                "font-semibold leading-tight "
+                                "text-sm font-semibold leading-none "
                                 "whitespace-normal break-words"
                             ).style(
                                 "overflow-wrap:anywhere;"
@@ -1073,16 +1073,16 @@ def items_panel():
                                 )
 
                             ui.label(details).classes(
-                                "text-xs text-gray-500 "
-                                "leading-tight"
+                                "text-[11px] text-gray-500 "
+                                "leading-none mt-0.5"
                             )
 
                             if item.get("note"):
                                 ui.label(
                                     item["note"]
                                 ).classes(
-                                    "text-xs text-gray-400 "
-                                    "whitespace-normal leading-tight"
+                                    "text-[11px] text-gray-400 "
+                                    "whitespace-normal leading-none mt-0.5"
                                 ).style(
                                     "overflow-wrap:anywhere;"
                                 )
@@ -1093,14 +1093,14 @@ def items_panel():
                             open_edit_dialog(selected)
                         ),
                     ).props(
-                        "flat round dense color=primary"
+                        "flat round dense size=sm color=primary"
                     ).tooltip("Modifier")
 
                     ui.button(
                         icon="delete",
                         on_click=move_to_trash,
                     ).props(
-                        "flat round dense color=negative"
+                        "flat round dense size=sm color=negative"
                     ).tooltip(
                         "Mettre à la corbeille"
                     )

@@ -14,7 +14,7 @@ APP_LABELS = {
 
 APP_VERSIONS = {
     "portal": PORTAL_VERSION,
-    "grocery": "1.2.1",
+    "grocery": "1.3.0",
     "recipes": "1.8.0",
     "blood_pressure": "1.2.3",
     "finances": "1.16.0",
@@ -23,6 +23,25 @@ APP_VERSIONS = {
 }
 
 RELEASE_NOTES = [
+{
+    "app_key": "grocery",
+    "version": "1.3.0",
+    "date": "2026-11-14",
+    "title": "Liste d’épicerie — V1.3.0 — liste compacte et codes-barres",
+    "summary": (
+        "Items utilise maintenant des lignes compactes et peut retrouver "
+        "ou créer rapidement un produit à partir d’un code UPC/EAN."
+    ),
+    "changes": [
+        "Tous les items utilise des lignes compactes plutôt qu’une grande carte par produit.",
+        "Le cercle de besoin, le nom, le magasin/catégorie, Modifier et Corbeille restent accessibles sur chaque ligne.",
+        "Ajout d’une recherche UPC/EAN avec saisie manuelle et scan caméra lorsque le navigateur supporte BarcodeDetector.",
+        "Un code déjà connu dans la famille ajoute directement l’item aux besoins sans doublon.",
+        "Un catalogue partagé conserve seulement code, nom générique, marque et format; les données familiales restent privées.",
+        "Le code-barres d’un item est inclus dans la sauvegarde/restauration familiale.",
+        "Migration PostgreSQL automatique et idempotente; aucun SQL manuel et aucune nouvelle dépendance Python.",
+    ],
+},
     {
         "app_key": "finances",
         "version": "1.16.0",

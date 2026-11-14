@@ -551,6 +551,38 @@ def migrate_grocery_schema(get_connection):
                 """
             )
 
+
+            # Épicerie V1.3.0 : codes-barres et catalogue générique partagé.
+            cur.execute(
+                """
+                ALTER TABLE items
+                ADD COLUMN IF NOT EXISTS barcode TEXT;
+
+                CREATE TABLE IF NOT EXISTS grocery_barcode_catalog (
+                    barcode TEXT PRIMARY KEY,
+                    generic_name TEXT NOT NULL DEFAULT '',
+                    brand TEXT NOT NULL DEFAULT '',
+                    format_text TEXT NOT NULL DEFAULT '',
+                    contributed_by_user_id INTEGER
+                        REFERENCES users(id)
+                        ON DELETE SET NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                    items_family_active_barcode_unique
+                ON items (family_id, barcode)
+                WHERE deleted_at IS NULL
+                  AND barcode IS NOT NULL;
+
+                CREATE INDEX IF NOT EXISTS
+                    items_barcode_lookup_idx
+                ON items (barcode)
+                WHERE barcode IS NOT NULL;
+                """
+            )
+
             # Chaque famille reçoit un magasin initial. Les anciens items y sont liés.
             cur.execute(
                 """

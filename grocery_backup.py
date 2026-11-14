@@ -48,6 +48,7 @@ def export_family_backup(user_id, family_id):
                 SELECT
                     item.name,
                     item.note,
+                    item.barcode,
                     item.quantity,
                     item.needed,
                     item.times_needed,
@@ -77,6 +78,7 @@ def export_family_backup(user_id, family_id):
                     {
                         "name": row["name"],
                         "note": row["note"],
+                        "barcode": row.get("barcode"),
                         "quantity": row["quantity"],
                         "needed": bool(row["needed"]),
                         "frequent_selected": bool(
@@ -375,9 +377,12 @@ def _item_values(item):
     if last_needed_at is not None:
         last_needed_at = str(last_needed_at).strip() or None
 
+    barcode = str(item.get("barcode") or "").strip() or None
+
     return {
         "name": name,
         "note": note,
+        "barcode": barcode,
         "category": category or "Sans catégorie",
         "store": store or "Épicerie",
         "quantity": quantity,
@@ -867,6 +872,7 @@ def import_family_backup(
                         """
                         UPDATE items
                         SET note = %s,
+                            barcode = COALESCE(%s, barcode),
                             quantity = %s,
                             needed = %s,
                             frequent_selected = COALESCE(
@@ -882,6 +888,7 @@ def import_family_backup(
                         """,
                         (
                             item["note"],
+                            item["barcode"],
                             item["quantity"],
                             needed,
                             item["frequent_selected"],
@@ -900,6 +907,7 @@ def import_family_backup(
                             store_id,
                             name,
                             note,
+                            barcode,
                             quantity,
                             needed,
                             frequent_selected,
@@ -908,7 +916,7 @@ def import_family_backup(
                         )
                         VALUES (
                             %s, %s, %s, %s, %s,
-                            %s, %s, %s, %s, %s::timestamptz
+                            %s, %s, %s, %s, %s, %s::timestamptz
                         )
                         RETURNING id;
                         """,
@@ -918,6 +926,7 @@ def import_family_backup(
                             store_id,
                             item["name"],
                             item["note"],
+                            item["barcode"],
                             item["quantity"],
                             needed,
                             bool(item["frequent_selected"]),

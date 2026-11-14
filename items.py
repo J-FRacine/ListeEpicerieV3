@@ -5,10 +5,12 @@ from db import (
     add_item,
     delete_item,
     get_accessible_families,
+    get_barcode_match,
     get_categories,
     get_frequent_items,
     get_items,
     get_stores,
+    set_item_barcode,
     set_item_needed,
     toggle_needed,
     update_item,
@@ -108,12 +110,383 @@ def items_panel():
         for row in stores
     }
 
+
+    def open_barcode_product(barcode):
+        try:
+            match = get_barcode_match(
+                user_id,
+                family_id,
+                barcode,
+            )
+        except (ValueError, PermissionError) as error:
+            ui.notify(str(error), type="warning")
+            return
+
+        code = match["barcode"]
+        family_item = match.get("family_item")
+
+        if family_item:
+            if family_item["needed"]:
+                ui.notify(
+                    f"« {family_item['name']} » est déjà dans les besoins.",
+                    type="info",
+                )
+                return
+            try:
+                set_item_needed(
+                    user_id,
+                    family_item["id"],
+                    True,
+                )
+            except (ValueError, PermissionError) as error:
+                ui.notify(str(error), type="warning")
+                return
+            ui.notify(
+                f"« {family_item['name']} » ajouté aux besoins.",
+                type="positive",
+            )
+            ui.navigate.to("/?tab=items")
+            return
+
+        catalog = match.get("catalog") or {}
+
+        with ui.dialog() as barcode_dialog:
+            with ui.card().classes("w-full max-w-xl p-4"):
+                ui.label("Produit scanné").classes(
+                    "text-xl font-bold"
+                )
+                ui.label(code).classes(
+                    "text-sm font-mono text-gray-500"
+                )
+
+                product_name = ui.input(
+                    label="Nom de l’item",
+                    value=catalog.get("generic_name") or "",
+                ).props(
+                    "dense outlined autofocus maxlength=160"
+                ).classes("w-full")
+
+                with ui.row().classes(
+                    "w-full gap-2 flex-wrap"
+                ):
+                    product_brand = ui.input(
+                        label="Marque — facultatif",
+                        value=catalog.get("brand") or "",
+                    ).props(
+                        "dense outlined maxlength=120"
+                    ).classes("grow min-w-40")
+
+                    product_format = ui.input(
+                        label="Format — facultatif",
+                        value=catalog.get("format_text") or "",
+                    ).props(
+                        "dense outlined maxlength=120"
+                    ).classes("grow min-w-40")
+
+                product_quantity = ui.number(
+                    label="Quantité",
+                    value=1,
+                    min=1,
+                    step=1,
+                ).props("dense outlined").classes("w-full")
+
+                product_category = None
+                if categories_enabled:
+                    product_category = ui.select(
+                        list(category_by_name),
+                        value=list(category_by_name)[0],
+                        label="Catégorie",
+                    ).props(
+                        "dense outlined options-dense"
+                    ).classes("w-full")
+
+                product_store = ui.select(
+                    list(store_by_name),
+                    value=list(store_by_name)[0],
+                    label="Magasin",
+                ).props(
+                    "dense outlined options-dense"
+                ).classes("w-full")
+
+                product_needed = ui.checkbox(
+                    "Ajouter directement aux besoins",
+                    value=True,
+                )
+
+                ui.label(
+                    "Le catalogue partagé conserve seulement le code, "
+                    "le nom générique, la marque et le format. "
+                    "Magasin, catégorie, quantité, note et état "
+                    "restent privés à votre famille."
+                ).classes("text-xs text-gray-500")
+
+                def create_scanned_item():
+                    name = (
+                        product_name.value or ""
+                    ).strip()
+                    if not name:
+                        ui.notify(
+                            "Inscrivez le nom du produit.",
+                            type="warning",
+                        )
+                        return
+
+                    try:
+                        item_id = add_item(
+                            user_id,
+                            family_id,
+                            (
+                                category_by_name[
+                                    product_category.value
+                                ]
+                                if categories_enabled
+                                else default_category_id
+                            ),
+                            name,
+                            int(product_quantity.value or 1),
+                            bool(product_needed.value),
+                            store_id=store_by_name[
+                                product_store.value
+                            ],
+                        )
+                        set_item_barcode(
+                            user_id,
+                            item_id,
+                            code,
+                            generic_name=name,
+                            brand=product_brand.value,
+                            format_text=product_format.value,
+                        )
+                    except (
+                        ValueError,
+                        PermissionError,
+                        KeyError,
+                    ) as error:
+                        ui.notify(
+                            str(error),
+                            type="warning",
+                        )
+                        return
+
+                    barcode_dialog.close()
+                    ui.notify(
+                        f"« {name} » ajouté avec son code-barres.",
+                        type="positive",
+                    )
+                    ui.navigate.to("/?tab=items")
+
+                with ui.row().classes(
+                    "w-full justify-end gap-2 mt-2"
+                ):
+                    ui.button(
+                        "Annuler",
+                        on_click=barcode_dialog.close,
+                    ).props("flat")
+                    ui.button(
+                        "Créer l’item",
+                        icon="add_shopping_cart",
+                        on_click=create_scanned_item,
+                    ).props("color=primary")
+
+        barcode_dialog.open()
+
+    async def scan_barcode_camera():
+        javascript = r"""
+        return await (async () => {
+            if (!navigator.mediaDevices ||
+                !navigator.mediaDevices.getUserMedia) {
+                return {
+                    error: "La caméra n’est pas accessible dans ce navigateur."
+                };
+            }
+            if (!("BarcodeDetector" in window)) {
+                return {
+                    error: "La détection UPC/EAN par caméra n’est pas disponible ici. Utilisez la saisie manuelle."
+                };
+            }
+
+            const wanted = ["ean_13", "ean_8", "upc_a", "upc_e"];
+            const supported =
+                await BarcodeDetector.getSupportedFormats();
+            const usable =
+                wanted.filter(x => supported.includes(x));
+
+            if (!usable.length) {
+                return {
+                    error: "Aucun format UPC/EAN compatible n’est disponible."
+                };
+            }
+
+            let stream = null;
+            let overlay = null;
+
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: {ideal: "environment"}
+                    },
+                    audio: false
+                });
+
+                overlay = document.createElement("div");
+                overlay.style.cssText =
+                    "position:fixed;inset:0;z-index:99999;" +
+                    "background:rgba(0,0,0,.88);display:flex;" +
+                    "flex-direction:column;align-items:center;" +
+                    "justify-content:center;gap:14px;padding:20px;";
+
+                const video = document.createElement("video");
+                video.autoplay = true;
+                video.playsInline = true;
+                video.srcObject = stream;
+                video.style.cssText =
+                    "width:min(92vw,720px);max-height:70vh;" +
+                    "border-radius:14px;background:black;";
+
+                const label = document.createElement("div");
+                label.textContent =
+                    "Placez le code-barres au centre de l’image";
+                label.style.cssText =
+                    "color:white;font:600 16px sans-serif;" +
+                    "text-align:center;";
+
+                const cancel = document.createElement("button");
+                cancel.textContent = "Annuler";
+                cancel.style.cssText =
+                    "padding:10px 18px;border:0;border-radius:9px;" +
+                    "font:600 15px sans-serif;cursor:pointer;";
+
+                overlay.append(video, label, cancel);
+                document.body.appendChild(overlay);
+
+                const detector =
+                    new BarcodeDetector({formats: usable});
+                let cancelled = false;
+                cancel.onclick = () => { cancelled = true; };
+
+                await video.play();
+
+                const started = Date.now();
+                while (
+                    !cancelled &&
+                    Date.now() - started < 30000
+                ) {
+                    const codes = await detector.detect(video);
+                    if (codes && codes.length) {
+                        return {
+                            value: codes[0].rawValue || ""
+                        };
+                    }
+                    await new Promise(
+                        resolve => setTimeout(resolve, 180)
+                    );
+                }
+
+                return cancelled
+                    ? {cancelled: true}
+                    : {
+                        error:
+                            "Aucun code détecté après 30 secondes."
+                    };
+            } catch (error) {
+                return {
+                    error:
+                        error && error.message
+                        ? error.message
+                        : String(error)
+                };
+            } finally {
+                if (stream) {
+                    stream.getTracks().forEach(
+                        track => track.stop()
+                    );
+                }
+                if (
+                    overlay &&
+                    overlay.parentNode
+                ) {
+                    overlay.parentNode.removeChild(overlay);
+                }
+            }
+        })();
+        """
+
+        try:
+            result = await ui.run_javascript(
+                javascript,
+                timeout=40.0,
+            )
+        except Exception as error:
+            ui.notify(
+                f"Scanner indisponible : {error}",
+                type="warning",
+            )
+            return
+
+        if not result or result.get("cancelled"):
+            return
+        if result.get("error"):
+            ui.notify(
+                result["error"],
+                type="warning",
+            )
+            return
+
+        scanned = str(
+            result.get("value") or ""
+        ).strip()
+        if scanned:
+            barcode_input.value = scanned
+            barcode_input.update()
+            open_barcode_product(scanned)
+
     # ---------------------------------------------------------
     # AJOUT
     # ---------------------------------------------------------
 
     ui.separator()
     ui.label("Ajouter un item").classes("text-xl font-bold")
+
+
+    with ui.card().classes(
+        "w-full p-3 border-l-4 border-primary"
+    ):
+        with ui.row().classes(
+            "w-full items-end gap-2 flex-wrap"
+        ):
+            barcode_input = ui.input(
+                label="Code-barres UPC / EAN",
+                placeholder="Scanner ou saisir le numéro",
+            ).props(
+                "dense outlined inputmode=numeric autocomplete=off"
+            ).classes("grow min-w-[210px]")
+
+            ui.button(
+                "Rechercher",
+                icon="search",
+                on_click=lambda: open_barcode_product(
+                    barcode_input.value
+                ),
+            ).props("outline color=primary")
+
+            ui.button(
+                "Scanner",
+                icon="qr_code_scanner",
+                on_click=scan_barcode_camera,
+            ).props("color=primary")
+
+        barcode_input.on(
+            "keydown.enter",
+            lambda: open_barcode_product(
+                barcode_input.value
+            ),
+        )
+
+        ui.label(
+            "La caméra est utilisée seulement pendant le scan. "
+            "La saisie manuelle reste disponible si le navigateur "
+            "ne prend pas en charge UPC/EAN."
+        ).classes("text-xs text-gray-500 mt-1")
 
     with ui.card().classes("w-full p-4"):
         with ui.row().classes(
@@ -386,6 +759,13 @@ def items_panel():
                     step=1,
                 ).classes("w-full")
 
+                edit_barcode = ui.input(
+                    label="Code-barres UPC / EAN",
+                    value=item.get("barcode") or "",
+                ).props(
+                    "dense outlined inputmode=numeric"
+                ).classes("w-full")
+
                 edit_category = None
                 if categories_enabled:
                     edit_category = ui.select(
@@ -452,6 +832,14 @@ def items_panel():
                             frequent_selected=bool(
                                 edit_frequent.value
                             ),
+                        )
+                        set_item_barcode(
+                            user_id,
+                            item["id"],
+                            edit_barcode.value,
+                            generic_name=(
+                                edit_name.value or ""
+                            ).strip(),
                         )
                     except (
                         ValueError,
@@ -575,6 +963,7 @@ def items_panel():
                 )
             return
 
+
         for item in visible:
 
             def change_needed(selected=item):
@@ -617,16 +1006,38 @@ def items_panel():
                 )
                 ui.navigate.to("/?tab=items")
 
-            with ui.card().classes(
-                "w-full p-0 mt-2 overflow-hidden"
+            with ui.element("div").classes(
+                "w-full border-b border-gray-200 "
+                "hover:bg-blue-50 transition-colors"
             ):
                 with ui.row().classes(
-                    "w-full items-stretch flex-nowrap gap-0"
+                    "w-full min-h-[48px] items-center "
+                    "flex-nowrap gap-1 px-2"
                 ):
+                    ui.button(
+                        icon=(
+                            "check_circle"
+                            if item["needed"]
+                            else "radio_button_unchecked"
+                        ),
+                        on_click=change_needed,
+                    ).props(
+                        (
+                            "flat round dense color=positive"
+                            if item["needed"]
+                            else "flat round dense color=grey-6"
+                        )
+                    ).tooltip(
+                        (
+                            "Retirer des besoins"
+                            if item["needed"]
+                            else "Ajouter aux besoins"
+                        )
+                    )
+
                     touch_area = ui.row().classes(
-                        "grow min-w-0 items-center "
-                        "justify-between gap-3 px-4 py-3 "
-                        "cursor-pointer hover:bg-blue-50"
+                        "grow min-w-0 items-center gap-3 "
+                        "px-1 py-2 cursor-pointer"
                     )
                     touch_area.on(
                         "click",
@@ -644,66 +1055,55 @@ def items_panel():
                                 )
 
                             ui.label(title).classes(
-                                "font-bold leading-snug "
+                                "font-semibold leading-tight "
                                 "whitespace-normal break-words"
                             ).style(
                                 "overflow-wrap:anywhere;"
                             )
 
-                            ui.label(
-                                (
-                                    f"{item['store']} · "
-                                    f"{item['category']}"
-                                    if categories_enabled
-                                    else item["store"]
+                            details = (
+                                f"{item['store']} · "
+                                f"{item['category']}"
+                                if categories_enabled
+                                else item["store"]
+                            )
+                            if item.get("barcode"):
+                                details += (
+                                    f" · {item['barcode']}"
                                 )
-                            ).classes(
-                                "text-sm text-primary"
+
+                            ui.label(details).classes(
+                                "text-xs text-gray-500 "
+                                "leading-tight"
                             )
 
                             if item.get("note"):
                                 ui.label(
                                     item["note"]
                                 ).classes(
-                                    "text-sm text-gray-500 "
-                                    "whitespace-normal"
+                                    "text-xs text-gray-400 "
+                                    "whitespace-normal leading-tight"
                                 ).style(
                                     "overflow-wrap:anywhere;"
                                 )
 
-                        ui.icon(
-                            "check_circle"
-                            if item["needed"]
-                            else "radio_button_unchecked"
-                        ).classes(
-                            "text-2xl shrink-0 "
-                            + (
-                                "text-green-600"
-                                if item["needed"]
-                                else "text-gray-400"
-                            )
-                        )
+                    ui.button(
+                        icon="edit",
+                        on_click=lambda selected=item: (
+                            open_edit_dialog(selected)
+                        ),
+                    ).props(
+                        "flat round dense color=primary"
+                    ).tooltip("Modifier")
 
-                    with ui.row().classes(
-                        "items-center gap-0 shrink-0 pr-1"
-                    ):
-                        ui.button(
-                            icon="edit",
-                            on_click=lambda selected=item: (
-                                open_edit_dialog(selected)
-                            ),
-                        ).props(
-                            "flat round color=primary"
-                        ).tooltip("Modifier")
-
-                        ui.button(
-                            icon="delete",
-                            on_click=move_to_trash,
-                        ).props(
-                            "flat round color=negative"
-                        ).tooltip(
-                            "Mettre à la corbeille"
-                        )
+                    ui.button(
+                        icon="delete",
+                        on_click=move_to_trash,
+                    ).props(
+                        "flat round dense color=negative"
+                    ).tooltip(
+                        "Mettre à la corbeille"
+                    )
 
     def search_changed(event):
         search_state["value"] = event.value or ""

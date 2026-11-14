@@ -2178,6 +2178,11 @@ from grocery_items import (
     toggle_needed,
     update_item,
 )
+from grocery_barcodes import (
+    get_barcode_match,
+    normalize_barcode,
+    set_item_barcode,
+)
 from grocery_common import (
     get_activity_history,
     purge_expired_trash,

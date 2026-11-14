@@ -1907,7 +1907,7 @@ La création des comptes et l'attribution des familles sont réservées aux util
         "caption": "Créer et gérer le catalogue familial",
         "keywords": (
             "item ajouter modifier supprimer recherche quantité note "
-            "magasin catégorie besoin fréquent"
+            "magasin catégorie besoin fréquent code-barres upc ean scanner caméra compact"
         ),
         "content": """
 ### Ajouter un item
@@ -1938,6 +1938,21 @@ La section est limitée à **10 items maximum** afin de garder la page lisible. 
 Un toucher sur un raccourci le replace dans les besoins sans créer de doublon. Le choix **Souvent ajoutés** est aussi conservé dans les sauvegardes de famille.
 
 La V1.2.1 a été validée dans le navigateur : ajout et retrait de la sélection fonctionnent, et un item sélectionné reste visible avec un crochet vert lorsqu’il est déjà dans les besoins.
+
+
+### Codes-barres UPC / EAN
+
+La page **Items** permet de saisir un code-barres manuellement ou d’utiliser **Scanner** lorsque le navigateur prend en charge la détection UPC/EAN par caméra.
+
+- si le code appartient déjà à un item de votre famille, cet item peut être ajouté directement aux besoins;
+- si le code est connu dans le catalogue partagé, le nom générique, la marque et le format sont proposés pour créer rapidement votre item;
+- si le code est inconnu, vous pouvez créer le produit et contribuer ses renseignements génériques au catalogue partagé.
+
+Le catalogue partagé contient seulement **code-barres, nom générique, marque et format**. Le magasin, la catégorie, la quantité, les notes et l’état de besoin demeurent propres à votre famille.
+
+### Affichage compact
+
+**Tous les items** utilise maintenant de simples lignes séparées plutôt qu’une grande carte par item. Le cercle à gauche ajoute ou retire l’item des besoins; le crayon et la corbeille restent à droite.
 
 
 ### Tri alphabétique

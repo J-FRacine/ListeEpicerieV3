@@ -14,6 +14,7 @@ def _item_select_sql(extra_where="", order_by="item.id"):
             item.store_id,
             item.name,
             item.note,
+            item.barcode,
             item.quantity,
             item.needed,
             item.times_needed,

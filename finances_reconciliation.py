@@ -261,6 +261,264 @@ def build_reconciliation_panel(
                 "text-xs jf-muted"
             )
 
+
+        with ui.card().classes("w-full p-3"):
+            ui.label("Analyser un relevé PDF").classes(
+                "text-lg font-bold"
+            )
+            ui.label(
+                "Finances extrait les lignes du relevé et propose des "
+                "correspondances avec les transactions confirmées non conciliées. "
+                "Aucune transaction n’est conciliée automatiquement."
+            ).classes("text-xs jf-muted")
+
+            async def receive_statement_pdf(event):
+                selected_id = reconciliation_payment.value
+                if not selected_id:
+                    ui.notify(
+                        "Choisissez d’abord la carte à concilier.",
+                        type="warning",
+                    )
+                    return
+
+                try:
+                    pdf_bytes = await event.file.read()
+                    statement_import = __import__(
+                        "finances_statement_import"
+                    )
+                    parsed = statement_import.prepare_statement_import(
+                        pdf_bytes
+                    )
+                    candidates = list_unreconciled_transactions(
+                        user_id,
+                        selected_id,
+                    )
+                    analysis = statement_import.match_statement_rows(
+                        parsed["rows"],
+                        candidates,
+                    )
+                except Exception as error:
+                    ui.notify(str(error), type="negative")
+                    return
+
+                with ui.dialog() as statement_dialog:
+                    with ui.card().classes(
+                        "w-full max-w-5xl p-4"
+                    ):
+                        ui.label(
+                            "Préparation de la conciliation"
+                        ).classes("text-xl font-bold")
+
+                        with ui.element("div").classes(
+                            "jf-finance-summary-grid mt-2"
+                        ):
+                            for label, value in (
+                                (
+                                    "Lignes détectées",
+                                    len(parsed["rows"]),
+                                ),
+                                (
+                                    "Correspondances certaines",
+                                    analysis["certain_count"],
+                                ),
+                                (
+                                    "À vérifier",
+                                    analysis["ambiguous_count"],
+                                ),
+                                (
+                                    "Sans correspondance",
+                                    analysis["unmatched_count"],
+                                ),
+                            ):
+                                with ui.element("div").classes(
+                                    "jf-finance-summary"
+                                ):
+                                    ui.label(label).classes(
+                                        "jf-finance-summary-label"
+                                    )
+                                    ui.label(str(value)).classes(
+                                        "jf-finance-summary-value"
+                                    )
+
+                        use_date = ui.checkbox(
+                            "Utiliser la date du relevé détectée",
+                            value=bool(parsed.get("statement_date")),
+                        )
+                        if parsed.get("statement_date"):
+                            ui.label(
+                                "Date détectée : "
+                                + parsed["statement_date"].strftime(
+                                    "%d/%m/%Y"
+                                )
+                            ).classes("text-xs jf-muted")
+                        else:
+                            use_date.disable()
+
+                        use_balance = ui.checkbox(
+                            "Utiliser le solde du relevé détecté",
+                            value=bool(
+                                parsed.get("statement_balance")
+                                is not None
+                            ),
+                        )
+                        if parsed.get("statement_balance") is not None:
+                            ui.label(
+                                "Solde détecté : "
+                                + _money(
+                                    parsed["statement_balance"]
+                                )
+                            ).classes("text-xs jf-muted")
+                        else:
+                            use_balance.disable()
+
+                        select_certain = ui.checkbox(
+                            "Sélectionner les correspondances certaines",
+                            value=True,
+                        )
+
+                        with ui.expansion(
+                            "Voir les correspondances proposées",
+                            icon="fact_check",
+                            value=True,
+                        ).classes("w-full mt-2"):
+                            visible = analysis["rows"][:60]
+                            for result in visible:
+                                with ui.element("div").classes(
+                                    "jf-finance-card"
+                                ):
+                                    with ui.row().classes(
+                                        "w-full items-start "
+                                        "justify-between gap-2"
+                                    ):
+                                        with ui.column().classes(
+                                            "gap-0 min-w-0 grow"
+                                        ):
+                                            ui.label(
+                                                result["description"]
+                                            ).classes(
+                                                "text-sm font-bold"
+                                            )
+                                            ui.label(
+                                                result[
+                                                    "transaction_date"
+                                                ].strftime("%d/%m/%Y")
+                                                + " · "
+                                                + _money(
+                                                    result["amount"]
+                                                )
+                                            ).classes(
+                                                "text-xs jf-muted"
+                                            )
+
+                                            match = result.get("match")
+                                            if match:
+                                                prefix = (
+                                                    "✓ "
+                                                    if result["certain"]
+                                                    else "? "
+                                                )
+                                                ui.label(
+                                                    prefix
+                                                    + match["description"]
+                                                    + " · "
+                                                    + match[
+                                                        "transaction_date"
+                                                    ].strftime(
+                                                        "%d/%m/%Y"
+                                                    )
+                                                ).classes(
+                                                    "text-xs "
+                                                    + (
+                                                        "text-positive"
+                                                        if result["certain"]
+                                                        else "text-warning"
+                                                    )
+                                                )
+                                            else:
+                                                ui.label(
+                                                    "Aucune correspondance"
+                                                ).classes(
+                                                    "text-xs text-negative"
+                                                )
+
+                            if len(analysis["rows"]) > len(visible):
+                                ui.label(
+                                    f"{len(analysis['rows']) - len(visible)} "
+                                    "ligne(s) supplémentaire(s) non affichée(s)."
+                                ).classes("text-xs jf-muted")
+
+                        def apply_statement_suggestions():
+                            if (
+                                use_date.value
+                                and parsed.get("statement_date")
+                            ):
+                                statement_date.value = (
+                                    parsed[
+                                        "statement_date"
+                                    ].isoformat()
+                                )
+                                statement_date.update()
+
+                            if (
+                                use_balance.value
+                                and parsed.get("statement_balance")
+                                is not None
+                            ):
+                                statement_balance.value = float(
+                                    parsed["statement_balance"]
+                                )
+                                statement_balance.update()
+
+                            added = 0
+                            if select_certain.value:
+                                for transaction_id in analysis[
+                                    "certain_transaction_ids"
+                                ]:
+                                    if (
+                                        int(transaction_id)
+                                        not in reconciliation_selected
+                                    ):
+                                        added += 1
+                                    reconciliation_selected.add(
+                                        int(transaction_id)
+                                    )
+
+                            statement_dialog.close()
+                            render_reconciliation_transactions.refresh()
+                            render_reconciliation_selection.refresh()
+                            render_reconciliation_balance.refresh()
+                            ui.notify(
+                                f"{added} correspondance(s) ajoutée(s) "
+                                "à la sélection. Vérifiez le relevé avant "
+                                "de finaliser la conciliation.",
+                                type="positive",
+                                timeout=8000,
+                            )
+
+                        with ui.row().classes(
+                            "w-full justify-end gap-2 mt-3"
+                        ):
+                            ui.button(
+                                "Annuler",
+                                on_click=statement_dialog.close,
+                            ).props("flat")
+                            ui.button(
+                                "Appliquer les suggestions",
+                                icon="playlist_add_check",
+                                on_click=apply_statement_suggestions,
+                            ).props("color=primary")
+
+                statement_dialog.open()
+
+            ui.upload(
+                label="Choisir un relevé PDF",
+                on_upload=receive_statement_pdf,
+                auto_upload=True,
+                max_files=1,
+            ).props(
+                "accept=.pdf,application/pdf"
+            ).classes("w-full mt-2")
+
         def save_current_reconciliation_draft():
             selected_id = reconciliation_payment.value
             if not selected_id:

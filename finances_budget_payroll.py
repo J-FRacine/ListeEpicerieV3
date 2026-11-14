@@ -1,7 +1,6 @@
 """Ajustement des paies prévues ou réelles pour la capacité du Budget.
 
-Ce module reste indépendant de PostgreSQL et de NiceGUI. Les lecteurs de
-transactions sont injectés afin que les calculs puissent être testés sans DB.
+Ce module reste indépendant de PostgreSQL et de NiceGUI.
 """
 from __future__ import annotations
 
@@ -29,17 +28,6 @@ def payroll_adjustment_from_transactions(
     month,
     month_end,
 ):
-    """Calcule l'écart des occurrences matérialisées par rapport au Budget.
-
-    Les transactions Prévue et Confirmée sont prises en compte lorsqu'elles
-    appartiennent à la récurrence de revenu principale.
-
-    Une occurrence normale au montant budgété produit un écart de 0.
-    Une occurrence modifiée individuellement ajuste immédiatement la capacité
-    du mois, même si elle est encore Prévue.
-
-    Une seule transaction est retenue par occurrence de récurrence.
-    """
     if recurrence_id in (None, "") or expected_per_pay in (None, ""):
         return {
             "realized_pay_count": 0,
@@ -53,12 +41,10 @@ def payroll_adjustment_from_transactions(
     expected = Decimal(expected_per_pay).quantize(CENT)
     start = _as_date(month)
     end = _as_date(month_end)
-
     by_occurrence = {}
 
     for raw in rows or []:
         row = dict(raw)
-
         status = row.get("status")
         if status not in (None, "planned", "confirmed"):
             continue
@@ -108,11 +94,9 @@ def payroll_adjustment_from_transactions(
         for row in by_occurrence.values()
         if row.get("status") in (None, "confirmed")
     )
-
     expected_total = (
         expected * Decimal(adjusted_count)
     ).quantize(CENT)
-
     adjustment = (
         actual_total - expected_total
     ).quantize(CENT)
@@ -135,11 +119,6 @@ def confirmed_primary_income_adjustment(
     expected_per_pay,
     list_transactions,
 ):
-    """Lit les occurrences prévues/confirmées et calcule leur écart au Budget.
-
-    Le nom historique de cette fonction est conservé pour compatibilité avec
-    les autres modules de Finances.
-    """
     if recurrence_id in (None, "") or expected_per_pay in (None, ""):
         return payroll_adjustment_from_transactions(
             [],

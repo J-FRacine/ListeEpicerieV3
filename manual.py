@@ -788,6 +788,17 @@ Pour une **Récurrence projetée**, le crayon propose maintenant deux choix. **M
 
 Un paiement de carte lié ouvre sa fiche de paiement liée; si son côté carte est déjà concilié, cette conciliation doit d’abord être retirée dans l’écran Conciliation.
 
+
+### Importer un relevé de carte PDF
+
+Dans **Conciliation**, la section **Analyser un relevé PDF** accepte un relevé de carte de crédit contenant du texte sélectionnable. Finances extrait les lignes candidates, puis les compare aux transactions **Confirmées et non conciliées** de la carte choisie.
+
+Une correspondance est proposée automatiquement seulement lorsque le **montant est identique**, que la **date est proche** et qu’aucun autre candidat n’est suffisamment semblable pour rendre le choix ambigu. Les cas ambigus et les lignes sans correspondance restent signalés pour vérification manuelle.
+
+Après l’analyse, vous pouvez reprendre la **date du relevé**, le **solde détecté** et ajouter les **correspondances certaines** à la sélection courante. Cette action ne finalise jamais la conciliation : vous devez toujours vérifier le résultat et utiliser ensuite les actions normales de l’écran Conciliation.
+
+Les relevés constitués uniquement d’images numérisées ne sont pas analysés automatiquement; Finances affiche alors un message indiquant qu’aucun texte n’a pu être extrait. Cette première version n’utilise volontairement pas d’OCR.
+
 ### Rappels de transactions
 
 Pour une transaction **Prévue**, activez **Me rappeler cette transaction le jour prévu** et choisissez une heure. L’heure proposée par défaut est **09:00**. Si la transaction a déjà été confirmée avant cette heure, aucun rappel n’est envoyé.

@@ -5,3 +5,4 @@ pywebpush
 cryptography
 httpx
 Pillow
+pypdf

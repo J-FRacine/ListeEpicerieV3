@@ -17,12 +17,32 @@ APP_VERSIONS = {
     "grocery": "1.2.1",
     "recipes": "1.8.0",
     "blood_pressure": "1.2.3",
-    "finances": "1.15.0",
+    "finances": "1.16.0",
     "rpg": "1.12.1",
     "feedback": "1.0.0",
 }
 
 RELEASE_NOTES = [
+    {
+        "app_key": "finances",
+        "version": "1.16.0",
+        "date": "2026-11-14",
+        "title": "Finances — V1.16.0 — relevé PDF et ajustement des revenus prévus",
+        "summary": (
+            "Conciliation peut maintenant analyser un relevé de carte PDF et "
+            "proposer des correspondances prudentes; les occurrences prévues "
+            "modifiées de la paie principale ajustent aussi le Disponible."
+        ),
+        "changes": [
+            "Ajout d’un import de relevé PDF directement dans Conciliation.",
+            "Le relevé est analysé en lecture seule; aucune transaction n’est créée, modifiée ou conciliée automatiquement.",
+            "Les correspondances certaines exigent un montant exact, une date proche et l’absence d’ambiguïté; elles peuvent être ajoutées à la sélection de conciliation après confirmation.",
+            "La date du relevé et le nouveau solde sont repris lorsqu’ils sont détectés et que l’utilisateur conserve les cases correspondantes.",
+            "Les PDF image sans texte sont refusés explicitement plutôt que d’utiliser un OCR incertain.",
+            "Le correctif du Disponible tient compte d’une occurrence Prévue de la paie principale modifiée individuellement et ne la recompte pas lorsqu’elle devient Confirmée.",
+            "Nouvelle dépendance pypdf pour l’extraction de texte des relevés PDF; aucune migration PostgreSQL et aucun SQL manuel.",
+        ],
+    },
 {
     "app_key": "finances",
     "version": "1.15.0",
